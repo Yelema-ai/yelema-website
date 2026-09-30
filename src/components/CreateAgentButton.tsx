@@ -50,13 +50,13 @@ export function CreateAgentButton({
     <>
       <Button onClick={() => setOpen(true)}>
         <Plus className="h-4 w-4" />
-        Create agent
+        Create my agent
       </Button>
 
       <Dialog open={open} onOpenChange={(o) => !busy && setOpen(o)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create agent</DialogTitle>
+            <DialogTitle>Create my agent</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-2">

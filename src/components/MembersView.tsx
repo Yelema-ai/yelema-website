@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { apiFetch } from "@/lib/api";
 import type { Invitation, Role, WorkspaceMember } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +19,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+const ROLE_OPTIONS: { value: Role; label: string; hint: string }[] = [
+  { value: "member", label: "Member", hint: "Creates and uses their own agent." },
+  { value: "admin", label: "Admin", hint: "Sees every agent, invites people." },
+];
+
+function roleLabel(role: Role) {
+  return role === "admin" ? "Admin" : "Member";
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString();
 }
@@ -26,7 +36,8 @@ export function MembersView() {
   const { current } = useWorkspace();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [role, setRole] = useState<Role>("admin");
+  const [role, setRole] = useState<Role>("member");
+  const [inviteRole, setInviteRole] = useState<Role>("member");
   const [loading, setLoading] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -64,6 +75,7 @@ export function MembersView() {
     try {
       const { url } = await apiFetch<{ url: string }>(`/api/workspaces/${current.id}/members`, {
         method: "POST",
+        body: JSON.stringify({ role: inviteRole }),
       });
       await navigator.clipboard.writeText(url).catch(() => {});
       toast.success("Invite link created and copied");
@@ -118,10 +130,28 @@ export function MembersView() {
               <DialogHeader>
                 <DialogTitle>Invite member</DialogTitle>
                 <DialogDescription>
-                  Create an invite link and share it. Anyone who opens it joins this workspace as an
-                  admin.
+                  Create an invite link and share it. Anyone who opens it joins this workspace with
+                  the role below.
                 </DialogDescription>
               </DialogHeader>
+              <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Role">
+                {ROLE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={inviteRole === opt.value}
+                    onClick={() => setInviteRole(opt.value)}
+                    className={cn(
+                      "rounded-md border p-3 text-left text-sm transition-colors",
+                      inviteRole === opt.value ? "border-primary ring-1 ring-primary" : "hover:bg-accent"
+                    )}
+                  >
+                    <span className="font-medium">{opt.label}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{opt.hint}</span>
+                  </button>
+                ))}
+              </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setInviteOpen(false)} disabled={busy}>
                   Cancel
@@ -154,7 +184,7 @@ export function MembersView() {
                   <tr key={m.user_id} className="border-t">
                     <td className="px-4 py-3 font-medium">{m.email}</td>
                     <td className="px-4 py-3">
-                      <Badge>Admin</Badge>
+                      <Badge variant={m.role === "admin" ? "default" : "outline"}>{roleLabel(m.role)}</Badge>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{formatDate(m.created_at)}</td>
                     <td className="px-4 py-3 text-right">
@@ -208,7 +238,8 @@ export function MembersView() {
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Created {formatDate(inv.created_at)} · anyone with this link joins as an admin
+                      Created {formatDate(inv.created_at)} · anyone with this link joins as{" "}
+                      {inv.role === "admin" ? "an admin" : "a member"}
                     </p>
                   </div>
                 ))}

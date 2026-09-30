@@ -1,4 +1,6 @@
-export type Role = "admin";
+// admin: sees and manages every agent of the workspace, invites people.
+// member: creates and uses their own agent only (one per user).
+export type Role = "admin" | "member";
 
 export interface Workspace {
   id: string;
@@ -36,6 +38,7 @@ export interface AgentRow {
   memory: number | null;
   disk: number | null;
   created_by: string | null;
+  owner_user_id: string | null;
   created_at: string;
 }
 

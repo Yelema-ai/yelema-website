@@ -10,7 +10,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function POST(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    await requireAgentAccess(id, "admin");
+    await requireAgentAccess(id);
 
     const path = requireTrimmed(new URL(request.url).searchParams.get("path"), "path is required");
     return json(await agent37.makeDir(id, path), 201);

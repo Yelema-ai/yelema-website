@@ -8,7 +8,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    await requireAgentAccess(id, "member");
+    await requireAgentAccess(id);
 
     return json(await agent37.listModels(id));
   } catch (e) {

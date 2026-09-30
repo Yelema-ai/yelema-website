@@ -22,7 +22,7 @@ interface ResponsesBody {
 export async function POST(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    await requireAgentAccess(id, "admin");
+    await requireAgentAccess(id);
 
     const body = await readJson<ResponsesBody>(request);
     const input = (body.input ?? "").trim();

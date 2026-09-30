@@ -57,12 +57,16 @@ Yelema commun.
    - `src/app/api/agents/route.ts` : `GET` filtré sur `owner_user_id` pour un membre ; `POST` renseigne `owner_user_id` et refuse un second agent.
    - `src/app/api/workspaces/[id]/members/route.ts` : rôle choisi à l'invitation.
    - UI (`AgentsView`, `MembersView`, `CreateAgentButton`) : actions d'administration masquées pour un membre.
-   - Décision à confirmer : **chaque utilisateur crée lui-même son agent** (« Créer mon agent »), l'admin voit tous les agents.
+   - Décision retenue : **chaque utilisateur crée lui-même son agent** (« Create my agent », un seul), l'admin voit tous les agents.
+   - Accès : propriétaire ou admin pour utiliser / configurer / démarrer l'agent ; suppression, redimensionnement et budget réservés à l'admin.
+   - Une invitation acceptée ne rétrograde jamais un admin. Les agents antérieurs à 0002 (`owner_user_id` nul) ne sont visibles que par l'admin.
 
 7. **Publication d'une version** — `scripts/build-image.sh <version>` :
    `docker buildx build --platform linux/amd64 --build-arg APP_VERSION=<v> -t agent37-app:<v> .`
    → `docker save agent37-app:<v> | gzip | ssh mstudio-vps 'gunzip | docker load'`
-   → `docker image prune -f` distant en gardant N-1. Puis copier `supabase/migrations/` dans le back-office.
+   → sur l'hôte, suppression des anciens tags `agent37-app` en gardant la version courante et la
+   précédente (pas de `docker image prune` global : l'hôte est partagé). Puis copie de
+   `supabase/migrations/*.sql` dans `~/yelema-platform/assets/agent37-app/<version>/`.
 
 ## 4. Hors périmètre
 

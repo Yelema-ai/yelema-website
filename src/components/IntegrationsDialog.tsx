@@ -33,7 +33,7 @@ export function IntegrationsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {open && <IntegrationsTab agentId={agentId} role="admin" embedded />}
+        {open && <IntegrationsTab agentId={agentId} canManage embedded />}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

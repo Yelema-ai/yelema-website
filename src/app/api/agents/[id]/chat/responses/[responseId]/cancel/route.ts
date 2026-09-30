@@ -8,7 +8,7 @@ type Ctx = { params: Promise<{ id: string; responseId: string }> };
 export async function POST(_request: Request, { params }: Ctx) {
   try {
     const { id, responseId } = await params;
-    await requireAgentAccess(id, "admin");
+    await requireAgentAccess(id);
 
     return json(await agent37.cancelResponse(id, responseId));
   } catch (e) {

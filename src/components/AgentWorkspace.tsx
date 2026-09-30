@@ -44,13 +44,18 @@ export function AgentWorkspace({
   agentId,
   workspaceId,
   role,
+  isOwner,
   initialTab,
 }: {
   agentId: string;
   workspaceId: string;
   role: Role;
+  isOwner: boolean;
   initialTab: AgentTab;
 }) {
+  // The page only renders for the agent's owner or a workspace admin (see its server check); both
+  // operate the agent, only an admin deletes it.
+  const canManage = role === "admin" || isOwner;
   const pathname = usePathname();
   const { setCurrentId } = useWorkspace();
 
@@ -220,12 +225,12 @@ export function AgentWorkspace({
             <div className="h-full overflow-y-auto">
               {currentTab === "integrations" ? (
                 <div className="mx-auto w-full max-w-5xl p-6 md:px-10 md:py-8">
-                  <IntegrationsTab agentId={agentId} role={role} />
+                  <IntegrationsTab agentId={agentId} canManage={canManage} />
                 </div>
               ) : currentTab === "messaging" ? (
                 <div className="mx-auto w-full max-w-3xl p-6 md:px-10 md:py-8">
                   {active ? (
-                    <ChannelsTab agentId={agentId} agent={active} role={role} />
+                    <ChannelsTab agentId={agentId} agent={active} canManage={canManage} />
                   ) : (
                     <p className="text-sm text-muted-foreground">Loading...</p>
                   )}
@@ -233,7 +238,13 @@ export function AgentWorkspace({
               ) : (
                 <div className="mx-auto w-full max-w-3xl p-6 md:px-10 md:py-8">
                   {active ? (
-                    <AgentSettingsTab agentId={agentId} agent={active} role={role} onChanged={load} />
+                    <AgentSettingsTab
+                      agentId={agentId}
+                      agent={active}
+                      canManage={canManage}
+                      isAdmin={role === "admin"}
+                      onChanged={load}
+                    />
                   ) : (
                     <p className="text-sm text-muted-foreground">Loading...</p>
                   )}

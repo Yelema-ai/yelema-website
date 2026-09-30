@@ -14,7 +14,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function GET(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    await requireAgentAccess(id, "member");
+    await requireAgentAccess(id);
 
     const { searchParams } = new URL(request.url);
     const qs = new URLSearchParams();
@@ -52,7 +52,7 @@ export async function GET(request: Request, { params }: Ctx) {
 export async function PUT(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    await requireAgentAccess(id, "admin");
+    await requireAgentAccess(id);
 
     const { searchParams } = new URL(request.url);
     const path = requireTrimmed(searchParams.get("path"), "path is required");

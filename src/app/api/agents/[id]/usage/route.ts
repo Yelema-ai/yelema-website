@@ -7,7 +7,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function GET(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    await requireAgentAccess(id, "member");
+    await requireAgentAccess(id);
 
     const month = new URL(request.url).searchParams.get("month") || undefined;
     return json(await agent37.getUsage(id, month));

@@ -10,7 +10,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function DELETE(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    await requireAgentAccess(id, "admin");
+    await requireAgentAccess(id);
 
     const path = requireTrimmed(new URL(request.url).searchParams.get("path"), "path is required");
     return json(await agent37.deleteFile(id, path));
@@ -24,7 +24,7 @@ export async function DELETE(request: Request, { params }: Ctx) {
 export async function PATCH(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    await requireAgentAccess(id, "admin");
+    await requireAgentAccess(id);
 
     const { from, to } = await readJson<{ from?: string; to?: string }>(request);
     return json(

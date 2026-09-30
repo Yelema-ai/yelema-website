@@ -27,17 +27,19 @@ import { useAsyncAction } from "@/components/useAsyncAction";
 export function AgentsView() {
   const { current } = useWorkspace();
   const [agents, setAgents] = useState<MergedAgent[]>([]);
-  const [role, setRole] = useState<Role>("admin");
+  const [role, setRole] = useState<Role>("member");
+  const [canCreate, setCanCreate] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!current) return;
     try {
-      const data = await apiFetch<{ agents: MergedAgent[]; role: Role }>(
+      const data = await apiFetch<{ agents: MergedAgent[]; role: Role; can_create: boolean }>(
         `/api/agents?workspace=${current.id}`
       );
       setAgents(data.agents);
       setRole(data.role);
+      setCanCreate(data.can_create);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -65,7 +67,8 @@ export function AgentsView() {
           <h1 className="text-2xl font-semibold tracking-tight">Agents</h1>
           <p className="text-sm text-muted-foreground">{current.name}</p>
         </div>
-        {role === "admin" && <CreateAgentButton workspaceId={current.id} onCreated={load} />}
+        {/* One agent per user: everyone creates their own, until they have it. */}
+        {canCreate && <CreateAgentButton workspaceId={current.id} onCreated={load} />}
       </div>
 
       {loading ? (
@@ -73,9 +76,7 @@ export function AgentsView() {
       ) : agents.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center">
           <p className="text-sm text-muted-foreground">
-            {role === "admin"
-              ? "No agents yet. Create your first one."
-              : "No agents in this workspace yet."}
+            {canCreate ? "You don't have an agent yet. Create yours." : "No agents in this workspace yet."}
           </p>
         </div>
       ) : (
@@ -96,7 +97,7 @@ export function AgentsView() {
                   <td className="px-4 py-3">
                     <AgentNameCell
                       agent={a}
-                      canEdit={role === "admin"}
+                      canEdit
                       onRenamed={load}
                       href={agentTabPath(a.agent37_id, "chat")}
                     />
@@ -135,7 +136,7 @@ export function AgentsView() {
                         size="sm"
                         className="justify-end"
                       />
-                      {role === "admin" && <AgentOptionsMenu agent={a} onChanged={load} />}
+                      <AgentOptionsMenu agent={a} canDelete={role === "admin"} onChanged={load} />
                     </div>
                   </td>
                 </tr>
@@ -148,7 +149,17 @@ export function AgentsView() {
   );
 }
 
-function AgentOptionsMenu({ agent, onChanged }: { agent: MergedAgent; onChanged: () => void }) {
+// Restart / stop for the agent's owner or an admin (a member only lists their own); delete is
+// admin-only.
+function AgentOptionsMenu({
+  agent,
+  canDelete,
+  onChanged,
+}: {
+  agent: MergedAgent;
+  canDelete: boolean;
+  onChanged: () => void;
+}) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const { busy, run } = useAsyncAction();
   const running = agent.live_status === "running";
@@ -186,11 +197,15 @@ function AgentOptionsMenu({ agent, onChanged }: { agent: MergedAgent; onChanged:
             <Square className="h-4 w-4" />
             Stop agent
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" disabled={busy} onClick={() => setConfirmDelete(true)}>
-            <Trash2 className="h-4 w-4" />
-            Delete agent
-          </DropdownMenuItem>
+          {canDelete && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" disabled={busy} onClick={() => setConfirmDelete(true)}>
+                <Trash2 className="h-4 w-4" />
+                Delete agent
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

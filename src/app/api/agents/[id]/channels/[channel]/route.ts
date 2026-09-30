@@ -33,7 +33,7 @@ async function refreshed(agentId: string, channelId: string): Promise<MessagingP
 export async function PUT(request: Request, { params }: Ctx) {
   try {
     const { id, channel } = await params;
-    await requireAgentAccess(id, "admin");
+    await requireAgentAccess(id);
 
     const body = await readJson<{ env?: Record<string, string>; enabled?: boolean }>(request);
     const platform = await getPlatform(id, channel);
@@ -64,7 +64,7 @@ export async function PUT(request: Request, { params }: Ctx) {
 export async function DELETE(_request: Request, { params }: Ctx) {
   try {
     const { id, channel } = await params;
-    await requireAgentAccess(id, "admin");
+    await requireAgentAccess(id);
 
     const platform = await getPlatform(id, channel);
     await writePlatform(id, channel, { enabled: false, clear_env: platform.env_vars.map((f) => f.key) });
@@ -79,7 +79,7 @@ export async function DELETE(_request: Request, { params }: Ctx) {
 export async function POST(request: Request, { params }: Ctx) {
   try {
     const { id, channel } = await params;
-    await requireAgentAccess(id, "admin");
+    await requireAgentAccess(id);
 
     const body = await readJson<{ action?: string; token?: string; pairing_id?: string; finish?: boolean }>(request);
 

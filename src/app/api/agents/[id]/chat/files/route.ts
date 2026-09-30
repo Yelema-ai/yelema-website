@@ -13,7 +13,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function POST(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    await requireAgentAccess(id, "admin");
+    await requireAgentAccess(id);
 
     const form = await request.formData();
     const file = form.get("file");

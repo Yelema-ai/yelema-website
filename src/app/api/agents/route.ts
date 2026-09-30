@@ -1,5 +1,5 @@
 import { agent37 } from "@/lib/agent37";
-import { requireAdmin, requireMember, requireUser } from "@/lib/auth";
+import { requireMember, requireUser } from "@/lib/auth";
 import { AGENT_TEMPLATES, DEFAULT_AGENT, templateAppPorts } from "@/config/agents";
 import { usdToMicros } from "@/lib/format";
 import { ApiError, handleError, json, readJson } from "@/lib/http";
@@ -39,12 +39,13 @@ export async function GET(request: Request) {
 
     const role = await requireMember(db, workspaceId, user.id);
 
-    const { data: rows, error } = await db
-      .from("agents")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .order("created_at", { ascending: false });
+    // An admin sees every agent of the workspace; a member only the one they own.
+    let query = db.from("agents").select("*").eq("workspace_id", workspaceId);
+    if (role !== "admin") query = query.eq("owner_user_id", user.id);
+    const { data: rows, error } = await query.order("created_at", { ascending: false });
     if (error) throw new ApiError(500, "db_error", error.message);
+    // One agent per user: the UI offers "Create my agent" until the caller owns one.
+    const canCreate = !(rows as AgentRow[]).some((r) => r.owner_user_id === user.id);
 
     let live = new Map<string, Agent>();
     let templates = new Map<string, Template>();
@@ -72,8 +73,8 @@ export async function GET(request: Request) {
     const agents: MergedAgent[] = (rows as AgentRow[]).map((row) => {
       const l = live.get(row.agent37_id);
       if (l && l.status !== row.status) {
-        // Best-effort mirror sync. Authorized already: these rows belong to workspaceId, which the
-        // caller is a member of (requireMember above).
+        // Best-effort mirror sync. Authorized already: these rows are the ones the caller may see
+        // (requireMember above, owner filter for members).
         db.from("agents").update({ status: l.status }).eq("agent37_id", row.agent37_id).then(() => {});
       }
       return {
@@ -96,7 +97,7 @@ export async function GET(request: Request) {
       };
     });
 
-    return json({ agents, role });
+    return json({ agents, role, can_create: canCreate });
   } catch (e) {
     return handleError(e);
   }
@@ -110,7 +111,17 @@ export async function POST(request: Request) {
 
     const workspaceId = body.workspace_id;
     if (!workspaceId) throw new ApiError(400, "invalid_request", "workspace_id is required");
-    await requireAdmin(db, workspaceId, user.id);
+    await requireMember(db, workspaceId, user.id);
+
+    // Every user — admin or member — creates their own agent, and only one. The unique index
+    // agents_one_per_owner_idx backs this up against a concurrent double submit.
+    const { data: owned } = await db
+      .from("agents")
+      .select("agent37_id")
+      .eq("workspace_id", workspaceId)
+      .eq("owner_user_id", user.id)
+      .limit(1);
+    if (owned?.length) throw new ApiError(409, "conflict", "You already have an agent in this workspace");
 
     // Paywall/entitlement seam: a fork can gate agent creation here, e.g.
     // if (!(await canCreateAgent(db, workspaceId))) throw new ApiError(403, "forbidden", "Agent creation is not enabled for this workspace.");
@@ -142,6 +153,7 @@ export async function POST(request: Request) {
       memory: agent.resources.memory,
       disk: agent.resources.disk,
       created_by: user.id,
+      owner_user_id: user.id,
     });
     if (error) {
       // Roll back the orphaned agent so we never bill for an untracked box.

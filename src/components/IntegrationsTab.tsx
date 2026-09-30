@@ -12,7 +12,6 @@ import type {
   IntegrationConnectResult,
   IntegrationToolkit,
   IntegrationToolkitsResult,
-  Role,
 } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,14 +50,14 @@ function isToolkitConnected(conns: IntegrationConnection[], slug: string): boole
 // unmount.
 export function IntegrationsTab({
   agentId,
-  role,
+  canManage,
   embedded = false,
 }: {
   agentId: string;
-  role: Role;
+  // Connecting / disconnecting accounts: the agent's owner or a workspace admin.
+  canManage: boolean;
   embedded?: boolean;
 }) {
-  const isAdmin = role === "admin";
   const [tab, setTab] = useState<SubTab>("browse");
   const [search, setSearch] = useState("");
   const [toolkits, setToolkits] = useState<IntegrationToolkit[]>([]);
@@ -264,7 +263,7 @@ export function IntegrationsTab({
                             <Check className="h-3 w-3" />
                             Added
                           </Badge>
-                        ) : isAdmin ? (
+                        ) : canManage ? (
                           <Button
                             size="sm"
                             variant="outline"
@@ -335,7 +334,7 @@ export function IntegrationsTab({
                         <Badge variant="warning">{c.status || "Pending"}</Badge>
                       )}
                     </div>
-                    {isAdmin && (
+                    {canManage && (
                       <div className="flex shrink-0 items-center gap-1.5">
                         <Button
                           variant="ghost"

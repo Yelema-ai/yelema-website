@@ -116,6 +116,13 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   `requireMember` / `requireAdmin` / `requireAgentAccess`) are the authorization boundary. RLS
   policies stay enabled as a backstop but are dormant (clients can't reach the tables). Neither
   the `sk_live_` key nor the service-role key ever reaches the browser.
+- **Yelema fork: one client per deployment, roles, one agent per user.** The back-office creates
+  the deployment's single workspace and its admin; there is no open sign-up (only on the way to an
+  invitation) and no workspace creation or deletion (`403`). Roles are `admin` (sees and manages
+  every agent, invites) and `member` (`0002_roles_owner.sql`). Each user creates their own agent,
+  one per workspace (`agents.owner_user_id`, unique index). `requireAgentAccess` lets in the
+  owner or a workspace admin — anyone else gets a `404`; `"admin"` access (delete, resize,
+  budget) is admins only. Configuration is read at runtime (`src/lib/runtime-config.ts`).
 - **`src/lib/agent37.ts` is the only thing that calls the Agent37 API**
   (`server-only`) — both the control-plane base and each instance's data-plane host.
   Internal `src/app/api/**` routes are this app's BFF: the browser calls them, they

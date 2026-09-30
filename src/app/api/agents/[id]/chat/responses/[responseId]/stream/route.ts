@@ -13,7 +13,7 @@ type Ctx = { params: Promise<{ id: string; responseId: string }> };
 export async function GET(_request: Request, { params }: Ctx) {
   try {
     const { id, responseId } = await params;
-    await requireAgentAccess(id, "member");
+    await requireAgentAccess(id);
 
     const upstream = await instanceFetch(id, `/v1/responses/${encodeURIComponent(responseId)}/stream`, {
       headers: { Accept: "text/event-stream" },

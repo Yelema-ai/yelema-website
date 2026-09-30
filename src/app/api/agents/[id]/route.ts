@@ -7,7 +7,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function PATCH(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    const { db } = await requireAgentAccess(id, "admin");
+    const { db } = await requireAgentAccess(id);
 
     const { name } = await readJson<{ name?: string }>(request);
     const trimmed = (name || "").trim();
