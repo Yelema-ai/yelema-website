@@ -28,12 +28,16 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState<null | "signup" | "reset">(null);
   const [sentEmail, setSentEmail] = useState("");
+  // One client per deployment: no open sign-up. Accounts come from the back-office (the admin) or
+  // from an invitation — so "Create account" is offered only on the way to an /invite/ link.
+  const [fromInvite, setFromInvite] = useState(false);
 
   // /auth/callback bounces here with ?error=auth when a confirmation/recovery link
   // fails (expired, already used, or opened in a different browser). Surface it —
   // otherwise the user lands on a pristine form with no clue the link broke.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    setFromInvite(safeNextPath(params.get("next")).startsWith("/invite/"));
     if (params.get("error") !== "auth") return;
     toast.error("That link is invalid or has expired. Sign in, or request a new one.");
     params.delete("error");
@@ -80,6 +84,10 @@ export default function LoginPage() {
 
     setLoading(true);
     if (mode === "signup") {
+      if (!fromInvite) {
+        setLoading(false);
+        return;
+      }
       const { data, error } = await supabase.auth.signUp({
         email: mail,
         password,
@@ -190,7 +198,7 @@ export default function LoginPage() {
             </Button>
 
             <div className="text-center text-sm text-muted-foreground">
-              {mode === "signin" && (
+              {mode === "signin" && fromInvite && (
                 <button type="button" onClick={() => switchMode("signup")} className="hover:text-foreground">
                   Don&apos;t have an account? <span className="font-medium text-foreground">Create one</span>
                 </button>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutGrid, Settings, Users } from "lucide-react";
-import { branding } from "@/config/branding";
+import { BrandMark } from "@/components/BrandMark";
 import { AccountMenu } from "@/components/AccountMenu";
 import { cn } from "@/lib/utils";
 
@@ -19,13 +19,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <aside className="flex w-60 shrink-0 flex-col border-r bg-card p-4">
-        <div className="flex items-center gap-2 px-2 py-1">
-          {branding.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={branding.logoUrl} alt="" className="h-6 w-6 rounded" />
-          ) : null}
-          <span className="truncate font-semibold">{branding.appName}</span>
-        </div>
+        <BrandMark />
 
         <nav className="mt-6 flex flex-col gap-1">
           {NAV.map((item) => {
@@ -47,7 +41,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* Account + workspace switcher, pinned to the bottom near the user's identity. */}
+        {/* Account menu, pinned to the bottom near the user's identity. */}
         <div className="mt-auto border-t pt-3">
           <AccountMenu />
         </div>

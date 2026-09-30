@@ -8,13 +8,11 @@ import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export function SettingsView() {
-  const { current, refresh, setCurrentId } = useWorkspace();
+  const { current, refresh } = useWorkspace();
   const [name, setName] = useState(current?.name ?? "");
   const [busy, setBusy] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     setName(current?.name ?? "");
@@ -39,15 +37,6 @@ export function SettingsView() {
     } finally {
       setBusy(false);
     }
-  }
-
-  async function remove() {
-    if (!current) return;
-    await apiFetch(`/api/workspaces/${current.id}`, { method: "DELETE" });
-    const ws = await refresh();
-    setCurrentId(ws[0]?.id ?? "");
-    toast.success("Workspace deleted");
-    window.location.href = "/dashboard";
   }
 
   return (
@@ -90,29 +79,6 @@ export function SettingsView() {
           </Button>
         </div>
       </div>
-
-      {isAdmin && (
-        <div className="rounded-lg border border-destructive/40 p-4">
-          <h2 className="text-sm font-medium">Delete workspace</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Permanently deletes this workspace and all of its agents. Only the workspace owner can
-            do this.
-          </p>
-          <Button variant="destructive" className="mt-3" onClick={() => setDeleting(true)}>
-            Delete workspace
-          </Button>
-        </div>
-      )}
-
-      <ConfirmDialog
-        open={deleting}
-        onOpenChange={setDeleting}
-        title="Delete workspace?"
-        description="This deletes the workspace and tears down all of its agents. This cannot be undone."
-        confirmText="Delete workspace"
-        destructive
-        onConfirm={remove}
-      />
     </div>
   );
 }

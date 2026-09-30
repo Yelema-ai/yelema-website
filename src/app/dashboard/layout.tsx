@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession, type DB } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { WorkspaceProvider } from "@/components/WorkspaceProvider";
+import { UnlinkedAccount } from "@/components/UnlinkedAccount";
 import type { Role, Workspace, WorkspaceWithRole } from "@/lib/types";
 
 // Read the user's workspaces with two plain table queries joined in JS, NOT a PostgREST relationship
@@ -33,40 +34,16 @@ async function loadWorkspaces(db: DB, userId: string): Promise<WorkspaceWithRole
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
-// First sign-in: create the user's own workspace and their admin membership, returning the new
-// WorkspaceWithRole built from the rows we just wrote — no read-back. We insert the membership
-// ourselves (idempotent — the on_workspace_created trigger normally adds it in the same transaction,
-// hence the on-conflict no-op) so bootstrap depends on neither the trigger having fired nor a
-// schema-cache-sensitive re-read of it.
-async function createFirstWorkspace(db: DB, userId: string): Promise<WorkspaceWithRole> {
-  const { data: ws, error: wsErr } = await db
-    .from("workspaces")
-    .insert({ name: "My Workspace", owner_id: userId })
-    .select("*")
-    .single();
-  if (wsErr || !ws) {
-    throw new Error(`Couldn't create your first workspace: ${wsErr?.message ?? "no row returned"}`);
-  }
-  const { error: memErr } = await db
-    .from("memberships")
-    .upsert(
-      { workspace_id: ws.id, user_id: userId, role: "admin" },
-      { onConflict: "workspace_id,user_id" }
-    );
-  if (memErr) throw new Error(`Couldn't add you to your first workspace: ${memErr.message}`);
-  return { ...(ws as Workspace), role: "admin" as Role };
-}
-
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user } = await getSession();
   if (!user) redirect("/login");
 
   // Table access goes through the privileged client; the user came from the verified session above.
   const db = createAdminClient();
-  let workspaces = await loadWorkspaces(db, user.id);
-  if (workspaces.length === 0) {
-    workspaces = [await createFirstWorkspace(db, user.id)];
-  }
+  const workspaces = await loadWorkspaces(db, user.id);
+  // One client per deployment: the back-office creates THE workspace and its admin, and everyone
+  // else joins by invitation. A signed-in account with no membership is simply not attached yet.
+  if (workspaces.length === 0) return <UnlinkedAccount email={user.email ?? ""} />;
 
   // The chrome (DashboardShell sidebar) lives in the (fleet) route group's layout, NOT here:
   // the per-agent workspace route renders its own full-height shell and must not be wrapped in it.
