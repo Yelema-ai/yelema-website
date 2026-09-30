@@ -8,7 +8,7 @@ This app runs on two secrets you supply (both behind a login, so a human must fe
 - **`SUPABASE_ACCESS_TOKEN`** (`sbp_…`) — [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens) (~30s).
 
 `npm run setup` does everything else: creates a free Supabase project (or configures the one
-whose URL you paste into `NEXT_PUBLIC_SUPABASE_URL`), runs the migration, enables email auth,
+whose URL you paste into `SUPABASE_URL`), runs the migration, enables email auth,
 and writes the Supabase URL, anon key, and **server-only service-role key** back into
 `.env.local`. (Clients never touch the DB directly — the app reads/writes every table server-side
 with the service-role key; see [`AGENTS.md`](AGENTS.md).) It's idempotent and fills only blank
@@ -34,13 +34,13 @@ these steps in order; don't skip the checks.
    (mask as `sk_live_…last4`), never `cat .env.local`, never `git add`/commit it.
 5. **Complete setup.** Run `npm run setup` again. If it fails, read its message and act on it
    instead of retrying blind:
-   - "free-project limit" → ask me for an existing project's URL in `NEXT_PUBLIC_SUPABASE_URL`
+   - "free-project limit" → ask me for an existing project's URL in `SUPABASE_URL`
      (or free a slot at supabase.com/dashboard), then re-run.
    - "more than one organization" / `403` on create → my account has multiple Supabase orgs (or
      can't create in the default one). Setup prints the orgs with a `SUPABASE_ORG=<slug>` for each;
      re-run as `SUPABASE_ORG=<slug> npm run setup` for the one I want (usually my personal org).
    - `401` → my Supabase token is wrong/expired; ask for a new one.
-   - `404` → `NEXT_PUBLIC_SUPABASE_URL` points at a project this token can't see.
+   - `404` → `SUPABASE_URL` points at a project this token can't see.
 6. **Verify.** Run `npm run typecheck` and `npm run build` (no test suite — these two are the gate).
 7. **Start.** Run `npm run dev` and report the URL (<http://localhost:3000>): I sign up with
    email + password (open signup, no email verification) → land in a fresh workspace. Remind me
@@ -79,11 +79,11 @@ backend or register your sign-in URLs. Run setup locally once first, then:
 
 1. Run `npm run setup` locally (creates Supabase + schema + auth config).
 2. Push your fork to GitHub, then in Vercel: **Add New → Project → Import Git Repository**.
-3. Add **only these** env vars: `AGENT37_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`,
-   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server-only — the runtime needs
-   it for all DB access), `NEXT_PUBLIC_SITE_URL` (your prod URL).
+3. Add **only these** env vars: `AGENT37_API_KEY`, `SUPABASE_URL`,
+   `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server-only — the runtime needs
+   it for all DB access), `SITE_URL` (your prod URL).
    **Never add** `SUPABASE_ACCESS_TOKEN` — it's setup-only (used to create/configure the project,
    never at runtime).
    (Branding is code-side now — edit `src/config/branding.ts`, not env.)
-4. Register your prod sign-in URL with Supabase: set `NEXT_PUBLIC_SITE_URL` to your prod URL
+4. Register your prod sign-in URL with Supabase: set `SITE_URL` to your prod URL
    in `.env.local` and re-run `npm run setup` (it adds `<prod>/auth/callback` for you).

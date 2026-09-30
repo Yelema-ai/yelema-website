@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronsUpDown, LogOut, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/lib/supabase/client";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { apiFetch } from "@/lib/api";
 import type { WorkspaceWithRole } from "@/lib/types";
@@ -36,6 +36,7 @@ import {
 // immediately re-pin the old workspace.
 export function AccountMenu() {
   const router = useRouter();
+  const supabase = useSupabase();
   const { workspaces, current, setCurrentId, refresh, userEmail } = useWorkspace();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -50,7 +51,7 @@ export function AccountMenu() {
   }
 
   async function signOut() {
-    await createClient().auth.signOut();
+    await supabase.auth.signOut();
     window.location.href = "/login";
   }
 

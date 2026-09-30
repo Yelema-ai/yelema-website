@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/lib/supabase/client";
+import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,8 @@ const COPY: Record<Mode, { title: string; subtitle: string; cta: string; busy: s
 };
 
 export default function LoginPage() {
+  const supabase = useSupabase();
+  const { siteUrl } = usePublicConfig();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,7 +49,7 @@ export default function LoginPage() {
 
   // /auth/callback exchanges the email link for a session, then redirects to `next`.
   function callbackUrl(next: string): string {
-    const url = new URL("/auth/callback", publicSiteOrigin(window.location.origin));
+    const url = new URL("/auth/callback", publicSiteOrigin(siteUrl, window.location.origin));
     url.searchParams.set("next", next);
     return url.toString();
   }
@@ -56,7 +59,6 @@ export default function LoginPage() {
     const mail = email.trim();
     if (!mail) return;
 
-    const supabase = createClient();
     const next = safeNextPath(new URLSearchParams(window.location.search).get("next"));
 
     if (mode === "reset") {

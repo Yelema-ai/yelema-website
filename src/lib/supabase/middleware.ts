@@ -1,12 +1,17 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { supabaseAnonKey, supabaseUrl } from "@/lib/runtime-config";
 
 export async function updateSession(request: NextRequest) {
+  // Health checks come from the back-office, carry no session, and must answer even when the
+  // Supabase variables are missing — so they skip the auth client entirely.
+  if (request.nextUrl.pathname === "/api/health") return NextResponse.next({ request });
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl()!,
+    supabaseAnonKey()!,
     {
       cookies: {
         getAll() {

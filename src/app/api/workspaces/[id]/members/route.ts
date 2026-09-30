@@ -1,5 +1,7 @@
 import { requireAdmin, requireMember, requireUser } from "@/lib/auth";
 import { ApiError, handleError, json } from "@/lib/http";
+import { siteUrl } from "@/lib/runtime-config";
+import { publicSiteOrigin } from "@/lib/site-url";
 import type { Invitation, WorkspaceMember } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -42,7 +44,7 @@ export async function POST(request: Request, { params }: Ctx) {
       .single();
     if (error) throw new ApiError(500, "db_error", error.message);
 
-    const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || new URL(request.url).origin;
+    const origin = publicSiteOrigin(siteUrl(), new URL(request.url).origin);
     const url = `${origin}/invite/${data.token}`;
 
     return json({ token: data.token, url }, 201);

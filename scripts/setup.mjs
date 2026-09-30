@@ -72,6 +72,19 @@ function get(env, key) {
   return env.map[key];
 }
 
+// The app reads SUPABASE_URL / SUPABASE_ANON_KEY / SITE_URL at runtime; older .env.local files
+// still carry the NEXT_PUBLIC_* names, which the app (and this script) accept as a fallback.
+const LEGACY = {
+  SUPABASE_URL: "NEXT_PUBLIC_SUPABASE_URL",
+  SUPABASE_ANON_KEY: "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  SITE_URL: "NEXT_PUBLIC_SITE_URL",
+};
+
+function getConfig(env, key) {
+  const value = get(env, key);
+  return isBlank(value) && LEGACY[key] ? get(env, LEGACY[key]) : value;
+}
+
 function isBlank(v) {
   return v == null || PLACEHOLDERS.has(String(v).trim());
 }
@@ -286,10 +299,10 @@ SUPABASE_ACCESS_TOKEN (a personal access token):
   - runs the database migration(s)
   - configures the Site URL + redirect allow-list and turns on
     email + password auth (open signup, no email verification)
-  - fills in NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY /
+  - fills in SUPABASE_URL / SUPABASE_ANON_KEY /
     SUPABASE_SERVICE_ROLE_KEY (server-only)
 
-If NEXT_PUBLIC_SUPABASE_URL is blank, it creates a free project for you.
+If SUPABASE_URL is blank, it creates a free project for you.
 
 Options:
   --no-create   Don't create a project; fail if none is configured.
@@ -340,9 +353,9 @@ async function main() {
   }
 
   const call = api(token);
-  const siteUrl = (get(env, "NEXT_PUBLIC_SITE_URL") || "http://localhost:3000").replace(/\/$/, "");
+  const siteUrl = (getConfig(env, "SITE_URL") || "http://localhost:3000").replace(/\/$/, "");
 
-  let ref = process.env.SUPABASE_PROJECT_REF || refFromUrl(get(env, "NEXT_PUBLIC_SUPABASE_URL"));
+  let ref = process.env.SUPABASE_PROJECT_REF || refFromUrl(getConfig(env, "SUPABASE_URL"));
 
   if (ref) {
     step(`Using Supabase project ${bold(ref)}`);
@@ -353,14 +366,14 @@ async function main() {
       if (e.status === 404)
         die(
           `No project ${ref} found for this token (404).`,
-          "Either the token belongs to a different account, or NEXT_PUBLIC_SUPABASE_URL is wrong."
+          "Either the token belongs to a different account, or SUPABASE_URL is wrong."
         );
       throw e;
     }
   } else if (FLAGS.noCreate) {
     die(
       "No Supabase project configured, and --no-create was passed.",
-      "Paste an existing project's URL into NEXT_PUBLIC_SUPABASE_URL in .env.local and re-run."
+      "Paste an existing project's URL into SUPABASE_URL in .env.local and re-run."
     );
   } else {
     step("No Supabase project configured — creating a new free one");
@@ -374,7 +387,7 @@ async function main() {
     const pickHint =
       `Re-run ${bold("npm run setup")} after choosing one:\n` +
       `  • Target a specific org — set one of these:\n${orgList}\n` +
-      `  • Or reuse an existing project — paste its URL into NEXT_PUBLIC_SUPABASE_URL in .env.local`;
+      `  • Or reuse an existing project — paste its URL into SUPABASE_URL in .env.local`;
 
     const wantOrg = process.env.SUPABASE_ORG;
     if (wantOrg && !orgs.some((o) => o.id === wantOrg || o.slug === wantOrg)) {
@@ -412,14 +425,14 @@ async function main() {
     // configures this one instead of creating a second. The generated DB password is NOT stored:
     // nothing in this app uses a direct Postgres connection (all DB access is via the service-role
     // key over HTTPS), so reset it in the Supabase dashboard if you ever want raw DB access.
-    setEnv(env, "NEXT_PUBLIC_SUPABASE_URL", `https://${ref}.supabase.co`);
+    setEnv(env, "SUPABASE_URL", `https://${ref}.supabase.co`);
     saveEnv(env);
-    ok("Wrote NEXT_PUBLIC_SUPABASE_URL");
+    ok("Wrote SUPABASE_URL");
     await waitHealthy(call, ref);
   }
 
   step("Filling in Supabase credentials");
-  const needAnon = isBlank(get(env, "NEXT_PUBLIC_SUPABASE_ANON_KEY"));
+  const needAnon = isBlank(getConfig(env, "SUPABASE_ANON_KEY"));
   const needService = isBlank(get(env, "SUPABASE_SERVICE_ROLE_KEY"));
   if (needAnon || needService) {
     // One reveal fetches both the public (anon) and the secret (service-role) key.
@@ -427,8 +440,8 @@ async function main() {
     if (needAnon) {
       const anon = pickPublicKey(keys);
       if (!anon) die("Could not read the project's anon/publishable key from the API.");
-      setEnv(env, "NEXT_PUBLIC_SUPABASE_ANON_KEY", anon);
-      ok("Wrote NEXT_PUBLIC_SUPABASE_ANON_KEY");
+      setEnv(env, "SUPABASE_ANON_KEY", anon);
+      ok("Wrote SUPABASE_ANON_KEY");
     }
     if (needService) {
       const svc = pickServiceKey(keys);
@@ -456,7 +469,7 @@ async function main() {
   );
   if (siteUrl.includes("localhost")) {
     log(
-      `\n${dim("When you deploy, set NEXT_PUBLIC_SITE_URL to your production URL and re-run")}\n` +
+      `\n${dim("When you deploy, set SITE_URL to your production URL and re-run")}\n` +
         `${dim("`npm run setup` to add the production redirect URLs.")}`
     );
   }

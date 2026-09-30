@@ -168,10 +168,11 @@ dashboard steps.
 
 ## Custom agent image (out of scope here)
 
-**There is no Docker in this repo.** The catalog ships Hermes and OpenClaw, which run
-on Agent37's stock images, and nothing in `src/**` or `scripts/**` builds, pushes, or
-references an image. Don't add a Dockerfile here — building a custom agent image is a
-separate concern with its own repo and its own docs page:
+The root `Dockerfile` builds **this app** (the Yelema image the back-office starts once per
+client, configured by env at runtime — see `docs/plans/yelema-single-tenant.md`). It is not an
+**agent** image: the catalog ships Hermes and OpenClaw, which run on Agent37's stock images,
+and nothing here builds or pushes an agent image. Building a custom agent image is a separate
+concern with its own repo and its own docs page:
 
 - [agent37-platform/custom-agent-image](https://github.com/agent37-platform/custom-agent-image)
   — a GitHub template repo: a Dockerfile on the Hermes base, an example skill, a
