@@ -14,28 +14,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ChannelPanelHeader } from "@/components/channels/ChannelCredentialsForm";
+import { TelegramQrConnect } from "@/components/channels/TelegramQrConnect";
 import { useAsyncAction } from "@/components/useAsyncAction";
 
 const OWNER_POLL_MS = 3000;
 
-type Step = "token" | "owner" | "connected";
+type Step = "qr" | "token" | "owner" | "connected";
 
 // Telegram is the channel worth building a real flow for: it reaches the agent through a webhook, so
 // it works even when the agent is asleep, and nobody has to install anything.
 //
-// Three steps, and the middle one is the point: the first person to message the bot becomes its whole
+// By default a QR creates the bot (TelegramQrConnect). Pasting a BotFather token stays available, in
+// three steps, and the middle one is the point: the first person to message the bot becomes its whole
 // allowlist. Without that, anyone who guessed the bot's @username could talk to someone else's agent.
 // We read that person from Telegram's own inbox rather than asking for a numeric user id nobody knows.
 export function TelegramConnect({
   agentId,
+  agentName,
   channel,
   onBack,
 }: {
   agentId: string;
+  agentName?: string | null;
   channel: MessagingPlatform;
   onBack: () => void;
 }) {
-  const [step, setStep] = useState<Step>(isChannelConnected(channel) ? "connected" : "token");
+  const [step, setStep] = useState<Step>(isChannelConnected(channel) ? "connected" : "qr");
+  const [qrBot, setQrBot] = useState<string | null>(null);
+  const defaultBotName = (agentName ?? "").split("@")[0]?.trim() || "My assistant";
   const [token, setToken] = useState("");
   const [bot, setBot] = useState<TelegramBotCheck | null>(null);
   const [owner, setOwner] = useState<TelegramOwner | null>(null);
@@ -123,6 +129,29 @@ export function TelegramConnect({
     <div className="space-y-5">
       <ChannelPanelHeader channel={channel} onBack={onBack} />
 
+      {step === "qr" && (
+        <div className="space-y-4">
+          <TelegramQrConnect
+            agentId={agentId}
+            defaultBotName={defaultBotName}
+            onConnected={(username) => {
+              setQrBot(username);
+              setStep("connected");
+            }}
+          />
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={() => setStep("token")}>
+              I already have a bot (paste its token)
+            </Button>
+            {channel.configured && (
+              <Button variant="ghost" onClick={disconnect} disabled={busy}>
+                Disconnect
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {step === "token" && (
         <div className="space-y-4">
           <ol className="list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
@@ -158,6 +187,9 @@ export function TelegramConnect({
             <Button onClick={check} disabled={busy || token.trim().length === 0}>
               {busy ? <Loader2 className="animate-spin" /> : null}
               Continue
+            </Button>
+            <Button variant="ghost" onClick={() => setStep("qr")} disabled={busy}>
+              Use a QR code instead
             </Button>
             {channel.configured && (
               <Button variant="ghost" onClick={disconnect} disabled={busy}>
@@ -205,7 +237,7 @@ export function TelegramConnect({
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
             <div className="space-y-1">
               <p className="text-sm font-medium">
-                {bot ? `@${bot.username} is connected.` : "Telegram is connected."}
+                {bot ? `@${bot.username} is connected.` : qrBot ? `@${qrBot} is connected.` : "Telegram is connected."}
               </p>
               <p className="text-xs text-muted-foreground">
                 Message the bot from anywhere. Telegram reaches this agent by webhook, so it answers even when the
@@ -214,9 +246,9 @@ export function TelegramConnect({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {bot && (
+            {(bot || qrBot) && (
               <Button asChild>
-                <a href={`https://t.me/${bot.username}`} target="_blank" rel="noopener noreferrer">
+                <a href={`https://t.me/${bot?.username ?? qrBot}`} target="_blank" rel="noopener noreferrer">
                   Open chat
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
@@ -229,7 +261,8 @@ export function TelegramConnect({
                 setToken("");
                 setBot(null);
                 setOwner(null);
-                setStep("token");
+                setQrBot(null);
+                setStep("qr");
               }}
             >
               Connect a different bot

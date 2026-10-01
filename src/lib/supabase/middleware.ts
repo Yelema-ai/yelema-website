@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { supabaseAnonKey, supabaseUrl } from "@/lib/runtime-config";
+import { siteUrl, supabaseAnonKey, supabaseUrl } from "@/lib/runtime-config";
+import { publicSiteOrigin } from "@/lib/site-url";
 
 export async function updateSession(request: NextRequest) {
   // Health checks come from the back-office, carry no session, and must answer even when the
@@ -43,8 +44,8 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/invite");
 
   if (!user && !isPublic) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    // SITE_URL, not nextUrl: behind the reverse proxy nextUrl can carry the listen address.
+    const url = new URL("/login", publicSiteOrigin(siteUrl(), request.nextUrl.origin));
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }

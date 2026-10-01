@@ -85,7 +85,7 @@ export function ChannelsTab({
     return (
       <div className="space-y-6">
         {open.id === "telegram" ? (
-          <TelegramConnect agentId={agentId} channel={open} onBack={back} />
+          <TelegramConnect agentId={agentId} agentName={agent.name} channel={open} onBack={back} />
         ) : open.id === "whatsapp" ? (
           <WhatsAppConnect agentId={agentId} channel={open} onBack={back} />
         ) : (

@@ -1,8 +1,6 @@
-import { requireAdmin, requireMember, requireUser } from "@/lib/auth";
-import { ApiError, handleError, json, readJson } from "@/lib/http";
-import { siteUrl } from "@/lib/runtime-config";
-import { publicSiteOrigin } from "@/lib/site-url";
-import type { Invitation, Role, WorkspaceMember } from "@/lib/types";
+import { requireMember, requireUser } from "@/lib/auth";
+import { ApiError, handleError, json } from "@/lib/http";
+import type { Invitation, WorkspaceMember } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -31,27 +29,10 @@ export async function GET(_request: Request, { params }: Ctx) {
   }
 }
 
-export async function POST(request: Request, { params }: Ctx) {
+// Invitations are disabled: the Yelema back-office creates every member and their agent.
+export async function POST() {
   try {
-    const { id } = await params;
-    const { db, user } = await requireUser();
-    await requireAdmin(db, id, user.id);
-
-    // The inviting admin picks the role; a plain member is the default.
-    const body = await readJson<{ role?: string }>(request);
-    const role: Role = body.role === "admin" ? "admin" : "member";
-
-    const { data, error } = await db
-      .from("invitations")
-      .insert({ workspace_id: id, role, created_by: user.id })
-      .select("token")
-      .single();
-    if (error) throw new ApiError(500, "db_error", error.message);
-
-    const origin = publicSiteOrigin(siteUrl(), new URL(request.url).origin);
-    const url = `${origin}/invite/${data.token}`;
-
-    return json({ token: data.token, url }, 201);
+    throw new ApiError(403, "forbidden", "Members are managed by the Yelema back-office");
   } catch (e) {
     return handleError(e);
   }

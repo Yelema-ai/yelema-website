@@ -1,8 +1,7 @@
 import { agent37 } from "@/lib/agent37";
 import { requireMember, requireUser } from "@/lib/auth";
-import { AGENT_TEMPLATES, DEFAULT_AGENT, templateAppPorts } from "@/config/agents";
-import { usdToMicros } from "@/lib/format";
-import { ApiError, handleError, json, readJson } from "@/lib/http";
+import { templateAppPorts } from "@/config/agents";
+import { ApiError, handleError, json } from "@/lib/http";
 import type { Agent, AgentRow, MergedAgent, Template } from "@/lib/types";
 
 // The image catalog barely changes, but the dashboard polls this route every 5s while any agent is
@@ -19,18 +18,6 @@ async function getTemplates(): Promise<Template[]> {
   return data;
 }
 
-async function resolveTemplate(): Promise<string | undefined> {
-  try {
-    const data = await getTemplates();
-    const preferred = data.find((t) => t.name === DEFAULT_AGENT.template);
-    if (preferred) return preferred.name;
-    const builtin = data.find((t) => t.scope === "system");
-    return (builtin ?? data[0])?.name;
-  } catch {
-    return DEFAULT_AGENT.template;
-  }
-}
-
 export async function GET(request: Request) {
   try {
     const { db, user } = await requireUser();
@@ -44,8 +31,6 @@ export async function GET(request: Request) {
     if (role !== "admin") query = query.eq("owner_user_id", user.id);
     const { data: rows, error } = await query.order("created_at", { ascending: false });
     if (error) throw new ApiError(500, "db_error", error.message);
-    // One agent per user: the UI offers "Create my agent" until the caller owns one.
-    const canCreate = !(rows as AgentRow[]).some((r) => r.owner_user_id === user.id);
 
     let live = new Map<string, Agent>();
     let templates = new Map<string, Template>();
@@ -54,7 +39,10 @@ export async function GET(request: Request) {
       getTemplates(),
     ]);
     if (liveRes.status === "fulfilled") {
-      live = new Map(liveRes.value.data.map((i) => [i.id, i]));
+      // The Agent37 account is shared by every Yelema client: keep only this workspace's instances.
+      live = new Map(
+        liveRes.value.data.filter((i) => i.metadata?.app_workspace === workspaceId).map((i) => [i.id, i])
+      );
     }
     if (tmplRes.status === "fulfilled") {
       templates = new Map(tmplRes.value.map((t) => [t.name, t]));
@@ -97,75 +85,16 @@ export async function GET(request: Request) {
       };
     });
 
-    return json({ agents, role, can_create: canCreate });
+    return json({ agents, role, can_create: false });
   } catch (e) {
     return handleError(e);
   }
 }
 
-export async function POST(request: Request) {
+// Agents are created by the Yelema back-office only: one per member, provisioned with their account.
+export async function POST() {
   try {
-    const { db, user } = await requireUser();
-    // Shape is fixed server-side (DEFAULT_AGENT); the client picks the workspace and agent type.
-    const body = await readJson<{ workspace_id?: string; template?: string }>(request);
-
-    const workspaceId = body.workspace_id;
-    if (!workspaceId) throw new ApiError(400, "invalid_request", "workspace_id is required");
-    await requireMember(db, workspaceId, user.id);
-
-    // Every user — admin or member — creates their own agent, and only one. The unique index
-    // agents_one_per_owner_idx backs this up against a concurrent double submit.
-    const { data: owned } = await db
-      .from("agents")
-      .select("agent37_id")
-      .eq("workspace_id", workspaceId)
-      .eq("owner_user_id", user.id)
-      .limit(1);
-    if (owned?.length) throw new ApiError(409, "conflict", "You already have an agent in this workspace");
-
-    // Paywall/entitlement seam: a fork can gate agent creation here, e.g.
-    // if (!(await canCreateAgent(db, workspaceId))) throw new ApiError(403, "forbidden", "Agent creation is not enabled for this workspace.");
-
-    const template =
-      body.template && AGENT_TEMPLATES.includes(body.template)
-        ? body.template
-        : await resolveTemplate();
-
-    const agent = await agent37.createAgent({
-      template,
-      resources: {
-        cpu: DEFAULT_AGENT.cpu,
-        memory: DEFAULT_AGENT.memory,
-        disk: DEFAULT_AGENT.disk,
-      },
-      user: user.id,
-      metadata: { app_workspace: workspaceId },
-      budget: { monthly_cap_micros: usdToMicros(DEFAULT_AGENT.monthlyCapUsd) },
-    });
-
-    const { error } = await db.from("agents").insert({
-      agent37_id: agent.id,
-      workspace_id: workspaceId,
-      name: agent.name || null,
-      status: agent.status,
-      template: agent.template,
-      cpu: agent.resources.cpu,
-      memory: agent.resources.memory,
-      disk: agent.resources.disk,
-      created_by: user.id,
-      owner_user_id: user.id,
-    });
-    if (error) {
-      // Roll back the orphaned agent so we never bill for an untracked box.
-      try {
-        await agent37.deleteAgent(agent.id);
-      } catch {
-        /* best-effort */
-      }
-      throw new ApiError(500, "db_error", error.message);
-    }
-
-    return json(agent, 201);
+    throw new ApiError(403, "forbidden", "Agents are managed by the Yelema back-office");
   } catch (e) {
     return handleError(e);
   }

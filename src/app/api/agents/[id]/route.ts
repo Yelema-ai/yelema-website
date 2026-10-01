@@ -1,4 +1,3 @@
-import { agent37, Agent37Error } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { ApiError, handleError, json, readJson } from "@/lib/http";
 
@@ -22,20 +21,10 @@ export async function PATCH(request: Request, { params }: Ctx) {
   }
 }
 
-export async function DELETE(_request: Request, { params }: Ctx) {
+// Agents are created and deleted by the Yelema back-office only (it also stops their billing).
+export async function DELETE() {
   try {
-    const { id } = await params;
-    const { db } = await requireAgentAccess(id, "admin");
-
-    try {
-      await agent37.deleteAgent(id);
-    } catch (e) {
-      // Instance already gone upstream — still remove our mirror row.
-      if (!(e instanceof Agent37Error && e.status === 404)) throw e;
-    }
-    await db.from("agents").delete().eq("agent37_id", id);
-
-    return json({ id, deleted: true });
+    throw new ApiError(403, "forbidden", "Agents are managed by the Yelema back-office");
   } catch (e) {
     return handleError(e);
   }

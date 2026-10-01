@@ -7,7 +7,7 @@
 # 2. streams it to $DEPLOY_HOST (default mstudio-vps) with `docker load` — no container is started
 # 3. on the host, removes older agent37-app tags, keeping this version and the previous one
 #    (scoped to agent37-app: the host is shared, so no global `docker image prune`)
-# 4. copies supabase/migrations/*.sql to $BACKOFFICE_DIR/assets/agent37-app/vX.Y.Z/
+# 4. copies supabase/migrations/*.sql to the back-office module assets (MIGRATIONS_DIR below)
 #
 # Env: DEPLOY_HOST (mstudio-vps), BACKOFFICE_DIR (~/yelema-platform), SKIP_SHIP=1 to build only.
 set -euo pipefail
@@ -46,14 +46,15 @@ for t in $old; do docker image rm "$IMAGE:$t" || true; done
 docker image ls "$IMAGE"
 REMOTE
 
-DEST="$BACKOFFICE_DIR/assets/$IMAGE/$VERSION"
+# Where the back-office reads them (yelema-platform: modules/tenant-apps/lib/migrations.ts).
+DEST="$BACKOFFICE_DIR/apps/control-plane/src/modules/tenant-apps/assets/$IMAGE/$VERSION"
 if [[ -d "$BACKOFFICE_DIR" ]]; then
   echo "==> Copying migrations to $DEST"
   mkdir -p "$DEST"
   cp supabase/migrations/*.sql "$DEST/"
   ls "$DEST"
 else
-  echo "==> $BACKOFFICE_DIR not found: copy supabase/migrations/*.sql to assets/$IMAGE/$VERSION/ yourself"
+  echo "==> $BACKOFFICE_DIR not found: copy supabase/migrations/*.sql to apps/control-plane/src/modules/tenant-apps/assets/$IMAGE/$VERSION/ yourself"
 fi
 
 echo "==> Published $IMAGE:$VERSION"

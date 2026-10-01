@@ -2,7 +2,7 @@
 
 > Pendant de `yelema-platform/docs/plans/agent37-espaces-dedies.md` (mise en service depuis le
 > back-office). Branche prévue : `feat/yelema-single-tenant`. Rédigé le 2026-09-30.
-> **STATUS : validé le 2026-09-30 — en cours d’exécution (A → B → C → D).**
+> **STATUS : validé le 2026-09-30 — étapes A, B, C, D réalisées ; v0.1.0 publiée (voir § 8).**
 
 ## 1. Objectif
 
@@ -20,6 +20,7 @@ Yelema commun.
 | Santé | `GET /api/health` → `200 { ok: true, version }` sans secret |
 | Schéma | `supabase/migrations/*.sql` de la version, copiés par le back-office dans `assets/agent37-app/<version>/` |
 | Données initiales | le back-office crée l'admin (Auth) et **la** ligne `workspaces` ; l'app ne crée plus de workspace |
+| Membres et agents (v0.1.2) | le back-office crée chaque membre (Auth + `memberships`, rôle `admin`/`member`), **son** instance Agent37 (`metadata.app_workspace` = id du workspace) et sa ligne `agents` (`owner_user_id`) ; l'app ne crée ni ne supprime plus d'agent ni de membre (403), et ne liste que les instances de son workspace |
 | Accès | lien `/auth/callback?token_hash=…&type=invite&next=/reset-password` (déjà géré par la route existante) |
 
 ## 3. Changements
@@ -100,3 +101,19 @@ sur le back-office).
 | B | 3 + 4 : mode client unique + branding | 1–2 j |
 | C | 7 : script de publication, première version `v0.1.0` chargée sur le VPS | 0,5 j |
 | D | 6 : rôles et isolation (avant le premier vrai client) | 2–3 j |
+
+## 8. Versions publiées
+
+| Tag | Date | Commit | Image sur `mstudio-vps` | Migrations (`assets/agent37-app/<tag>/`) | Contenu |
+|---|---|---|---|---|---|
+| `v0.1.0` | 2026-09-30 | `910fb65` | `agent37-app:v0.1.0` — linux/amd64, `USER node`, 206 Mo, `APP_VERSION=v0.1.0` | `0001_init.sql`, `0002_roles_owner.sql` | Étapes A–D : config au runtime, `/api/health`, un client par déploiement, branding **provisoire**, rôles `admin`/`member` + un agent par utilisateur |
+| `v0.1.1` | 2026-09-30 | `910fb65` + correctif **non commité** | `agent37-app:v0.1.1` — linux/amd64 | `0001_init.sql`, `0002_roles_owner.sql` (inchangées) | Redirections (`/auth/callback`, middleware → `/login`) construites depuis `SITE_URL` : derrière Apache, `request.url` donnait `0.0.0.0:3000`. `build-image.sh` copie les migrations dans `apps/control-plane/src/modules/tenant-apps/assets/` (et non plus `assets/` à la racine) |
+| `v0.1.2` | 2026-10-01 | `910fb65` + correctifs **non commités** | `agent37-app:v0.1.2` — linux/amd64 | `0001_init.sql`, `0002_roles_owner.sql` (inchangées) | Création/suppression d'agent, invitations et retrait de membre désactivés (403 « managed by the Yelema back-office », boutons retirés) ; liste des agents filtrée sur `metadata.app_workspace` (compte Agent37 partagé entre clients) |
+| `v0.1.3` | 2026-10-01 | `910fb65` + correctifs **non commités** | `agent37-app:v0.1.3` — linux/amd64 | `0001_init.sql`, `0002_roles_owner.sql` (inchangées) | Telegram par QR code (bot géré créé via l'onboarding Hermes, service Nous) par défaut ; collage du jeton BotFather conservé en repli |
+
+Notes pour le back-office :
+- Appliquer les migrations **dans l'ordre** (`0001` puis `0002`) ; les deux sont idempotentes.
+- Le contrat § 2 est inchangé. La ligne `memberships` de l'admin est créée par le trigger
+  `on_workspace_created` à l'insertion de `workspaces` (rôle `admin`).
+- Les invitations créées dans l'app sont `member` par défaut ; l'admin peut choisir `admin`.
+

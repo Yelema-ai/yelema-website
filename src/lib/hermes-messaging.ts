@@ -1,7 +1,7 @@
 import "server-only";
 import { agent37 } from "@/lib/agent37";
 import { ApiError } from "@/lib/http";
-import type { MessagingPlatform, WhatsappPairing } from "@/lib/channels";
+import type { MessagingPlatform, TelegramPairing, WhatsappPairing } from "@/lib/channels";
 
 // Hermes serves its own messaging API on a LOOPBACK port inside the instance (9119), so it is
 // reachable only from inside the sandbox, which is exactly what POST /v1/instances/{id}/exec gives
@@ -108,4 +108,29 @@ export function readWhatsappPairing(agentId: string, pairingId: string): Promise
 
 export function applyWhatsappPairing(agentId: string, pairingId: string): Promise<{ ok?: boolean; detail?: string }> {
   return dashboard(agentId, "POST", `${WHATSAPP_ONBOARDING}/${encodeURIComponent(pairingId)}/apply`, {});
+}
+
+// ---- Telegram: a managed bot created by scanning a QR ----
+// The harness asks its setup service for a pairing; the user scans it in Telegram, which creates a bot
+// they own; apply saves that bot's token and its owner as the allowlist, then restarts the gateway.
+// The token stays inside the agent: this app only ever sees the bot's @username and its owner's id.
+
+const TELEGRAM_ONBOARDING = "/api/messaging/telegram/onboarding";
+
+export function startTelegramPairing(agentId: string, botName: string): Promise<TelegramPairing> {
+  return dashboard<TelegramPairing>(agentId, "POST", `${TELEGRAM_ONBOARDING}/start`, { bot_name: botName });
+}
+
+export function readTelegramPairing(agentId: string, pairingId: string): Promise<TelegramPairing> {
+  return dashboard<TelegramPairing>(agentId, "GET", `${TELEGRAM_ONBOARDING}/${encodeURIComponent(pairingId)}`);
+}
+
+export function applyTelegramPairing(
+  agentId: string,
+  pairingId: string,
+  allowedUserIds: string[]
+): Promise<{ ok?: boolean; detail?: string; bot_username?: string | null }> {
+  return dashboard(agentId, "POST", `${TELEGRAM_ONBOARDING}/${encodeURIComponent(pairingId)}/apply`, {
+    allowed_user_ids: allowedUserIds,
+  });
 }

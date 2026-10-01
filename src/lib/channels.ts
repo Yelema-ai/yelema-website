@@ -115,6 +115,35 @@ export interface TelegramOwner {
   name: string | null;
 }
 
+// ---- Telegram QR (managed bot) ----
+
+// The harness's Telegram setup record: start answers with the link and QR to scan, the poll stays
+// `waiting` until the user confirms the new bot in Telegram, then `ready` with who owns it. The bot
+// token itself never leaves the agent. Harness errors come back as `detail`.
+export interface TelegramPairing {
+  pairing_id?: string;
+  status?: "waiting" | "ready";
+  deep_link?: string;
+  qr_payload?: string;
+  suggested_username?: string;
+  expires_at?: string;
+  bot_username?: string | null;
+  owner_user_id?: string | number | null;
+  detail?: string;
+}
+
+// What the Telegram panel sees while a QR setup runs.
+export type TelegramUiStatus = "waiting" | "connected" | "expired";
+
+export interface TelegramPairingState {
+  pairing_id: string;
+  status: TelegramUiStatus;
+  qr_data_url?: string;
+  deep_link?: string;
+  suggested_username?: string;
+  bot_username?: string | null;
+}
+
 // ---- WhatsApp ----
 
 export type WhatsappPairingStatus =

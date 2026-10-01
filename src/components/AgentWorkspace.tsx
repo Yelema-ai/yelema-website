@@ -242,7 +242,6 @@ export function AgentWorkspace({
                       agentId={agentId}
                       agent={active}
                       canManage={canManage}
-                      isAdmin={role === "admin"}
                       onChanged={load}
                     />
                   ) : (
