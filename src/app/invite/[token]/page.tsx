@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { deploymentWorkspaceId } from "@/lib/runtime-config";
 import { AcceptInvite } from "@/components/AcceptInvite";
 import { branding } from "@/config/branding";
 
@@ -15,10 +16,12 @@ export default async function InvitePage({ params }: Ctx) {
   // read what they were invited to. Runs through the privileged client.
   const { data, error } = await createAdminClient().rpc("get_invitation", { p_token: token });
   const inv = (Array.isArray(data) ? data[0] : null) as
-    | { workspace_name: string; role: string; expired: boolean }
+    | { workspace_id: string; workspace_name: string; role: string; expired: boolean }
     | null;
 
-  if (error || !inv) return <Message text="This invitation is invalid or no longer exists." />;
+  // On a shared database, another client's invitation does not exist for this deployment.
+  const pinned = deploymentWorkspaceId();
+  if (error || !inv || (pinned && inv.workspace_id !== pinned)) return <Message text="This invitation is invalid or no longer exists." />;
   if (inv.expired) return <Message text="This invitation has expired." />;
 
   return <AcceptInvite token={token} workspaceName={inv.workspace_name} role={inv.role} />;

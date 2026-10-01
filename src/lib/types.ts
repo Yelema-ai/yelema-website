@@ -62,6 +62,8 @@ export interface Agent {
   user: string | null;
   name: string | null;
   metadata: Record<string, unknown> | null;
+  // The instance URL mirrored under the workspace's custom domains, oldest first ([] without one).
+  domain_urls?: string[];
   paid_through: number | null;
   past_due: boolean;
   created: number | null;

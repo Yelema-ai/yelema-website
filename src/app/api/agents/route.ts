@@ -18,6 +18,13 @@ async function getTemplates(): Promise<Template[]> {
   return data;
 }
 
+// A port's preview URL, under the custom domain when the instance reports one
+// (`https://{id}.yelema-agents.ai` → `https://{id}-{port}.yelema-agents.ai`).
+function previewUrl(id: string, port: number, domainUrl?: string): string {
+  const host = domainUrl ? new URL(domainUrl).hostname.slice(id.length + 1) : "agent37.app";
+  return `https://${id}-${port}.${host}`;
+}
+
 export async function GET(request: Request) {
   try {
     const { db, user } = await requireUser();
@@ -79,7 +86,7 @@ export async function GET(request: Request) {
             : templateAppPorts(l?.template ?? row.template).map((port) => ({
                 port,
                 default: false,
-                url: `https://${row.agent37_id}-${port}.agent37.app`,
+                url: previewUrl(row.agent37_id, port, l?.domain_urls?.[0]),
               })),
         update_available: updateAvailable(l),
       };

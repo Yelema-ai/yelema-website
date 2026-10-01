@@ -37,6 +37,14 @@ export function brandLogoUrl(): string | undefined {
   return read("BRAND_LOGO_URL");
 }
 
+// The client workspace this deployment serves. Every client shares ONE Supabase project (see
+// docs/decisions/supabase-projet-partage.md), so the deployment is pinned to its workspace: any
+// other workspace — even one the signed-in user belongs to — is invisible here. Unset means the
+// legacy dedicated-project mode, where the database holds a single workspace anyway.
+export function deploymentWorkspaceId(): string | undefined {
+  return read("WORKSPACE_ID");
+}
+
 export function appVersion(): string {
   return read("APP_VERSION") ?? "dev";
 }

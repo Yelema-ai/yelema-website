@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession, type DB } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { deploymentWorkspaceId } from "@/lib/runtime-config";
 import { WorkspaceProvider } from "@/components/WorkspaceProvider";
 import { UnlinkedAccount } from "@/components/UnlinkedAccount";
 import type { Role, Workspace, WorkspaceWithRole } from "@/lib/types";
@@ -12,10 +13,11 @@ import type { Role, Workspace, WorkspaceWithRole } from "@/lib/types";
 // selects don't depend on the relationship, and we surface real query errors instead of mistaking
 // them for an empty result.
 async function loadWorkspaces(db: DB, userId: string): Promise<WorkspaceWithRole[]> {
-  const { data: memberships, error: memErr } = await db
-    .from("memberships")
-    .select("workspace_id, role")
-    .eq("user_id", userId);
+  // A deployment only ever shows its own client's workspace (shared database).
+  let query = db.from("memberships").select("workspace_id, role").eq("user_id", userId);
+  const pinned = deploymentWorkspaceId();
+  if (pinned) query = query.eq("workspace_id", pinned);
+  const { data: memberships, error: memErr } = await query;
   if (memErr) throw new Error(`Couldn't load your workspaces: ${memErr.message}`);
   if (!memberships?.length) return [];
 

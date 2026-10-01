@@ -1,14 +1,16 @@
 import { requireUser } from "@/lib/auth";
+import { deploymentWorkspaceId } from "@/lib/runtime-config";
 import { handleError, json, ApiError } from "@/lib/http";
 import type { Role, Workspace, WorkspaceWithRole } from "@/lib/types";
 
 export async function GET() {
   try {
     const { db, user } = await requireUser();
-    const { data, error } = await db
-      .from("memberships")
-      .select("role, workspaces(*)")
-      .eq("user_id", user.id);
+    // A deployment only ever lists its own client's workspace (shared database).
+    let query = db.from("memberships").select("role, workspaces(*)").eq("user_id", user.id);
+    const pinned = deploymentWorkspaceId();
+    if (pinned) query = query.eq("workspace_id", pinned);
+    const { data, error } = await query;
     if (error) throw new ApiError(500, "db_error", error.message);
 
     const workspaces: WorkspaceWithRole[] = (data ?? [])

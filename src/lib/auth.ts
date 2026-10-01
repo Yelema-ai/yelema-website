@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ApiError } from "@/lib/http";
+import { deploymentWorkspaceId } from "@/lib/runtime-config";
 import type { AgentRow, Role } from "@/lib/types";
 
 // `db` is the privileged service-role client (RLS bypassed). All table access in this app goes
@@ -24,7 +25,11 @@ export async function requireUser() {
   return { db: createAdminClient(), user };
 }
 
+// Every authorization helper below goes through here, so this is where a deployment stays inside
+// its own workspace: on a shared database, another client's workspace has no role at all (404).
 export async function getRole(db: DB, workspaceId: string, userId: string): Promise<Role | null> {
+  const pinned = deploymentWorkspaceId();
+  if (pinned && workspaceId !== pinned) return null;
   const { data } = await db
     .from("memberships")
     .select("role")

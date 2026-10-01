@@ -16,10 +16,12 @@ Yelema commun.
 | Élément | Forme |
 |---|---|
 | Image | `agent37-app:vX.Y.Z` (linux/amd64), port `3000`, utilisateur non-root |
-| Variables lues au runtime | `AGENT37_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SITE_URL`, `BRAND_LOGO_URL` (optionnelle) |
+| Variables lues au runtime | `AGENT37_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SITE_URL`, `BRAND_LOGO_URL` (optionnelle), **`WORKSPACE_ID` (v0.1.4 ; obligatoire en base partagée)** |
 | Santé | `GET /api/health` → `200 { ok: true, version }` sans secret |
 | Schéma | `supabase/migrations/*.sql` de la version, copiés par le back-office dans `assets/agent37-app/<version>/` |
-| Données initiales | le back-office crée l'admin (Auth) et **la** ligne `workspaces` ; l'app ne crée plus de workspace |
+| Données initiales | le back-office crée l'admin (Auth) et **la** ligne `workspaces` du client ; l'app ne crée plus de workspace |
+| Base (v0.1.4) | **un seul projet Supabase pour tous les clients** (option : projet dédié). Le déploiement ne voit que le workspace `WORKSPACE_ID` (404 sinon). Migrations **additives uniquement**, appliquées une fois au projet partagé. Voir `docs/decisions/supabase-projet-partage.md` |
+| Domaine des agents (v0.1.4) | aucune variable : si le workspace Agent37 a un domaine personnalisé, l'app sert les URL `domain_urls` renvoyées par l'API (liens signés, ports) au lieu d'`agent37.app` |
 | Membres et agents (v0.1.2) | le back-office crée chaque membre (Auth + `memberships`, rôle `admin`/`member`), **son** instance Agent37 (`metadata.app_workspace` = id du workspace) et sa ligne `agents` (`owner_user_id`) ; l'app ne crée ni ne supprime plus d'agent ni de membre (403), et ne liste que les instances de son workspace |
 | Accès | lien `/auth/callback?token_hash=…&type=invite&next=/reset-password` (déjà géré par la route existante) |
 
@@ -117,3 +119,25 @@ Notes pour le back-office :
   `on_workspace_created` à l'insertion de `workspaces` (rôle `admin`).
 - Les invitations créées dans l'app sont `member` par défaut ; l'admin peut choisir `admin`.
 
+## 9. Lot 2 — à implémenter (validé le 2026-10-01)
+
+Ordre d'exécution ; **Kit** = ce dépôt, **BO** = `yelema-platform` (autre session).
+
+| # | Où | Élément | Détail | Statut |
+|---|---|---|---|---|
+| 0 | Kit + BO | Commiter l'existant | v0.1.1 → v0.1.3 publiées depuis des changements **non commités** (kit) ; module `tenant-apps` non commité (BO) | à faire |
+| 1 | BO | **Outils payants Perflo désactivés** | `env: { AGENT37_MANAGED_PLUGIN_PERFLO_ENABLED: "false" }` à la création de chaque instance (`MEMBER_INSTANCE`) ; un appel peut coûter jusqu'à $3,50 | à faire |
+| 2 | Kit | **v0.1.4 — base partagée** | `WORKSPACE_ID` lu au runtime ; `getRole` renvoie null hors de ce workspace ; dashboard, `/api/workspaces`, invitations filtrés | **codé, non publié** (test réel en attente d'un projet Supabase) |
+| 3 | BO | **Mode base partagée** | projet Supabase créé / migré / auth configurée **une fois** (wildcard `https://*.app.yelema.ai/**`) ; par client : ligne `workspaces` + admin ; `WORKSPACE_ID` dans le `.env` et la liste blanche de `tenant-app-host` ; champ `database: shared \| dedicated` | à faire |
+| 4 | BO | **P1-b Consommation** | `getUsage(from,to)` → `GET /v1/usage` ; collection `agent37-usage-daily` (jour × instance, upsert) ; job quotidien qui relit les 3 derniers jours ; rattachement via `agent37InstanceId` (sinon « non attribué ») ; vue par client et membre vs plafond ; coûts → `VendorCosts`, refacturation → `CreditLedger` selon une règle par plan (**décision commerciale à prendre**) | à faire |
+| 5 | BO | **Alerte `past_due`** | dans le même job : une instance `past_due` = portefeuille négatif = **tous les clients en veille** ; alerte immédiate (pas d'API de solde chez Agent37) | à faire |
+| 6 | Ops + Kit | **P1-a Domaine des agents** | prérequis : $100 de recharges cumulées, domaine **dédié** (pas un sous-domaine de `yelema.ai`) dont toute la DNS part chez Agent37 ; `POST /v1/domains` → nameservers → `/verify` (script ops, une fois). Kit : `domain_urls` déjà pris en compte en v0.1.4 | kit prêt ; ops à faire |
+| 7 | BO | **P2 Lien Agent37** | sur chaque membre : lien vers l'instance dans le dashboard Agent37 (onglet Metrics, logs, usage). Logs, métriques et restauration restent **côté Agent37** | à faire |
+| 8 | BO | **P2 Export avant suppression** | `GET /v1/files/archive` stocké avant de supprimer une instance (suppression définitive après 7 j). Sauvegardes : **automatiques** chez Agent37 (7 nuits glissantes, gratuites) ; restauration = procédure ops par API, sans interface | à faire |
+| 9 | BO | **P3 BYO modèle via LiteLLM** | passerelle LiteLLM ; une clé virtuelle par instance (plafond, révocation, coût réel) injectée en `env` à la création (non modifiable ensuite) ; le coût LLM vient alors de LiteLLM, P1-b ne garde que compute / Composio / Brave | à faire |
+| 10 | BO | P3 BYO Composio | kit `hermes-openclaw-composio`, après le MVP | plus tard |
+| — | — | Écartés du back-office | instances `performance`, crons imposés, clés SSH (une clé ouvre toutes les instances) | — |
+| — | Vishnu | À voir avec lui | Honcho / mémoire partagée (en dernier) ; image Hermes Yelema + prompt système de sélection des skills (plus tard) ; relèvement du plafond de 200 instances (confirmé) | — |
+
+Décisions prises le 2026-10-01 : un expert = **un profil sur l'instance** du membre ; un seul
+workspace et une seule clé Agent37 pour tous les clients (plafond de 200 instances à faire relever).

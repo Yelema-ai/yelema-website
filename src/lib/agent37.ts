@@ -181,7 +181,7 @@ export const agent37 = {
     ),
 
   signedUrl: (id: string, port: number, ttlSeconds?: number) =>
-    call<{ url: string; port: number; expires_at: number }>(`/instances/${id}/signed-url`, {
+    call<{ url: string; domain_urls?: string[]; port: number; expires_at: number }>(`/instances/${id}/signed-url`, {
       method: "POST",
       body: JSON.stringify({ port, ...(ttlSeconds ? { ttl_seconds: ttlSeconds } : {}) }),
     }),

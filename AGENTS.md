@@ -116,11 +116,14 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   `requireMember` / `requireAdmin` / `requireAgentAccess`) are the authorization boundary. RLS
   policies stay enabled as a backstop but are dormant (clients can't reach the tables). Neither
   the `sk_live_` key nor the service-role key ever reaches the browser.
-- **Yelema fork: one client per deployment, roles, one agent per user.** The back-office creates
+- **Yelema fork: one client per deployment, roles, one agent per member.** The back-office creates
   the deployment's single workspace and its admin; there is no open sign-up (only on the way to an
   invitation) and no workspace creation or deletion (`403`). Roles are `admin` (sees and manages
-  every agent, invites) and `member` (`0002_roles_owner.sql`). Each user creates their own agent,
-  one per workspace (`agents.owner_user_id`, unique index). `requireAgentAccess` lets in the
+  every agent) and `member` (`0002_roles_owner.sql`). The back-office creates every member and
+  their agent, one per member (`agents.owner_user_id`, unique index); the app creates neither.
+  All clients share ONE Supabase project: `WORKSPACE_ID` pins a deployment to its workspace and
+  `getRole` answers null for any other (`docs/decisions/supabase-projet-partage.md`), so
+  migrations must stay additive. `requireAgentAccess` lets in the
   owner or a workspace admin — anyone else gets a `404`; `"admin"` access (delete, resize,
   budget) is admins only. Configuration is read at runtime (`src/lib/runtime-config.ts`).
 - **`src/lib/agent37.ts` is the only thing that calls the Agent37 API**
