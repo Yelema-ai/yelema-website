@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deploymentWorkspaceId } from "@/lib/runtime-config";
 import { AcceptInvite } from "@/components/AcceptInvite";
-import { branding } from "@/config/branding";
+import { AuthShell, AuthHeading } from "@/components/auth/AuthShell";
 
 type Ctx = { params: Promise<{ token: string }> };
 
@@ -21,19 +21,22 @@ export default async function InvitePage({ params }: Ctx) {
 
   // On a shared database, another client's invitation does not exist for this deployment.
   const pinned = deploymentWorkspaceId();
-  if (error || !inv || (pinned && inv.workspace_id !== pinned)) return <Message text="This invitation is invalid or no longer exists." />;
-  if (inv.expired) return <Message text="This invitation has expired." />;
+  if (error || !inv || (pinned && inv.workspace_id !== pinned)) return <Message text="Cette invitation n’est pas valable, ou n’existe plus." />;
+  if (inv.expired) return <Message text="Cette invitation a expiré." />;
 
   return <AcceptInvite token={token} workspaceName={inv.workspace_name} role={inv.role} />;
 }
 
 function Message({ text }: { text: string }) {
   return (
-    <main className="flex min-h-screen items-center justify-center px-6 text-center">
-      <div className="max-w-sm space-y-2">
-        <h1 className="text-xl font-semibold tracking-tight">{branding.appName}</h1>
-        <p className="text-sm text-muted-foreground">{text}</p>
-      </div>
-    </main>
+    <AuthShell>
+      <AuthHeading title="Invitation indisponible">{text}</AuthHeading>
+      <a
+        href="/login"
+        className="inline-flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-brand px-5 text-[15px] font-semibold text-white hover:opacity-90"
+      >
+        Retour à la connexion
+      </a>
+    </AuthShell>
   );
 }

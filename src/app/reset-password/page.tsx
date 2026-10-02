@@ -1,34 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, Check, CircleAlert, CircleCheck, CircleX } from "lucide-react";
 import { useSupabase } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { branding } from "@/config/branding";
-import { MIN_PASSWORD } from "@/config/auth";
+import { AuthShell, AuthHeading } from "@/components/auth/AuthShell";
+import { PasswordField } from "@/components/auth/Field";
+import { PASSWORD_RULES, passwordIsValid, passwordScore } from "@/config/auth";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+const STRENGTH = ["bg-ko", "bg-ko", "bg-coral", "bg-ok"];
 
 export default function ResetPasswordPage() {
   const supabase = useSupabase();
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
-  // null = still checking for the recovery session.
+  // null = on vérifie encore la session de récupération.
   const [hasSession, setHasSession] = useState<boolean | null>(null);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    // The recovery link routes through /auth/callback, which establishes a session
-    // before redirecting here. No user means the link was invalid, already used,
-    // expired, or opened in a different browser than the one that requested it.
+    // Le lien de récupération passe par /auth/callback, qui ouvre une session avant de
+    // rediriger ici. Pas d'utilisateur = lien invalide, déjà utilisé, expiré, ou ouvert
+    // dans un autre navigateur que celui qui l'a demandé.
     supabase.auth.getUser().then(({ data }) => setHasSession(!!data.user));
   }, [supabase]);
 
+  const score = useMemo(() => passwordScore(password), [password]);
+  const mismatch = confirm.length > 0 && confirm !== password;
+  const canSave = passwordIsValid(password) && confirm === password && !loading;
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (password.length < MIN_PASSWORD) {
-      return toast.error(`Password must be at least ${MIN_PASSWORD} characters.`);
-    }
+    if (!canSave) return;
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
@@ -36,65 +41,115 @@ export default function ResetPasswordPage() {
     setDone(true);
   }
 
-  return (
-    <main className="flex min-h-screen items-center justify-center px-6">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">{branding.appName}</h1>
-          {hasSession && !done && (
-            <p className="text-sm text-muted-foreground">Choose a new password.</p>
-          )}
-        </div>
+  if (hasSession === null) {
+    return (
+      <AuthShell>
+        <p className="text-sm text-ink-3">Chargement…</p>
+      </AuthShell>
+    );
+  }
 
-        {hasSession === null ? (
-          <p className="text-center text-sm text-muted-foreground">Loading…</p>
-        ) : done ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border bg-card p-6 text-center text-sm">
-              <p className="font-medium">Password updated</p>
-              <p className="mt-1 text-muted-foreground">You&apos;re all set.</p>
-            </div>
-            <Button className="w-full" onClick={() => (window.location.href = "/dashboard")}>
-              Continue to dashboard
-            </Button>
-          </div>
-        ) : !hasSession ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border bg-card p-6 text-center text-sm">
-              <p className="font-medium">Reset link invalid or expired</p>
-              <p className="mt-1 text-muted-foreground">
-                Request a new password reset link to try again.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => (window.location.href = "/login")}
-            >
-              Back to sign in
-            </Button>
-          </div>
-        ) : (
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="password">New password</Label>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="new-password"
-                placeholder="At least 8 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={MIN_PASSWORD}
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Updating..." : "Update password"}
-            </Button>
-          </form>
-        )}
-      </div>
-    </main>
+  if (done) {
+    return (
+      <AuthShell>
+        <span className="grid size-12 place-items-center rounded-2xl bg-ok-pale text-ok">
+          <CircleCheck className="size-6" />
+        </span>
+        <AuthHeading title="Mot de passe changé">
+          C’est fait. Par sécurité, vous êtes déconnecté de vos autres appareils.
+        </AuthHeading>
+        <a
+          href="/login"
+          className="inline-flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-brand px-5 text-[15px] font-semibold text-white hover:opacity-90"
+        >
+          Se connecter <ArrowRight className="size-[18px]" />
+        </a>
+      </AuthShell>
+    );
+  }
+
+  if (!hasSession) {
+    return (
+      <AuthShell>
+        <span className="grid size-12 place-items-center rounded-2xl bg-ko-pale text-ko">
+          <CircleX className="size-6" />
+        </span>
+        <AuthHeading title="Ce lien a expiré">
+          Un lien de réinitialisation reste valable 30 minutes et ne sert qu’une fois.
+          Demandez-en un nouveau.
+        </AuthHeading>
+        <a
+          href="/login"
+          className="inline-flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-brand px-5 text-[15px] font-semibold text-white hover:opacity-90"
+        >
+          Recevoir un nouveau lien <ArrowRight className="size-[18px]" />
+        </a>
+      </AuthShell>
+    );
+  }
+
+  return (
+    <AuthShell>
+      <AuthHeading title="Nouveau mot de passe">Choisissez-le, puis reconnectez-vous.</AuthHeading>
+
+      <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
+        <PasswordField
+          label="Nouveau mot de passe"
+          autoComplete="new-password"
+          placeholder="8 caractères minimum"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+
+        <ul className="-mt-2 flex flex-wrap gap-x-3.5 gap-y-1.5 text-[12.5px] text-ink-3">
+          {PASSWORD_RULES.map((r) => {
+            const ok = r.test(password);
+            return (
+              <li key={r.key} className={cn("inline-flex items-center gap-1", ok && "text-ok")}>
+                <Check className={cn("size-3.5", !ok && "opacity-40")} />
+                {r.label}
+              </li>
+            );
+          })}
+        </ul>
+
+        <span className="block h-[5px] overflow-hidden rounded-full bg-soft-2">
+          <i
+            className={cn(
+              "block h-full rounded-full transition-[width,background-color] duration-200",
+              STRENGTH[score]
+            )}
+            style={{ width: `${(score / PASSWORD_RULES.length) * 100}%` }}
+          />
+        </span>
+
+        <PasswordField
+          label="Confirmer"
+          autoComplete="new-password"
+          placeholder="Saisissez-le à nouveau"
+          value={confirm}
+          invalid={mismatch}
+          onChange={(e) => setConfirm(e.target.value)}
+          required
+        />
+
+        {mismatch ? (
+          <p className="-mt-1.5 flex items-center gap-1.5 text-[13px] text-ko">
+            <CircleAlert className="size-4 shrink-0" />
+            Les deux mots de passe ne sont pas identiques.
+          </p>
+        ) : null}
+
+        <button
+          type="submit"
+          disabled={!canSave}
+          className="mt-1 inline-flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-brand px-5 text-[15px] font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loading ? "Enregistrement…" : "Enregistrer le mot de passe"}
+          <ArrowRight className="size-[18px]" />
+        </button>
+      </form>
+    </AuthShell>
   );
 }

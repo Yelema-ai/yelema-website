@@ -1,22 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowRight, CheckCircle2, CircleAlert, Info, Mail } from "lucide-react";
 import { useSupabase } from "@/lib/supabase/client";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { branding } from "@/config/branding";
+import { AuthShell, AuthHeading } from "@/components/auth/AuthShell";
+import { Field, PasswordField } from "@/components/auth/Field";
 import { publicSiteOrigin, safeNextPath } from "@/lib/site-url";
 import { toast } from "sonner";
 
-// No sign-up here: every account is created by the Yelema back-office, which sends its access link.
-type Mode = "signin" | "reset";
+// Pas d'inscription ici : chaque compte est créé par le back-office Yelema, qui envoie
+// son lien d'accès. Trois écrans : connexion, demande de lien, lien envoyé.
+type Mode = "signin" | "forgot" | "sent";
 
-const COPY: Record<Mode, { title: string; subtitle: string; cta: string; busy: string }> = {
-  signin: { title: "Sign in", subtitle: "Welcome back.", cta: "Sign in", busy: "Signing in..." },
-  reset: { title: "Reset password", subtitle: "We'll email you a link to set a new password.", cta: "Send reset link", busy: "Sending..." },
-};
+const RESEND_DELAY = 30;
 
 export default function LoginPage() {
   const supabase = useSupabase();
@@ -25,32 +22,57 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [sentEmail, setSentEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [signedOut, setSignedOut] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const sentTo = useRef("");
 
-  // /auth/callback bounces here with ?error=auth when a confirmation/recovery link
-  // fails (expired, already used, or opened in a different browser). Surface it —
-  // otherwise the user lands on a pristine form with no clue the link broke.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("error") !== "auth") return;
-    toast.error("That link is invalid or has expired. Sign in, or request a new one.");
-    params.delete("error");
-    const qs = params.toString();
-    window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    // Retour de déconnexion : on le dit, plutôt que de rendre un formulaire muet.
+    if (params.get("out") === "1" || window.location.hash.startsWith("#out")) setSignedOut(true);
+    // /auth/callback renvoie ici avec ?error=auth quand un lien a expiré, a déjà servi,
+    // ou a été ouvert dans un autre navigateur.
+    if (params.get("error") === "auth") {
+      toast.error("Ce lien n’est plus valable. Connectez-vous, ou demandez-en un nouveau.");
+    }
+    if (params.has("error") || params.has("out")) {
+      params.delete("error");
+      params.delete("out");
+      const qs = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    }
   }, []);
 
-  function switchMode(next: Mode) {
+  // Compte à rebours avant de pouvoir redemander un lien.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  function go(next: Mode) {
     setMode(next);
     setPassword("");
-    setSent(false);
+    setError(null);
   }
 
-  // /auth/callback exchanges the email link for a session, then redirects to `next`.
   function callbackUrl(next: string): string {
     const url = new URL("/auth/callback", publicSiteOrigin(siteUrl, window.location.origin));
     url.searchParams.set("next", next);
     return url.toString();
+  }
+
+  async function sendResetLink(mail: string) {
+    setLoading(true);
+    const { error: err } = await supabase.auth.resetPasswordForEmail(mail, {
+      redirectTo: callbackUrl("/reset-password"),
+    });
+    setLoading(false);
+    if (err) return toast.error(err.message);
+    sentTo.current = mail;
+    setCooldown(RESEND_DELAY);
+    setMode("sent");
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -58,112 +80,142 @@ export default function LoginPage() {
     const mail = email.trim();
     if (!mail) return;
 
-    const next = safeNextPath(new URLSearchParams(window.location.search).get("next"));
-
-    if (mode === "reset") {
-      setLoading(true);
-      const { error } = await supabase.auth.resetPasswordForEmail(mail, {
-        redirectTo: callbackUrl("/reset-password"),
-      });
-      setLoading(false);
-      if (error) return toast.error(error.message);
-      setSentEmail(mail);
-      setSent(true);
-      return;
-    }
+    if (mode === "forgot") return sendResetLink(mail);
 
     if (!password) return;
-
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: mail, password });
+    setError(null);
+    const { error: err } = await supabase.auth.signInWithPassword({ email: mail, password });
     setLoading(false);
-    if (error) return toast.error(error.message);
-    // Hard navigation so the freshly written auth cookies ride along on the next request.
-    window.location.href = next;
+    if (err) {
+      setError("Adresse ou mot de passe incorrect.");
+      return;
+    }
+    // Navigation dure : les cookies de session fraîchement écrits partent avec la requête suivante.
+    window.location.href = safeNextPath(new URLSearchParams(window.location.search).get("next"));
   }
 
-  const copy = COPY[mode];
+  if (mode === "sent") {
+    return (
+      <AuthShell>
+        <span className="grid size-12 place-items-center rounded-2xl bg-tint text-brand-ink">
+          <Mail className="size-6" />
+        </span>
+        <AuthHeading title="Vérifiez vos emails">
+          Un lien vient de partir vers <b className="text-ink">{sentTo.current}</b>. Il reste
+          valable 30 minutes.
+        </AuthHeading>
 
-  return (
-    <main className="flex min-h-screen items-center justify-center px-6">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">{branding.appName}</h1>
-          <p className="text-sm text-muted-foreground">{copy.subtitle}</p>
+        <div className="flex items-start gap-2.5 rounded-[14px] bg-soft px-3.5 py-3 text-[13.5px] text-ink-2">
+          <Info className="mt-px size-4 shrink-0 text-ink-3" />
+          <span>Rien reçu ? Regardez dans les courriers indésirables, ou vérifiez l’adresse.</span>
         </div>
 
-        {sent ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border bg-card p-6 text-center text-sm">
-              <p className="font-medium">Check your email</p>
-              <p className="mt-1 text-muted-foreground">
-                We sent a password reset link to{" "}
-                <span className="font-medium text-foreground">{sentEmail}</span>.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => switchMode("signin")}
-              className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
-            >
-              Back to sign in
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
+        <p className="text-[13px] text-ink-2">
+          Pas de lien ?{" "}
+          <button
+            type="button"
+            disabled={cooldown > 0 || loading}
+            onClick={() => sendResetLink(sentTo.current)}
+            className="font-semibold text-link disabled:text-ink-3"
+          >
+            Renvoyer le lien
+          </button>
+          {cooldown > 0 ? <span className="text-ink-3"> (dans {cooldown} s)</span> : null}
+        </p>
+        <p className="text-[13px]">
+          <button type="button" onClick={() => go("forgot")} className="font-semibold text-link">
+            Changer d’adresse
+          </button>
+        </p>
+      </AuthShell>
+    );
+  }
 
-            {mode !== "reset" && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                  {mode === "signin" && (
-                    <button
-                      type="button"
-                      onClick={() => switchMode("reset")}
-                      className="text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      Forgot password?
-                    </button>
-                  )}
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="Your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-            )}
+  const forgot = mode === "forgot";
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? copy.busy : copy.cta}
-            </Button>
+  return (
+    <AuthShell>
+      {signedOut && !forgot ? (
+        <p className="flex items-center gap-2 rounded-[14px] bg-ok-pale px-3.5 py-3 text-sm font-semibold text-ok">
+          <CheckCircle2 className="size-4 shrink-0" />
+          Vous êtes déconnecté. À bientôt.
+        </p>
+      ) : null}
 
-            <div className="text-center text-sm text-muted-foreground">
-              {mode === "reset" && (
-                <button type="button" onClick={() => switchMode("signin")} className="hover:text-foreground">
-                  Back to sign in
-                </button>
-              )}
+      <AuthHeading title={forgot ? "Mot de passe oublié" : "Connexion à votre espace"}>
+        {forgot
+          ? "Indiquez votre adresse email. Nous vous envoyons un lien pour en choisir un nouveau."
+          : "Entrez vos identifiants pour retrouver vos experts."}
+      </AuthHeading>
+
+      {error ? (
+        <p className="flex items-start gap-2.5 rounded-[14px] bg-ko-pale px-3.5 py-3 text-[13.5px] text-ko">
+          <CircleAlert className="mt-px size-4 shrink-0" />
+          <span>{error}</span>
+        </p>
+      ) : null}
+
+      <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
+        <Field
+          label="Adresse email"
+          type="email"
+          autoComplete="username"
+          placeholder="vous@entreprise.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+
+        {!forgot && (
+          <>
+            <PasswordField
+              label="Mot de passe"
+              autoComplete="current-password"
+              placeholder="Votre mot de passe"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <div className="flex items-center justify-between text-sm">
+              <label className="flex items-center gap-2 text-ink-2">
+                <input type="checkbox" name="remember" defaultChecked className="accent-brand" />
+                Restez connecté
+              </label>
+              <button type="button" onClick={() => go("forgot")} className="font-semibold text-link">
+                Mot de passe oublié ?
+              </button>
             </div>
-          </form>
+          </>
         )}
-      </div>
-    </main>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="mt-1 inline-flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-brand px-5 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {loading
+            ? forgot
+              ? "Envoi…"
+              : "Connexion…"
+            : forgot
+              ? "Recevoir le lien"
+              : "Se connecter"}
+          <ArrowRight className="size-[18px]" />
+        </button>
+      </form>
+
+      {forgot ? (
+        <p className="text-center text-[13px]">
+          <button type="button" onClick={() => go("signin")} className="font-semibold text-link">
+            Retour à la connexion
+          </button>
+        </p>
+      ) : (
+        <p className="text-center text-xs text-ink-3">
+          Besoin d’un accès ? Demandez à votre administrateur de vous inviter.
+        </p>
+      )}
+    </AuthShell>
   );
 }

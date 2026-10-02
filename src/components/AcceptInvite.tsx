@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
-import { branding } from "@/config/branding";
-import { Button } from "@/components/ui/button";
+import { AuthShell, AuthHeading } from "@/components/auth/AuthShell";
 
 const STORAGE_KEY = "agent37wl_workspace";
 
@@ -26,7 +26,7 @@ export function AcceptInvite({
         method: "POST",
       });
       localStorage.setItem(STORAGE_KEY, workspace_id);
-      window.location.href = "/dashboard";
+      window.location.href = "/";
     } catch (e) {
       toast.error((e as Error).message);
       setBusy(false);
@@ -34,18 +34,25 @@ export function AcceptInvite({
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6">
-      <div className="w-full max-w-sm space-y-6 text-center">
-        <h1 className="text-xl font-semibold tracking-tight">{branding.appName}</h1>
-        <div className="rounded-lg border bg-card p-6">
-          <p className="text-sm text-muted-foreground">You&apos;ve been invited to join</p>
-          <p className="mt-1 text-lg font-medium">{workspaceName}</p>
-          <p className="mt-1 text-sm text-muted-foreground">as {role}</p>
-          <Button className="mt-4 w-full" onClick={accept} disabled={busy}>
-            {busy ? "Joining..." : "Accept invitation"}
-          </Button>
-        </div>
-      </div>
-    </main>
+    <AuthShell>
+      <span className="self-start rounded-full bg-soft-2 px-3 py-1.5 text-[13px] font-semibold text-ink-2">
+        Invitation de {workspaceName}
+      </span>
+
+      <AuthHeading title="Bienvenue">
+        Vous rejoignez l’espace de <b className="text-ink">{workspaceName}</b> en tant que {role}.
+        Vos experts vous y attendent.
+      </AuthHeading>
+
+      <button
+        type="button"
+        onClick={accept}
+        disabled={busy}
+        className="mt-1 inline-flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-brand px-5 text-[15px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+      >
+        {busy ? "Un instant…" : "Entrer dans mon espace"}
+        <ArrowRight className="size-[18px]" />
+      </button>
+    </AuthShell>
   );
 }
