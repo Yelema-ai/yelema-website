@@ -11,7 +11,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function GET(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    await requireAgentAccess(id, "member");
+    await requireAgentAccess(id);
 
     const path = new URL(request.url).searchParams.get("path") || undefined;
     return json(await agent37.listFiles(id, path));

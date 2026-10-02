@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { supabaseServiceRoleKey, supabaseUrl } from "@/lib/runtime-config";
 
 // The privileged, SERVER-ONLY Supabase client, keyed by the service-role secret.
 //
@@ -17,11 +18,11 @@ let cached: SupabaseClient | null = null;
 
 export function createAdminClient(): SupabaseClient {
   if (cached) return cached;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = supabaseUrl();
+  const key = supabaseServiceRoleKey();
   if (!url || !key) {
     throw new Error(
-      "Supabase admin client needs NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY — run `npm run setup`."
+      "Supabase admin client needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY — run `npm run setup`."
     );
   }
   cached = createClient(url, key, {

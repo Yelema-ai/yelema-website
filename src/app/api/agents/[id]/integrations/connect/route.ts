@@ -9,7 +9,7 @@ export async function POST(request: Request, { params }: Ctx) {
     const { id } = await params;
     // Connecting an external account to a shared agent is a capability grant — admin-only, like
     // every other agent mutation.
-    await requireAgentAccess(id, "admin");
+    await requireAgentAccess(id);
 
     const { toolkit } = await readJson<{ toolkit?: string }>(request);
     if (!toolkit || typeof toolkit !== "string") {

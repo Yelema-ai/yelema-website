@@ -1,38 +1,35 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowDownToLine, Pencil, Play, RotateCw, Search, Sparkles, Square, Trash2, Wrench, type LucideIcon } from "lucide-react";
+import { ArrowDownToLine, Pencil, Play, RotateCw, Search, Sparkles, Square, Wrench, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { isTransitional, statusVariant, usd } from "@/lib/format";
 import { AGENT_TYPES, SHAPE_PRESETS } from "@/config/agents";
-import type { Budget, MergedAgent, Role, Usage } from "@/lib/types";
+import type { Budget, MergedAgent, Usage } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { OpenPortButtons } from "@/components/OpenPortButtons";
 import { useAsyncAction } from "@/components/useAsyncAction";
 import { cn } from "@/lib/utils";
 
 // The agent's overview/manage tab: a clean header (inline-rename name, status + shape + template
 // badges, and lifecycle actions as icon buttons) over app shortcuts and a read-only budget + usage
-// panel. Mutations are admin-only.
+// panel. Operating the agent is for its owner or an admin; it is deleted from the Yelema back-office.
 export function AgentSettingsTab({
   agentId,
   agent,
-  role,
+  canManage,
   onChanged,
 }: {
   agentId: string;
   agent: MergedAgent;
-  role: Role;
+  // canManage: the agent's owner or a workspace admin (start/stop/restart, update). The name is set
+  // in the Yelema back-office, so it is never editable here.
+  canManage: boolean;
   onChanged?: () => void;
 }) {
-  const router = useRouter();
-  const isAdmin = role === "admin";
   const running = agent.live_status === "running";
   const transitional = isTransitional(agent.live_status);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const { busy, run } = useAsyncAction();
 
   // POST a lifecycle action; the merged list refreshes via onChanged.
@@ -43,18 +40,12 @@ export function AgentSettingsTab({
       onChanged?.();
     });
 
-  async function deleteAgent() {
-    await apiFetch(`/api/agents/${agentId}`, { method: "DELETE" });
-    toast.success("Agent deleted");
-    router.push("/dashboard");
-  }
-
   return (
     <div className="space-y-6">
       <header className="space-y-3">
         <div className="flex items-start justify-between gap-4">
-          <NameEditor agentId={agentId} agent={agent} isAdmin={isAdmin} onChanged={onChanged} />
-          {isAdmin && (
+          <NameEditor agentId={agentId} agent={agent} canEdit={false} onChanged={onChanged} />
+          {canManage && (
             <div className="flex shrink-0 items-center gap-1.5">
               {running ? (
                 <IconAction label="Stop" icon={Square} disabled={busy || transitional} onClick={() => action("stop", "Stopping")} />
@@ -71,13 +62,6 @@ export function AgentSettingsTab({
                   onClick={() => action("update", "Updating")}
                 />
               )}
-              <IconAction
-                label="Delete agent"
-                icon={Trash2}
-                destructive
-                disabled={busy}
-                onClick={() => setConfirmDelete(true)}
-              />
             </div>
           )}
         </div>
@@ -101,16 +85,6 @@ export function AgentSettingsTab({
 
       <AppsSection agentId={agentId} agent={agent} />
       <BudgetSection agentId={agentId} />
-
-      <ConfirmDialog
-        open={confirmDelete}
-        onOpenChange={setConfirmDelete}
-        title="Delete agent?"
-        description={`This will permanently delete ${agent.name?.trim() || "this agent"}. This cannot be undone.`}
-        confirmText="Delete agent"
-        destructive
-        onConfirm={deleteAgent}
-      />
     </div>
   );
 }
@@ -166,12 +140,12 @@ function IconAction({
 function NameEditor({
   agentId,
   agent,
-  isAdmin,
+  canEdit,
   onChanged,
 }: {
   agentId: string;
   agent: MergedAgent;
-  isAdmin: boolean;
+  canEdit: boolean;
   onChanged?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -231,7 +205,7 @@ function NameEditor({
   return (
     <div className="flex min-w-0 items-center gap-2">
       <h1 className="truncate text-2xl font-semibold tracking-tight">{agent.name?.trim() || "Untitled agent"}</h1>
-      {isAdmin && (
+      {canEdit && (
         <button
           type="button"
           onClick={() => setEditing(true)}

@@ -1,29 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/lib/supabase/client";
+import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { branding } from "@/config/branding";
-import { MIN_PASSWORD } from "@/config/auth";
 import { publicSiteOrigin, safeNextPath } from "@/lib/site-url";
 import { toast } from "sonner";
 
-type Mode = "signin" | "signup" | "reset";
+// No sign-up here: every account is created by the Yelema back-office, which sends its access link.
+type Mode = "signin" | "reset";
 
 const COPY: Record<Mode, { title: string; subtitle: string; cta: string; busy: string }> = {
   signin: { title: "Sign in", subtitle: "Welcome back.", cta: "Sign in", busy: "Signing in..." },
-  signup: { title: "Create account", subtitle: `Get started with ${branding.appName}.`, cta: "Create account", busy: "Creating account..." },
   reset: { title: "Reset password", subtitle: "We'll email you a link to set a new password.", cta: "Send reset link", busy: "Sending..." },
 };
 
 export default function LoginPage() {
+  const supabase = useSupabase();
+  const { siteUrl } = usePublicConfig();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState<null | "signup" | "reset">(null);
+  const [sent, setSent] = useState(false);
   const [sentEmail, setSentEmail] = useState("");
 
   // /auth/callback bounces here with ?error=auth when a confirmation/recovery link
@@ -41,12 +43,12 @@ export default function LoginPage() {
   function switchMode(next: Mode) {
     setMode(next);
     setPassword("");
-    setSent(null);
+    setSent(false);
   }
 
   // /auth/callback exchanges the email link for a session, then redirects to `next`.
   function callbackUrl(next: string): string {
-    const url = new URL("/auth/callback", publicSiteOrigin(window.location.origin));
+    const url = new URL("/auth/callback", publicSiteOrigin(siteUrl, window.location.origin));
     url.searchParams.set("next", next);
     return url.toString();
   }
@@ -56,7 +58,6 @@ export default function LoginPage() {
     const mail = email.trim();
     if (!mail) return;
 
-    const supabase = createClient();
     const next = safeNextPath(new URLSearchParams(window.location.search).get("next"));
 
     if (mode === "reset") {
@@ -67,46 +68,13 @@ export default function LoginPage() {
       setLoading(false);
       if (error) return toast.error(error.message);
       setSentEmail(mail);
-      setSent("reset");
+      setSent(true);
       return;
     }
 
     if (!password) return;
-    if (mode === "signup" && password.length < MIN_PASSWORD) {
-      return toast.error(`Password must be at least ${MIN_PASSWORD} characters.`);
-    }
 
     setLoading(true);
-    if (mode === "signup") {
-      const { data, error } = await supabase.auth.signUp({
-        email: mail,
-        password,
-        options: { emailRedirectTo: callbackUrl(next) },
-      });
-      setLoading(false);
-      if (error) {
-        // Email confirmation is off, so signing up an existing email errors here
-        // (rather than sending a useless link) — steer them to sign in instead.
-        if (error.code === "user_already_exists") {
-          toast.error("That email already has an account. Sign in instead.");
-          switchMode("signin");
-          return;
-        }
-        return toast.error(error.message);
-      }
-      // Email confirmation is disabled: signUp returns a session immediately, so we
-      // register-and-go with no inbox round-trip.
-      if (data.session) {
-        window.location.href = next;
-        return;
-      }
-      // Fallback only reached if "Confirm email" is re-enabled on the project — then
-      // there's no session until the user verifies via the emailed link.
-      setSentEmail(mail);
-      setSent("signup");
-      return;
-    }
-
     const { error } = await supabase.auth.signInWithPassword({ email: mail, password });
     setLoading(false);
     if (error) return toast.error(error.message);
@@ -129,7 +97,7 @@ export default function LoginPage() {
             <div className="rounded-lg border bg-card p-6 text-center text-sm">
               <p className="font-medium">Check your email</p>
               <p className="mt-1 text-muted-foreground">
-                We sent {sent === "signup" ? "a confirmation" : "a password reset"} link to{" "}
+                We sent a password reset link to{" "}
                 <span className="font-medium text-foreground">{sentEmail}</span>.
               </p>
             </div>
@@ -173,11 +141,10 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type="password"
-                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                  placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
+                  autoComplete="current-password"
+                  placeholder="Your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  minLength={mode === "signup" ? MIN_PASSWORD : undefined}
                   required
                 />
               </div>
@@ -188,16 +155,6 @@ export default function LoginPage() {
             </Button>
 
             <div className="text-center text-sm text-muted-foreground">
-              {mode === "signin" && (
-                <button type="button" onClick={() => switchMode("signup")} className="hover:text-foreground">
-                  Don&apos;t have an account? <span className="font-medium text-foreground">Create one</span>
-                </button>
-              )}
-              {mode === "signup" && (
-                <button type="button" onClick={() => switchMode("signin")} className="hover:text-foreground">
-                  Already have an account? <span className="font-medium text-foreground">Sign in</span>
-                </button>
-              )}
               {mode === "reset" && (
                 <button type="button" onClick={() => switchMode("signin")} className="hover:text-foreground">
                   Back to sign in

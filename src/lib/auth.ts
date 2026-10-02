@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ApiError } from "@/lib/http";
+import { deploymentWorkspaceId } from "@/lib/runtime-config";
 import type { AgentRow, Role } from "@/lib/types";
 
 // `db` is the privileged service-role client (RLS bypassed). All table access in this app goes
@@ -24,7 +25,11 @@ export async function requireUser() {
   return { db: createAdminClient(), user };
 }
 
+// Every authorization helper below goes through here, so this is where a deployment stays inside
+// its own workspace: on a shared database, another client's workspace has no role at all (404).
 export async function getRole(db: DB, workspaceId: string, userId: string): Promise<Role | null> {
+  const pinned = deploymentWorkspaceId();
+  if (pinned && workspaceId !== pinned) return null;
   const { data } = await db
     .from("memberships")
     .select("role")
@@ -52,14 +57,28 @@ export async function getAgentRow(db: DB, agent37Id: string): Promise<AgentRow> 
   return data as AgentRow;
 }
 
+// Who may reach an agent: its owner, or any admin of its workspace. Everyone else — including
+// other members of the same workspace — gets null, which callers turn into a 404 (we don't leak
+// that the agent exists). Returns the caller's workspace role otherwise.
+export async function agentAccessRole(db: DB, row: AgentRow, userId: string): Promise<Role | null> {
+  const role = await getRole(db, row.workspace_id, userId);
+  if (role === "admin") return role;
+  if (role && row.owner_user_id === userId) return role;
+  return null;
+}
+
 // The auth + ownership preamble every per-agent BFF route repeats: require a signed-in user,
-// resolve the agent's mirror row, then gate on the workspace role — "member" for reads, "admin"
-// for mutations. Returns the privileged client, user, and row so the handler can get on with its
-// work (and run its DB writes through `db`).
-export async function requireAgentAccess(agent37Id: string, access: "member" | "admin" = "member") {
+// resolve the agent's mirror row, then gate on access. "owner" (the default) lets the agent's
+// owner or a workspace admin in — using, configuring and starting/stopping the agent. "admin" is
+// for what spends or destroys (delete, resize, budget): workspace admins only. Returns the
+// privileged client, user, and row so the handler can get on with its work.
+export async function requireAgentAccess(agent37Id: string, access: "owner" | "admin" = "owner") {
   const { db, user } = await requireUser();
   const row = await getAgentRow(db, agent37Id);
-  if (access === "admin") await requireAdmin(db, row.workspace_id, user.id);
-  else await requireMember(db, row.workspace_id, user.id);
-  return { db, user, row };
+  const role = await agentAccessRole(db, row, user.id);
+  if (!role) throw new ApiError(404, "not_found", "Agent not found");
+  if (access === "admin" && role !== "admin") {
+    throw new ApiError(403, "forbidden", "Admin role required");
+  }
+  return { db, user, row, role };
 }

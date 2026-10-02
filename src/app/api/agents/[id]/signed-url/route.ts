@@ -8,7 +8,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function POST(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    await requireAgentAccess(id, "member");
+    await requireAgentAccess(id);
 
     const { port, ttl_seconds } = await readJson<{ port?: number; ttl_seconds?: number }>(request);
     if (!port) throw new ApiError(400, "invalid_request", "port is required");
@@ -24,8 +24,10 @@ export async function POST(request: Request, { params }: Ctx) {
       throw new ApiError(400, "invalid_request", "port is not openable");
     }
 
+    // With a custom domain registered, Agent37 also returns the link under it: hand that one out,
+    // so users see the Yelema domain rather than agent37.app.
     const result = await agent37.signedUrl(id, port, ttl_seconds);
-    return json(result);
+    return json({ ...result, url: result.domain_urls?.[0] ?? result.url });
   } catch (e) {
     return handleError(e);
   }

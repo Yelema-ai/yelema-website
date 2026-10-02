@@ -2,42 +2,37 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { MessageSquare, MoreHorizontal, RotateCw, Square, Trash2 } from "lucide-react";
+import { MessageSquare, MoreHorizontal, RotateCw, Square } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { apiFetch } from "@/lib/api";
 import { isTransitional, statusVariant } from "@/lib/format";
 import { agentTabPath } from "@/lib/dashboard-tabs";
-import type { MergedAgent, Role } from "@/lib/types";
+import type { MergedAgent } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AgentNameCell } from "@/components/AgentNameCell";
-import { CreateAgentButton } from "@/components/CreateAgentButton";
 import { OpenPortButtons } from "@/components/OpenPortButtons";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useAsyncAction } from "@/components/useAsyncAction";
 
 export function AgentsView() {
   const { current } = useWorkspace();
   const [agents, setAgents] = useState<MergedAgent[]>([]);
-  const [role, setRole] = useState<Role>("admin");
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!current) return;
     try {
-      const data = await apiFetch<{ agents: MergedAgent[]; role: Role }>(
+      const data = await apiFetch<{ agents: MergedAgent[] }>(
         `/api/agents?workspace=${current.id}`
       );
       setAgents(data.agents);
-      setRole(data.role);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -65,7 +60,6 @@ export function AgentsView() {
           <h1 className="text-2xl font-semibold tracking-tight">Agents</h1>
           <p className="text-sm text-muted-foreground">{current.name}</p>
         </div>
-        {role === "admin" && <CreateAgentButton workspaceId={current.id} onCreated={load} />}
       </div>
 
       {loading ? (
@@ -73,9 +67,7 @@ export function AgentsView() {
       ) : agents.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center">
           <p className="text-sm text-muted-foreground">
-            {role === "admin"
-              ? "No agents yet. Create your first one."
-              : "No agents in this workspace yet."}
+            Your agent is set up by Yelema. Contact your Yelema administrator if it is missing.
           </p>
         </div>
       ) : (
@@ -84,6 +76,7 @@ export function AgentsView() {
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
               <tr>
                 <th className="px-4 py-2 font-medium">Name</th>
+                <th className="px-4 py-2 font-medium">Created by</th>
                 <th className="px-4 py-2 font-medium">Status</th>
                 <th className="px-4 py-2 font-medium">Template</th>
                 <th className="px-4 py-2 font-medium">Resources</th>
@@ -96,11 +89,12 @@ export function AgentsView() {
                   <td className="px-4 py-3">
                     <AgentNameCell
                       agent={a}
-                      canEdit={role === "admin"}
+                      canEdit={false}
                       onRenamed={load}
                       href={agentTabPath(a.agent37_id, "chat")}
                     />
                   </td>
+                  <td className="px-4 py-3 text-muted-foreground">{a.owner_email ?? "-"}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <Badge variant={statusVariant(a.live_status)}>{a.live_status ?? "unknown"}</Badge>
@@ -135,7 +129,7 @@ export function AgentsView() {
                         size="sm"
                         className="justify-end"
                       />
-                      {role === "admin" && <AgentOptionsMenu agent={a} onChanged={load} />}
+                      <AgentOptionsMenu agent={a} onChanged={load} />
                     </div>
                   </td>
                 </tr>
@@ -148,12 +142,12 @@ export function AgentsView() {
   );
 }
 
+// Restart / stop for the agent's owner or an admin (a member only lists their own). Deleting an
+// agent is done from the Yelema back-office only.
 function AgentOptionsMenu({ agent, onChanged }: { agent: MergedAgent; onChanged: () => void }) {
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const { busy, run } = useAsyncAction();
   const running = agent.live_status === "running";
   const transitional = isTransitional(agent.live_status);
-  const name = agent.name?.trim() || "this agent";
 
   function action(path: "restart" | "stop", message: string) {
     run(async () => {
@@ -161,12 +155,6 @@ function AgentOptionsMenu({ agent, onChanged }: { agent: MergedAgent; onChanged:
       toast.success(message);
       onChanged();
     });
-  }
-
-  async function deleteAgent() {
-    await apiFetch(`/api/agents/${agent.agent37_id}`, { method: "DELETE" });
-    toast.success("Agent deleted");
-    onChanged();
   }
 
   return (
@@ -186,23 +174,8 @@ function AgentOptionsMenu({ agent, onChanged }: { agent: MergedAgent; onChanged:
             <Square className="h-4 w-4" />
             Stop agent
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" disabled={busy} onClick={() => setConfirmDelete(true)}>
-            <Trash2 className="h-4 w-4" />
-            Delete agent
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-
-      <ConfirmDialog
-        open={confirmDelete}
-        onOpenChange={setConfirmDelete}
-        title="Delete agent?"
-        description={`This will permanently delete ${name}. This cannot be undone.`}
-        confirmText="Delete agent"
-        destructive
-        onConfirm={deleteAgent}
-      />
     </>
   );
 }

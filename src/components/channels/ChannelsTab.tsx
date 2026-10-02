@@ -12,7 +12,7 @@ import {
   type ChannelsResponse,
   type MessagingPlatform,
 } from "@/lib/channels";
-import type { MergedAgent, Role } from "@/lib/types";
+import type { MergedAgent } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { channelBrand } from "@/components/channels/BrandIcons";
@@ -30,13 +30,13 @@ import { WhatsAppConnect } from "@/components/channels/WhatsAppConnect";
 export function ChannelsTab({
   agentId,
   agent,
-  role,
+  canManage,
 }: {
   agentId: string;
   agent: MergedAgent;
-  role: Role;
+  // Connecting a channel: the agent's owner or a workspace admin.
+  canManage: boolean;
 }) {
-  const isAdmin = role === "admin";
   // Reaching the harness runs a command inside the instance, which wakes a sleeper but cannot start a
   // stopped agent.
   const reachable = agent.live_status === "running" || agent.live_status === "sleeping";
@@ -85,7 +85,7 @@ export function ChannelsTab({
     return (
       <div className="space-y-6">
         {open.id === "telegram" ? (
-          <TelegramConnect agentId={agentId} channel={open} onBack={back} />
+          <TelegramConnect agentId={agentId} agentName={agent.name} channel={open} onBack={back} />
         ) : open.id === "whatsapp" ? (
           <WhatsAppConnect agentId={agentId} channel={open} onBack={back} />
         ) : (
@@ -119,7 +119,7 @@ export function ChannelsTab({
               <ChannelRow
                 key={channel.id}
                 channel={channel}
-                isAdmin={isAdmin}
+                canManage={canManage}
                 onOpen={() => setOpenId(channel.id)}
               />
             ))}
@@ -127,7 +127,7 @@ export function ChannelsTab({
               <ChannelRow
                 key={channel.id}
                 channel={channel}
-                isAdmin={isAdmin}
+                canManage={canManage}
                 onOpen={() => setOpenId(channel.id)}
               />
             ))}
@@ -151,7 +151,7 @@ export function ChannelsTab({
                       <ChannelRow
                         key={channel.id}
                         channel={channel}
-                        isAdmin={isAdmin}
+                        canManage={canManage}
                         onOpen={() => setOpenId(channel.id)}
                       />
                     ))}
@@ -176,11 +176,11 @@ function Header() {
 
 function ChannelRow({
   channel,
-  isAdmin,
+  canManage,
   onOpen,
 }: {
   channel: MessagingPlatform;
-  isAdmin: boolean;
+  canManage: boolean;
   onOpen: () => void;
 }) {
   const { Icon, color } = channelBrand(channel.id);
@@ -201,7 +201,7 @@ function ChannelRow({
           {error || channel.description || channelStateLabel(channel)}
         </p>
       </div>
-      <Button variant="outline" size="sm" disabled={!isAdmin} onClick={onOpen}>
+      <Button variant="outline" size="sm" disabled={!canManage} onClick={onOpen}>
         {connected ? "Manage" : isFeaturedChannel(channel.id) ? `Connect ${channel.name}` : "Connect"}
       </Button>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSupabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { MIN_PASSWORD } from "@/config/auth";
 import { toast } from "sonner";
 
 export default function ResetPasswordPage() {
+  const supabase = useSupabase();
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   // null = still checking for the recovery session.
@@ -20,10 +21,8 @@ export default function ResetPasswordPage() {
     // The recovery link routes through /auth/callback, which establishes a session
     // before redirecting here. No user means the link was invalid, already used,
     // expired, or opened in a different browser than the one that requested it.
-    createClient()
-      .auth.getUser()
-      .then(({ data }) => setHasSession(!!data.user));
-  }, []);
+    supabase.auth.getUser().then(({ data }) => setHasSession(!!data.user));
+  }, [supabase]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,7 +30,7 @@ export default function ResetPasswordPage() {
       return toast.error(`Password must be at least ${MIN_PASSWORD} characters.`);
     }
     setLoading(true);
-    const { error } = await createClient().auth.updateUser({ password });
+    const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) return toast.error(error.message);
     setDone(true);

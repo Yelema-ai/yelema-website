@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { isTransitional } from "@/lib/format";
 import { agentTabPath, parseAgentTab, type AgentTab } from "@/lib/dashboard-tabs";
-import { branding } from "@/config/branding";
+import { BrandMark } from "@/components/BrandMark";
 import type { MergedAgent, Role } from "@/lib/types";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { ActiveAgentSwitcher } from "@/components/ActiveAgentSwitcher";
@@ -44,13 +44,18 @@ export function AgentWorkspace({
   agentId,
   workspaceId,
   role,
+  isOwner,
   initialTab,
 }: {
   agentId: string;
   workspaceId: string;
   role: Role;
+  isOwner: boolean;
   initialTab: AgentTab;
 }) {
+  // The page only renders for the agent's owner or a workspace admin (see its server check); both
+  // operate the agent, only an admin deletes it.
+  const canManage = role === "admin" || isOwner;
   const pathname = usePathname();
   const { setCurrentId } = useWorkspace();
 
@@ -146,13 +151,7 @@ export function AgentWorkspace({
       <div className="flex h-screen">
         <aside className="flex w-64 shrink-0 flex-col border-r bg-card">
           <div className="flex flex-col p-4 pb-3">
-            <div className="flex items-center gap-2 px-2 py-1">
-              {branding.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={branding.logoUrl} alt="" className="h-6 w-6 rounded" />
-              ) : null}
-              <span className="truncate font-semibold">{branding.appName}</span>
-            </div>
+            <BrandMark />
 
             <Link
               href="/dashboard"
@@ -226,12 +225,12 @@ export function AgentWorkspace({
             <div className="h-full overflow-y-auto">
               {currentTab === "integrations" ? (
                 <div className="mx-auto w-full max-w-5xl p-6 md:px-10 md:py-8">
-                  <IntegrationsTab agentId={agentId} role={role} />
+                  <IntegrationsTab agentId={agentId} canManage={canManage} />
                 </div>
               ) : currentTab === "messaging" ? (
                 <div className="mx-auto w-full max-w-3xl p-6 md:px-10 md:py-8">
                   {active ? (
-                    <ChannelsTab agentId={agentId} agent={active} role={role} />
+                    <ChannelsTab agentId={agentId} agent={active} canManage={canManage} />
                   ) : (
                     <p className="text-sm text-muted-foreground">Loading...</p>
                   )}
@@ -239,7 +238,12 @@ export function AgentWorkspace({
               ) : (
                 <div className="mx-auto w-full max-w-3xl p-6 md:px-10 md:py-8">
                   {active ? (
-                    <AgentSettingsTab agentId={agentId} agent={active} role={role} onChanged={load} />
+                    <AgentSettingsTab
+                      agentId={agentId}
+                      agent={active}
+                      canManage={canManage}
+                      onChanged={load}
+                    />
                   ) : (
                     <p className="text-sm text-muted-foreground">Loading...</p>
                   )}

@@ -37,8 +37,10 @@ export function safeNextPath(raw?: string | null): string {
   return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard";
 }
 
-export function publicSiteOrigin(fallbackOrigin?: string | null): string {
-  const configured = normalizeOrigin(process.env.NEXT_PUBLIC_SITE_URL);
+// `siteUrl` is the deployment's SITE_URL (runtime config): server code passes `siteUrl()` from
+// src/lib/runtime-config.ts, client code `usePublicConfig().siteUrl`.
+export function publicSiteOrigin(siteUrl: string | null | undefined, fallbackOrigin?: string | null): string {
+  const configured = normalizeOrigin(siteUrl);
   const fallback = normalizeOrigin(fallbackOrigin);
 
   if (configured && !(isLocalOrigin(configured) && fallback && !isLocalOrigin(fallback))) {

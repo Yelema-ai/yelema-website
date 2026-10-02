@@ -9,7 +9,7 @@ type Ctx = { params: Promise<{ id: string; sessionId: string }> };
 export async function GET(_request: Request, { params }: Ctx) {
   try {
     const { id, sessionId } = await params;
-    await requireAgentAccess(id, "member");
+    await requireAgentAccess(id);
 
     return json(await agent37.getSession(id, sessionId));
   } catch (e) {
@@ -23,7 +23,7 @@ export async function GET(_request: Request, { params }: Ctx) {
 export async function PATCH(request: Request, { params }: Ctx) {
   try {
     const { id, sessionId } = await params;
-    await requireAgentAccess(id, "admin");
+    await requireAgentAccess(id);
 
     const { title } = await readJson<{ title?: string }>(request);
     const trimmed = (title ?? "").trim();
@@ -47,7 +47,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
 export async function DELETE(_request: Request, { params }: Ctx) {
   try {
     const { id, sessionId } = await params;
-    await requireAgentAccess(id, "admin");
+    await requireAgentAccess(id);
 
     return json(await agent37.deleteSession(id, sessionId));
   } catch (e) {

@@ -116,6 +116,16 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   `requireMember` / `requireAdmin` / `requireAgentAccess`) are the authorization boundary. RLS
   policies stay enabled as a backstop but are dormant (clients can't reach the tables). Neither
   the `sk_live_` key nor the service-role key ever reaches the browser.
+- **Yelema fork: one client per deployment, roles, one agent per member.** The back-office creates
+  the deployment's single workspace and its admin; there is no open sign-up (only on the way to an
+  invitation) and no workspace creation or deletion (`403`). Roles are `admin` (sees and manages
+  every agent) and `member` (`0002_roles_owner.sql`). The back-office creates every member and
+  their agent, one per member (`agents.owner_user_id`, unique index); the app creates neither.
+  All clients share ONE Supabase project: `WORKSPACE_ID` pins a deployment to its workspace and
+  `getRole` answers null for any other (`docs/decisions/supabase-projet-partage.md`), so
+  migrations must stay additive. `requireAgentAccess` lets in the
+  owner or a workspace admin — anyone else gets a `404`; `"admin"` access (delete, resize,
+  budget) is admins only. Configuration is read at runtime (`src/lib/runtime-config.ts`).
 - **`src/lib/agent37.ts` is the only thing that calls the Agent37 API**
   (`server-only`) — both the control-plane base and each instance's data-plane host.
   Internal `src/app/api/**` routes are this app's BFF: the browser calls them, they
@@ -168,10 +178,11 @@ dashboard steps.
 
 ## Custom agent image (out of scope here)
 
-**There is no Docker in this repo.** The catalog ships Hermes and OpenClaw, which run
-on Agent37's stock images, and nothing in `src/**` or `scripts/**` builds, pushes, or
-references an image. Don't add a Dockerfile here — building a custom agent image is a
-separate concern with its own repo and its own docs page:
+The root `Dockerfile` builds **this app** (the Yelema image the back-office starts once per
+client, configured by env at runtime — see `docs/plans/yelema-single-tenant.md`). It is not an
+**agent** image: the catalog ships Hermes and OpenClaw, which run on Agent37's stock images,
+and nothing here builds or pushes an agent image. Building a custom agent image is a separate
+concern with its own repo and its own docs page:
 
 - [agent37-platform/custom-agent-image](https://github.com/agent37-platform/custom-agent-image)
   — a GitHub template repo: a Dockerfile on the Hermes base, an example skill, a

@@ -1,4 +1,6 @@
-export type Role = "admin";
+// admin: sees and manages every agent of the workspace, invites people.
+// member: creates and uses their own agent only (one per user).
+export type Role = "admin" | "member";
 
 export interface Workspace {
   id: string;
@@ -36,6 +38,7 @@ export interface AgentRow {
   memory: number | null;
   disk: number | null;
   created_by: string | null;
+  owner_user_id: string | null;
   created_at: string;
 }
 
@@ -59,6 +62,8 @@ export interface Agent {
   user: string | null;
   name: string | null;
   metadata: Record<string, unknown> | null;
+  // The instance URL mirrored under the workspace's custom domains, oldest first ([] without one).
+  domain_urls?: string[];
   paid_through: number | null;
   past_due: boolean;
   created: number | null;
@@ -136,6 +141,8 @@ export interface IntegrationConnectResult {
 }
 
 export interface MergedAgent extends AgentRow {
+  // Email of the member the agent belongs to (owner_user_id, else created_by); null if unknown.
+  owner_email: string | null;
   live_status: string | null;
   status_reason: Agent["status_reason"];
   past_due: boolean;
