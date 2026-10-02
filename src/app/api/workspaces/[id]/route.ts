@@ -1,28 +1,12 @@
-import { requireAdmin, requireUser } from "@/lib/auth";
-import { ApiError, handleError, json, readJson } from "@/lib/http";
-import type { Workspace } from "@/lib/types";
+import { requireUser } from "@/lib/auth";
+import { ApiError, handleError } from "@/lib/http";
 
-type Ctx = { params: Promise<{ id: string }> };
-
-export async function PATCH(request: Request, { params }: Ctx) {
+// The workspace name is set in the Yelema back-office (it can differ from the client's legal name),
+// which stays its single source of truth: the app does not rename it.
+export async function PATCH() {
   try {
-    const { id } = await params;
-    const { db, user } = await requireUser();
-    await requireAdmin(db, id, user.id);
-
-    const { name } = await readJson<{ name?: string }>(request);
-    const trimmed = (name || "").trim();
-    if (!trimmed) throw new ApiError(400, "invalid_request", "Workspace name is required");
-
-    const { data, error } = await db
-      .from("workspaces")
-      .update({ name: trimmed })
-      .eq("id", id)
-      .select("*")
-      .single();
-    if (error) throw new ApiError(500, "db_error", error.message);
-
-    return json({ workspace: data as Workspace });
+    await requireUser();
+    throw new ApiError(403, "forbidden", "The workspace name is managed by the Yelema back-office");
   } catch (e) {
     return handleError(e);
   }

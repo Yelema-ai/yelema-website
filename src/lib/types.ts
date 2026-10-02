@@ -141,6 +141,8 @@ export interface IntegrationConnectResult {
 }
 
 export interface MergedAgent extends AgentRow {
+  // Email of the member the agent belongs to (owner_user_id, else created_by); null if unknown.
+  owner_email: string | null;
   live_status: string | null;
   status_reason: Agent["status_reason"];
   past_due: boolean;

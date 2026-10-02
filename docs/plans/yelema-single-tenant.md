@@ -24,6 +24,8 @@ Yelema commun.
 | Domaine des agents (v0.1.4) | aucune variable : si le workspace Agent37 a un domaine personnalisé, l'app sert les URL `domain_urls` renvoyées par l'API (liens signés, ports) au lieu d'`agent37.app` |
 | Membres et agents (v0.1.2) | le back-office crée chaque membre (Auth + `memberships`, rôle `admin`/`member`), **son** instance Agent37 (`metadata.app_workspace` = id du workspace) et sa ligne `agents` (`owner_user_id`) ; l'app ne crée ni ne supprime plus d'agent ni de membre (403), et ne liste que les instances de son workspace |
 | Accès | lien `/auth/callback?token_hash=…&type=invite&next=/reset-password` (déjà géré par la route existante) |
+| Noms (v0.1.5) | **le back-office est seul maître des noms** : il écrit `workspaces.name` (nom de workspace saisi, distinct du nom du client) et `agents.name` (nom de l'instance, ex. « Adjoua, Nadia ») ; l'app les affiche mais ne les modifie plus (`PATCH` → 403). La colonne « Created by » de l'app affiche l'e-mail du membre propriétaire (`owner_user_id`, sinon `created_by`) |
+| Inscription (v0.1.5) | aucune dans l'app : connexion et mot de passe oublié seulement ; tous les comptes viennent du back-office |
 
 ## 3. Changements
 
@@ -142,3 +144,35 @@ Ordre d'exécution ; **Kit** = ce dépôt, **BO** = `yelema-platform` (autre ses
 
 Décisions prises le 2026-10-01 : un expert = **un profil sur l'instance** du membre ; un seul
 workspace et une seule clé Agent37 pour tous les clients (plafond de 200 instances à faire relever).
+
+## 10. Lot 3 — noms, écrans Provisioning, onboarding (demandé le 2026-10-02)
+
+### Kit v0.1.5 (fait, non publié)
+- Formulaire « Create account » retiré de la page de connexion.
+- Noms du workspace et des agents en lecture seule (`PATCH` → 403) : le back-office les définit.
+- Liste des agents : colonne « Created by » (e-mail du membre) ; l'état affiché est l'état live Agent37
+  (`running`, `sleeping`, `waking`, `stopped`, `starting`, `failed`…).
+
+### Back-office (autre session)
+| # | Élément | Détail |
+|---|---|---|
+| 1 | **Nom de workspace** | champ `workspaceName` sur `tenant-apps` (saisi à la mise en service, par défaut = nom du client, modifiable) ; `seedWorkspace` l'utilise et retrouve le workspace par `workspaceId` (plus par nom) ; une modification met à jour `workspaces.name` dans Supabase ; affiché à côté du client (liste Clients × Workspaces et en-tête du client) |
+| 2 | **Nom d'instance** | champ `instanceName` sur `tenant-app-members` ; par défaut = `personaName` des profils choisis (« Adjoua, Nadia »), modifiable ; envoyé à Agent37 (`name` à la création, `PATCH /v1/instances/{id}` au renommage) et écrit dans `agents.name` ; l'e-mail reste dans `metadata`/`user` |
+| 3 | **Created by** | champ `createdBy` (→ users, l'opérateur back-office) sur `tenant-apps` et `tenant-app-members` ; afficher « Utilisateur » (le membre) et « Créé par » (l'opérateur) |
+| 4 | **Fiche client en onglets** (`/provisioning/clients?client=…`) | **Instances** (nom, utilisateur, créé par, profils, état) · **Profils & skills** (pilotage existant : profils, envois, déploiements) · **Consommation** · **Réglages** (LLM, gestes, exports) |
+| 5 | **Section Instances** | groupée par client, paginée, **filtres rapides par client et par état** ; colonnes : nom de l'instance, utilisateur / créé par, état, profils |
+| 6 | **État transverse** | partout : l'état de mise en service (`provisioning`, `failed`, `suspended`…) tant que l'instance n'est pas active, puis l'**état live Agent37** (En marche, En veille, Réveil, Arrêtée, Démarrage, Échec…) ; lu en un seul `GET /v1/instances` filtré sur `metadata.app_workspace` plutôt qu'un appel par instance |
+| 7 | **Libellé** | l'entrée « Clients » de Provisioning devient « Clients × Workspaces » |
+| 8 | **Onboarding → Provisioning** | voir ci-dessous |
+
+### Onboarding → Provisioning (proposition)
+Aujourd'hui aucun lien : l'onboarding crée client, abonnement, utilisateurs et `experts`
+(un par utilisateur et par modèle), le Provisioning part d'un client existant.
+- **Pas de mise en service automatique** (elle coûte de l'argent et dépend du paiement) : à la fin de
+  l'onboarding, le client apparaît dans Provisioning en **« À mettre en service »**, pré-rempli :
+  sous-domaine proposé, nom de workspace = nom du client, admin = premier administrateur, base partagée.
+- **Un clic** lance la mise en service ; ensuite chaque utilisateur qui a des `experts` reçoit son
+  instance, avec ses profils (`purchasedProfiles` fait déjà le lien `expert-templates.key` ↔ dossier
+  `hermes-experts`) et un nom d'instance = les `personaName` de ses experts.
+- Le récapitulatif de l'onboarding renvoie vers la fiche Provisioning du client, et inversement.
+- On continue de pouvoir mettre en service directement depuis Provisioning, comme aujourd'hui.

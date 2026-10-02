@@ -1,21 +1,15 @@
 import { requireAgentAccess } from "@/lib/auth";
-import { ApiError, handleError, json, readJson } from "@/lib/http";
+import { ApiError, handleError } from "@/lib/http";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function PATCH(request: Request, { params }: Ctx) {
+// Agent names (e.g. the expert profiles it carries: "Adjoua, Nadia") are set in the Yelema
+// back-office, its single source of truth: the app does not rename agents.
+export async function PATCH(_request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    const { db } = await requireAgentAccess(id);
-
-    const { name } = await readJson<{ name?: string }>(request);
-    const trimmed = (name || "").trim();
-    if (!trimmed) throw new ApiError(400, "invalid_request", "name is required");
-
-    const { error } = await db.from("agents").update({ name: trimmed }).eq("agent37_id", id);
-    if (error) throw new ApiError(500, "db_error", error.message);
-
-    return json({ id, name: trimmed });
+    await requireAgentAccess(id);
+    throw new ApiError(403, "forbidden", "Agent names are managed by the Yelema back-office");
   } catch (e) {
     return handleError(e);
   }

@@ -39,6 +39,12 @@ export async function GET(request: Request) {
     const { data: rows, error } = await query.order("created_at", { ascending: false });
     if (error) throw new ApiError(500, "db_error", error.message);
 
+    // "Created by": the member each agent belongs to, by email (one RPC for the whole workspace).
+    const { data: members } = await db.rpc("get_workspace_members", { p_workspace: workspaceId });
+    const emailById = new Map(
+      ((members ?? []) as { user_id: string; email: string }[]).map((m) => [m.user_id, m.email])
+    );
+
     let live = new Map<string, Agent>();
     let templates = new Map<string, Template>();
     const [liveRes, tmplRes] = await Promise.allSettled([
@@ -72,8 +78,10 @@ export async function GET(request: Request) {
         // (requireMember above, owner filter for members).
         db.from("agents").update({ status: l.status }).eq("agent37_id", row.agent37_id).then(() => {});
       }
+      const ownerId = row.owner_user_id ?? row.created_by;
       return {
         ...row,
+        owner_email: (ownerId && emailById.get(ownerId)) || null,
         cpu: l?.resources.cpu ?? row.cpu,
         memory: l?.resources.memory ?? row.memory,
         disk: l?.resources.disk ?? row.disk,

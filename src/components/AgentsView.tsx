@@ -76,6 +76,7 @@ export function AgentsView() {
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
               <tr>
                 <th className="px-4 py-2 font-medium">Name</th>
+                <th className="px-4 py-2 font-medium">Created by</th>
                 <th className="px-4 py-2 font-medium">Status</th>
                 <th className="px-4 py-2 font-medium">Template</th>
                 <th className="px-4 py-2 font-medium">Resources</th>
@@ -88,11 +89,12 @@ export function AgentsView() {
                   <td className="px-4 py-3">
                     <AgentNameCell
                       agent={a}
-                      canEdit
+                      canEdit={false}
                       onRenamed={load}
                       href={agentTabPath(a.agent37_id, "chat")}
                     />
                   </td>
+                  <td className="px-4 py-3 text-muted-foreground">{a.owner_email ?? "-"}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <Badge variant={statusVariant(a.live_status)}>{a.live_status ?? "unknown"}</Badge>

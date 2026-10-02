@@ -1,43 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
-import { apiFetch } from "@/lib/api";
+import { branding } from "@/config/branding";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function SettingsView() {
-  const { current, refresh } = useWorkspace();
-  const [name, setName] = useState(current?.name ?? "");
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    setName(current?.name ?? "");
-  }, [current?.id, current?.name]);
+  const { current } = useWorkspace();
 
   if (!current) return <p className="text-sm text-muted-foreground">No workspace selected.</p>;
-
-  const isAdmin = current.role === "admin";
-
-  async function save() {
-    if (!current) return;
-    setBusy(true);
-    try {
-      await apiFetch(`/api/workspaces/${current.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name: name.trim() }),
-      });
-      await refresh();
-      toast.success("Workspace renamed");
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <div className="max-w-xl space-y-8">
@@ -48,19 +22,9 @@ export function SettingsView() {
 
       <div className="space-y-2">
         <Label htmlFor="ws-name">Workspace name</Label>
-        <div className="flex gap-2">
-          <Input
-            id="ws-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={!isAdmin}
-          />
-          {isAdmin && (
-            <Button onClick={save} disabled={busy || !name.trim() || name.trim() === current.name}>
-              Save
-            </Button>
-          )}
-        </div>
+        <Input id="ws-name" readOnly value={current.name} />
+        {/* Set in the Yelema back-office, which is its single source of truth. */}
+        <p className="text-xs text-muted-foreground">Managed by {branding.appName}.</p>
       </div>
 
       <div className="space-y-2">

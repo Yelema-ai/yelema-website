@@ -23,7 +23,8 @@ export function AgentSettingsTab({
 }: {
   agentId: string;
   agent: MergedAgent;
-  // canManage: the agent's owner or a workspace admin (rename, start/stop/restart, update).
+  // canManage: the agent's owner or a workspace admin (start/stop/restart, update). The name is set
+  // in the Yelema back-office, so it is never editable here.
   canManage: boolean;
   onChanged?: () => void;
 }) {
@@ -43,7 +44,7 @@ export function AgentSettingsTab({
     <div className="space-y-6">
       <header className="space-y-3">
         <div className="flex items-start justify-between gap-4">
-          <NameEditor agentId={agentId} agent={agent} canEdit={canManage} onChanged={onChanged} />
+          <NameEditor agentId={agentId} agent={agent} canEdit={false} onChanged={onChanged} />
           {canManage && (
             <div className="flex shrink-0 items-center gap-1.5">
               {running ? (
