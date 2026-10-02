@@ -115,6 +115,7 @@ sur le back-office).
 | `v0.1.2` | 2026-10-01 | `910fb65` + correctifs **non commités** | `agent37-app:v0.1.2` — linux/amd64 | `0001_init.sql`, `0002_roles_owner.sql` (inchangées) | Création/suppression d'agent, invitations et retrait de membre désactivés (403 « managed by the Yelema back-office », boutons retirés) ; liste des agents filtrée sur `metadata.app_workspace` (compte Agent37 partagé entre clients) |
 | `v0.1.3` | 2026-10-01 | `910fb65` + correctifs **non commités** | `agent37-app:v0.1.3` — linux/amd64 | `0001_init.sql`, `0002_roles_owner.sql` (inchangées) | Telegram par QR code (bot géré créé via l'onboarding Hermes, service Nous) par défaut ; collage du jeton BotFather conservé en repli |
 | `v0.1.4` | 2026-10-02 | `19a684a` | `agent37-app:v0.1.4` — linux/amd64, `USER node`, 206 Mo, `APP_VERSION=v0.1.4` | `0001_init.sql`, `0002_roles_owner.sql` (inchangées) | Base Supabase partagée : `WORKSPACE_ID` verrouille le déploiement sur son workspace (isolation testée sur `yelema`) ; liens d'agents sous le domaine personnalisé Agent37 (`domain_urls`) dès qu'il existe |
+| `v0.1.5` | 2026-10-02 | `f27d6b0` | `agent37-app:v0.1.5` — linux/amd64, `USER node`, 206 Mo, `APP_VERSION=v0.1.5` | `0001_init.sql`, `0002_roles_owner.sql` (inchangées) | Noms du workspace et des agents définis par le back-office (lecture seule dans l'app) ; colonne « Created by » ; plus aucun formulaire d'inscription |
 
 Notes pour le back-office :
 - Appliquer les migrations **dans l'ordre** (`0001` puis `0002`) ; les deux sont idempotentes.
@@ -147,7 +148,7 @@ workspace et une seule clé Agent37 pour tous les clients (plafond de 200 instan
 
 ## 10. Lot 3 — noms, écrans Provisioning, onboarding (demandé le 2026-10-02)
 
-### Kit v0.1.5 (fait, non publié)
+### Kit v0.1.5 (publié le 2026-10-02)
 - Formulaire « Create account » retiré de la page de connexion.
 - Noms du workspace et des agents en lecture seule (`PATCH` → 403) : le back-office les définit.
 - Liste des agents : colonne « Created by » (e-mail du membre) ; l'état affiché est l'état live Agent37
