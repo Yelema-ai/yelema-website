@@ -34,7 +34,7 @@ function isLocalOrigin(origin: string): boolean {
 // allowed — never protocol-relative (`//evil.com`) or absolute URLs. Falls back to
 // /dashboard. Shared by the login page and the /auth/callback route so the two can't drift.
 export function safeNextPath(raw?: string | null): string {
-  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard";
+  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/";
 }
 
 // `siteUrl` is the deployment's SITE_URL (runtime config): server code passes `siteUrl()` from

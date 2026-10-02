@@ -36,8 +36,9 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+  // La racine est l'accueil connecté depuis le passage aux routes des maquettes : elle
+  // n'est plus publique.
   const isPublic =
-    pathname === "/" ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
     pathname.startsWith("/reset-password") ||

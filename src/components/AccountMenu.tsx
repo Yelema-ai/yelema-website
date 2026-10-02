@@ -1,22 +1,22 @@
 "use client";
 
-import { ChevronsUpDown, LogOut } from "lucide-react";
+import Link from "next/link";
+import { ChevronsUpDown, LogOut, Settings2 } from "lucide-react";
 import { useSupabase } from "@/lib/supabase/client";
 import { useWorkspace } from "@/components/WorkspaceProvider";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
-// The account control, pinned to the BOTTOM of every sidebar (fleet and per-agent) and merged with
-// sign-out. It names the organization but offers no workspace switching or creation: a deployment
-// serves one client, whose single workspace belongs to the back-office.
-export function AccountMenu() {
+// Le bloc de compte, en pied de menu (maquettes : .acw / .me / .acm). Il nomme l'organisation
+// mais n'offre ni bascule ni création d'espace : un déploiement sert un client, dont l'unique
+// espace appartient au back-office.
+export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
   const supabase = useSupabase();
   const { current, userEmail } = useWorkspace();
 
@@ -24,38 +24,59 @@ export function AccountMenu() {
 
   async function signOut() {
     await supabase.auth.signOut();
-    window.location.href = "/login";
+    window.location.href = "/login?out=1";
   }
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-auto w-full justify-between px-2 py-2 font-normal">
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-secondary text-xs font-medium text-secondary-foreground">
-              {initial}
+      <DropdownMenuTrigger
+        className={cn(
+          "mt-1 flex w-full items-center gap-2.5 rounded-[14px] px-2.5 py-2 text-left text-ink hover:bg-soft-2",
+          collapsed && "w-auto justify-center px-1"
+        )}
+      >
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-[13px] font-bold text-white">
+          {initial}
+        </span>
+        {!collapsed && (
+          <>
+            <span className="min-w-0 grow">
+              <b className="block truncate text-sm">{userEmail}</b>
+              <small className="block truncate text-xs text-ink-3">
+                {current?.role === "admin" ? "Administrateur" : "Membre"}
+              </small>
             </span>
-            <span className="flex min-w-0 flex-col text-left">
-              <span className="truncate text-sm">{userEmail}</span>
-              <span className="truncate text-xs text-muted-foreground">
-                {current?.name}
-              </span>
-            </span>
-          </span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-        </Button>
+            <ChevronsUpDown className="size-4 shrink-0 text-ink-3" />
+          </>
+        )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="start" side="top">
-        <DropdownMenuLabel className="flex items-center gap-2 font-normal">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-secondary text-xs font-medium text-secondary-foreground">
+
+      <DropdownMenuContent align="start" side="top" className="w-[272px] rounded-2xl p-1.5">
+        <div className="flex items-center gap-2.5 border-b px-2.5 pt-2.5 pb-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-[13px] font-bold text-white">
             {initial}
           </span>
-          <span className="min-w-0 truncate">{userEmail}</span>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
-          <LogOut className="h-4 w-4" />
-          Log out
+          <span className="min-w-0">
+            <b className="block truncate text-sm">{current?.name}</b>
+            <small className="block truncate text-xs text-ink-3">{userEmail}</small>
+          </span>
+        </div>
+
+        <DropdownMenuItem asChild className="mt-1.5 gap-2.5 rounded-[10px] px-2.5 py-2 text-sm">
+          <Link href="/administration">
+            <Settings2 className="size-4" />
+            Administration
+          </Link>
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator className="mx-1 my-1.5" />
+
+        <DropdownMenuItem
+          onClick={signOut}
+          className="gap-2.5 rounded-[10px] px-2.5 py-2 text-sm text-ko focus:text-ko"
+        >
+          <LogOut className="size-4" />
+          Se déconnecter
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { apiFetch } from "@/lib/api";
 import { isTransitional, statusVariant } from "@/lib/format";
-import { agentTabPath } from "@/lib/dashboard-tabs";
+import { agentTabPath } from "@/lib/expert-tabs";
 import type { MergedAgent } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

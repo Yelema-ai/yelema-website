@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { deploymentWorkspaceId } from "@/lib/runtime-config";
 import { WorkspaceProvider } from "@/components/WorkspaceProvider";
 import { UnlinkedAccount } from "@/components/UnlinkedAccount";
+import { AppShell } from "@/components/app/AppShell";
 import type { Role, Workspace, WorkspaceWithRole } from "@/lib/types";
 
 // Read the user's workspaces with two plain table queries joined in JS, NOT a PostgREST relationship
@@ -36,7 +37,7 @@ async function loadWorkspaces(db: DB, userId: string): Promise<WorkspaceWithRole
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { user } = await getSession();
   if (!user) redirect("/login");
 
@@ -47,12 +48,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // else joins by invitation. A signed-in account with no membership is simply not attached yet.
   if (workspaces.length === 0) return <UnlinkedAccount email={user.email ?? ""} />;
 
-  // The chrome (DashboardShell sidebar) lives in the (fleet) route group's layout, NOT here:
-  // the per-agent workspace route renders its own full-height shell and must not be wrapped in it.
-  // This layer only establishes auth + the WorkspaceProvider that both branches share.
+  // Un seul chrome pour tout le groupe (app), espace expert compris : c'est ce qui remplace
+  // l'écran de choix d'instance. Le <main> ne pose aucune marge — chaque page choisit son mode
+  // en enveloppant ou non son contenu dans <Page>.
   return (
     <WorkspaceProvider initialWorkspaces={workspaces} userEmail={user.email ?? ""}>
-      {children}
+      <AppShell>{children}</AppShell>
     </WorkspaceProvider>
   );
 }

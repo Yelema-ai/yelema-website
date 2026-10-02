@@ -1,20 +1,21 @@
 import { notFound } from "next/navigation";
 import { agentAccessRole, getAgentRow, requireUser } from "@/lib/auth";
-import { parseAgentTab } from "@/lib/dashboard-tabs";
+import { parseAgentTab } from "@/lib/expert-tabs";
 import { AgentWorkspace } from "@/components/AgentWorkspace";
 
-// The per-agent workspace. The active agent is bound to the URL; the optional catch-all carries
-// the tab (/dashboard/agents/{agentId}/{tab}, default "chat"). This route lives OUTSIDE the
-// (fleet) route group, so it renders its own full-height shell instead of the fleet sidebar.
+// L'espace d'un expert. L'expert actif est porté par l'URL ; le segment optionnel porte
+// l'onglet (/experts/{agentId}/{onglet}, « chat » par défaut). La route vit dans le groupe
+// (app), donc dans le chrome commun : plus d'écran de choix d'instance, la liste des experts
+// est en permanence dans la barre latérale.
 export default async function AgentWorkspacePage({
   params,
 }: {
-  params: Promise<{ agentId: string; tab?: string[] }>;
+  params: Promise<{ agentId: string; onglet?: string[] }>;
 }) {
-  const { agentId, tab } = await params;
+  const { agentId, onglet } = await params;
 
   // One grammar, shared with the client SPA: an unknown tab or extra segments 404 here.
-  const initialTab = parseAgentTab(tab);
+  const initialTab = parseAgentTab(onglet);
   if (initialTab === null) notFound();
 
   const { db, user } = await requireUser();

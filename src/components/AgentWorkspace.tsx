@@ -1,18 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Blocks, FolderOpen, MessageSquare, MessagesSquare, Settings2 } from "lucide-react";
+import { Blocks, FolderOpen, MessageSquare, MessagesSquare, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { isTransitional } from "@/lib/format";
-import { agentTabPath, parseAgentTab, type AgentTab } from "@/lib/dashboard-tabs";
-import { BrandMark } from "@/components/BrandMark";
+import { agentTabPath, parseAgentTab, type AgentTab } from "@/lib/expert-tabs";
 import type { MergedAgent, Role } from "@/lib/types";
 import { useWorkspace } from "@/components/WorkspaceProvider";
-import { ActiveAgentSwitcher } from "@/components/ActiveAgentSwitcher";
-import { AccountMenu } from "@/components/AccountMenu";
 import { AgentSettingsTab } from "@/components/AgentSettingsTab";
 import { IntegrationsTab } from "@/components/IntegrationsTab";
 import { ChannelsTab } from "@/components/channels/ChannelsTab";
@@ -148,24 +144,10 @@ export function AgentWorkspace({
       onChatTab={isChat}
       navigateToSession={navigateToSession}
     >
-      <div className="flex h-screen">
+      <div className="flex min-h-0 flex-1">
         <aside className="flex w-64 shrink-0 flex-col border-r bg-card">
           <div className="flex flex-col p-4 pb-3">
-            <BrandMark />
-
-            <Link
-              href="/dashboard"
-              className="mt-4 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to all agents
-            </Link>
-
-            <div className="mt-3">
-              <ActiveAgentSwitcher agents={agents} activeAgentId={agentId} currentTab={currentTab} />
-            </div>
-
-            <nav className="mt-5 flex flex-col gap-1">
+            <nav className="flex flex-col gap-1">
               {TABS.map((t) => {
                 const Icon = t.icon;
                 const isActive = currentTab === t.id;
@@ -200,11 +182,6 @@ export function AgentWorkspace({
             <div className="flex-1" />
           )}
 
-          {/* Account + workspace switcher (mirrors the fleet sidebar); the agent switcher lives at
-              the top. Switching workspace here routes back to that workspace's fleet. */}
-          <div className="border-t p-4">
-            <AccountMenu />
-          </div>
         </aside>
 
         <main className="min-w-0 flex-1 overflow-hidden">

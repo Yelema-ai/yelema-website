@@ -28,6 +28,26 @@ export interface Invitation {
   expires_at: string;
 }
 
+/** Un Expert : un profil Hermes installé sur une instance de l'organisation. */
+export interface Expert {
+  profileId: string;
+  displayName: string;
+  /** L'instance qui porte ce profil — plusieurs Experts peuvent partager la même. */
+  agentId: string;
+  agentName: string | null;
+  /** État de la passerelle du profil : « running » quand il peut répondre. */
+  gateway: string | null;
+  /** Distribution installée, par exemple `djeneba@7.0.0`. */
+  distribution: string | null;
+
+  // Enrichissement à venir, lu profil par profil (SOUL.md, configuration YAML, back-office).
+  // Rien ne les remplit aujourd'hui ; l'interface les affiche dès qu'ils arrivent.
+  /** Métier de l'Expert — « Chief of Staff », « Marketing et contenu »… */
+  role?: string | null;
+  /** Portrait de l'Expert. */
+  photoUrl?: string | null;
+}
+
 export interface AgentRow {
   agent37_id: string;
   workspace_id: string;

@@ -1,0 +1,52 @@
+import type { Expert } from "@/lib/types";
+import { cn } from "@/lib/utils";
+
+const SIZES = {
+  sm: { box: "size-[34px] text-[13px]", dot: "size-[11px]" },
+  md: { box: "size-[48px] text-base", dot: "size-[13px]" },
+  lg: { box: "size-[72px] text-2xl", dot: "size-4" },
+} as const;
+
+/**
+ * Le visage d'un Expert, avec sa pastille d'état.
+ *
+ * La photo n'est pas encore servie (`photoUrl` reste vide) : on affiche l'initiale en attendant.
+ * Le jour où elle arrivera, rien à changer ici ni chez les appelants.
+ */
+export function ExpertAvatar({
+  expert,
+  size = "sm",
+  className,
+}: {
+  expert: Pick<Expert, "displayName" | "gateway" | "photoUrl">;
+  size?: keyof typeof SIZES;
+  className?: string;
+}) {
+  const s = SIZES[size];
+  return (
+    <span className={cn("relative shrink-0", className)}>
+      {expert.photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={expert.photoUrl}
+          alt=""
+          className={cn(s.box, "rounded-full object-cover object-[50%_20%]")}
+        />
+      ) : (
+        <span
+          className={cn(s.box, "grid place-items-center rounded-full bg-tint font-bold text-brand-ink")}
+        >
+          {expert.displayName.trim()[0]?.toUpperCase() ?? "?"}
+        </span>
+      )}
+      {/* La colonne « Gateway » de `hermes profile list` : le profil peut répondre, ou non. */}
+      <span
+        className={cn(
+          "absolute -right-px -bottom-px rounded-full ring-2 ring-card",
+          s.dot,
+          expert.gateway === "running" ? "bg-ok" : "bg-[#B8B4C6]"
+        )}
+      />
+    </span>
+  );
+}
