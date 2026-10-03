@@ -52,10 +52,10 @@ export function ConfirmDialog({
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
+            Annuler
           </Button>
           <Button variant={destructive ? "destructive" : "default"} onClick={handle} disabled={busy}>
-            {busy ? "Working..." : confirmText}
+            {busy ? "En cours…" : confirmText}
           </Button>
         </DialogFooter>
       </DialogContent>

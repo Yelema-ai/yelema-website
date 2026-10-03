@@ -1,4 +1,4 @@
-// Shared client-side helpers for the Files tab. The wire shapes (FileEntry / FileListResponse)
+// Shared client-side helpers for the drive. The wire shapes (FileEntry / FileListResponse)
 // live in lib/types.ts so the server (lib/agent37.ts) and the browser agree on one definition.
 import type { FileEntry } from "@/lib/types";
 
@@ -8,38 +8,56 @@ export function isDir(entry: FileEntry): boolean {
   return entry.type === "directory";
 }
 
+// Dotfiles (tool state, caches) are never shown in the drive.
+export function isVisible(entry: FileEntry): boolean {
+  return !entry.hidden && !entry.name.startsWith(".");
+}
+
 // Join a directory path and a basename, tolerating a trailing slash (e.g. the "/" root).
 export function joinPath(dir: string, name: string): string {
   return dir.endsWith("/") ? `${dir}${name}` : `${dir}/${name}`;
 }
 
-// Human-readable size. Directories carry a null size and render blank.
+// The instance's home. Listings come back absolute, so drive paths given as `~/…` are mapped onto
+// it before any comparison.
+const HOME = "/home/node";
+
+export function toAbsPath(path: string): string {
+  const abs = path === "~" ? HOME : path.startsWith("~/") ? `${HOME}${path.slice(1)}` : path;
+  return abs.length > 1 ? abs.replace(/\/+$/, "") : abs;
+}
+
+export function isInside(path: string, root: string): boolean {
+  return path === root || path.startsWith(`${root}/`);
+}
+
+// Human-readable size, French units. Directories carry a null size and render blank.
 export function formatBytes(size: number | null): string {
   if (size == null) return "";
-  if (size < 1024) return `${size} B`;
-  const units = ["KB", "MB", "GB", "TB"];
+  if (size < 1024) return `${size} o`;
+  const units = ["Ko", "Mo", "Go", "To"];
   let n = size / 1024;
   let i = 0;
   while (n >= 1024 && i < units.length - 1) {
     n /= 1024;
     i += 1;
   }
-  return `${n < 10 ? n.toFixed(1) : Math.round(n)} ${units[i]}`;
+  return `${n.toLocaleString("fr-FR", { maximumFractionDigits: n < 10 ? 1 : 0 })} ${units[i]}`;
 }
 
 // `modified` is epoch milliseconds (Agent API convention).
 export function formatMtime(ms: number): string {
   if (!ms) return "";
-  return new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  return new Date(ms).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" });
 }
 
-// One clickable breadcrumb: a label plus the absolute path it navigates to. Splits an absolute
-// path into its ancestors, with a leading root segment ("/").
-export function breadcrumbs(path: string): { label: string; path: string }[] {
-  const parts = path.split("/").filter(Boolean);
-  const crumbs: { label: string; path: string }[] = [{ label: "/", path: "/" }];
-  let acc = "";
-  for (const part of parts) {
+// The breadcrumb: the drive root (under its label), then each folder below it. Nothing above the
+// root is ever shown.
+export function breadcrumbs(path: string | null, root: string, rootLabel: string): { label: string; path: string }[] {
+  const crumbs = [{ label: rootLabel, path: root }];
+  if (!path || !isInside(path, root)) return crumbs;
+  let acc = root;
+  for (const part of path.slice(root.length).split("/").filter(Boolean)) {
     acc += `/${part}`;
     crumbs.push({ label: part, path: acc });
   }
@@ -47,7 +65,7 @@ export function breadcrumbs(path: string): { label: string; path: string }[] {
 }
 
 // How the preview dialog should render a file, chosen by extension. CRITICAL: html/svg are
-// "sandbox" — they must only ever be rendered inside a sandboxed <iframe> (scripts neutralised),
+// "sandbox": they must only ever be rendered inside a sandboxed <iframe> (scripts neutralised),
 // never inline on the app origin. Plain text/code is fetched and shown escaped in a <pre>.
 export type PreviewKind = "image" | "pdf" | "sandbox" | "text" | "none";
 
@@ -70,13 +88,13 @@ export function previewKind(name: string): PreviewKind {
   return "none";
 }
 
-// The browser never holds the sk_live_ key — preview/download point at the BFF content route,
+// The browser never holds the sk_live_ key: preview/download point at the BFF content route,
 // which streams the bytes server-side with the key attached.
 export function contentUrl(agentId: string, path: string, disposition: "inline" | "attachment"): string {
   return `/api/agents/${agentId}/files/content?path=${encodeURIComponent(path)}&disposition=${disposition}`;
 }
 
-// Folder download → the BFF archive route streams a .tar.gz of the directory (key attached
+// Folder download: the BFF archive route streams a .tar.gz of the directory (key attached
 // server-side), so an <a download> can point straight at it, like contentUrl for single files.
 export function archiveUrl(agentId: string, path: string): string {
   return `/api/agents/${agentId}/files/archive?path=${encodeURIComponent(path)}`;

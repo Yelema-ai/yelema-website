@@ -8,10 +8,10 @@ export async function DELETE(_request: Request, { params }: Ctx) {
   try {
     const { id, connectedAccountId } = await params;
     if (!connectedAccountId) {
-      throw new ApiError(400, "invalid_request", "connectedAccountId is required");
+      throw new ApiError(400, "invalid_request", "Compte manquant");
     }
 
-    // Disconnecting an integration is a destructive mutation — admin-only.
+    // Disconnecting an integration is a destructive mutation, admin-only.
     await requireAgentAccess(id, "admin");
 
     // Ownership of the connected account to this instance's Composio entity is

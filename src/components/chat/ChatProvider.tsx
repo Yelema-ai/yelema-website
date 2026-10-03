@@ -3,18 +3,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
-import type { MergedAgent } from "@/lib/types";
 import { type ChatSession } from "./types";
 
 interface ChatContextValue {
   agentId: string;
-  // The workspace's agent list, threaded down so the composer's agent switcher can list them.
-  agents: MergedAgent[];
+  // The Hermes profile: an expert's key, or "default" for the business chat.
+  profile: string;
   sessions: ChatSession[];
   activeSessionId: string | null;
-  // Whether the Chat tab is the one on screen. The open thread is kept active even off-tab (so its
-  // stream survives a tab switch), so consumers gate "is this thread being viewed" UI on this.
-  onChatTab: boolean;
   composerFocusToken: number;
   // Ping the composer to refocus its textarea (e.g. after an attachment lands).
   requestComposerFocus: () => void;
@@ -28,8 +24,6 @@ interface ChatContextValue {
   // still streaming on it (locally and upstream).
   registerRunKiller: (fn: (sessionId: string) => void) => () => void;
   deleteSession: (sessionId: string) => Promise<void>;
-  // Rename a thread (server-side via PATCH). Optimistic; rolls back + toasts if the build
-  // doesn't support titles. Resolves whether it succeeded so callers can react if needed.
   renameSession: (sessionId: string, title: string) => Promise<void>;
   // Move a thread to the top of the rail on new activity (most-recently-used first).
   bumpSession: (sessionId: string) => void;
@@ -43,74 +37,66 @@ export function useChatContext() {
   return ctx;
 }
 
-// Holds the thread rail + the active selection, shared by the sidebar rail and the conversation
-// pane. The rail comes straight from the Agent37 Agents API (GET /v1/sessions) — there is no local
-// sessions table. Each row's label (server-side title, else the first-message preview) is resolved
-// by the sessions route, so the rail paints in one fetch with no per-session hydration.
+// The open thread rides the URL as ?session=, written with history.pushState (Next's
+// useSearchParams follows it), so refresh, Back/Forward and shared links reopen the same thread.
+export function useSessionUrl(): [string | null, (sessionId: string | null, mode?: "push" | "replace") => void] {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  useEffect(() => {
+    const read = () => setSessionId(new URLSearchParams(window.location.search).get("session"));
+    read();
+    window.addEventListener("popstate", read);
+    return () => window.removeEventListener("popstate", read);
+  }, []);
+  const navigate = useCallback((id: string | null, mode: "push" | "replace" = "push") => {
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set("session", id);
+    else url.searchParams.delete("session");
+    if (mode === "replace") window.history.replaceState(window.history.state, "", url);
+    else window.history.pushState(window.history.state, "", url);
+    setSessionId(id);
+  }, []);
+  return [sessionId, navigate];
+}
+
+// Holds one profile's thread rail + the open thread, shared by the rail and the conversation pane.
+// The rail comes straight from the Agent37 Agents API (GET /v1/sessions?profile=); there is no
+// local sessions table.
 export function ChatProvider({
   agentId,
-  agents,
+  profile,
   urlSessionId,
-  onChatTab,
   navigateToSession,
   children,
 }: {
   agentId: string;
-  agents: MergedAgent[];
-  // The open thread's id, taken from the URL (?session=) — null for a new chat. The URL is the
-  // source of truth so refresh, Back/Forward, and shared links all reopen the same thread.
+  profile: string;
   urlSessionId: string | null;
-  // Whether the Chat tab is the one on screen. We only adopt the URL's thread while on Chat, so
-  // visiting another tab never drops the open thread or cancels its in-flight stream.
-  onChatTab: boolean;
-  // Writes the chat URL (?session=). Selecting/clearing a thread navigates; activeSessionId follows.
   navigateToSession: (sessionId: string | null, mode?: "push" | "replace") => void;
   children: ReactNode;
 }) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(urlSessionId);
   const [composerFocusToken, setComposerFocusToken] = useState(0);
   const [loadingSessions, setLoadingSessions] = useState(true);
+  const activeSessionId = urlSessionId;
+  const q = `?profile=${encodeURIComponent(profile)}`;
 
-  // Adopt the thread from the URL whenever it changes — a rail click, Back/Forward, or a refresh.
-  // Done during render (React's "adjust state when a prop changes" pattern) so there's no extra
-  // paint. We always track the URL, but only adopt it into the open thread while the Chat tab is
-  // showing, so leaving to another tab keeps the open thread (and its in-flight stream) mounted
-  // rather than resetting it.
-  const [syncedUrlSessionId, setSyncedUrlSessionId] = useState<string | null>(urlSessionId);
-  if (urlSessionId !== syncedUrlSessionId) {
-    setSyncedUrlSessionId(urlSessionId);
-    if (onChatTab) setActiveSessionId(urlSessionId);
-  }
-
-  // Tab switches (handled by the shell) rewrite the path WITHOUT the ?session= query, so on the
-  // way back to Chat the open thread lives only in memory. Re-stamp the URL with the open thread
-  // when Chat becomes visible again, so a refresh/share from here reopens the same thread.
-  useEffect(() => {
-    if (onChatTab && activeSessionId && urlSessionId !== activeSessionId) {
-      navigateToSession(activeSessionId, "replace");
-    }
-    // Only react to tab-visibility flips; activeSessionId changes already drive the URL elsewhere.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onChatTab]);
-
-  // Load the rail from upstream — labels and ordering arrive ready from the sessions route.
   useEffect(() => {
     let cancelled = false;
-
-    apiFetch<{ sessions: ChatSession[] }>(`/api/agents/${agentId}/chat/sessions`)
+    setLoadingSessions(true);
+    apiFetch<{ sessions: ChatSession[] }>(`/api/agents/${agentId}/chat/sessions${q}`)
       .then((res) => {
         if (!cancelled) setSessions(res.sessions);
       })
-      .catch(() => {})
+      .catch((e) => {
+        if (!cancelled) toast.error((e as Error).message || "Impossible de charger les conversations.");
+      })
       .finally(() => {
         if (!cancelled) setLoadingSessions(false);
       });
-
     return () => {
       cancelled = true;
     };
-  }, [agentId]);
+  }, [agentId, q]);
 
   const requestComposerFocus = useCallback(() => setComposerFocusToken((n) => n + 1), []);
 
@@ -127,37 +113,20 @@ export function ChatProvider({
     requestComposerFocus();
   }, [navigateToSession, requestComposerFocus]);
 
-  // Point the open thread at a session. While the Chat tab is showing this rides the URL (so
-  // Back/Forward and refresh stay in sync); off-tab we set it directly so we don't yank the user's
-  // URL back to chat or cancel an in-flight stream they've stepped away from.
-  const setOpenThread = useCallback(
-    (sessionId: string | null, mode: "push" | "replace" = "push") => {
-      if (onChatTab) navigateToSession(sessionId, mode);
-      else setActiveSessionId(sessionId);
-    },
-    [onChatTab, navigateToSession]
-  );
-
-  // A brand-new conversation just minted its session id mid-stream. We already have its first
-  // message (the label), so add the rail row locally and promote it — no write-back: the session
-  // already exists upstream and will reappear from GET /v1/sessions on the next load. A run that
-  // finished creating in the background (promote: false) only gets its rail row.
+  // A brand-new conversation just minted its session id mid-stream: add its rail row locally (it
+  // reappears from GET /v1/sessions on the next load) and give it its own URL.
   const onSessionCreated = useCallback(
     (sessionId: string, title: string, opts?: { promote?: boolean }) => {
-      // Give the freshly-minted thread its own URL (replace, so Back doesn't return to the blank
-      // new-chat URL); off-tab it's adopted silently.
-      if (opts?.promote !== false) setOpenThread(sessionId, "replace");
+      if (opts?.promote !== false) navigateToSession(sessionId, "replace");
       setSessions((prev) =>
         prev.some((s) => s.session_id === sessionId)
           ? prev
-          : [{ session_id: sessionId, title: title.trim().slice(0, 80) || null }, ...prev]
+          : [{ session_id: sessionId, title: title.trim().slice(0, 80) || null, last_active: Date.now() }, ...prev]
       );
     },
-    [setOpenThread]
+    [navigateToSession]
   );
 
-  // The conversation pane's run-killer (deleting a thread must also stop any turn still
-  // streaming on it). A ref, not state — registration shouldn't re-render the tree.
   const runKillerRef = useRef<((sessionId: string) => void) | null>(null);
   const registerRunKiller = useCallback((fn: (sessionId: string) => void) => {
     runKillerRef.current = fn;
@@ -170,22 +139,18 @@ export function ChatProvider({
     async (sessionId: string) => {
       const removed = sessions.find((x) => x.session_id === sessionId);
       const wasActive = activeSessionId === sessionId;
-      runKillerRef.current?.(sessionId); // stop any in-flight turn before the thread disappears
-      setSessions((s) => s.filter((x) => x.session_id !== sessionId)); // optimistic, functional
-      // Deleting the open thread falls back to a new chat (the rail can delete the active thread
-      // from any tab, so off-tab this stays silent rather than yanking the user's URL).
-      if (wasActive) setOpenThread(null);
+      runKillerRef.current?.(sessionId);
+      setSessions((s) => s.filter((x) => x.session_id !== sessionId));
+      if (wasActive) navigateToSession(null);
       try {
-        await apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}`, { method: "DELETE" });
+        await apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`, { method: "DELETE" });
       } catch (e) {
-        // Functional rollback: re-insert only the removed row (preserving any threads added
-        // concurrently) and restore the open thread.
         if (removed) setSessions((s) => (s.some((x) => x.session_id === sessionId) ? s : [removed, ...s]));
-        if (wasActive) setOpenThread(sessionId);
-        toast.error((e as Error).message || "Couldn't delete that chat.");
+        if (wasActive) navigateToSession(sessionId);
+        toast.error((e as Error).message || "Impossible de supprimer cette conversation.");
       }
     },
-    [agentId, activeSessionId, sessions, setOpenThread]
+    [agentId, q, activeSessionId, sessions, navigateToSession]
   );
 
   const renameSession = useCallback(
@@ -193,37 +158,35 @@ export function ChatProvider({
       const next = title.trim().slice(0, 200);
       const prev = sessions.find((s) => s.session_id === sessionId)?.title ?? null;
       if (!next || next === prev) return;
-      setSessions((s) => s.map((x) => (x.session_id === sessionId ? { ...x, title: next } : x))); // optimistic
+      setSessions((s) => s.map((x) => (x.session_id === sessionId ? { ...x, title: next } : x)));
       try {
-        await apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}`, {
+        await apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`, {
           method: "PATCH",
           body: JSON.stringify({ title: next }),
         });
       } catch (e) {
-        setSessions((s) => s.map((x) => (x.session_id === sessionId ? { ...x, title: prev } : x))); // rollback
-        toast.error((e as Error).message || "Couldn't rename that chat.");
+        setSessions((s) => s.map((x) => (x.session_id === sessionId ? { ...x, title: prev } : x)));
+        toast.error((e as Error).message || "Impossible de renommer cette conversation.");
       }
     },
-    [agentId, sessions]
+    [agentId, q, sessions]
   );
 
-  // Move a thread to the top of the rail on new activity. Upstream ordering (last_active) only
-  // refreshes on reload, so keep the most-recently-used thread first in the meantime.
   const bumpSession = useCallback((sessionId: string) => {
     setSessions((prev) => {
       const idx = prev.findIndex((s) => s.session_id === sessionId);
-      if (idx <= 0) return prev; // not present, or already at the top
-      return [prev[idx], ...prev.slice(0, idx), ...prev.slice(idx + 1)];
+      if (idx < 0) return prev;
+      const row = { ...prev[idx], last_active: Date.now() };
+      return [row, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
     });
   }, []);
 
   const value = useMemo<ChatContextValue>(
     () => ({
       agentId,
-      agents,
+      profile,
       sessions,
       activeSessionId,
-      onChatTab,
       composerFocusToken,
       requestComposerFocus,
       loadingSessions,
@@ -235,7 +198,7 @@ export function ChatProvider({
       renameSession,
       bumpSession,
     }),
-    [agentId, agents, sessions, activeSessionId, onChatTab, composerFocusToken, requestComposerFocus, loadingSessions, selectSession, startNewChat, onSessionCreated, registerRunKiller, deleteSession, renameSession, bumpSession]
+    [agentId, profile, sessions, activeSessionId, composerFocusToken, requestComposerFocus, loadingSessions, selectSession, startNewChat, onSessionCreated, registerRunKiller, deleteSession, renameSession, bumpSession]
   );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

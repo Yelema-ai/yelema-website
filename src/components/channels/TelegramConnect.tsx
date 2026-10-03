@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
@@ -11,36 +11,38 @@ import {
   type TelegramOwner,
 } from "@/lib/channels";
 import { Button } from "@/components/ui/button";
+import { DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChannelPanelHeader } from "@/components/channels/ChannelCredentialsForm";
+import { TelegramIcon } from "@/components/channels/BrandIcons";
 import { useAsyncAction } from "@/components/useAsyncAction";
 
 const OWNER_POLL_MS = 3000;
 
 type Step = "token" | "owner" | "connected";
 
-// Telegram is the channel worth building a real flow for: it reaches the agent through a webhook, so
-// it works even when the agent is asleep, and nobody has to install anything.
+// Telegram on the business chat (the instance's default Hermes profile), shown in the Canaux dialog.
 //
 // Three steps, and the middle one is the point: the first person to message the bot becomes its whole
-// allowlist. Without that, anyone who guessed the bot's @username could talk to someone else's agent.
+// allowlist. Without that, anyone who guessed the bot's @username could talk to the company's experts.
 // We read that person from Telegram's own inbox rather than asking for a numeric user id nobody knows.
 export function TelegramConnect({
   agentId,
   channel,
-  onBack,
+  onChanged,
+  onClose,
 }: {
   agentId: string;
   channel: MessagingPlatform;
-  onBack: () => void;
+  onChanged: () => void;
+  onClose: () => void;
 }) {
   const [step, setStep] = useState<Step>(isChannelConnected(channel) ? "connected" : "token");
   const [token, setToken] = useState("");
   const [bot, setBot] = useState<TelegramBotCheck | null>(null);
   const [owner, setOwner] = useState<TelegramOwner | null>(null);
   // Telegram refuses to hand over the inbox once the bot is on a webhook, which is what a bot that is
-  // already wired to an agent looks like. Then there is nobody to wait for: offer to connect as-is.
+  // already wired somewhere looks like. Then there is nobody to wait for: offer to connect as-is.
   const [ownerUnavailable, setOwnerUnavailable] = useState(false);
   const { busy, run } = useAsyncAction();
   const connecting = useRef(false);
@@ -57,25 +59,30 @@ export function TelegramConnect({
       setStep("owner");
     });
 
-  // Write the token (and whoever said hello) into the agent, then let the harness restart its gateway.
+  // Write the token (and whoever said hello) into the instance, then let Hermes restart its gateway.
   const connect = (allowed: TelegramOwner | null) =>
     run(async () => {
-      await apiFetch(`/api/agents/${agentId}/channels/telegram`, {
-        method: "PUT",
-        body: JSON.stringify({
-          enabled: true,
-          env: {
-            TELEGRAM_BOT_TOKEN: token,
-            TELEGRAM_ALLOWED_USERS: allowed?.user_id ?? "",
-          },
-        }),
-      });
+      try {
+        await apiFetch(`/api/agents/${agentId}/channels/telegram`, {
+          method: "PUT",
+          body: JSON.stringify({
+            enabled: true,
+            env: {
+              TELEGRAM_BOT_TOKEN: token,
+              TELEGRAM_ALLOWED_USERS: allowed?.user_id ?? "",
+            },
+          }),
+        });
+      } finally {
+        connecting.current = false;
+      }
       setStep("connected");
-      toast.success("Telegram connected");
+      toast.success("Telegram est connecté");
+      onChanged();
     });
 
   // Watch the bot's inbox while the screen asks its owner to say hello. The first message connects the
-  // agent on its own, so there is no button to press after Telegram.
+  // bot on its own, so there is no button to press after Telegram.
   useEffect(() => {
     if (step !== "owner" || !bot || owner || ownerUnavailable) return;
 
@@ -115,53 +122,73 @@ export function TelegramConnect({
   const disconnect = () =>
     run(async () => {
       await apiFetch(`/api/agents/${agentId}/channels/telegram`, { method: "DELETE" });
-      toast.success("Telegram disconnected");
-      onBack();
+      toast.success("Telegram est déconnecté");
+      onClose();
     });
+
+  const restart = () => {
+    connecting.current = false;
+    setToken("");
+    setBot(null);
+    setOwner(null);
+    setOwnerUnavailable(false);
+    setStep("token");
+  };
 
   return (
     <div className="space-y-5">
-      <ChannelPanelHeader channel={channel} onBack={onBack} />
+      <DialogHeader className="flex-row items-center gap-3 space-y-0 text-left">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-soft">
+          <TelegramIcon className="h-6 w-6" style={{ color: "#26A5E4" }} />
+        </span>
+        <div className="min-w-0 space-y-1">
+          <DialogTitle className="font-display text-xl font-bold text-ink">Telegram</DialogTitle>
+          <DialogDescription className="text-[13px] text-ink-3">Un bot Telegram relié au chat entreprise.</DialogDescription>
+        </div>
+      </DialogHeader>
 
       {step === "token" && (
         <div className="space-y-4">
-          <ol className="list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
-            <li>
-              Open{" "}
-              <a
-                href="https://t.me/BotFather"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-foreground underline-offset-4 hover:underline"
-              >
-                @BotFather
-              </a>{" "}
-              in Telegram and send <span className="font-medium text-foreground">/newbot</span>.
-            </li>
-            <li>Pick a name and a username for your agent&apos;s bot.</li>
-            <li>Paste the token BotFather sends back.</li>
-          </ol>
-          <div className="space-y-1.5">
-            <Label htmlFor="telegram-token" className="text-xs">
-              Bot token
-            </Label>
+          <Steps
+            items={[
+              <>
+                Ouvrez{" "}
+                <a
+                  href="https://t.me/BotFather"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-link underline-offset-4 hover:underline"
+                >
+                  @BotFather
+                </a>{" "}
+                dans Telegram et envoyez <code className="rounded bg-soft px-1 font-mono text-[13px] text-ink">/newbot</code>.
+              </>,
+              <>Choisissez un nom et un identifiant pour le bot.</>,
+              <>Collez ici le jeton que BotFather vous envoie.</>,
+            ]}
+          />
+          <div className="space-y-2">
+            <Label htmlFor="telegram-token">Jeton du bot</Label>
             <Input
               id="telegram-token"
               type="password"
               autoComplete="off"
-              placeholder="123456789:AA..."
+              placeholder="123456789:AA…"
               value={token}
               onChange={(e) => setToken(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && token.trim() && !busy) void check();
+              }}
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button onClick={check} disabled={busy || token.trim().length === 0}>
-              {busy ? <Loader2 className="animate-spin" /> : null}
-              Continue
+              {busy && <Loader2 className="animate-spin" />}
+              Continuer
             </Button>
             {channel.configured && (
-              <Button variant="ghost" onClick={disconnect} disabled={busy}>
-                Disconnect
+              <Button variant="ghost" className="text-ko hover:text-ko" onClick={disconnect} disabled={busy}>
+                Déconnecter
               </Button>
             )}
           </div>
@@ -170,30 +197,36 @@ export function TelegramConnect({
 
       {step === "owner" && bot && (
         <div className="space-y-4">
-          <p className="text-sm">
-            Open <span className="font-medium">@{bot.username}</span> and send it any message. Whoever writes first is
-            the only person the agent will answer.
+          <p className="text-sm text-ink-2">
+            Ouvrez <span className="font-semibold text-ink">@{bot.username}</span> et envoyez-lui un message. La
+            première personne qui écrit sera la seule à qui vos experts répondent.
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline">
               <a href={`https://t.me/${bot.username}`} target="_blank" rel="noopener noreferrer">
-                Open @{bot.username}
-                <ExternalLink className="h-3.5 w-3.5" />
+                Ouvrir @{bot.username}
+                <ExternalLink />
               </a>
             </Button>
-            <Button variant="ghost" onClick={() => connect(null)} disabled={busy}>
-              {ownerUnavailable ? "Connect anyway" : "Skip"}
+            {/* After a failed write the owner is already known: retry with them, never without. */}
+            <Button variant="ghost" onClick={() => connect(owner)} disabled={busy}>
+              {owner ? "Réessayer" : ownerUnavailable ? "Connecter quand même" : "Passer"}
             </Button>
           </div>
-          {ownerUnavailable ? (
-            <p className="text-xs text-muted-foreground">
-              This bot is already wired to something else, so Telegram will not show us who owns it. Connecting leaves
-              the bot open to anyone who finds it.
+          {busy ? (
+            <p className="flex items-center gap-2 text-[13px] text-ink-3">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {owner?.name ? `Message reçu de ${owner.name}. ` : ""}Connexion du bot, environ une minute.
+            </p>
+          ) : ownerUnavailable ? (
+            <p className="rounded-xl bg-coral-pale px-3 py-2 text-[13px] text-coral-ink">
+              Ce bot est déjà relié ailleurs : Telegram ne nous dit pas qui l’a créé. Une fois connecté, toute personne
+              qui le trouve pourra lui écrire.
             </p>
           ) : (
-            <p className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Waiting for your message
+            <p className="flex items-center gap-2 text-[13px] text-ink-3">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              En attente de votre message
             </p>
           )}
         </div>
@@ -201,46 +234,53 @@ export function TelegramConnect({
 
       {step === "connected" && (
         <div className="space-y-4">
-          <div className="flex items-start gap-2">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+          <div className="flex items-start gap-2.5 rounded-xl bg-ok-pale px-3.5 py-3">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-ok" />
             <div className="space-y-1">
-              <p className="text-sm font-medium">
-                {bot ? `@${bot.username} is connected.` : "Telegram is connected."}
+              <p className="text-sm font-semibold text-ink">
+                {bot ? `@${bot.username} est connecté.` : "Telegram est connecté."}
               </p>
-              <p className="text-xs text-muted-foreground">
-                Message the bot from anywhere. Telegram reaches this agent by webhook, so it answers even when the
-                agent is asleep.
+              <p className="text-[13px] text-ink-2">
+                Écrivez au bot depuis n’importe où : c’est le chat entreprise qui répond.
+                {owner?.name ? ` Il ne répond qu’à ${owner.name}.` : ""}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {bot && (
               <Button asChild>
                 <a href={`https://t.me/${bot.username}`} target="_blank" rel="noopener noreferrer">
-                  Open chat
-                  <ExternalLink className="h-3.5 w-3.5" />
+                  Ouvrir la conversation
+                  <ExternalLink />
                 </a>
               </Button>
             )}
-            <Button
-              variant="outline"
-              onClick={() => {
-                connecting.current = false;
-                setToken("");
-                setBot(null);
-                setOwner(null);
-                setStep("token");
-              }}
-            >
-              Connect a different bot
+            <Button variant="outline" onClick={restart} disabled={busy}>
+              Changer de bot
             </Button>
-            <Button variant="ghost" onClick={disconnect} disabled={busy}>
-              Disconnect
+            <Button variant="ghost" className="text-ko hover:text-ko" onClick={disconnect} disabled={busy}>
+              {busy && <Loader2 className="animate-spin" />}
+              Déconnecter
             </Button>
           </div>
-          {owner?.name && <p className="text-xs text-muted-foreground">Answering {owner.name} only.</p>}
         </div>
       )}
     </div>
+  );
+}
+
+// A numbered how-to list, shared by the channel dialogs and the topics card.
+export function Steps({ items }: { items: ReactNode[] }) {
+  return (
+    <ol className="space-y-2.5">
+      {items.map((item, i) => (
+        <li key={i} className="flex gap-3 text-sm text-ink-2">
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-tint text-xs font-bold text-brand">
+            {i + 1}
+          </span>
+          <span className="pt-0.5">{item}</span>
+        </li>
+      ))}
+    </ol>
   );
 }

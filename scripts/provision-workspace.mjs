@@ -12,7 +12,7 @@
 //    own install lacks (memories, a config.yaml so the managed model reaches the profile, a larger
 //    SOUL.md cap), the shared ~/Livrables drive, then a restart so the image writes the managed
 //    model into every profile. Then agents.profiles + ready = true.
-// 4. Prints the access link to send the admin (set a password, land in the app).
+// 4. Prints the admin's access link (7 days, one use: sign in, choose a password, land in the app).
 
 import fs from "node:fs";
 import path from "node:path";
@@ -217,16 +217,15 @@ ${rows}
 - Ne range rien ailleurs que dans ~/Livrables/ : le reste n'est pas visible par l'équipe.`;
 }
 
-async function accessLink() {
-  let type = "invite";
-  let r = await sb("/auth/v1/admin/generate_link", { method: "POST", body: { type, email: EMAIL, redirect_to: SITE } }).catch((e) => e);
-  if (r instanceof Error) {
-    if (r.status !== 422) throw r;
-    type = "recovery";
-    r = await sb("/auth/v1/admin/generate_link", { method: "POST", body: { type, email: EMAIL, redirect_to: SITE } });
-  }
-  const q = new URLSearchParams({ token_hash: r.hashed_token, type, next: "/bienvenue" });
-  return `${SITE}/auth/callback?${q}`;
+// The admin's access link: a row in `invitations` the app consumes at /acces/<token> (7 days, one
+// use), then they choose their password on /bienvenue.
+async function accessLink(workspaceId) {
+  const [row] = await sb("/rest/v1/invitations", {
+    method: "POST",
+    body: { workspace_id: workspaceId, email: EMAIL, role: "admin" },
+    headers: { Prefer: "return=representation" },
+  });
+  return `${SITE}/acces/${row.token}`;
 }
 
 async function main() {
@@ -256,8 +255,8 @@ async function main() {
     body: { profiles: Object.keys(EXPERTS), ready: true, status: "running" },
   });
 
-  step("Done. Send this link to the admin (valid 24 h, one use):");
-  console.log(`\n  ${await accessLink()}\n`);
+  step("Done. Send this link to the admin (valid 7 days, one use):");
+  console.log(`\n  ${await accessLink(workspaceId)}\n`);
 }
 
 main().catch((e) => {

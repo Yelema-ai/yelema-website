@@ -1,6 +1,7 @@
 import { agent37 } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { handleError, json } from "@/lib/http";
+import { profileParam, profileQuery } from "@/lib/profiles";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -9,12 +10,13 @@ type Ctx = { params: Promise<{ id: string }> };
 // table. We resolve each rail label here as `title || preview` (the server-side title once set,
 // otherwise the first-message preview the list already carries) and order most-recently-active
 // first, so the client needs no per-session fetch to label the rail.
-export async function GET(_request: Request, { params }: Ctx) {
+export async function GET(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
     await requireAgentAccess(id, "member");
+    const profile = profileParam(new URL(request.url).searchParams.get("profile"));
 
-    const { data } = await agent37.listSessions(id);
+    const { data } = await agent37.listSessions(id, profileQuery(profile));
     const sessions = data
       .map((s) => ({
         session_id: s.id,

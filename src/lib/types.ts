@@ -4,6 +4,7 @@ export interface Workspace {
   id: string;
   name: string;
   owner_id: string;
+  logo_url: string | null;
   created_at: string;
 }
 
@@ -14,8 +15,10 @@ export interface WorkspaceWithRole extends Workspace {
 export interface WorkspaceMember {
   user_id: string;
   email: string;
+  name: string | null;
   role: Role;
   created_at: string;
+  last_sign_in_at: string | null;
 }
 
 export interface Invitation {
@@ -37,6 +40,11 @@ export interface AgentRow {
   disk: number | null;
   created_by: string | null;
   created_at: string;
+  // NULL for the workspace's shared instance (the one the app uses); set on legacy per-user rows.
+  owner_user_id: string | null;
+  // Hermes profiles installed on the instance, and whether provisioning finished.
+  profiles: string[];
+  ready: boolean;
 }
 
 export interface Agent {

@@ -1,5 +1,6 @@
 import { agent37 } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
+import { assertInDrive } from "@/lib/drive";
 import { handleError, json } from "@/lib/http";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -13,7 +14,7 @@ export async function GET(request: Request, { params }: Ctx) {
     const { id } = await params;
     await requireAgentAccess(id, "member");
 
-    const path = new URL(request.url).searchParams.get("path") || undefined;
+    const path = assertInDrive(new URL(request.url).searchParams.get("path"));
     return json(await agent37.listFiles(id, path));
   } catch (e) {
     return handleError(e);

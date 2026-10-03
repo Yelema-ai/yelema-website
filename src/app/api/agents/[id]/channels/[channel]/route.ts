@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { agent37 } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { ApiError, handleError, json, readJson } from "@/lib/http";
 import {
@@ -9,7 +10,8 @@ import {
   writePlatform,
 } from "@/lib/hermes-messaging";
 import { assertBotTokenShape, checkBotToken, findBotOwner } from "@/lib/telegram";
-import type { MessagingPlatform, WhatsappPairing, WhatsappPairingState } from "@/lib/channels";
+import { isSupportedChannel } from "@/lib/channels";
+import type { ChannelId, MessagingPlatform, WhatsappPairing, WhatsappPairingState } from "@/lib/channels";
 
 // Every handler here is one or more execs into the instance, and a write also restarts the agent's
 // messaging gateway, a minute of work in the slowest case.
@@ -19,10 +21,25 @@ type Ctx = { params: Promise<{ id: string; channel: string }> };
 
 const QR_OPTIONS = { margin: 1, width: 224 } as const;
 
+function supportedChannel(channel: string): ChannelId {
+  if (!isSupportedChannel(channel)) throw new ApiError(404, "not_found", "Ce canal n’est pas disponible");
+  return channel;
+}
+
 // Credentials are written by the harness, which redacts them on the way back out, so the refreshed
 // channel is safe to return to the browser.
 async function refreshed(agentId: string, channelId: string): Promise<MessagingPlatform> {
   return getPlatform(agentId, channelId);
+}
+
+// A channel only receives messages while the instance is awake: once one is connected, auto-sleep
+// goes off. Best effort: the channel is connected either way, and a seat-billed instance refuses it.
+async function keepAwake(agentId: string): Promise<void> {
+  try {
+    await agent37.setAutoSleep(agentId, false);
+  } catch (e) {
+    console.error(`[channels] could not turn auto-sleep off on ${agentId}`, e);
+  }
 }
 
 // Connect (or re-configure) a channel: write its credentials, switch it on, and let the harness
@@ -32,8 +49,9 @@ async function refreshed(agentId: string, channelId: string): Promise<MessagingP
 // bad token, so writing one unchecked would take every other channel on the agent down with it.
 export async function PUT(request: Request, { params }: Ctx) {
   try {
-    const { id, channel } = await params;
+    const { id, channel: raw } = await params;
     await requireAgentAccess(id, "admin");
+    const channel = supportedChannel(raw);
 
     const body = await readJson<{ env?: Record<string, string>; enabled?: boolean }>(request);
     const platform = await getPlatform(id, channel);
@@ -47,13 +65,15 @@ export async function PUT(request: Request, { params }: Ctx) {
     }
     const missing = platform.env_vars.filter((f) => f.required && !f.is_set && !env[f.key]);
     if (missing.length > 0) {
-      throw new ApiError(400, "invalid_request", `${missing.map((f) => f.prompt || f.key).join(", ")} is required`);
+      throw new ApiError(400, "invalid_request", `Champ requis : ${missing.map((f) => f.prompt || f.key).join(", ")}`);
     }
     if (channel === "telegram" && env.TELEGRAM_BOT_TOKEN) {
       await checkBotToken(assertBotTokenShape(env.TELEGRAM_BOT_TOKEN));
     }
 
-    await writePlatform(id, channel, { enabled: body.enabled ?? true, env });
+    const enabled = body.enabled ?? true;
+    await writePlatform(id, channel, { enabled, env });
+    if (enabled) await keepAwake(id);
     return json({ channel: await refreshed(id, channel) });
   } catch (e) {
     return handleError(e);
@@ -63,8 +83,9 @@ export async function PUT(request: Request, { params }: Ctx) {
 // Disconnect: switch the channel off and forget its credentials.
 export async function DELETE(_request: Request, { params }: Ctx) {
   try {
-    const { id, channel } = await params;
+    const { id, channel: raw } = await params;
     await requireAgentAccess(id, "admin");
+    const channel = supportedChannel(raw);
 
     const platform = await getPlatform(id, channel);
     await writePlatform(id, channel, { enabled: false, clear_env: platform.env_vars.map((f) => f.key) });
@@ -78,8 +99,9 @@ export async function DELETE(_request: Request, { params }: Ctx) {
 // owner to say hello; WhatsApp relays the agent's QR pairing.
 export async function POST(request: Request, { params }: Ctx) {
   try {
-    const { id, channel } = await params;
+    const { id, channel: raw } = await params;
     await requireAgentAccess(id, "admin");
+    const channel = supportedChannel(raw);
 
     const body = await readJson<{ action?: string; token?: string; pairing_id?: string; finish?: boolean }>(request);
 
@@ -93,7 +115,7 @@ export async function POST(request: Request, { params }: Ctx) {
       return json(await pairWhatsapp(id, body.pairing_id, body.finish === true));
     }
 
-    throw new ApiError(400, "invalid_request", "Unsupported action for this channel");
+    throw new ApiError(400, "invalid_request", "Action inconnue pour ce canal");
   } catch (e) {
     return handleError(e);
   }
@@ -113,12 +135,13 @@ async function pairWhatsapp(agentId: string, pairingId: string | undefined, fini
     if (!finish) return { pairing_id: id, status: "linking" };
     const applied = await applyWhatsappPairing(agentId, id);
     if (applied.ok !== true) {
-      throw new ApiError(502, "pairing_failed", applied.detail || "WhatsApp linked but could not be saved. Try again.");
+      throw new ApiError(502, "pairing_failed", applied.detail || "WhatsApp est relié mais n’a pas pu être enregistré. Réessayez.");
     }
+    await keepAwake(agentId);
     return { pairing_id: id, status: "connected", phone: session.account_phone ?? null };
   }
   if (session.status === "error") {
-    throw new ApiError(502, "pairing_failed", session.error || "WhatsApp setup failed.");
+    throw new ApiError(502, "pairing_failed", session.error || "La liaison WhatsApp a échoué.");
   }
   if (session.status === "waiting" && session.qr_payload) {
     return { pairing_id: id, status: "waiting", qr_data_url: await QRCode.toDataURL(session.qr_payload, QR_OPTIONS) };

@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, readApiError } from "@/lib/api";
 import { type SessionDetail } from "@/lib/types";
-import { uid, type ChatMessage, type ChatSettings, type MessageAttachment, type ToolEvent, type ToolStatus } from "./types";
+import { uid, type ChatMessage, type MessageAttachment, type ToolEvent, type ToolStatus } from "./types";
 
-export interface SendSettings extends Partial<ChatSettings> {
+export interface SendSettings {
   files?: string[];
   // Display metadata for the same files (name/path/isImage) — rendered as chips in the user bubble.
   attachments?: MessageAttachment[];
@@ -13,6 +13,8 @@ export interface SendSettings extends Partial<ChatSettings> {
 
 interface UseChatArgs {
   agentId: string;
+  // The Hermes profile this chat talks to: an expert's key, or "default" (business chat).
+  profile: string;
   sessionId: string | null;
   // Called once when a brand-new conversation mints its session id mid-stream. The provider
   // records the rail row; `promote` says whether to also make it the open thread (false when the
@@ -120,7 +122,8 @@ function mergeLiveRun(history: ChatMessage[], run: LiveRun): ChatMessage[] {
   return run.user ? [...history, run.user, run.assistant] : [...history, run.assistant];
 }
 
-export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: UseChatArgs) {
+export function useChat({ agentId, profile, sessionId, onSessionCreated, onActivity }: UseChatArgs) {
+  const q = `?profile=${encodeURIComponent(profile)}`;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -192,7 +195,7 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
   const refreshHistory = useCallback(
     async (sid: string) => {
       try {
-        const res = await apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sid}`);
+        const res = await apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sid}${q}`);
         if (activeSessionRef.current !== sid || runsRef.current.get(sid)) return;
         setMessages(mapHistory(res.history));
         setIsStreaming(false);
@@ -200,7 +203,7 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
         // Leave whatever's on screen.
       }
     },
-    [agentId]
+    [agentId, q]
   );
 
   // Drain a turn's SSE stream into its run. Shared by send() and reattach; runs to completion
@@ -265,8 +268,11 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
               }
               case "response.failed": {
                 sawTerminal = true;
-                const err = data.error as { message?: string } | undefined;
-                streamError = err?.message || "The agent failed to respond.";
+                const err = data.error as { code?: string; message?: string } | undefined;
+                streamError =
+                  err?.code === "quota_exhausted"
+                    ? "Le budget mensuel de votre équipe est atteint. Contactez Yelema pour l’augmenter."
+                    : err?.message || "L’expert n’a pas pu répondre.";
                 break;
               }
             }
@@ -360,12 +366,12 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
         cancelUpstream(run.responseId);
         runsRef.current.delete(sid);
       } else if (!run) {
-        apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sid}`)
+        apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sid}${q}`)
           .then((res) => cancelUpstream(res.active_response_id ?? null))
           .catch(() => {});
       }
     },
-    [agentId, cancelUpstream]
+    [agentId, q, cancelUpstream]
   );
 
   // Load history when the selected thread changes; reset for a fresh chat. Switching threads no
@@ -398,7 +404,7 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
 
     let cancelled = false;
     setLoadingHistory(true);
-    apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sessionId}`)
+    apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`)
       .then((res) => {
         if (cancelled) return;
         const history = mapHistory(res.history);
@@ -444,7 +450,7 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
     return () => {
       cancelled = true;
     };
-  }, [agentId, sessionId, startReattach, forgetRun, refreshHistory]);
+  }, [agentId, q, sessionId, startReattach, forgetRun, refreshHistory]);
 
   const send = useCallback(
     async (text: string, settings: SendSettings = {}) => {
@@ -485,10 +491,8 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             input: trimmed,
+            profile,
             session_id: run.sessionId ?? undefined,
-            model: settings.model ?? undefined,
-            provider: settings.provider ?? undefined,
-            reasoning_effort: settings.reasoningEffort ?? undefined,
             files: files.length ? files : undefined,
           }),
           signal: run.abort.signal,
@@ -498,9 +502,12 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
           // A 409 means the previous turn is still wrapping up (session busy) — soften it. The
           // status carries the semantics, so we don't have to match the error text.
           if (res.status === 409) {
-            throw new Error("Your agent is still finishing the previous message. Give it a moment and try again.");
+            throw new Error("L’expert termine encore le message précédent. Patientez un instant puis réessayez.");
           }
-          throw new Error(await readApiError(res, "Chat failed"));
+          if (res.status === 402) {
+            throw new Error("Le budget mensuel de votre équipe est atteint. Contactez Yelema pour l’augmenter.");
+          }
+          throw new Error(await readApiError(res, "La discussion a échoué"));
         }
 
         await consume(run, res.body);
@@ -512,11 +519,11 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
         forgetRun(run);
         if (viewed) {
           setIsStreaming(false);
-          if ((e as Error).name !== "AbortError") setError((e as Error).message || "Something went wrong.");
+          if ((e as Error).name !== "AbortError") setError((e as Error).message || "Une erreur est survenue.");
         }
       }
     },
-    [agentId, isStreaming, consume, isViewed, forgetRun]
+    [agentId, profile, isStreaming, consume, isViewed, forgetRun]
   );
 
   // Stop the current turn: abort the local stream and cancel it upstream so the agent stops work.

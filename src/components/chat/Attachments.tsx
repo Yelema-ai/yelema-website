@@ -13,8 +13,8 @@ export function AttachButton({ onFiles, disabled }: { onFiles: (files: FileList)
         type="button"
         disabled={disabled}
         onClick={() => ref.current?.click()}
-        aria-label="Attach files"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
+        aria-label="Joindre des fichiers"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line text-ink-2 transition-colors hover:bg-soft hover:text-ink disabled:opacity-50"
       >
         <Paperclip className="h-4 w-4" />
       </button>
@@ -52,7 +52,7 @@ export function AttachmentTray({
             <button
               type="button"
               onClick={() => onRetry(f.id)}
-              aria-label="Retry upload"
+              aria-label="Réessayer l’envoi"
               className="text-destructive hover:text-destructive/80"
             >
               <RotateCw className="h-3.5 w-3.5" />
@@ -61,7 +61,7 @@ export function AttachmentTray({
           <button
             type="button"
             onClick={() => onRemove(f.id)}
-            aria-label="Remove attachment"
+            aria-label="Retirer la pièce jointe"
             className="text-muted-foreground hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />

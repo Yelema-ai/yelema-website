@@ -32,9 +32,9 @@ function isLocalOrigin(origin: string): boolean {
 
 // Open-redirect guard for `?next=` params: only internal absolute paths (`/foo`) are
 // allowed — never protocol-relative (`//evil.com`) or absolute URLs. Falls back to
-// /dashboard. Shared by the login page and the /auth/callback route so the two can't drift.
+// /accueil. Shared by the login page and the /auth/callback route so the two can't drift.
 export function safeNextPath(raw?: string | null): string {
-  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard";
+  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/accueil";
 }
 
 export function publicSiteOrigin(fallbackOrigin?: string | null): string {

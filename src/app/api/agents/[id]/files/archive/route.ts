@@ -1,5 +1,6 @@
 import { instanceFetch } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
+import { assertInDrive } from "@/lib/drive";
 import { ApiError, handleError } from "@/lib/http";
 import { assertUpstreamOk } from "../../_helpers";
 
@@ -15,12 +16,12 @@ export async function GET(request: Request, { params }: Ctx) {
     const { id } = await params;
     await requireAgentAccess(id, "member");
 
-    const path = new URL(request.url).searchParams.get("path");
-    const qs = path ? `?path=${encodeURIComponent(path)}` : "";
+    const path = assertInDrive(new URL(request.url).searchParams.get("path"));
+    const qs = `?path=${encodeURIComponent(path)}`;
 
     const upstream = await instanceFetch(id, `/v1/files/archive${qs}`);
-    await assertUpstreamOk(upstream, "files/archive", "Download failed", "download_error");
-    if (!upstream.body) throw new ApiError(502, "download_error", "Download failed");
+    await assertUpstreamOk(upstream, "files/archive", "Le téléchargement a échoué", "download_error");
+    if (!upstream.body) throw new ApiError(502, "download_error", "Le téléchargement a échoué");
 
     const headers = new Headers();
     const ct = upstream.headers.get("Content-Type");

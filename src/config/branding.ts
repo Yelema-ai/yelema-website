@@ -1,7 +1,6 @@
-// Branding lives in code, not env — fork this file and change the two values.
-// `logoUrl` can be a path to a file you drop in /public (e.g. "/logo.svg") or an
-// absolute URL; "" hides it.
+// The product's own brand. Each client's name and logo come from its workspace row instead.
 export const branding = {
-  appName: "Agent37 Starter Kit",
-  logoUrl: "",
+  appName: "Yelema",
+  logoUrl: "/yelema_long.png",
+  markUrl: "/yelema_y.svg",
 } as const;
