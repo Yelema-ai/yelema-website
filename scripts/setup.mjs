@@ -268,12 +268,38 @@ async function configureAuth(call, ref, siteUrl) {
     site_url: siteUrl,
     uri_allow_list: allow.join(","),
     external_email_enabled: true,
-    // Open signup, no email verification: signUp returns a session immediately,
-    // so the login form can register-and-go with zero inbox round-trips.
-    mailer_autoconfirm: true,
+    // No public signup: the back office creates every account and the app adds admins. Their
+    // access links (invite / password reset) stay valid for a day, the maximum, because they
+    // are often copied and sent by hand.
+    disable_signup: true,
+    mailer_otp_exp: 86400,
+    ...smtpSettings(),
   });
   ok(`Auth Site URL set to ${siteUrl}`);
   info(`Redirect allow-list: ${allow.join(", ")}`);
+  info(process.env.RESEND_API_KEY ? `Auth emails sent through Resend as ${emailFrom()}` : "No RESEND_API_KEY: auth emails stay on Supabase's default sender");
+}
+
+// The sender for every email: Supabase auth mails (password reset) and the app's own invites.
+function emailFrom() {
+  return process.env.EMAIL_FROM || "Yelema <no-reply@yelema.ai>";
+}
+
+// With a Resend key, Supabase sends its auth emails through Resend's SMTP. Without one, leave
+// Supabase's own sender alone; the app always shows a copyable link instead.
+function smtpSettings() {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return {};
+  const from = emailFrom();
+  const match = /^(.*)<(.+)>$/.exec(from);
+  return {
+    smtp_host: "smtp.resend.com",
+    smtp_port: "465",
+    smtp_user: "resend",
+    smtp_pass: key,
+    smtp_admin_email: (match ? match[2] : from).trim(),
+    smtp_sender_name: (match ? match[1] : "Yelema").trim() || "Yelema",
+  };
 }
 
 function printHelp() {
@@ -284,8 +310,8 @@ Usage: npm run setup [-- options]
 Reads .env.local and finishes the Supabase setup for you using
 SUPABASE_ACCESS_TOKEN (a personal access token):
   - runs the database migration(s)
-  - configures the Site URL + redirect allow-list and turns on
-    email + password auth (open signup, no email verification)
+  - configures the Site URL + redirect allow-list, email + password
+    auth with public signup off, and Resend SMTP when RESEND_API_KEY is set
   - fills in NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY /
     SUPABASE_SERVICE_ROLE_KEY (server-only)
 
@@ -300,6 +326,8 @@ Env overrides:
   SUPABASE_PROJECT_REF    target an existing project by ref instead of URL
   SUPABASE_ORG            org slug to create the project under
   SUPABASE_REGION         americas | emea | apac          [default: americas]
+  RESEND_API_KEY          send auth emails through Resend  [optional]
+  EMAIL_FROM              sender, e.g. "Yelema <no-reply@yelema.ai>"
 `);
 }
 
@@ -324,6 +352,9 @@ async function main() {
   }
 
   const env = loadEnv(ENV_FILE);
+  for (const key of ["RESEND_API_KEY", "EMAIL_FROM"]) {
+    if (!isBlank(env.map[key]) && !process.env[key]) process.env[key] = env.map[key];
+  }
 
   const token = get(env, "SUPABASE_ACCESS_TOKEN");
   if (isBlank(token)) {
