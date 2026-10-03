@@ -85,7 +85,10 @@ export function ChatProvider({
     setLoadingSessions(true);
     apiFetch<{ sessions: ChatSession[] }>(`/api/agents/${agentId}/chat/sessions${q}`)
       .then((res) => {
-        if (!cancelled) setSessions(res.sessions);
+        // A conversation started before this list arrived (the home page's message) is not in it
+        // yet: Hermes stores a session when its first turn ends. Keep such local rows on top.
+        if (!cancelled)
+          setSessions((prev) => [...prev.filter((p) => !res.sessions.some((s) => s.session_id === p.session_id)), ...res.sessions]);
       })
       .catch((e) => {
         if (!cancelled) toast.error((e as Error).message || "Impossible de charger les conversations.");

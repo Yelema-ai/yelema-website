@@ -80,9 +80,12 @@ export function ChatMessages({
   messages,
   isStreaming,
   expertKey,
+  agentId,
 }: {
   messages: ChatMessage[];
   isStreaming: boolean;
+  // Turns the drive paths experts mention into download links.
+  agentId: string;
   // Shows the expert's face beside their replies; omitted for the business chat.
   expertKey?: string;
 }) {
@@ -115,7 +118,7 @@ export function ChatMessages({
             {expertKey && <ExpertAvatar expertKey={expertKey} size={32} className="mt-0.5" />}
             <div className="min-w-0 max-w-full flex-1 text-[15px] text-ink">
               {tools.length > 0 && <Steps tools={tools} live={live} />}
-              {m.content ? <Markdown content={m.content} /> : showDots ? <TypingDots /> : null}
+              {m.content ? <Markdown content={m.content} agentId={agentId} /> : showDots ? <TypingDots /> : null}
             </div>
           </div>
         );

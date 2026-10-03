@@ -110,7 +110,7 @@ export function ChatView({ initialMessage }: { initialMessage?: string | null })
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : messages.length > 0 ? (
-          <ChatMessages messages={messages} isStreaming={isStreaming} expertKey={expert?.key} />
+          <ChatMessages messages={messages} isStreaming={isStreaming} expertKey={expert?.key} agentId={agentId} />
         ) : (
           <div className="flex flex-col items-center text-center">
             {expert && <ExpertAvatar expertKey={expert.key} size={72} className="mb-4" />}
