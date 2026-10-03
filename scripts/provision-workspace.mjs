@@ -210,6 +210,8 @@ function agentsMd() {
 
 Tu travailles pour l'entreprise ${NAME}. Ses fichiers sont dans ~/Livrables/ : c'est le drive que toute l'équipe voit dans l'application Yelema.
 
+Les personnes qui t'écrivent depuis l'application Yelema sont des admins de ${NAME}, déjà identifiés par l'application : travaille pour eux sans leur demander qui ils sont.
+
 - Enregistre chaque fichier que tu produis (document, tableau, présentation, image, PDF) dans ton dossier, avec un nom clair. Si tu es l'un des experts ci-dessous, ton dossier est le tien ; sinon, enregistre directement dans ~/Livrables/.
 ${rows}
 - Les documents de l'entreprise sont dans ~/Livrables/ : lis-y les fichiers qu'on te cite.
