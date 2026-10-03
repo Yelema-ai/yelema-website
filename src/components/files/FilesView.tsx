@@ -1,21 +1,35 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type SyntheticEvent,
+} from "react";
 import {
   ArrowUp,
   ChevronDown,
   ChevronRight,
   Download,
   Eye,
-  EyeOff,
   File as FileIcon,
+  FileArchive,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
   Folder,
+  FolderOpen,
   FolderPlus,
   FolderUp,
-  Grid2X2,
+  LayoutGrid,
   Link2,
   List,
   Loader2,
+  MoreHorizontal,
   Pencil,
   RefreshCw,
   Trash2,
@@ -24,24 +38,61 @@ import {
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { ExpertAvatar } from "@/components/app/ExpertAvatar";
 import { DropOverlay } from "@/components/DropOverlay";
 import { HiddenFileInput } from "@/components/HiddenFileInput";
 import { useAsyncAction } from "@/components/useAsyncAction";
+import { EXPERTS } from "@/config/experts";
+import { cn } from "@/lib/utils";
 import { FilePreview } from "./FilePreview";
 import { useFileBrowser } from "./useFileBrowser";
-import { archiveUrl, breadcrumbs, contentUrl, formatBytes, formatMtime, isDir, type FileEntry } from "./types";
+import {
+  archiveUrl,
+  breadcrumbs,
+  contentUrl,
+  formatBytes,
+  formatMtime,
+  isDir,
+  toAbsPath,
+  type FileEntry,
+} from "./types";
 
 type ViewMode = "list" | "grid";
 
-// The Files pane, rendered full-height in the dashboard main when the Files tab is active (kept
-// mounted/hidden across tab switches, like ChatView, so the current directory survives). The whole
-// pane is a drop zone for uploads. Look + primitives mirror the Chat tab: same shadcn Dialog/Input,
-// lucide icons, sonner toasts (raised inside the hook), and the hover-action pattern.
-export function FilesView({ agentId }: { agentId: string }) {
-  const fb = useFileBrowser(agentId);
+// The top of the shared drive: its folders named after an expert show that expert's face.
+const DRIVE_TOP = toAbsPath("~/Livrables");
+
+// Touch screens have no double-click: a tap opens instead of selecting.
+const COARSE = "(pointer: coarse)";
+function useCoarsePointer(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia(COARSE);
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(COARSE).matches,
+    () => false
+  );
+}
+
+const stop = (e: SyntheticEvent) => e.stopPropagation();
+
+// The drive pane: one folder of the workspace instance's ~/Livrables, fenced to `root` (browsing
+// never goes above it; the breadcrumb starts at `rootLabel`). The whole pane is a drop zone for
+// uploads. The pane sizes itself by container width: on a narrow pane every action lives in one
+// menu and the list drops its size/date columns.
+export function FilesView({ agentId, root, rootLabel }: { agentId: string; root: string; rootLabel: string }) {
+  const fb = useFileBrowser(agentId, root);
+  const touch = useCoarsePointer();
   const [preview, setPreview] = useState<FileEntry | null>(null);
   const [pendingDelete, setPendingDelete] = useState<FileEntry | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -49,6 +100,7 @@ export function FilesView({ agentId }: { agentId: string }) {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const folderUploadRef = useRef<HTMLInputElement>(null);
+  const crumbRef = useRef<HTMLElement>(null);
 
   // `webkitdirectory` isn't in React's input typings, so set it on the DOM node directly. It makes
   // the picker select a whole folder; each file then reports its path under it via webkitRelativePath.
@@ -56,7 +108,13 @@ export function FilesView({ agentId }: { agentId: string }) {
     folderUploadRef.current?.setAttribute("webkitdirectory", "");
   }, []);
 
-  // Inline rename — the row's name swaps to an input (Enter-commits / Escape-cancels). `skipBlur`
+  // Keep the deepest breadcrumb in view when the path is longer than the bar.
+  useEffect(() => {
+    const el = crumbRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [fb.path]);
+
+  // Inline rename: the entry's name swaps to an input (Enter commits, Escape cancels). `skipBlur`
   // suppresses the commit the Escape-triggered blur would fire.
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -85,16 +143,12 @@ export function FilesView({ agentId }: { agentId: string }) {
 
   function openEntry(entry: FileEntry) {
     if (isDir(entry)) {
-      setSelectedPath(null);
+      resetSelection();
       fb.openEntry(entry);
     } else {
       setSelectedPath(entry.path);
       setPreview(entry);
     }
-  }
-
-  function selectEntry(entry: FileEntry) {
-    setSelectedPath(entry.path);
   }
 
   function onEntryKeyDown(e: KeyboardEvent<HTMLElement>, entry: FileEntry) {
@@ -103,7 +157,7 @@ export function FilesView({ agentId }: { agentId: string }) {
       openEntry(entry);
     } else if (e.key === " ") {
       e.preventDefault();
-      selectEntry(entry);
+      setSelectedPath(entry.path);
     }
   }
 
@@ -124,7 +178,7 @@ export function FilesView({ agentId }: { agentId: string }) {
     fb.goUp();
   }
 
-  function selectForDelete(entry: FileEntry) {
+  function askDelete(entry: FileEntry) {
     setSelectedPath(entry.path);
     setPendingDelete(entry);
   }
@@ -133,280 +187,311 @@ export function FilesView({ agentId }: { agentId: string }) {
     if (!editingPath) setSelectedPath(null);
   }
 
-  // Shared row/card interaction: click selects, double-click opens, Space/Enter from the keyboard.
-  // `stopPropagation` keeps the click from bubbling to the container's clear-selection handler.
+  // Shared row/card interaction: with a mouse, click selects and double-click opens; on a touch
+  // screen, a tap opens. Enter opens and Space selects from the keyboard (only when the row itself
+  // has focus, not its actions menu). `stopPropagation` keeps the click from reaching the pane's
+  // clear-selection handler.
   function entryHandlers(entry: FileEntry) {
     return {
       tabIndex: 0,
       onClick: (e: ReactMouseEvent<HTMLElement>) => {
         e.stopPropagation();
-        selectEntry(entry);
+        if (touch) openEntry(entry);
+        else setSelectedPath(entry.path);
       },
       onDoubleClick: (e: ReactMouseEvent<HTMLElement>) => {
         e.stopPropagation();
-        openEntry(entry);
+        if (!touch) openEntry(entry);
       },
-      onKeyDown: (e: KeyboardEvent<HTMLElement>) => onEntryKeyDown(e, entry),
+      onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+        if (e.target === e.currentTarget) onEntryKeyDown(e, entry);
+      },
     };
   }
 
-  const crumbs = fb.path ? breadcrumbs(fb.path) : [];
+  const crumbs = breadcrumbs(fb.path, fb.root, rootLabel);
   const selectedEntry = useMemo(
     () => (selectedPath == null ? null : fb.visibleEntries.find((entry) => entry.path === selectedPath) ?? null),
     [fb.visibleEntries, selectedPath]
   );
+  const atDriveTop = fb.path === DRIVE_TOP;
+  const canWrite = !!fb.path;
+  const pickFiles = () => uploadRef.current?.click();
+  const pickFolder = () => folderUploadRef.current?.click();
+
+  const renameProps = { draft, setDraft, onRenameKeyDown, commitRename, skipBlurRef };
+  const menuProps = { agentId, onOpen: openEntry, onRename: startRename, onDelete: askDelete };
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col" {...fb.dragHandlers}>
-      {fb.dragOver && <DropOverlay label="Drop files to upload here" />}
+    <div
+      className="@container relative flex h-full min-h-0 flex-col overflow-hidden rounded-[22px] border border-line bg-surface"
+      {...fb.dragHandlers}
+    >
+      {fb.dragOver && <DropOverlay label="Déposez vos fichiers pour les importer ici" />}
 
-      <header className="shrink-0 border-b bg-background px-4 py-3 md:px-6 lg:px-8">
-        <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={goUp}
-              disabled={!fb.parentPath}
-              aria-label="Up one folder"
-              title="Up one folder"
-              className="h-10 shrink-0"
-            >
-              <ArrowUp className="h-4 w-4" />
-              Up
-            </Button>
-            <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-md border bg-card px-3 shadow-sm">
-              <Folder className="h-4 w-4 shrink-0 text-primary" />
-              <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm" aria-label="Folder path">
-                {crumbs.length === 0 ? (
-                  <span className="text-muted-foreground">Loading folder</span>
-                ) : (
-                  crumbs.map((c, i) => (
-                    <span key={c.path} className="flex shrink-0 items-center">
-                      {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-                      <button
-                        type="button"
-                        onClick={() => navigate(c.path)}
-                        aria-current={i === crumbs.length - 1 ? "page" : undefined}
-                        className={cn(
-                          "max-w-[11rem] truncate rounded px-1.5 py-0.5 transition-colors hover:bg-secondary",
-                          i === crumbs.length - 1 ? "font-medium text-foreground" : "text-muted-foreground"
-                        )}
-                      >
-                        {c.label}
-                      </button>
-                    </span>
-                  ))
-                )}
-              </nav>
-            </div>
-          </div>
+      <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-3 @2xl:px-4">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={goUp}
+          disabled={fb.atRoot}
+          aria-label="Dossier parent"
+          title="Dossier parent"
+          className="shrink-0"
+        >
+          <ArrowUp />
+        </Button>
+        <nav
+          ref={crumbRef}
+          aria-label="Emplacement"
+          className="flex h-10 min-w-0 flex-1 items-center gap-0.5 overflow-x-auto rounded-xl bg-soft px-2 text-sm [scrollbar-width:none]"
+        >
+          {crumbs.map((c, i) => {
+            const last = i === crumbs.length - 1;
+            return (
+              <span key={c.path} className="flex shrink-0 items-center">
+                {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-ink-3" />}
+                <button
+                  type="button"
+                  onClick={() => navigate(c.path)}
+                  aria-current={last ? "page" : undefined}
+                  className={cn(
+                    "flex max-w-[12rem] items-center gap-1.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-soft-2",
+                    last ? "font-semibold text-ink" : "text-ink-2"
+                  )}
+                >
+                  {i === 0 && <FolderOpen className="h-4 w-4 shrink-0 text-brand" />}
+                  <span className="min-w-0 truncate">{c.label}</span>
+                </button>
+              </span>
+            );
+          })}
+        </nav>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-1 xl:ml-auto">
-            {selectedEntry && (
-              <SelectedActions
-                agentId={agentId}
-                entry={selectedEntry}
-                onRename={startRename}
-                onDelete={selectForDelete}
-              />
-            )}
-            <ViewToggle value={viewMode} onChange={setViewMode} />
-            <ToolbarIconButton
-              onClick={() => fb.setShowHidden((v) => !v)}
-              label={fb.showHidden ? "Hide hidden files" : "Show hidden files"}
-            >
-              {fb.showHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </ToolbarIconButton>
-            <ToolbarIconButton onClick={fb.refresh} label="Refresh">
-              <RefreshCw className={cn("h-4 w-4", fb.loading && "animate-spin")} />
-            </ToolbarIconButton>
-            <span className="mx-1 hidden h-6 w-px bg-border sm:block" />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setNewFolderOpen(true)}
-              disabled={!fb.path}
-              className="h-9"
-            >
-              <FolderPlus className="h-4 w-4" />
-              New folder
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" disabled={!fb.path || fb.uploading} className="h-9">
-                  {fb.uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                  Upload
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => uploadRef.current?.click()}>
-                  <Upload className="h-4 w-4" />
-                  Files
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => folderUploadRef.current?.click()}>
-                  <FolderUp className="h-4 w-4" />
-                  Folder
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <HiddenFileInput inputRef={uploadRef} onFiles={fb.uploadFiles} />
-            <HiddenFileInput inputRef={folderUploadRef} onFiles={fb.uploadFolder} />
-          </div>
+        {/* Wide pane: the full toolbar. */}
+        <div className="hidden shrink-0 items-center gap-1.5 @2xl:flex">
+          {selectedEntry && !editingPath && (
+            <SelectedActions entry={selectedEntry} agentId={agentId} onRename={startRename} onDelete={askDelete} />
+          )}
+          <ViewToggle value={viewMode} onChange={setViewMode} />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={fb.refresh}
+            aria-label="Actualiser"
+            title="Actualiser"
+          >
+            <RefreshCw className={cn(fb.loading && "animate-spin")} />
+          </Button>
+          <span className="mx-0.5 h-6 w-px bg-line" />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setNewFolderOpen(true)}
+            disabled={!canWrite}
+            aria-label="Nouveau dossier"
+            title="Nouveau dossier"
+          >
+            <FolderPlus />
+            <span className="hidden @4xl:inline">Nouveau dossier</span>
+          </Button>
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button disabled={!canWrite || fb.uploading}>
+                {fb.uploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                Importer
+                <ChevronDown />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onSelect={pickFiles}>
+                <Upload />
+                Des fichiers
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={pickFolder}>
+                <FolderUp />
+                Un dossier
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
+
+        {/* Narrow pane: every action in one menu. */}
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" size="icon" aria-label="Plus d’actions" className="shrink-0 @2xl:hidden">
+              {fb.uploading ? <Loader2 className="animate-spin" /> : <MoreHorizontal />}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem onSelect={pickFiles} disabled={!canWrite || fb.uploading}>
+              <Upload />
+              Importer des fichiers
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={pickFolder} disabled={!canWrite || fb.uploading}>
+              <FolderUp />
+              Importer un dossier
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setNewFolderOpen(true)} disabled={!canWrite}>
+              <FolderPlus />
+              Nouveau dossier
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setViewMode(viewMode === "list" ? "grid" : "list")}>
+              {viewMode === "list" ? <LayoutGrid /> : <List />}
+              {viewMode === "list" ? "Afficher en grille" : "Afficher en liste"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={fb.refresh}>
+              <RefreshCw />
+              Actualiser
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <HiddenFileInput inputRef={uploadRef} onFiles={fb.uploadFiles} />
+        <HiddenFileInput inputRef={folderUploadRef} onFiles={fb.uploadFolder} />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {fb.loading && fb.entries.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
+      <div className="min-h-0 flex-1 overflow-y-auto" onClick={clearSelection}>
+        {fb.loading && fb.visibleEntries.length === 0 ? (
+          <div className="flex h-full min-h-[12rem] items-center justify-center text-ink-3">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : fb.error ? (
-          <div className="p-6 md:px-10">
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{fb.error}</p>
+          <div className="flex flex-col items-start gap-3 p-4 @2xl:p-6">
+            <p className="rounded-xl bg-ko-pale px-3 py-2 text-[13px] text-ko">{fb.error}</p>
+            <Button type="button" variant="outline" size="sm" onClick={fb.refresh}>
+              <RefreshCw />
+              Réessayer
+            </Button>
           </div>
-        ) : (
-          <div className="w-full p-4 md:p-6 lg:p-8" onClick={clearSelection}>
-            {fb.visibleEntries.length === 0 ? (
-              <EmptyFolder
-                canCreate={!!fb.path}
-                uploading={fb.uploading}
-                onNewFolder={() => setNewFolderOpen(true)}
-                onUpload={() => uploadRef.current?.click()}
-              />
-            ) : viewMode === "list" ? (
-              <div className="overflow-x-auto rounded-lg border bg-card">
-                <table className="w-full min-w-[700px] table-fixed text-sm">
-                  <colgroup>
-                    <col />
-                    <col className="w-28" />
-                    <col className="w-56" />
-                  </colgroup>
-                  <thead className="bg-secondary/50 text-left text-xs text-muted-foreground">
-                    <tr className="border-b">
-                      <th className="px-4 py-3 font-medium">Name</th>
-                      <th className="px-4 py-3 text-right font-medium">Size</th>
-                      <th className="px-4 py-3 font-medium">Last modified</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {fb.visibleEntries.map((entry) => {
-                      const editing = editingPath === entry.path;
-                      const selected = selectedEntry?.path === entry.path;
-                      return (
-                        <tr
-                          key={entry.path}
-                          aria-selected={selected}
-                          className={cn(
-                            "cursor-default select-none border-b border-border/70 outline-none last:border-0 hover:bg-secondary/35 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                            selected && "bg-primary/10 text-foreground hover:bg-primary/10"
-                          )}
-                          {...entryHandlers(entry)}
-                        >
-                          <td className="min-w-0 px-4 py-3">
-                            {editing ? (
-                              <RenameInput
-                                entry={entry}
-                                draft={draft}
-                                setDraft={setDraft}
-                                onRenameKeyDown={onRenameKeyDown}
-                                commitRename={commitRename}
-                                skipBlurRef={skipBlurRef}
-                              />
-                            ) : (
-                              <EntryName entry={entry} selected={selected} />
-                            )}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-right text-muted-foreground">
-                            {formatBytes(entry.size)}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                            {formatMtime(entry.modified)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
-                {fb.visibleEntries.map((entry) => {
-                  const editing = editingPath === entry.path;
-                  const selected = selectedEntry?.path === entry.path;
-                  return (
-                    <div
-                      key={entry.path}
-                      aria-selected={selected}
-                      className={cn(
-                        "group flex min-h-44 cursor-default select-none flex-col rounded-lg border bg-card p-3 outline-none transition-colors hover:border-primary/35 hover:bg-secondary/25 focus-visible:ring-2 focus-visible:ring-ring",
-                        selected && "border-primary/35 bg-primary/10 hover:border-primary/35 hover:bg-primary/10"
+        ) : fb.visibleEntries.length === 0 ? (
+          <EmptyFolder
+            atRoot={fb.atRoot}
+            canCreate={canWrite}
+            uploading={fb.uploading}
+            onNewFolder={() => setNewFolderOpen(true)}
+            onUpload={pickFiles}
+          />
+        ) : viewMode === "list" ? (
+          <table className="w-full table-fixed text-sm">
+            <thead className="sticky top-0 z-10 hidden bg-surface text-left text-xs font-semibold text-ink-3 @2xl:table-header-group">
+              <tr className="border-b border-line">
+                <th className="px-4 py-2.5 font-semibold">Nom</th>
+                <th className="w-28 px-4 py-2.5 text-right font-semibold">Taille</th>
+                <th className="w-52 px-4 py-2.5 font-semibold">Modifié le</th>
+                <th className="w-14 px-2 py-2.5">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {fb.visibleEntries.map((entry) => {
+                const selected = selectedEntry?.path === entry.path;
+                const meta = [isDir(entry) ? "Dossier" : formatBytes(entry.size), formatMtime(entry.modified)]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <tr
+                    key={entry.path}
+                    aria-selected={selected}
+                    className={cn(
+                      "group cursor-default select-none border-b border-line outline-none transition-colors last:border-0 hover:bg-soft focus-visible:bg-soft focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/25",
+                      selected && "bg-soft-2 hover:bg-soft-2"
+                    )}
+                    {...entryHandlers(entry)}
+                  >
+                    <td className="min-w-0 py-2.5 pl-3 pr-2 @2xl:pl-4">
+                      {editingPath === entry.path ? (
+                        <RenameInput entry={entry} {...renameProps} />
+                      ) : (
+                        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+                          <EntryGlyph entry={entry} expertFolder={atDriveTop} selected={selected} />
+                          <span className="min-w-0">
+                            <span className={cn("block truncate text-ink", isDir(entry) && "font-semibold")}>
+                              {entry.name}
+                            </span>
+                            {meta && <span className="block truncate text-xs text-ink-3 @2xl:hidden">{meta}</span>}
+                          </span>
+                        </div>
                       )}
-                      {...entryHandlers(entry)}
-                    >
-                      <div className="min-w-0 flex-1">
-                        {editing ? (
-                          <RenameInput
-                            entry={entry}
-                            draft={draft}
-                            setDraft={setDraft}
-                            onRenameKeyDown={onRenameKeyDown}
-                            commitRename={commitRename}
-                            skipBlurRef={skipBlurRef}
-                          />
-                        ) : (
-                          <EntryName entry={entry} layout="grid" selected={selected} />
-                        )}
-                      </div>
-                      <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                        <div className="truncate">{formatMtime(entry.modified) || "No modified date"}</div>
-                        <div>{isDir(entry) ? "Folder" : formatBytes(entry.size) || "Unknown size"}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {fb.truncated && (
-              <p className="mt-3 px-3 text-xs text-muted-foreground">
-                Showing the first 1000 entries. Open a subfolder to narrow the listing.
-              </p>
-            )}
-            {!fb.showHidden && fb.hiddenCount > 0 && (
-              <p className="mt-3 px-3 text-xs text-muted-foreground">
-                {fb.hiddenCount} hidden {fb.hiddenCount === 1 ? "item" : "items"} not shown.
-              </p>
-            )}
+                    </td>
+                    <td className="hidden w-28 whitespace-nowrap px-4 py-2.5 text-right text-ink-3 @2xl:table-cell">
+                      {formatBytes(entry.size)}
+                    </td>
+                    <td className="hidden w-52 whitespace-nowrap px-4 py-2.5 text-ink-3 @2xl:table-cell">
+                      {formatMtime(entry.modified)}
+                    </td>
+                    <td className="w-14 px-2 py-2.5 text-right">
+                      <EntryMenu entry={entry} {...menuProps} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 p-3 @md:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] @2xl:p-4">
+            {fb.visibleEntries.map((entry) => {
+              const selected = selectedEntry?.path === entry.path;
+              return (
+                <div
+                  key={entry.path}
+                  aria-selected={selected}
+                  className={cn(
+                    "group flex cursor-default select-none flex-col rounded-[18px] border border-line bg-surface p-3 outline-none transition-colors hover:bg-soft focus-visible:ring-2 focus-visible:ring-brand/25 @md:min-h-40",
+                    selected && "border-brand/25 bg-soft-2 hover:bg-soft-2"
+                  )}
+                  {...entryHandlers(entry)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <EntryGlyph entry={entry} expertFolder={atDriveTop} large selected={selected} />
+                    <EntryMenu entry={entry} {...menuProps} />
+                  </div>
+                  <div className="mt-3 min-w-0 flex-1">
+                    {editingPath === entry.path ? (
+                      <RenameInput entry={entry} {...renameProps} />
+                    ) : (
+                      <span className={cn("block truncate text-sm text-ink", isDir(entry) && "font-semibold")}>
+                        {entry.name}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 space-y-0.5 text-xs text-ink-3">
+                    <div>{isDir(entry) ? "Dossier" : formatBytes(entry.size)}</div>
+                    <div className="truncate">{formatMtime(entry.modified)}</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
+        )}
+
+        {fb.truncated && !fb.error && (
+          <p className="px-4 py-3 text-xs text-ink-3">
+            Seuls les 1 000 premiers éléments sont affichés. Ouvrez un sous-dossier pour voir la suite.
+          </p>
         )}
       </div>
 
       <FilePreview agentId={agentId} entry={preview} onClose={() => setPreview(null)} />
 
-      <NewFolderDialog
-        open={newFolderOpen}
-        onOpenChange={setNewFolderOpen}
-        onCreate={async (name) => {
-          await fb.createDir(name);
-        }}
-      />
+      <NewFolderDialog open={newFolderOpen} onOpenChange={setNewFolderOpen} onCreate={fb.createDir} />
 
       <ConfirmDialog
         open={!!pendingDelete}
         onOpenChange={(open) => !open && setPendingDelete(null)}
-        title="Delete this item?"
+        title={pendingDelete && isDir(pendingDelete) ? "Supprimer ce dossier ?" : "Supprimer ce fichier ?"}
         description={
           pendingDelete
-            ? `"${pendingDelete.name}" will be permanently deleted${
-                isDir(pendingDelete) ? ", along with everything inside it" : ""
-              }. This cannot be undone.`
+            ? `« ${pendingDelete.name} » sera supprimé définitivement${
+                isDir(pendingDelete) ? ", avec tout son contenu" : ""
+              }. Cette action est irréversible.`
             : undefined
         }
-        confirmText="Delete"
+        confirmText="Supprimer"
         destructive
         onConfirm={async () => {
           if (pendingDelete) await fb.remove(pendingDelete);
@@ -417,13 +502,13 @@ export function FilesView({ agentId }: { agentId: string }) {
 }
 
 const VIEW_MODES = [
-  { mode: "list" as const, Icon: List, label: "List view" },
-  { mode: "grid" as const, Icon: Grid2X2, label: "Grid view" },
+  { mode: "list" as const, Icon: List, label: "Vue liste" },
+  { mode: "grid" as const, Icon: LayoutGrid, label: "Vue grille" },
 ];
 
 function ViewToggle({ value, onChange }: { value: ViewMode; onChange: (value: ViewMode) => void }) {
   return (
-    <div className="inline-flex h-9 rounded-md border bg-background p-0.5" role="group" aria-label="File view">
+    <div className="inline-flex h-10 rounded-xl bg-soft p-1" role="group" aria-label="Affichage">
       {VIEW_MODES.map(({ mode, Icon, label }) => (
         <button
           key={mode}
@@ -433,8 +518,8 @@ function ViewToggle({ value, onChange }: { value: ViewMode; onChange: (value: Vi
           title={label}
           onClick={() => onChange(mode)}
           className={cn(
-            "inline-flex size-8 items-center justify-center rounded transition-colors",
-            value === mode ? "bg-secondary text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            "inline-flex w-9 items-center justify-center rounded-[9px] transition-colors",
+            value === mode ? "bg-surface text-brand shadow-sm" : "text-ink-3 hover:text-ink"
           )}
         >
           <Icon className="h-4 w-4" />
@@ -444,33 +529,7 @@ function ViewToggle({ value, onChange }: { value: ViewMode; onChange: (value: Vi
   );
 }
 
-function ToolbarIconButton({
-  onClick,
-  label,
-  disabled,
-  children,
-}: {
-  onClick: () => void;
-  label: string;
-  disabled?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="icon"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      title={label}
-      className="text-muted-foreground hover:text-foreground"
-    >
-      {children}
-    </Button>
-  );
-}
-
+// Quick actions for the selected entry, in the wide toolbar (mouse users select with a click).
 function SelectedActions({
   agentId,
   entry,
@@ -482,15 +541,16 @@ function SelectedActions({
   onRename: (entry: FileEntry) => void;
   onDelete: (entry: FileEntry) => void;
 }) {
+  const dir = isDir(entry);
   return (
-    <div className="mr-1 flex items-center gap-1 border-r pr-2">
-      <Button asChild variant="outline" size="icon" className="size-9" title="Download">
+    <div className="mr-0.5 flex items-center gap-1 border-r border-line pr-2">
+      <Button asChild variant="ghost" size="icon" title={dir ? "Télécharger (.tar.gz)" : "Télécharger"}>
         <a
-          href={isDir(entry) ? archiveUrl(agentId, entry.path) : contentUrl(agentId, entry.path, "attachment")}
-          download={isDir(entry) ? `${entry.name}.tar.gz` : entry.name}
-          aria-label={isDir(entry) ? `Download ${entry.name} as a .tar.gz archive` : `Download ${entry.name}`}
+          href={dir ? archiveUrl(agentId, entry.path) : contentUrl(agentId, entry.path, "attachment")}
+          download={dir ? `${entry.name}.tar.gz` : entry.name}
+          aria-label={dir ? `Télécharger ${entry.name} en archive .tar.gz` : `Télécharger ${entry.name}`}
         >
-          <Download className="h-4 w-4" />
+          <Download />
         </a>
       </Button>
       <Button
@@ -498,82 +558,139 @@ function SelectedActions({
         variant="ghost"
         size="icon"
         onClick={() => onRename(entry)}
-        className="size-9"
-        aria-label={`Rename ${entry.name}`}
-        title="Rename"
+        aria-label={`Renommer ${entry.name}`}
+        title="Renommer"
       >
-        <Pencil className="h-4 w-4" />
+        <Pencil />
       </Button>
       <Button
         type="button"
-        variant="outline"
+        variant="ghost"
         size="icon"
         onClick={() => onDelete(entry)}
-        className="size-9 hover:bg-destructive/10 hover:text-destructive"
-        aria-label={`Delete ${entry.name}`}
-        title="Delete"
+        className="hover:bg-ko-pale hover:text-ko"
+        aria-label={`Supprimer ${entry.name}`}
+        title="Supprimer"
       >
-        <Trash2 className="h-4 w-4" />
+        <Trash2 />
       </Button>
     </div>
   );
 }
 
-function EntryName({
+// The per-entry "…" menu: always visible on touch screens, on hover/focus/selection with a mouse.
+// Its events are kept from reaching the row (React bubbles them through the menu's portal), and
+// after an action focus is left where the action put it (the rename field, a dialog).
+function EntryMenu({
+  agentId,
   entry,
-  layout = "list",
-  selected,
+  onOpen,
+  onRename,
+  onDelete,
 }: {
+  agentId: string;
   entry: FileEntry;
-  layout?: ViewMode;
-  selected: boolean;
+  onOpen: (entry: FileEntry) => void;
+  onRename: (entry: FileEntry) => void;
+  onDelete: (entry: FileEntry) => void;
 }) {
   const dir = isDir(entry);
-
+  const acted = useRef(false);
+  const act = (fn: () => void) => () => {
+    acted.current = true;
+    fn();
+  };
   return (
-    <div
-      className={cn(
-        "min-w-0 text-left",
-        layout === "grid"
-          ? "flex w-full flex-col items-start gap-3"
-          : "grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-3"
-      )}
-    >
-      <EntryGlyph entry={entry} large={layout === "grid"} selected={selected} />
-      <span
-        className={cn(
-          "min-w-0 truncate",
-          layout === "grid" ? "w-full text-sm" : "text-sm",
-          dir ? "font-medium text-foreground" : "text-foreground",
-          entry.hidden && "text-muted-foreground"
-        )}
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Actions pour ${entry.name}`}
+          onClick={stop}
+          onDoubleClick={stop}
+          onKeyDown={stop}
+          className="inline-grid h-8 w-8 place-items-center rounded-lg text-ink-3 transition hover:bg-soft-2 hover:text-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25 data-[state=open]:bg-soft-2 data-[state=open]:text-ink data-[state=open]:opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100 pointer-fine:group-aria-selected:opacity-100"
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="w-56"
+        onClick={stop}
+        onDoubleClick={stop}
+        onKeyDown={stop}
+        onCloseAutoFocus={(e) => {
+          if (acted.current) e.preventDefault();
+          acted.current = false;
+        }}
       >
-        {entry.name}
-      </span>
-    </div>
+        <DropdownMenuItem onSelect={act(() => onOpen(entry))}>
+          {dir ? <FolderOpen /> : <Eye />}
+          {dir ? "Ouvrir" : "Aperçu"}
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild onSelect={act(() => undefined)}>
+          <a
+            href={dir ? archiveUrl(agentId, entry.path) : contentUrl(agentId, entry.path, "attachment")}
+            download={dir ? `${entry.name}.tar.gz` : entry.name}
+          >
+            <Download />
+            {dir ? "Télécharger (.tar.gz)" : "Télécharger"}
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={act(() => onRename(entry))}>
+          <Pencil />
+          Renommer
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={act(() => onDelete(entry))}>
+          <Trash2 />
+          Supprimer
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
-function EntryGlyph({ entry, large = false, selected = false }: { entry: FileEntry; large?: boolean; selected?: boolean }) {
-  const dir = isDir(entry);
-  const iconClassName = cn(large ? "h-7 w-7" : "h-4 w-4", "shrink-0");
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic)$/i;
+const SHEET_EXT = /\.(csv|tsv|xlsx?|ods|numbers)$/i;
+const ARCHIVE_EXT = /\.(zip|tar|gz|tgz|rar|7z)$/i;
+const DOC_EXT = /\.(pdf|docx?|odt|rtf|txt|md|pptx?|odp|key|pages)$/i;
 
+function fileIcon(name: string) {
+  if (IMAGE_EXT.test(name)) return FileImage;
+  if (SHEET_EXT.test(name)) return FileSpreadsheet;
+  if (ARCHIVE_EXT.test(name)) return FileArchive;
+  if (DOC_EXT.test(name)) return FileText;
+  return FileIcon;
+}
+
+function EntryGlyph({
+  entry,
+  expertFolder,
+  large = false,
+  selected = false,
+}: {
+  entry: FileEntry;
+  expertFolder: boolean;
+  large?: boolean;
+  selected?: boolean;
+}) {
+  const dir = isDir(entry);
+  const expert = dir && expertFolder ? EXPERTS.find((e) => e.name.normalize() === entry.name.normalize()) : undefined;
+  if (expert) return <ExpertAvatar expertKey={expert.key} size={large ? 44 : 32} />;
+
+  const Icon = dir ? Folder : entry.type === "symlink" ? Link2 : fileIcon(entry.name);
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-md",
-        large ? "size-12" : "size-7",
-        dir ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground",
-        selected && "bg-background text-primary"
+        "inline-flex shrink-0 items-center justify-center",
+        large ? "size-11 rounded-[14px]" : "size-8 rounded-[10px]",
+        dir ? "bg-soft-2 text-brand" : "bg-soft text-ink-2",
+        selected && "bg-surface"
       )}
     >
-      {dir ? (
-        <Folder className={iconClassName} />
-      ) : entry.type === "symlink" ? (
-        <Link2 className={iconClassName} />
-      ) : (
-        <FileIcon className={iconClassName} />
-      )}
+      <Icon className={large ? "h-5 w-5" : "h-4 w-4"} strokeWidth={1.9} />
     </span>
   );
 }
@@ -598,8 +715,8 @@ function RenameInput({
       autoFocus
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
-      onClick={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
+      onClick={stop}
+      onDoubleClick={stop}
       onFocus={(e) => e.currentTarget.select()}
       onKeyDown={(e) => {
         e.stopPropagation();
@@ -612,39 +729,49 @@ function RenameInput({
         }
         commitRename(entry);
       }}
-      aria-label="File name"
-      className="w-full rounded-md bg-background px-2 py-1.5 text-sm text-foreground outline-none ring-1 ring-ring"
+      aria-label="Nouveau nom"
+      className="h-9 w-full rounded-[10px] border border-brand/40 bg-surface px-2.5 text-sm text-ink outline-none ring-2 ring-brand/15"
     />
   );
 }
 
 function EmptyFolder({
+  atRoot,
   canCreate,
   uploading,
   onNewFolder,
   onUpload,
 }: {
+  atRoot: boolean;
   canCreate: boolean;
   uploading: boolean;
   onNewFolder: () => void;
   onUpload: () => void;
 }) {
   return (
-    <div className="flex min-h-[20rem] flex-col items-center justify-center rounded-lg border border-dashed bg-secondary/20 p-8 text-center">
-      <span className="mb-4 inline-flex size-12 items-center justify-center rounded-md bg-background text-primary shadow-sm">
-        <Folder className="h-7 w-7" />
+    <div className="flex h-full min-h-[18rem] flex-col items-center justify-center px-6 py-10 text-center">
+      <span className="mb-4 grid h-14 w-14 place-items-center rounded-[18px] bg-soft-2 text-brand">
+        <FolderOpen className="h-7 w-7" strokeWidth={1.8} />
       </span>
-      <p className="text-sm font-medium text-foreground">This folder is empty.</p>
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-        <Button size="sm" onClick={onUpload} disabled={!canCreate || uploading}>
-          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          Upload files
+      <p className="font-display text-lg font-bold tracking-tight text-ink">
+        {atRoot ? "Aucun fichier pour l’instant" : "Ce dossier est vide"}
+      </p>
+      <p className="mt-1.5 max-w-sm text-sm text-ink-3">
+        {atRoot
+          ? "Les livrables de vos experts et les documents importés par l’équipe apparaîtront ici."
+          : "Glissez-y des fichiers ou importez-les depuis votre ordinateur."}
+      </p>
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+        <Button onClick={onUpload} disabled={!canCreate || uploading}>
+          {uploading ? <Loader2 className="animate-spin" /> : <Upload />}
+          Importer des fichiers
         </Button>
-        <Button variant="outline" size="sm" onClick={onNewFolder} disabled={!canCreate}>
-          <FolderPlus className="h-4 w-4" />
-          New folder
+        <Button variant="outline" onClick={onNewFolder} disabled={!canCreate}>
+          <FolderPlus />
+          Nouveau dossier
         </Button>
       </div>
+      <p className="mt-4 hidden text-xs text-ink-3 pointer-fine:block">Ou déposez-les directement dans cette fenêtre.</p>
     </div>
   );
 }
@@ -682,8 +809,8 @@ function NewFolderDialog({
       }}
     >
       <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>New folder</DialogTitle>
+        <DialogHeader className="text-left">
+          <DialogTitle className="font-display text-xl font-bold text-ink">Nouveau dossier</DialogTitle>
         </DialogHeader>
         <Input
           autoFocus
@@ -695,15 +822,15 @@ function NewFolderDialog({
               submit();
             }
           }}
-          placeholder="Folder name"
-          aria-label="Folder name"
+          placeholder="Nom du dossier"
+          aria-label="Nom du dossier"
         />
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:space-x-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
+            Annuler
           </Button>
           <Button onClick={submit} disabled={busy || !name.trim()}>
-            {busy ? "Creating..." : "Create"}
+            {busy ? "Création…" : "Créer"}
           </Button>
         </DialogFooter>
       </DialogContent>

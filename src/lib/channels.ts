@@ -1,10 +1,8 @@
-// Messaging channels: types shared by the BFF routes and the Messaging tab.
+// Messaging channels: types shared by the BFF routes and the Canaux page.
 //
-// The agent's harness owns the catalog: it reports every channel it supports, each channel's live
-// state, and the exact credentials that channel wants (key, prompt, whether it is a secret, where to
-// get it). So this app renders a form it did not write, and a channel the harness gains needs no
-// change here. Telegram and WhatsApp get purpose-built panels on top because their setup is a flow
-// rather than a form.
+// Channels live on the instance's default Hermes profile (the business chat): Hermes reports each
+// channel's live state and the credentials it wants, and this app drives it over exec. Yelema offers
+// two channels, Telegram (a bot) and WhatsApp (a QR pairing), each with its own flow.
 
 // One credential a channel asks for, as the harness describes it.
 export interface ChannelField {
@@ -29,7 +27,7 @@ export interface MessagingPlatform {
   enabled: boolean;
   configured: boolean;
   gateway_running: boolean;
-  // "disabled" | "connected" | "starting" | "startup_failed" and so on, the harness's own wording, shown as-is.
+  // "disabled" | "connected" | "starting" | "startup_failed" and so on, the harness's own wording.
   state: string | null;
   error_code: string | null;
   error_message: string | null;
@@ -41,13 +39,12 @@ export interface ChannelsResponse {
   channels: MessagingPlatform[];
 }
 
-// The harness writes its own product name into the copy it ships ("Connect Hermes to Discord DMs").
-// A white-label dashboard should not leak the harness it runs on, so the names are swapped for a
-// neutral noun on the way to the browser. Add your own harness here if you ship a custom image.
-const HARNESS_NAMES = /\b(Hermes|OpenClaw)\b/g;
+// The channels Yelema offers, in display order.
+export const SUPPORTED_CHANNELS = ["telegram", "whatsapp"] as const;
+export type ChannelId = (typeof SUPPORTED_CHANNELS)[number];
 
-export function neutralizeHarnessName<T extends string | null | undefined>(text: T): T {
-  return (typeof text === "string" ? (text.replace(HARNESS_NAMES, "your agent") as T) : text);
+export function isSupportedChannel(id: string): id is ChannelId {
+  return (SUPPORTED_CHANNELS as readonly string[]).includes(id);
 }
 
 // A channel is live when the harness says the gateway has it connected.
@@ -62,41 +59,10 @@ export function channelError(channel: MessagingPlatform): string | null {
 }
 
 export function channelStateLabel(channel: MessagingPlatform): string {
-  if (isChannelConnected(channel)) return "Connected";
-  if (channelError(channel)) return "Needs attention";
-  if (channel.enabled) return "Starting";
-  if (channel.configured) return "Off";
-  return "Not connected";
-}
-
-// A channel with no credentials to fill in cannot be connected from this app at all (it is set up
-// inside the agent), so it is left off the list rather than offered as an empty form.
-export function isConnectableChannel(channel: MessagingPlatform): boolean {
-  return channel.env_vars.length > 0 || isGuidedChannel(channel.id);
-}
-
-// The four channels the Messaging tab leads with, in this order. Everything else the harness
-// supports is still offered, folded under "More channels".
-export const FEATURED_CHANNELS = ["telegram", "whatsapp", "slack", "discord"] as const;
-
-// Telegram and WhatsApp connect through their own panel; the rest take a credentials form.
-export const GUIDED_CHANNELS = ["telegram", "whatsapp"] as const;
-
-export function isGuidedChannel(id: string): boolean {
-  return (GUIDED_CHANNELS as readonly string[]).includes(id);
-}
-
-// Order the harness's list so the featured four lead, then everything else alphabetically.
-export function sortChannels(channels: MessagingPlatform[]): MessagingPlatform[] {
-  const rank = (id: string) => {
-    const i = (FEATURED_CHANNELS as readonly string[]).indexOf(id);
-    return i < 0 ? FEATURED_CHANNELS.length : i;
-  };
-  return [...channels].sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name));
-}
-
-export function isFeaturedChannel(id: string): boolean {
-  return (FEATURED_CHANNELS as readonly string[]).includes(id);
+  if (isChannelConnected(channel)) return "Connecté";
+  if (channelError(channel)) return "À vérifier";
+  if (channel.enabled) return "Démarrage…";
+  return "Non connecté";
 }
 
 // ---- Telegram ----
@@ -113,6 +79,14 @@ export interface TelegramBotCheck {
 export interface TelegramOwner {
   user_id: string;
   name: string | null;
+}
+
+// POST /api/agents/[id]/channels/telegram/topics: `message` is the French line for the page,
+// `output` the tail of what the instance printed (for support).
+export interface TelegramTopicsResult {
+  ok: boolean;
+  message: string;
+  output: string;
 }
 
 // ---- WhatsApp ----
@@ -135,8 +109,8 @@ export interface WhatsappPairing {
   error?: string | null;
 }
 
-// What the Messaging tab's WhatsApp panel sees. `linking` is ours: a scan has landed and the agent
-// is still saving it, so the screen stops asking for a code it already got.
+// What the WhatsApp panel sees. `linking` is ours: a scan has landed and the agent is still saving
+// it, so the screen stops asking for a code it already got.
 export type WhatsappUiStatus = "preparing" | "waiting" | "linking" | "connected" | "expired";
 
 export interface WhatsappPairingState {

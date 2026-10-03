@@ -6,12 +6,7 @@ export function composioLogoUrl(slug: string) {
   return `https://logos.composio.dev/api/${slug}`;
 }
 
-function toolkit(
-  slug: string,
-  name: string,
-  description: string,
-  authSchemes: string[] = ["OAUTH2"]
-): IntegrationToolkit {
+function toolkit(slug: string, name: string, description: string): IntegrationToolkit {
   return {
     slug,
     name,
@@ -19,36 +14,39 @@ function toolkit(
     logo: composioLogoUrl(slug),
     enabled: true,
     isNoAuth: false,
-    authSchemes,
+    authSchemes: ["OAUTH2"],
   };
 }
 
-// Static first-paint catalog for the Browse tab. Live Agent37/Composio search still runs for typed
-// queries (the full 1,000+ app catalog), but the default grid should not wait on a remote request.
-// Forkers can curate this list freely — it is purely the "popular apps" starting set.
+// The tools shown before any search, with French descriptions. Search reaches the full catalog
+// (1 000+ apps); a result that is also listed here keeps its French description.
 export const DEFAULT_INTEGRATION_TOOLKITS: IntegrationToolkit[] = [
-  toolkit("googledrive", "Google Drive", "Google Drive stores and shares cloud files."),
-  toolkit("googledocs", "Google Docs", "Google Docs is a collaborative document editor."),
-  toolkit("googlecalendar", "Google Calendar", "Google Calendar helps manage schedules and events."),
-  toolkit("gmail", "Gmail", "Gmail is Google's email service."),
-  toolkit("slack", "Slack", "Slack is a team messaging and collaboration hub."),
-  toolkit("notion", "Notion", "Notion centralizes notes, docs, wikis, and tasks."),
-  toolkit("airtable", "Airtable", "Airtable merges spreadsheets with databases."),
-  toolkit("googlesheets", "Google Sheets", "Google Sheets is a cloud spreadsheet tool."),
-  toolkit("googletasks", "Google Tasks", "Google Tasks helps track tasks and to-dos."),
-  toolkit("github", "GitHub", "GitHub is a code hosting platform."),
-  toolkit("discord", "Discord", "Discord connects communities and chat servers."),
-  toolkit("linear", "Linear", "Linear tracks issues and product work."),
-  toolkit("jira", "Jira", "Jira tracks bugs, issues, and project work."),
-  toolkit("figma", "Figma", "Figma supports collaborative design workflows."),
-  toolkit("outlook", "Outlook", "Outlook is Microsoft's email and calendar platform."),
-  toolkit("hubspot", "HubSpot", "HubSpot manages CRM, marketing, and sales workflows."),
-  toolkit("twitter", "Twitter", "Twitter connects posts, profiles, and social data."),
-  toolkit("supabase", "Supabase", "Supabase is an open-source backend platform.", ["API_KEY"]),
-  toolkit("perplexityai", "Perplexity AI", "Perplexity AI provides conversational answer search.", ["API_KEY"]),
-  toolkit("youtube", "YouTube", "YouTube hosts and manages video content."),
-  toolkit("serpapi", "SerpApi", "SerpApi provides real-time search results.", ["API_KEY"]),
-  toolkit("firecrawl", "Firecrawl", "Firecrawl automates web crawling and extraction.", ["API_KEY"]),
-  toolkit("tavily", "Tavily", "Tavily offers search and data retrieval for agents.", ["API_KEY"]),
-  toolkit("codeinterpreter", "Code Interpreter", "Code Interpreter runs Python and data analysis tasks.", []),
+  toolkit("gmail", "Gmail", "Lire, trier et envoyer des e-mails"),
+  toolkit("googledrive", "Google Drive", "Ranger et retrouver les fichiers"),
+  toolkit("googlecalendar", "Google Agenda", "Prendre et déplacer des rendez-vous"),
+  toolkit("googlesheets", "Google Sheets", "Tableaux et suivis"),
+  toolkit("googledocs", "Google Docs", "Rédiger et partager des documents"),
+  toolkit("outlook", "Outlook", "E-mails et agenda Microsoft 365"),
+  toolkit("microsoft_teams", "Microsoft Teams", "Réunions et messages d’équipe"),
+  toolkit("one_drive", "OneDrive", "Fichiers Microsoft 365"),
+  toolkit("slack", "Slack", "Écrire dans vos canaux"),
+  toolkit("notion", "Notion", "Lire et mettre à jour vos pages"),
+  toolkit("canva", "Canva", "Créer et exporter des visuels"),
+  toolkit("facebook", "Facebook", "Publier sur votre page"),
+  toolkit("instagram", "Instagram", "Publier et suivre votre compte"),
+  toolkit("linkedin", "LinkedIn", "Publier et suivre votre page"),
+  toolkit("hubspot", "HubSpot", "Contacts, affaires et relances"),
+  toolkit("airtable", "Airtable", "Bases de données d’équipe"),
+  toolkit("quickbooks", "QuickBooks", "Factures et dépenses"),
+  toolkit("calendly", "Calendly", "Prise de rendez-vous"),
+  toolkit("zoom", "Zoom", "Réunions vidéo"),
+  toolkit("dropbox", "Dropbox", "Fichiers partagés"),
+  toolkit("trello", "Trello", "Tableaux de projets"),
 ];
+
+const BY_SLUG = new Map(DEFAULT_INTEGRATION_TOOLKITS.map((t) => [t.slug, t]));
+
+// The catalog entry for a slug (French name and description), if it is one of ours.
+export function catalogToolkit(slug: string): IntegrationToolkit | undefined {
+  return BY_SLUG.get(slug.toLowerCase());
+}

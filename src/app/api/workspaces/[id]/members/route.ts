@@ -1,51 +1,70 @@
 import { requireAdmin, requireMember, requireUser } from "@/lib/auth";
-import { ApiError, handleError, json } from "@/lib/http";
-import type { Invitation, WorkspaceMember } from "@/lib/types";
+import { createAccessLink, ensureAuthUser, normalizeEmail } from "@/lib/access-links";
+import { accessEmail, sendEmail } from "@/lib/email";
+import { ApiError, handleError, json, readJson } from "@/lib/http";
+import { publicSiteOrigin } from "@/lib/site-url";
+import type { WorkspaceMember } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+// The team: everyone in the workspace (all admins), with their name and last sign-in.
 export async function GET(_request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
     const { db, user } = await requireUser();
-    const role = await requireMember(db, id, user.id);
+    await requireMember(db, id, user.id);
 
-    const { data: members, error } = await db.rpc("get_workspace_members", { p_workspace: id });
+    const { data, error } = await db.rpc("get_workspace_members", { p_workspace: id });
     if (error) throw new ApiError(500, "db_error", error.message);
+    const rows = (data as Omit<WorkspaceMember, "name" | "last_sign_in_at">[]) ?? [];
+    const members: WorkspaceMember[] = await Promise.all(
+      rows.map(async (m) => {
+        const { data: u } = await db.auth.admin.getUserById(m.user_id);
+        return {
+          ...m,
+          name: (u.user?.user_metadata?.name as string | undefined)?.trim() || null,
+          last_sign_in_at: u.user?.last_sign_in_at ?? null,
+        };
+      })
+    );
+    const { data: ws } = await db.from("workspaces").select("owner_id").eq("id", id).maybeSingle();
 
-    let invitations: Invitation[] = [];
-    if (role === "admin") {
-      const { data: inv } = await db
-        .from("invitations")
-        .select("*")
-        .eq("workspace_id", id)
-        .order("created_at", { ascending: false });
-      invitations = (inv as Invitation[]) ?? [];
-    }
-
-    return json({ members: (members as WorkspaceMember[]) ?? [], invitations, role });
+    return json({ members, owner_id: ws?.owner_id ?? null, email_enabled: Boolean(process.env.RESEND_API_KEY) });
   } catch (e) {
     return handleError(e);
   }
 }
 
+// "Ajouter un admin": the account (created if new) joins the workspace now, and gets an access link
+// to set a password. Emailed when email is configured; the link is always returned to copy.
 export async function POST(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
     const { db, user } = await requireUser();
     await requireAdmin(db, id, user.id);
+    const { email: raw } = await readJson<{ email?: string }>(request);
+    const email = normalizeEmail(raw);
 
-    const { data, error } = await db
-      .from("invitations")
-      .insert({ workspace_id: id, role: "admin", created_by: user.id })
-      .select("token")
-      .single();
+    const userId = await ensureAuthUser(db, email);
+    const { error } = await db
+      .from("memberships")
+      .upsert({ workspace_id: id, user_id: userId, role: "admin" }, { onConflict: "workspace_id,user_id" });
     if (error) throw new ApiError(500, "db_error", error.message);
 
-    const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || new URL(request.url).origin;
-    const url = `${origin}/invite/${data.token}`;
+    const link = await createAccessLink(db, {
+      workspaceId: id,
+      email,
+      createdBy: user.id,
+      origin: publicSiteOrigin(new URL(request.url).origin),
+    });
+    const { data: ws } = await db.from("workspaces").select("name").eq("id", id).maybeSingle();
+    const inviter = (user.user_metadata?.name as string | undefined)?.trim() || user.email || null;
+    const { sent } = await sendEmail({
+      to: email,
+      ...accessEmail({ workspaceName: ws?.name ?? "Yelema", link, inviter, reset: false }),
+    });
 
-    return json({ token: data.token, url }, 201);
+    return json({ user_id: userId, link, emailed: sent }, 201);
   } catch (e) {
     return handleError(e);
   }

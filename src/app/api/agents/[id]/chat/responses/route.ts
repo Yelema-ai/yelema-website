@@ -2,6 +2,7 @@ import { instanceFetch } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { ApiError, handleError, readJson } from "@/lib/http";
 import { FILES_ONLY_PROMPT } from "@/lib/types";
+import { DEFAULT_PROFILE, profileParam } from "@/lib/profiles";
 import { upstreamErrorMessage } from "../../_helpers";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -9,9 +10,7 @@ type Ctx = { params: Promise<{ id: string }> };
 interface ResponsesBody {
   input?: string;
   session_id?: string;
-  model?: string | null;
-  provider?: string | null;
-  reasoning_effort?: string | null;
+  profile?: string;
   files?: string[];
 }
 
@@ -34,15 +33,12 @@ export async function POST(request: Request, { params }: Ctx) {
     // prompt so we always send a non-empty input rather than relying on "" being accepted.
     const finalInput = input || FILES_ONLY_PROMPT;
 
-    // Forward only what the Agents API expects; omit null/empty so the agent's own defaults
-    // apply (model/provider/effort). provider only rides along when a model is chosen.
+    // The expert's Hermes profile picks the persona; the business chat runs on the default home.
+    // Model and effort are the instance's managed defaults, so neither is sent.
+    const profile = profileParam(body.profile);
     const payload: Record<string, unknown> = { input: finalInput, stream: true };
+    if (profile !== DEFAULT_PROFILE) payload.profile = profile;
     if (body.session_id) payload.session_id = body.session_id;
-    if (body.model) {
-      payload.model = body.model;
-      if (body.provider) payload.provider = body.provider;
-    }
-    if (body.reasoning_effort) payload.reasoning_effort = body.reasoning_effort;
     if (files.length) payload.files = files;
 
     const upstream = await instanceFetch(id, "/v1/responses", {
@@ -52,7 +48,7 @@ export async function POST(request: Request, { params }: Ctx) {
     });
 
     if (!upstream.ok || !upstream.body) {
-      const message = await upstreamErrorMessage(upstream, "chat/responses", "Chat request failed");
+      const message = await upstreamErrorMessage(upstream, "chat/responses", "La discussion a échoué");
       // The client softens the "busy" case by matching the message, not a code, and the 409 is
       // preserved in the status — so one code suffices.
       throw new ApiError(upstream.status || 502, "upstream_error", message);

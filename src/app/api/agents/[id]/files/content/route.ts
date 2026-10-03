@@ -1,5 +1,6 @@
 import { instanceFetch } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
+import { assertInDrive } from "@/lib/drive";
 import { ApiError, handleError, json } from "@/lib/http";
 import { assertUpstreamOk, requireTrimmed } from "../../_helpers";
 
@@ -18,9 +19,9 @@ export async function GET(request: Request, { params }: Ctx) {
 
     const { searchParams } = new URL(request.url);
     const qs = new URLSearchParams();
-    const path = searchParams.get("path");
+    const path = assertInDrive(requireTrimmed(searchParams.get("path"), "path is required"));
     const disposition = searchParams.get("disposition");
-    if (path) qs.set("path", path);
+    qs.set("path", path);
     if (disposition) qs.set("disposition", disposition);
 
     const upstream = await instanceFetch(id, `/v1/files/content?${qs.toString()}`);
@@ -55,7 +56,7 @@ export async function PUT(request: Request, { params }: Ctx) {
     await requireAgentAccess(id, "admin");
 
     const { searchParams } = new URL(request.url);
-    const path = requireTrimmed(searchParams.get("path"), "path is required");
+    const path = assertInDrive(requireTrimmed(searchParams.get("path"), "path is required"));
     const qs = new URLSearchParams();
     qs.set("path", path);
     const overwrite = searchParams.get("overwrite");

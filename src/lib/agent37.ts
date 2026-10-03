@@ -7,7 +7,6 @@ import type {
   IntegrationConnectionsResult,
   IntegrationConnectResult,
   IntegrationToolkitsResult,
-  ModelsResponse,
   SessionDetail,
   SessionListResponse,
   Template,
@@ -164,6 +163,10 @@ export const agent37 = {
       image_digest: string | null;
       template_revision: number | null;
     }>(`/instances/${id}/update`, { method: "POST" }),
+  // Auto-sleep on or off. A sleeping instance misses Telegram/WhatsApp messages, so connecting a
+  // channel turns it off.
+  setAutoSleep: (id: string, on: boolean) =>
+    call<Agent>(`/instances/${id}`, { method: "PATCH", body: JSON.stringify({ auto_sleep: on }) }),
   resize: (id: string, body: ResizeInput) =>
     call<{ id: string; status: string; resources: { cpu: number; memory: number; disk: number } }>(
       `/instances/${id}/resize`,
@@ -197,24 +200,25 @@ export const agent37 = {
   // ---- Per-instance Agents API (data plane: web chat) — served on the instance host, see
   // instanceFetch. The streaming surfaces (POST /v1/responses SSE, GET/PUT /v1/files/content,
   // GET /v1/files/archive) go through instanceFetch directly from their routes. ----
-  listModels: (id: string) => instanceCall<ModelsResponse>(id, "/v1/models"),
-  // The thread rail: every session on the instance. Items carry `title`, a `preview` of the first
-  // message, and timestamps — the sessions route turns these into the rail's label + ordering.
-  listSessions: (id: string) => instanceCall<SessionListResponse>(id, "/v1/sessions"),
-  getSession: (id: string, sessionId: string) =>
-    instanceCall<SessionDetail>(id, `/v1/sessions/${encodeURIComponent(sessionId)}`),
-  deleteSession: (id: string, sessionId: string) =>
+  // The thread rail of one Hermes profile (an expert, or "default" for the business chat). Items
+  // carry `title`, a `preview` of the first message, and timestamps — the sessions route turns
+  // these into the rail's label + ordering. `profile` is the "?profile=…" query (see lib/profiles).
+  listSessions: (id: string, profileQuery: string) =>
+    instanceCall<SessionListResponse>(id, `/v1/sessions${profileQuery}`),
+  getSession: (id: string, sessionId: string, profileQuery: string) =>
+    instanceCall<SessionDetail>(id, `/v1/sessions/${encodeURIComponent(sessionId)}${profileQuery}`),
+  deleteSession: (id: string, sessionId: string, profileQuery: string) =>
     instanceCall<{ id: string; deleted: boolean }>(
       id,
-      `/v1/sessions/${encodeURIComponent(sessionId)}`,
+      `/v1/sessions/${encodeURIComponent(sessionId)}${profileQuery}`,
       { method: "DELETE" }
     ),
   // Set a session's title. Supported on newer Hermes builds; older ones answer 404/405 (the
   // PATCH route maps that to a friendly "not supported yet" so the rail degrades gracefully).
-  renameSession: (id: string, sessionId: string, title: string) =>
+  renameSession: (id: string, sessionId: string, title: string, profileQuery: string) =>
     instanceCall<{ id: string; agent: string; renamed: boolean }>(
       id,
-      `/v1/sessions/${encodeURIComponent(sessionId)}`,
+      `/v1/sessions/${encodeURIComponent(sessionId)}${profileQuery}`,
       { method: "PATCH", body: JSON.stringify({ title }) }
     ),
   cancelResponse: (id: string, responseId: string) =>

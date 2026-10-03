@@ -41,7 +41,7 @@ export function useChatAttachments(agentId: string, onFocusRequest?: () => void)
           signal: ctrl.signal,
         });
         if (!res.ok) {
-          throw new Error(await readApiError(res, "Upload failed"));
+          throw new Error(await readApiError(res, "L’envoi du fichier a échoué"));
         }
         const data = (await res.json()) as { path?: string };
         patch(pf.id, { status: "uploaded", path: data.path });
