@@ -1,5 +1,5 @@
-import { agent37 } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
+import { listToolkits } from "@/lib/composio";
 import { handleError, json } from "@/lib/http";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -12,7 +12,7 @@ export async function GET(request: Request, { params }: Ctx) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.trim() || undefined;
 
-    return json(await agent37.listIntegrationToolkits(id, { search }));
+    return json(await listToolkits(search));
   } catch (e) {
     return handleError(e);
   }

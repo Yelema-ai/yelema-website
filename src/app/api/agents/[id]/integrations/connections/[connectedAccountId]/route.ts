@@ -1,5 +1,5 @@
-import { agent37 } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
+import { deleteConnection } from "@/lib/composio";
 import { ApiError, handleError, json } from "@/lib/http";
 
 type Ctx = { params: Promise<{ id: string; connectedAccountId: string }> };
@@ -12,11 +12,9 @@ export async function DELETE(_request: Request, { params }: Ctx) {
     }
 
     // Disconnecting an integration is a destructive mutation, admin-only.
-    await requireAgentAccess(id, "admin");
+    const { row } = await requireAgentAccess(id, "admin");
 
-    // Ownership of the connected account to this instance's Composio entity is
-    // verified upstream by the v1 endpoint before deletion.
-    return json(await agent37.disconnectIntegration(id, connectedAccountId));
+    return json(await deleteConnection(row.workspace_id, connectedAccountId));
   } catch (e) {
     return handleError(e);
   }

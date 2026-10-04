@@ -3,7 +3,7 @@
 // to end without it. Idempotent: re-running finds the user, workspace and instance it made before.
 //
 //   node scripts/provision-workspace.mjs --name "Unifood" --email admin@unifood.ci \
-//     [--logo https://…/logo.png] [--experts ../hermes-experts] [--template yelema-hermes]
+//     [--logo https://…/logo.png] [--experts ../hermes-experts] [--template yelema-hermes] [--skip-experts]
 //
 // 1. Supabase: the admin's auth user, the workspace (+ logo) and their admin membership.
 // 2. Agent37: one instance for the workspace (4 vCPU / 8 GB / 20 GB, $20 monthly cap, always on),
@@ -11,11 +11,16 @@
 // 3. The 11 expert profiles from a local hermes-experts checkout, installed with the fixes Hermes'
 //    own install lacks (memories, a config.yaml so the managed model reaches the profile, a larger
 //    SOUL.md cap), the shared ~/Livrables drive, then a restart so the image writes the managed
-//    model into every profile. Then agents.profiles + ready = true.
-// 4. Prints the admin's access link (7 days, one use: sign in, choose a password, land in the app).
+//    model into every profile. Then agents.profiles + ready = true. --skip-experts keeps the
+//    installed profiles (an existing instance) and only redoes AGENTS.md and the apps wiring.
+// 4. Yelema's Composio: a fresh token for the instance (its hash in agents.apps_token_hash), written
+//    with the app's MCP proxy URL to ~/.yelema/apps-mcp.json; the yelema-hermes image wires it into
+//    every profile at start. Needs NEXT_PUBLIC_SITE_URL to be the deployed app.
+// 5. Prints the admin's access link (7 days, one use: sign in, choose a password, land in the app).
 
 import fs from "node:fs";
 import path from "node:path";
+import { createHash, randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadEnv } from "./setup.mjs";
@@ -25,7 +30,11 @@ const env = loadEnv(path.join(ROOT, ".env.local")).map;
 const get = (k) => process.env[k] || env[k];
 
 const args = {};
-for (let i = 2; i < process.argv.length; i += 2) args[process.argv[i].replace(/^--/, "")] = process.argv[i + 1];
+for (let i = 2; i < process.argv.length; i++) {
+  const key = process.argv[i].replace(/^--/, "");
+  const next = process.argv[i + 1];
+  args[key] = next === undefined || next.startsWith("--") ? true : (i++, next);
+}
 
 const NAME = args.name;
 const EMAIL = args.email?.toLowerCase();
@@ -53,7 +62,7 @@ const EXPERTS = {
 };
 
 if (!NAME || !EMAIL) {
-  console.error('Usage: node scripts/provision-workspace.mjs --name "Client" --email admin@client.com [--logo URL] [--experts DIR] [--template NAME]');
+  console.error('Usage: node scripts/provision-workspace.mjs --name "Client" --email admin@client.com [--logo URL] [--experts DIR] [--template NAME] [--skip-experts]');
   process.exit(1);
 }
 for (const [k, v] of Object.entries({ NEXT_PUBLIC_SUPABASE_URL: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY: SERVICE_KEY, AGENT37_API_KEY: A37_KEY })) {
@@ -202,8 +211,24 @@ function installCommand() {
       `echo "installed ${key}"`
     );
   }
-  lines.push(`cat > "$HOME/AGENTS.md" <<'EOF'\n${agentsMd()}\nEOF`);
   return lines.join("\n");
+}
+
+// The experts' connected apps (Yelema's Composio, through the app's /api/composio-mcp): a new
+// token for the instance, its hash for the proxy's lookup, and both written where the image's
+// start-up wiring reads them. Returns the shell that writes the file.
+async function appsCommand(id) {
+  if (!/^https:\/\//.test(SITE)) {
+    console.warn(`  ! NEXT_PUBLIC_SITE_URL is not the deployed app (${SITE}): connected apps not wired`);
+    return "";
+  }
+  const token = `yapps_${randomBytes(24).toString("hex")}`;
+  await sb(`/rest/v1/agents?agent37_id=eq.${id}`, {
+    method: "PATCH",
+    body: { apps_token_hash: createHash("sha256").update(token).digest("hex") },
+  });
+  const state = JSON.stringify({ url: `${SITE}/api/composio-mcp`, token });
+  return `mkdir -p "$HOME/.yelema" && cat > "$HOME/.yelema/apps-mcp.json" <<'EOF'\n${state}\nEOF`;
 }
 
 function agentsMd() {
@@ -218,7 +243,14 @@ Les personnes qui t'écrivent depuis l'application Yelema sont des admins de ${N
 ${rows}
 - Les documents de l'entreprise sont dans ~/Livrables/ : lis-y les fichiers qu'on te cite.
 - Quand tu as enregistré un fichier, donne son chemin complet dans ta réponse.
-- Ne range rien ailleurs que dans ~/Livrables/ : le reste n'est pas visible par l'équipe.`;
+- Ne range rien ailleurs que dans ~/Livrables/ : le reste n'est pas visible par l'équipe.
+
+## Applications de l'entreprise
+
+Gmail, Google Agenda, Google Drive, Notion, Slack, HubSpot et les autres applications de l'entreprise passent par le serveur MCP \`apps\`. Ses outils se décrivent eux-mêmes : cherche-les avec son outil de recherche, n'invente pas leurs noms.
+- Pour connecter une application, lance la connexion avec son outil de gestion des connexions, donne le lien renvoyé en lien markdown, puis attends que la personne confirme avant de vérifier.
+- N'utilise jamais pour ces applications une compétence ou un outil qui demande un mot de passe d'application, une clé d'API ou des identifiants Google Cloud : la connexion se fait en un clic.
+- Une application connectée l'est pour toute l'équipe : réutilise la connexion.`;
 }
 
 // The admin's access link: a row in `invitations` the app consumes at /acces/<token> (7 days, one
@@ -243,11 +275,16 @@ async function main() {
   console.log(`  instance ${id}, waiting until healthy…`);
   await waitHealthy(id);
 
-  step(`Installing ${Object.keys(EXPERTS).length} expert profiles from ${EXPERTS_DIR}`);
-  await uploadExperts(id);
-  console.log((await exec(id, installCommand())).trim().replace(/^/gm, "  "));
+  if (!args["skip-experts"]) {
+    step(`Installing ${Object.keys(EXPERTS).length} expert profiles from ${EXPERTS_DIR}`);
+    await uploadExperts(id);
+    console.log((await exec(id, installCommand())).trim().replace(/^/gm, "  "));
+  }
 
-  step("Restarting so every profile gets the managed model");
+  step("AGENTS.md and the connected apps (Yelema's Composio)");
+  await exec(id, [`cat > "$HOME/AGENTS.md" <<'EOF'\n${agentsMd()}\nEOF`, await appsCommand(id)].filter(Boolean).join("\n"));
+
+  step("Restarting so every profile gets the managed model and the apps server");
   await a37(`/instances/${id}/restart`, { method: "POST" });
   await sleep(10_000);
   await waitHealthy(id);

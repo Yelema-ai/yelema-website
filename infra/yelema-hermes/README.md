@@ -1,8 +1,12 @@
 # yelema-hermes
 
 The Agent37 workspace template every Yelema client instance runs: the stock `agent37-hermes`
-image (Hermes + the Agent37 gateway + managed model/Composio wiring) plus the PDF tools the
-expert skills call.
+image (Hermes + the Agent37 gateway + managed model wiring) plus the PDF tools the expert skills
+call, with Yelema's own Composio in place of Agent37's:
+
+- `yelema-entrypoint.sh` switches Agent37's managed Composio off, then starts the stock entrypoint.
+- `yelema-apps-mcp.py` adds the `apps` MCP server (the app's `/api/composio-mcp`) to every Hermes
+  profile at each start, from `~/.yelema/apps-mcp.json`, which provisioning writes.
 
 Build and publish it in the Agent37 cloud (no local Docker needed), from this folder:
 

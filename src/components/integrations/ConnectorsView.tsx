@@ -49,9 +49,9 @@ function localized(t: IntegrationToolkit): IntegrationToolkit {
   return ours ? { ...t, name: ours.name, description: ours.description } : { ...t, description: null };
 }
 
-// Connecteurs: the company's tools (Gmail, Drive, Notion…), connected once on the workspace instance
-// through Agent37's managed Composio. A connection belongs to the instance, so every expert (every
-// Hermes profile on it) can use it. A popular catalog shows first; typing searches the full catalog.
+// Connecteurs: the company's tools (Gmail, Drive, Notion…), connected once for the workspace through
+// Yelema's own Composio (src/lib/composio.ts). A connection belongs to the workspace, so every expert
+// (every Hermes profile on its instance) can use it. A popular catalog shows first; typing searches the full catalog.
 export function ConnectorsView({ agentId }: { agentId: string }) {
   const [search, setSearch] = useState("");
   const [remote, setRemote] = useState<{ q: string; items: IntegrationToolkit[] } | null>(null);
