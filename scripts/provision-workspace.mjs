@@ -6,7 +6,7 @@
 //     [--logo https://…/logo.png] [--experts ../hermes-experts] [--template yelema-hermes]
 //
 // 1. Supabase: the admin's auth user, the workspace (+ logo) and their admin membership.
-// 2. Agent37: one instance for the workspace (4 vCPU / 8 GB / 20 GB, $20 monthly cap, auto-sleep),
+// 2. Agent37: one instance for the workspace (4 vCPU / 8 GB / 20 GB, $20 monthly cap, always on),
 //    registered as the workspace's agent (agents.owner_user_id null, ready = false).
 // 3. The 11 expert profiles from a local hermes-experts checkout, installed with the fixes Hermes'
 //    own install lacks (memories, a config.yaml so the managed model reaches the profile, a larger
@@ -142,7 +142,6 @@ async function ensureInstance(workspaceId, ownerId) {
         resources: { cpu: 4, memory: 8, disk: 20 },
         metadata: { app_workspace: workspaceId },
         budget: { monthly_cap_micros: 20_000_000 },
-        auto_sleep: true,
       },
     });
     console.log(`  created instance ${inst.id}`);
