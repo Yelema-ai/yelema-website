@@ -31,11 +31,37 @@ function safeDecode(s: string): string {
   }
 }
 
+// Our own links (drive downloads) open directly; external ones still ask first.
+const LINK_SAFETY = { enabled: true, onLinkCheck: (url: string) => url.startsWith("/") };
+
+const FR = {
+  close: "Fermer",
+  copied: "Copié",
+  copyCode: "Copier le code",
+  copyLink: "Copier le lien",
+  copyTable: "Copier le tableau",
+  copyTableAsCsv: "Copier en CSV",
+  copyTableAsMarkdown: "Copier en Markdown",
+  copyTableAsTsv: "Copier en TSV",
+  downloadDiagram: "Télécharger le schéma",
+  downloadFile: "Télécharger le fichier",
+  downloadImage: "Télécharger l’image",
+  downloadTable: "Télécharger le tableau",
+  downloadTableAsCsv: "Télécharger en CSV",
+  downloadTableAsMarkdown: "Télécharger en Markdown",
+  exitFullscreen: "Quitter le plein écran",
+  externalLinkWarning: "Ce lien ouvre un site extérieur à Yelema.",
+  imageNotAvailable: "Image indisponible",
+  openExternalLink: "Ouvrir le lien externe ?",
+  openLink: "Ouvrir le lien",
+  viewFullscreen: "Plein écran",
+};
+
 // Streaming-aware markdown: Streamdown tolerates incomplete markdown (unclosed fences, partial
 // tables) so we can feed it the running output buffer on every delta without flicker.
 export const Markdown = memo(function Markdown({ content, agentId }: { content: string; agentId?: string }) {
   return (
-    <Streamdown className="chat-markdown text-[15px] leading-relaxed">
+    <Streamdown className="chat-markdown text-[15px] leading-relaxed" linkSafety={LINK_SAFETY} translations={FR}>
       {agentId ? linkDriveFiles(content, agentId) : content}
     </Streamdown>
   );
