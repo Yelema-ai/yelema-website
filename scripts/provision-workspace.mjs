@@ -129,7 +129,10 @@ async function ensureInstance(workspaceId, ownerId) {
   const [row] = await sb(`/rest/v1/agents?workspace_id=eq.${workspaceId}&owner_user_id=is.null&select=agent37_id`);
   if (row) return row.agent37_id;
   const { data } = await a37("/instances");
-  let inst = data.find((i) => i.metadata?.app_workspace === workspaceId && i.status !== "deleted");
+  // The back office's old model made one instance per member (metadata.yelema_member): skip those.
+  let inst = data.find(
+    (i) => i.metadata?.app_workspace === workspaceId && !i.metadata?.yelema_member && i.status !== "deleted"
+  );
   if (!inst) {
     inst = await a37("/instances", {
       method: "POST",
