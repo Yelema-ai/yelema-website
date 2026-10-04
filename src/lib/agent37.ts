@@ -4,9 +4,6 @@ import type {
   Budget,
   FileEntry,
   FileListResponse,
-  IntegrationConnectionsResult,
-  IntegrationConnectResult,
-  IntegrationToolkitsResult,
   SessionDetail,
   SessionListResponse,
   Template,
@@ -243,22 +240,4 @@ export const agent37 = {
   // mkdir -p (recursive, idempotent); returns the resolved FileEntry of the directory.
   makeDir: (id: string, path: string) =>
     instanceCall<FileEntry>(id, `/v1/files/dir?path=${encodeURIComponent(path)}`, { method: "POST" }),
-
-  // App integrations (managed Composio, per-instance entity). Management ops only — no billing here.
-  listIntegrationToolkits: (id: string, opts: { search?: string } = {}) => {
-    const q = opts.search ? `?search=${encodeURIComponent(opts.search)}` : "";
-    return call<IntegrationToolkitsResult>(`/instances/${id}/integrations/toolkits${q}`);
-  },
-  connectIntegration: (id: string, body: { toolkit: string }) =>
-    call<IntegrationConnectResult>(`/instances/${id}/integrations/connect`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  listIntegrationConnections: (id: string) =>
-    call<IntegrationConnectionsResult>(`/instances/${id}/integrations/connections`),
-  disconnectIntegration: (id: string, connectedAccountId: string) =>
-    call<{ id: string; deleted: boolean }>(
-      `/instances/${id}/integrations/connections/${connectedAccountId}`,
-      { method: "DELETE" }
-    ),
 };
