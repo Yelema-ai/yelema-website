@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, History, Loader2, MoreHorizontal, Paperclip, Pencil, Play, Plus, Repeat, Send, Trash2, X } from "lucide-react";
+import { Check, History, Loader2, MoreHorizontal, Paperclip, Pencil, Play, Plus, Repeat, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { getExpert, type Expert } from "@/config/experts";
 import { apiFetch, readApiError } from "@/lib/api";
@@ -13,7 +13,6 @@ import {
   cronParts,
   isOneOff,
   oneOffFor,
-  parseRoutineSentence,
   recurrenceOf,
   scheduleLabel,
   todayIso,
@@ -113,8 +112,6 @@ function RoutineDialog({
   const [draft, setDraft] = useState<Draft>(() => draftOf(routine));
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [asked, setAsked] = useState<{ me: string; reply: string }[]>([]);
-  const [question, setQuestion] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
 
@@ -127,22 +124,6 @@ function RoutineDialog({
       : []),
     ...(draft.recurrence === KEEP && routine ? [{ value: KEEP, label: `Comme aujourd’hui (${routine.schedule})` }] : []),
   ];
-
-  function ask() {
-    const sentence = question.trim();
-    if (!sentence) return;
-    const p = parseRoutineSentence(sentence);
-    set({
-      task: p.task,
-      name: draft.name || p.name,
-      recurring: p.recurring,
-      time: p.parts.time,
-      ...(p.recurring ? { recurrence: `${p.parts.dom}|${p.parts.dow}` } : { date: p.date ?? todayIso(1) }),
-    });
-    const when = p.recurring ? `${recurrenceOf(p.parts).toLowerCase()} à ${p.parts.time}` : `une fois, à ${p.parts.time}`;
-    setAsked((a) => [...a, { me: sentence, reply: `C’est rempli : ${when}. Vérifiez, puis cliquez sur ${routine ? "Enregistrer" : "Créer"}.` }]);
-    setQuestion("");
-  }
 
   async function attach(file: File) {
     setUploading(true);
@@ -193,7 +174,7 @@ function RoutineDialog({
   const label = "text-[13px] font-semibold text-ink-2";
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-h-[calc(100vh-2rem)] max-w-xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {expert.name}, {routine ? "modifier la routine" : "nouvelle routine"}
@@ -202,164 +183,129 @@ function RoutineDialog({
             {expert.name} la fait à l’heure dite, sans qu’on le demande. Le résultat arrive dans ses conversations et sur ses canaux.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_240px]">
-          <form id="routine-form" onSubmit={save} className="grid content-start gap-3">
-            <Input
-              placeholder="Nom de la routine"
-              aria-label="Nom de la routine"
-              maxLength={80}
-              value={draft.name}
-              onChange={(e) => set({ name: e.target.value })}
-            />
-            <textarea
-              placeholder="Décrivez la tâche à faire"
-              aria-label="Description"
-              rows={5}
-              value={draft.task}
-              onChange={(e) => set({ task: e.target.value })}
-              className="w-full resize-y rounded-xl border border-line bg-surface px-4 py-3 text-[15px] text-ink placeholder:text-ink-3 focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15"
-            />
+        <form id="routine-form" onSubmit={save} className="grid content-start gap-3">
+          <Input
+            placeholder="Nom de la routine"
+            aria-label="Nom de la routine"
+            maxLength={80}
+            value={draft.name}
+            onChange={(e) => set({ name: e.target.value })}
+          />
+          <textarea
+            placeholder="Décrivez la tâche à faire"
+            aria-label="Description"
+            rows={5}
+            value={draft.task}
+            onChange={(e) => set({ task: e.target.value })}
+            className="w-full resize-y rounded-xl border border-line bg-surface px-4 py-3 text-[15px] text-ink placeholder:text-ink-3 focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15"
+          />
 
-            <div className="flex w-fit rounded-xl bg-soft p-1" role="group" aria-label="Quand">
-              {[
-                { recurring: false, label: "Plus tard", icon: History },
-                { recurring: true, label: "Récurrent", icon: Repeat },
-              ].map((m) => (
-                <button
-                  key={m.label}
-                  type="button"
-                  aria-pressed={draft.recurring === m.recurring}
-                  onClick={() => set({ recurring: m.recurring })}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-[13px] font-semibold",
-                    draft.recurring === m.recurring ? "bg-surface text-ink shadow-sm" : "text-ink-2"
-                  )}
-                >
-                  <m.icon className="h-4 w-4" /> {m.label}
-                </button>
-              ))}
-            </div>
+          <div className="flex w-fit rounded-xl bg-soft p-1" role="group" aria-label="Quand">
+            {[
+              { recurring: false, label: "Plus tard", icon: History },
+              { recurring: true, label: "Récurrent", icon: Repeat },
+            ].map((m) => (
+              <button
+                key={m.label}
+                type="button"
+                aria-pressed={draft.recurring === m.recurring}
+                onClick={() => set({ recurring: m.recurring })}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-[13px] font-semibold",
+                  draft.recurring === m.recurring ? "bg-surface text-ink shadow-sm" : "text-ink-2"
+                )}
+              >
+                <m.icon className="h-4 w-4" /> {m.label}
+              </button>
+            ))}
+          </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              {draft.recurring ? (
-                <select
-                  aria-label="Fréquence"
-                  value={draft.recurrence}
-                  onChange={(e) => set({ recurrence: e.target.value })}
-                  className="h-11 rounded-xl border border-line bg-surface px-3 text-[15px] text-ink"
-                >
-                  {recurrences.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <Input
-                  type="date"
-                  aria-label="Jour"
-                  min={todayIso()}
-                  value={draft.date}
-                  onChange={(e) => set({ date: e.target.value })}
-                  className="w-auto"
-                />
-              )}
-              {!(draft.recurring && draft.recurrence === KEEP) && (
-                <Input
-                  type="time"
-                  aria-label="Heure"
-                  step={300}
-                  value={draft.time}
-                  onChange={(e) => set({ time: e.target.value || "09:00" })}
-                  className="w-auto"
-                />
-              )}
-              <span className="flex items-center gap-1.5 text-[13px] text-ink-3">
-                <History className="h-3.5 w-3.5" /> {ROUTINE_TIMEZONE}, GMT
-              </span>
-            </div>
-
-            <div>
-              <p className={label}>Compétences</p>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {expert.skills.map((s) => {
-                  const on = draft.skills.includes(s.title);
-                  return (
-                    <button
-                      key={s.title}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => set({ skills: on ? draft.skills.filter((x) => x !== s.title) : [...draft.skills, s.title] })}
-                      className={cn(
-                        "flex items-center gap-1 rounded-full border px-3 py-1 text-[13px] font-medium",
-                        on ? "border-brand/30 bg-tint text-brand" : "border-line text-ink-2 hover:bg-soft"
-                      )}
-                    >
-                      {on && <Check className="h-3.5 w-3.5" />} {s.title}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                ref={fileRef}
-                type="file"
-                hidden
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void attach(file);
-                  e.target.value = "";
-                }}
-              />
-              <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
-                {uploading ? <Loader2 className="animate-spin" /> : <Paperclip />} Joindre un fichier
-              </Button>
-              {draft.attachment && (
-                <span className="flex items-center gap-1 rounded-full bg-soft px-3 py-1 text-[13px] text-ink-2">
-                  {draft.attachment.split("/").pop()}
-                  <button type="button" aria-label="Retirer le fichier" onClick={() => set({ attachment: null })}>
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </span>
-              )}
-            </div>
-          </form>
-
-          <aside className="flex flex-col rounded-[18px] bg-soft p-3">
-            <p className="text-sm font-semibold text-ink">Assistant</p>
-            <p className="mt-1 text-[13px] text-ink-3">
-              Décrivez la tâche, je remplis le formulaire. Par exemple : « Chaque lundi à 9 h, prépare le point de la semaine ».
-            </p>
-            <div className="mt-2 flex flex-1 flex-col gap-2">
-              {asked.map((a, i) => (
-                <div key={i} className="grid gap-1.5 text-[13px]">
-                  <p className="ml-auto rounded-xl bg-brand px-3 py-1.5 text-on-brand">{a.me}</p>
-                  <p className="rounded-xl bg-surface px-3 py-1.5 text-ink-2">{a.reply}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-2 flex gap-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            {draft.recurring ? (
+              <select
+                aria-label="Fréquence"
+                value={draft.recurrence}
+                onChange={(e) => set({ recurrence: e.target.value })}
+                className="h-11 rounded-xl border border-line bg-surface px-3 text-[15px] text-ink"
+              >
+                {recurrences.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
               <Input
-                placeholder="Décrivez votre tâche"
-                aria-label="Décrire la tâche à l’assistant"
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    ask();
-                  }
-                }}
-                className="h-10 text-[14px]"
+                type="date"
+                aria-label="Jour"
+                min={todayIso()}
+                value={draft.date}
+                onChange={(e) => set({ date: e.target.value })}
+                className="w-auto"
               />
-              <Button type="button" size="icon" aria-label="Envoyer" onClick={ask} className="shrink-0">
-                <Send />
-              </Button>
+            )}
+            {!(draft.recurring && draft.recurrence === KEEP) && (
+              <Input
+                type="time"
+                aria-label="Heure"
+                step={300}
+                value={draft.time}
+                onChange={(e) => set({ time: e.target.value || "09:00" })}
+                className="w-auto"
+              />
+            )}
+            <span className="flex items-center gap-1.5 text-[13px] text-ink-3">
+              <History className="h-3.5 w-3.5" /> {ROUTINE_TIMEZONE}, GMT
+            </span>
+          </div>
+
+          <div>
+            <p className={label}>Compétences</p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {expert.skills.map((s) => {
+                const on = draft.skills.includes(s.title);
+                return (
+                  <button
+                    key={s.title}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => set({ skills: on ? draft.skills.filter((x) => x !== s.title) : [...draft.skills, s.title] })}
+                    className={cn(
+                      "flex items-center gap-1 rounded-full border px-3 py-1 text-[13px] font-medium",
+                      on ? "border-brand/30 bg-tint text-brand" : "border-line text-ink-2 hover:bg-soft"
+                    )}
+                  >
+                    {on && <Check className="h-3.5 w-3.5" />} {s.title}
+                  </button>
+                );
+              })}
             </div>
-          </aside>
-        </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void attach(file);
+                e.target.value = "";
+              }}
+            />
+            <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
+              {uploading ? <Loader2 className="animate-spin" /> : <Paperclip />} Joindre un fichier
+            </Button>
+            {draft.attachment && (
+              <span className="flex items-center gap-1 rounded-full bg-soft px-3 py-1 text-[13px] text-ink-2">
+                {draft.attachment.split("/").pop()}
+                <button type="button" aria-label="Retirer le fichier" onClick={() => set({ attachment: null })}>
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            )}
+          </div>
+        </form>
         <DialogFooter className="gap-2 sm:gap-0">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Annuler
