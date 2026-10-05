@@ -5,11 +5,12 @@ import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
 
 const DRIVE_PATH = String.raw`(?:/home/node|~)/Livrables/[^\s)\]\x60]+\.[A-Za-z0-9]{1,6}`;
-// [label](file:///home/node/Livrables/…) or [label](~/Livrables/…)
-const LINKED = new RegExp(String.raw`\]\((?:file://)?(${DRIVE_PATH})\)`, "g");
+// GPT models prefix the path with `sandbox:` (ChatGPT's own download links); it is dropped.
+// [label](file:///home/node/Livrables/…), [label](sandbox:/home/node/Livrables/…) or [label](~/Livrables/…)
+const LINKED = new RegExp(String.raw`\]\((?:file://|sandbox:)?(${DRIVE_PATH})\)`, "g");
 // `~/Livrables/Fatima/post.docx` or a bare path in the text
-const CODE = new RegExp("`((?:/home/node|~)/Livrables/[^`\\n]+\\.[A-Za-z0-9]{1,6})`", "g");
-const BARE = new RegExp(String.raw`(^|[\s(«"])(${DRIVE_PATH})`, "gm");
+const CODE = new RegExp("`(?:sandbox:)?((?:/home/node|~)/Livrables/[^`\\n]+\\.[A-Za-z0-9]{1,6})`", "g");
+const BARE = new RegExp(String.raw`(^|[\s(«"])(?:sandbox:)?(${DRIVE_PATH})`, "gm");
 
 // Experts give the drive path of what they saved; turn those paths into download links (the
 // browser can't open file:// links or instance paths, and Streamdown blocks them).
