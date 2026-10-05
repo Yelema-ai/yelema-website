@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { keepAwake } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { ApiError, handleError, json, readJson } from "@/lib/http";
 import {
@@ -56,7 +57,10 @@ export async function PUT(request: Request, { params }: Ctx) {
       await checkBotToken(assertBotTokenShape(env.TELEGRAM_BOT_TOKEN));
     }
 
-    await writePlatform(id, channel, { enabled: body.enabled ?? true, env });
+    const enabled = body.enabled ?? true;
+    await writePlatform(id, channel, { enabled, env });
+    // A sleeping instance does not hear its channels.
+    if (enabled) await keepAwake(id);
     return json({ channel: await refreshed(id, channel) });
   } catch (e) {
     return handleError(e);
@@ -121,6 +125,7 @@ async function pairWhatsapp(agentId: string, pairingId: string | undefined, fini
     if (applied.ok !== true) {
       throw new ApiError(502, "pairing_failed", applied.detail || "WhatsApp linked but could not be saved. Try again.");
     }
+    await keepAwake(agentId);
     return { pairing_id: id, status: "connected", phone: session.account_phone ?? null };
   }
   if (session.status === "error") {

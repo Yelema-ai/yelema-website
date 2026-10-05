@@ -2,14 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Blocks, FolderOpen, MessageSquare, MessagesSquare, Settings2 } from "lucide-react";
+import { Blocks, FolderOpen, MessageSquare, MessagesSquare, Repeat, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { isTransitional } from "@/lib/format";
 import { agentTabPath, parseAgentRoute, type AgentTab } from "@/lib/expert-tabs";
 import type { MergedAgent, Role } from "@/lib/types";
 import { useWorkspace } from "@/components/WorkspaceProvider";
+import { ExpertRoutines } from "@/components/experts/ExpertRoutines";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
+import { useCatalogueExpert } from "@/components/experts/useCatalogue";
+import { expertDisplayName } from "@/lib/experts";
 import { DRIVE_ROOT } from "@/lib/drive-paths";
 import { AgentSettingsTab } from "@/components/AgentSettingsTab";
 import { ConnectorsView } from "@/components/integrations/ConnectorsView";
@@ -23,6 +26,7 @@ import { cn } from "@/lib/utils";
 const TABS: { id: AgentTab; label: string; icon: typeof MessageSquare }[] = [
   { id: "chat", label: "Discussion", icon: MessageSquare },
   { id: "files", label: "Livrables", icon: FolderOpen },
+  { id: "routines", label: "Routines", icon: Repeat },
   { id: "messaging", label: "Canaux", icon: MessagesSquare },
   { id: "integrations", label: "Connecteurs", icon: Blocks },
   { id: "settings", label: "Réglages", icon: Settings2 },
@@ -97,6 +101,10 @@ export function AgentWorkspace({
   const { experts } = useExpertsContext();
   const expert = experts.find((e) => e.agentId === agentId && e.profileId === profileId) ?? null;
   const driveFolder = expert?.driveFolder ? `${DRIVE_ROOT}/${expert.driveFolder}` : undefined;
+  // Routines belong to an expert's profile: the instance's default home has none here.
+  const tabs = profileId ? TABS : TABS.filter((t) => t.id !== "routines");
+  const sheet = useCatalogueExpert(expert?.catalogueKey);
+  const expertName = expert?.displayName ?? (profileId ? expertDisplayName(profileId) : "");
 
   // A message typed on the home page rides the URL as ?q= and is sent once the chat is up.
   const [initialMessage] = useState<string | null>(() =>
@@ -164,7 +172,7 @@ export function AgentWorkspace({
         <aside className="hidden w-64 shrink-0 flex-col border-r bg-card md:flex">
           <div className="flex flex-col p-4 pb-3">
             <nav className="flex flex-col gap-1">
-              {TABS.map((t) => {
+              {tabs.map((t) => {
                 const Icon = t.icon;
                 const isActive = currentTab === t.id;
                 return (
@@ -203,7 +211,7 @@ export function AgentWorkspace({
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* On a phone the rail is hidden: the tabs become a strip above the pane. */}
           <nav className="flex shrink-0 gap-1 overflow-x-auto border-b bg-card px-3 py-2 md:hidden">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t.id}
                 type="button"
@@ -233,7 +241,19 @@ export function AgentWorkspace({
           {/* Integrations + Settings mount lazily in the padded scroll area. */}
           {!isChat && !isFiles && (
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {currentTab === "integrations" ? (
+              {currentTab === "routines" && profileId ? (
+                <div className="mx-auto w-full max-w-4xl p-6 md:px-10 md:py-8">
+                  <ExpertRoutines
+                    agentId={agentId}
+                    expert={{
+                      profileId,
+                      name: expertName,
+                      skills: sheet ? [...sheet.skills.map((s) => s.name), ...sheet.competencies] : [],
+                      driveFolder: expert?.driveFolder ?? expertName,
+                    }}
+                  />
+                </div>
+              ) : currentTab === "integrations" ? (
                 <div className="mx-auto w-full max-w-5xl p-6 md:px-10 md:py-8">
                   <ConnectorsView agentId={agentId} />
                 </div>

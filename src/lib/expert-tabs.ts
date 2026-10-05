@@ -10,7 +10,7 @@ import { isProfileId } from "@/lib/profile-id";
 // prévoient treize, aux noms différents (discussion, résumé, connecteurs, canaux…).
 // Ils seront repris en bloc au lot « espace expert », pas deux fois.
 
-export const AGENT_TAB_IDS = ["chat", "files", "messaging", "integrations", "settings"] as const;
+export const AGENT_TAB_IDS = ["chat", "files", "routines", "messaging", "integrations", "settings"] as const;
 
 export type AgentTab = (typeof AGENT_TAB_IDS)[number];
 

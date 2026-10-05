@@ -24,8 +24,10 @@ const BASE = "https://api.agent37.com";
 // Like BASE, a code constant — no per-deployment reason to change it.
 const INSTANCE_DOMAIN = "agent37.app";
 
-function instanceBaseUrl(id: string): string {
-  return `https://${id}.${INSTANCE_DOMAIN}`;
+// Any other port of the instance has its own preview host, `https://{id}-{port}.agent37.app`,
+// behind the same key (https://www.agent37.com/docs/agents-api/urls).
+function instanceBaseUrl(id: string, port?: number): string {
+  return `https://${id}${port ? `-${port}` : ""}.${INSTANCE_DOMAIN}`;
 }
 
 export class Agent37Error extends Error {
@@ -119,6 +121,21 @@ export async function instanceFetch(id: string, path: string, init?: RequestInit
   });
 }
 
+// Raw fetch against another port of the instance, through its preview URL. Here it is how the
+// Routines tab reaches Hermes's API server (lib/hermes-cron), which checks its own Bearer key: the
+// edge passes Authorization through untouched. JSON bodies only.
+export async function instancePortFetch(id: string, port: number, path: string, init?: RequestInit): Promise<Response> {
+  const key = process.env.AGENT37_API_KEY;
+  if (!key) {
+    throw new Agent37Error(500, "config_error", "AGENT37_API_KEY is not set on the server");
+  }
+  return fetch(`${instanceBaseUrl(id, port)}${path}`, {
+    ...init,
+    headers: { "X-Agent37-Key": key, ...(init?.headers || {}) },
+    cache: "no-store",
+  });
+}
+
 // JSON helper against an instance's Agents API — same parse + Agent37Error semantics as `call`,
 // without the 402 wallet hint (a data-plane 402 is budget exhaustion mid-chat, not wallet funding).
 async function instanceCall<T>(id: string, path: string, init?: RequestInit): Promise<T> {
@@ -164,6 +181,10 @@ export const agent37 = {
       image_digest: string | null;
       template_revision: number | null;
     }>(`/instances/${id}/update`, { method: "POST" }),
+  // Auto-sleep on or off. A sleeping instance misses Telegram/WhatsApp messages and its routines'
+  // schedule, so connecting a channel or turning a routine on switches it off (see keepAwake).
+  setAutoSleep: (id: string, on: boolean) =>
+    call<Agent>(`/instances/${id}`, { method: "PATCH", body: JSON.stringify({ auto_sleep: on }) }),
   resize: (id: string, body: ResizeInput) =>
     call<{ id: string; status: string; resources: { cpu: number; memory: number; disk: number } }>(
       `/instances/${id}/resize`,
@@ -261,3 +282,13 @@ export const agent37 = {
       { method: "DELETE" }
     ),
 };
+
+// A channel only receives messages, and a routine only fires, while the instance is awake: once
+// one is switched on, auto-sleep goes off. Best effort: the channel or routine is saved either way.
+export async function keepAwake(agentId: string): Promise<void> {
+  try {
+    await agent37.setAutoSleep(agentId, false);
+  } catch (e) {
+    console.error(`[agent37] could not turn auto-sleep off on ${agentId}`, e);
+  }
+}
