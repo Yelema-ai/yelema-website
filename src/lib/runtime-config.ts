@@ -37,6 +37,12 @@ export function brandLogoUrl(): string | undefined {
   return read("BRAND_LOGO_URL");
 }
 
+// The Yelema back office's public origin: it serves the expert catalogue (names, roles, photos,
+// videos). Optional: without it the app still works and shows each expert by its profile name.
+export function backofficeUrl(): string | undefined {
+  return read("BACKOFFICE_URL")?.replace(/\/+$/, "");
+}
+
 // The client workspace this deployment serves. Every client shares ONE Supabase project (see
 // docs/decisions/supabase-projet-partage.md), so the deployment is pinned to its workspace: any
 // other workspace — even one the signed-in user belongs to — is invisible here. Unset means the

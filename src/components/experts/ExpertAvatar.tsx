@@ -10,8 +10,7 @@ const SIZES = {
 /**
  * Le visage d'un Expert, avec sa pastille d'état.
  *
- * La photo n'est pas encore servie (`photoUrl` reste vide) : on affiche l'initiale en attendant.
- * Le jour où elle arrivera, rien à changer ici ni chez les appelants.
+ * La photo vient du catalogue du back-office (`photoUrl`) ; sans elle, on affiche l'initiale.
  */
 export function ExpertAvatar({
   expert,
@@ -39,14 +38,17 @@ export function ExpertAvatar({
           {expert.displayName.trim()[0]?.toUpperCase() ?? "?"}
         </span>
       )}
-      {/* La colonne « Gateway » de `hermes profile list` : le profil peut répondre, ou non. */}
-      <span
-        className={cn(
-          "absolute -right-px -bottom-px rounded-full ring-2 ring-card",
-          s.dot,
-          expert.gateway === "running" ? "bg-ok" : "bg-[#B8B4C6]"
-        )}
-      />
+      {/* La colonne « Gateway » de `hermes profile list` : le profil peut répondre, ou non. Inconnue
+          quand la liste vient de la base (l'instance n'a pas été interrogée) : pas de pastille. */}
+      {expert.gateway != null && (
+        <span
+          className={cn(
+            "absolute -right-px -bottom-px rounded-full ring-2 ring-card",
+            s.dot,
+            expert.gateway === "running" ? "bg-ok" : "bg-[#B8B4C6]"
+          )}
+        />
+      )}
     </span>
   );
 }

@@ -40,12 +40,63 @@ export interface Expert {
   /** Distribution installée, par exemple `djeneba@7.0.0`. */
   distribution: string | null;
 
-  // Enrichissement à venir, lu profil par profil (SOUL.md, configuration YAML, back-office).
-  // Rien ne les remplit aujourd'hui ; l'interface les affiche dès qu'ils arrivent.
+  // Enrichissement par le catalogue du back-office (lib/catalogue.ts). Absent tant que le
+  // catalogue ne connaît pas cet expert ou n'est pas configuré : l'interface s'en passe.
+  /** Clé de l'expert dans le catalogue (la partie du profil après « __ »). */
+  catalogueKey?: string | null;
   /** Métier de l'Expert — « Chief of Staff », « Marketing et contenu »… */
   role?: string | null;
+  /** Titre court, pour les listes étroites. */
+  title?: string | null;
+  tagline?: string | null;
   /** Portrait de l'Expert. */
   photoUrl?: string | null;
+}
+
+/** Un expert tel que le back-office le présente : textes et médias, jamais de réglage d'agent. */
+export interface CatalogueExpert {
+  key: string;
+  name: string;
+  role: string | null;
+  title: string | null;
+  tagline: string | null;
+  description: string | null;
+  pronoun: "elle" | "il" | null;
+  category: { key: string; label: string } | null;
+  avatarUrl: string | null;
+  /** Portrait en pied. */
+  portraitUrl: string | null;
+  /** Dossier de l'expert dans le drive (~/Livrables/<dossier>). */
+  driveFolder: string | null;
+  /** Messages qu'on peut lui envoyer pour démarrer. */
+  suggestions: string[];
+}
+
+export interface CatalogueExpertDetail extends CatalogueExpert {
+  useCase: string | null;
+  valueAdd: string | null;
+  whyRelevant: string | null;
+  salesDescription: string | null;
+  skills: { name: string; summary: string | null }[];
+  competencies: string[];
+  deliverables: { label: string; thumbnailUrl: string | null }[];
+  video: { url: string | null; posterUrl: string | null };
+}
+
+/** Où un expert du catalogue est installé pour l'utilisateur courant. */
+export interface InstalledExpert {
+  agentId: string;
+  agentName: string | null;
+  profileId: string;
+}
+
+/** GET /api/catalogue : le catalogue, croisé avec ce qui est installé. */
+export interface CatalogueResponse {
+  /** Faux quand le back-office n'est pas configuré ou ne répond pas. */
+  available: boolean;
+  defaultExpertKey: string | null;
+  categories: { key: string; label: string }[];
+  experts: (CatalogueExpert & { installed: InstalledExpert[] })[];
 }
 
 export interface AgentRow {
