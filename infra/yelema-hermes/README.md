@@ -11,6 +11,11 @@ call, with Yelema's own Composio in place of Agent37's:
   experts' routines (`/p/<expert>/api/jobs`). Its key is made on the instance at first start
   (`~/.yelema/api-server-key`, which the app reads through the Agent37 files API) and written into
   every profile's `.env` at each start. Requests need both the Agent37 key and this one.
+- `yelema-desktop.sh` puts the experts' browser on a screen the app shows under "Son ordinateur":
+  Agent37's [hermes-vnc-desktop](https://github.com/agent37-platform/examples/tree/main/custom-images/hermes-vnc-desktop)
+  recipe. A visible Chromium (DevTools on loopback 9222, which `BROWSER_CDP_URL` points every expert
+  at) on the stock display, streamed by x11vnc and websockify on port 6901, where the app's noVNC
+  client connects with a signed URL. All the experts share it: one instance, one screen.
 - `hermes-heartbeat-fix.py` applies, at build time, upstream's fix for Hermes refusing every
   ordinary command from GPT models (the default model). Once `HERMES_TAG` ships a Hermes with the
   fix, the build prints "already has the fix": then remove the step from the Dockerfile.

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { getExpert } from "@/config/experts";
 import { DropOverlay } from "@/components/DropOverlay";
 import { ExpertAvatar } from "@/components/app/ExpertAvatar";
+import { ExpertComputer } from "@/components/experts/ExpertComputer";
 import { ChatComposer } from "./ChatComposer";
 import { ChatMessages } from "./ChatMessages";
 import { useChatContext } from "./ChatProvider";
@@ -91,13 +92,24 @@ export function ChatView({ initialMessage }: { initialMessage?: string | null })
             <p className="truncate text-xs text-ink-3">{expert ? expert.role : "Une IA généraliste pour toute l’équipe"}</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={startNewChat}
-          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-[13px] font-semibold text-ink hover:bg-soft"
-        >
-          <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle conversation</span>
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {expert && (
+            <ExpertComputer
+              agentId={agentId}
+              expert={expert}
+              busy={isStreaming}
+              onTakeOver={stop}
+              onWrite={requestComposerFocus}
+            />
+          )}
+          <button
+            type="button"
+            onClick={startNewChat}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-[13px] font-semibold text-ink hover:bg-soft"
+          >
+            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nouvelle conversation</span>
+          </button>
+        </div>
       </div>
 
       <div
