@@ -2,9 +2,10 @@ import { notFound } from "next/navigation";
 import { getExpert } from "@/config/experts";
 import { ExpertWorkspace, type ExpertTab } from "@/components/experts/ExpertWorkspace";
 
-const TABS: Record<string, ExpertTab> = { livrables: "livrables", fiche: "fiche" };
+const TABS: Record<string, ExpertTab> = { livrables: "livrables", routines: "routines", fiche: "fiche" };
 
-// An expert's space: /experts/<key> (Discussion), /experts/<key>/livrables, /experts/<key>/fiche.
+// An expert's space: /experts/<key> (Discussion), /experts/<key>/livrables, /experts/<key>/routines,
+// /experts/<key>/fiche.
 export default async function ExpertPage({
   params,
   searchParams,
