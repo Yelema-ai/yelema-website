@@ -1,18 +1,21 @@
 import { agent37 } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
-import { handleError, json, readJson } from "@/lib/http";
+import { assertInDrive, isDriveRoot } from "@/lib/drive";
+import { ApiError, handleError, json, readJson } from "@/lib/http";
 import { requireTrimmed } from "../_helpers";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-// Recursive force delete (rm -rf) of one path on the instance. The Agents API owns the filesystem
-// and applies no guards — confirmation lives in the UI. A symlink is removed itself, not followed.
+// Recursive force delete (rm -rf) of one path inside the drive. The Agents API applies no guards of
+// its own, so the path is checked here and confirmation lives in the UI. A symlink is removed
+// itself, not followed.
 export async function DELETE(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
     await requireAgentAccess(id);
 
-    const path = requireTrimmed(new URL(request.url).searchParams.get("path"), "path is required");
+    const path = assertInDrive(requireTrimmed(new URL(request.url).searchParams.get("path"), "path is required"));
+    if (isDriveRoot(path)) throw new ApiError(400, "invalid_path", "Le dossier racine ne peut pas être supprimé");
     return json(await agent37.deleteFile(id, path));
   } catch (e) {
     return handleError(e);
@@ -27,9 +30,9 @@ export async function PATCH(request: Request, { params }: Ctx) {
     await requireAgentAccess(id);
 
     const { from, to } = await readJson<{ from?: string; to?: string }>(request);
-    return json(
-      await agent37.moveFile(id, requireTrimmed(from, "from is required"), requireTrimmed(to, "to is required"))
-    );
+    const source = assertInDrive(requireTrimmed(from, "from is required"));
+    if (isDriveRoot(source)) throw new ApiError(400, "invalid_path", "Le dossier racine ne peut pas être déplacé");
+    return json(await agent37.moveFile(id, source, assertInDrive(requireTrimmed(to, "to is required"))));
   } catch (e) {
     return handleError(e);
   }
