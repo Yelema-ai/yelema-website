@@ -131,13 +131,26 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   Internal `src/app/api/**` routes are this app's BFF: the browser calls them, they
   authenticate + check workspace ownership in TS, then call `agent37.ts` and/or the DB via the
   service-role client. The browser never calls the upstream API or the DB directly.
-- **The UI is a fleet + a per-agent workspace.** The `(fleet)` route group is the
-  multi-agent dashboard (agents, members, invitations, workspace settings). Clicking
-  an agent opens `/dashboard/agents/{agentId}/{tab}` — a tabbed workspace (Chat /
-  Files / Messaging / Integrations / Settings) where the active agent is bound to the URL and
-  switchable from a dropdown. Creating an agent is one screen: pick a type from the
-  curated catalog (`AGENT_TYPES`) and an optional name; shape and budget are fixed
-  server-side (`DEFAULT_AGENT`).
+- **The UI is one shell around the member's experts.** An **expert** is a Hermes profile
+  (`client__expert`) installed on the member's instance. The shell (`src/components/app`) lists
+  them; `/` is the home, `/recruter` the gallery of every expert Yelema offers, and
+  `/experts/{agentId}/{profileId}/{tab}` the expert's workspace (Discussion / Livrables /
+  Routines / Canaux / Connecteurs / Réglages). Without a profile segment the page is the
+  instance's default Hermes home. Administration (`/administration`) holds the workspace, its
+  members and its instances. The app creates neither members nor agents.
+- **Talking to an expert is the Agent37 API's `profile`**, not an image feature: `profile` on
+  `POST /v1/responses` and `?profile=` on every session read, sent on EVERY turn. The profile is
+  checked against what is installed on that instance (`src/lib/profiles.ts`), never a fixed list.
+- **Nothing about experts is written in this repo.** Names, roles, photos, sheets come from the
+  back office's public catalogue (`BACKOFFICE_URL`, `src/lib/catalogue.ts`), joined to installed
+  profiles by the part of the profile name after `__`. Which experts a member HAS is what is
+  installed (`agents.profiles`, written by the back office; the instance itself as a fallback).
+- **The drive is `~/Livrables` on the member's instance**, and every files route refuses a path
+  outside it (`src/lib/drive.ts`): the files API can otherwise read `~/.hermes` and `~/.yelema`.
+- **Connectors belong to the member.** An instance wired by the back office
+  (`agents.apps_token_hash`) uses Yelema's own Composio under its owner's identity, and its
+  experts reach their tools through `/api/composio-mcp`; any other instance keeps Agent37's
+  managed Composio (`src/lib/integrations.ts`).
 - **Naming:** the upstream API calls these resources **instances**; this app brands
   them **agents**. Paths stay `/instances`; the client methods read `agent…`.
 
@@ -148,17 +161,26 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 | `src/lib/agent37.ts` | The Agent37 `/v1` client — the single egress to both planes |
 | `src/app/api/**` | This app's own API routes (BFF); enforce auth + ownership |
 | `src/app/api/agents/[id]/{chat,files}/**` | Data-plane BFF: native Chat + Files proxied to the instance |
-| `src/app/api/agents/[id]/integrations/**` | Composio integrations BFF (control plane) |
+| `src/app/api/agents/[id]/integrations/**` | Connecteurs BFF: Yelema's Composio or Agent37's managed one, per instance (`src/lib/integrations.ts`) |
+| `src/lib/composio.ts`, `src/app/api/composio-mcp/` | Yelema's Composio (server-only key) and the experts' tool proxy; identity = the instance's owner |
+| `src/lib/profile-id.ts`, `src/lib/profiles.ts` | The profile a chat targets: shape, `?profile=`, and the check against the instance's real profiles |
+| `src/lib/catalogue.ts`, `src/app/api/catalogue/**` | The back office's expert catalogue, cached, and its join with installed profiles |
+| `src/lib/installed-experts.ts`, `src/app/api/experts/` | The profiles installed on the instances a user can see |
+| `src/lib/drive.ts`, `src/lib/drive-paths.ts` | The drive (`~/Livrables`) and the path guard every files route applies |
+| `src/lib/hermes-cron.ts`, `src/app/api/agents/[id]/routines/**` | Routines: Hermes's scheduler through its API server (port 8642, `yelema-hermes` image) |
+| `src/components/home`, `src/components/experts`, `src/components/integrations` | Home, gallery, sheet, routines, connectors |
 | `src/app/api/agents/[id]/channels/**` | Messaging channels BFF (list / write / disconnect, Telegram checks, WhatsApp pairing) |
 | `src/lib/hermes-messaging.ts` | The agent's own messaging API, reached over `exec`; the only module that speaks it |
 | `src/lib/telegram.ts` | Telegram Bot API calls made BEFORE anything is written into the agent (token check, owner lookup) |
 | `src/lib/channels.ts` | Channel types + the featured list, shared by the BFF and the Messaging tab |
 | `src/components/channels/**` | The Messaging tab: channel list, Telegram flow, WhatsApp QR, generic credentials form |
-| `src/app/dashboard/agents/[agentId]/[[...tab]]/` | The per-agent tabbed workspace route (Chat / Files / Messaging / Integrations / Settings) |
+| `src/app/(app)/experts/[agentId]/[[...onglet]]/`, `src/lib/expert-tabs.ts` | The expert workspace route and its URL grammar (instance, profile, tab) |
 | `src/config/agents.ts` | `SHAPE_PRESETS`, `DEFAULT_AGENT`, the `AGENT_TYPES` catalog, `PORT_LABELS` (labels only), and `templateAppPorts` — the per-template openable app ports (the API no longer reports per-instance ports) |
 | `src/config/branding.ts` | `appName` / `logoUrl` code constants (branding lives here, not in env) |
 | `src/lib/types.ts` | App + upstream `/v1` types |
 | `supabase/migrations/0001_init.sql` | Schema, RLS policies (dormant backstop), SECURITY DEFINER RPCs; grants tables to the service role only (clients have no direct DB access) |
+| `supabase/migrations/0003_agent_backoffice_columns.sql` | Columns the back office fills on `agents`: `profiles`, `ready`, `apps_token_hash` |
+| `docs/plans/experts-profils-vercel.md` | The current plan and the contract with the back office |
 | `src/lib/supabase/admin.ts` | Service-role client (server-only, bypasses RLS) — the DB egress |
 | `scripts/setup.mjs` | One-command Supabase setup (`npm run setup`) |
 
@@ -178,20 +200,18 @@ dashboard steps.
 
 ## Custom agent image (out of scope here)
 
-The root `Dockerfile` builds **this app** (the Yelema image the back-office starts once per
-client, configured by env at runtime — see `docs/plans/yelema-single-tenant.md`). It is not an
-**agent** image: the catalog ships Hermes and OpenClaw, which run on Agent37's stock images,
-and nothing here builds or pushes an agent image. Building a custom agent image is a separate
-concern with its own repo and its own docs page:
+Nothing here builds or pushes an agent image. Yelema's agent image lives in its own repo,
+**`Yelema-ai/yelema-hermes`**, with a `versions.json` registry the back office reads to pin each
+instance. This app only relies on what that image provides: the `apps` tool server wired from
+`~/.yelema/apps-mcp.json` (Connecteurs) and Hermes's API server on port 8642 with its key in
+`~/.yelema/api-server-key` (Routines). Chat by profile needs no custom image.
 
-- [agent37-platform/custom-agent-image](https://github.com/agent37-platform/custom-agent-image)
-  — a GitHub template repo: a Dockerfile on the Hermes base, an example skill, a
-  register script (Agent37 cloud build or a public registry), and an optional
-  bring-your-own-model proxy.
+The root `Dockerfile` builds **this app** for the older per-client containers (see
+`docs/plans/yelema-single-tenant.md`). New clients run on Vercel, one project per client, deployed
+by the back office from a git tag (`vercel.json` turns automatic deployments off). The Dockerfile
+goes away once every client is on Vercel.
+
 - [Build a custom image](https://www.agent37.com/docs/agents-api/custom-image) — the guide.
-
-Once that template is registered in your workspace, wiring it into this app is one
-entry in `AGENT_TYPES` (`src/config/agents.ts`) whose `template` is the template name.
 
 ## House rules
 
@@ -207,6 +227,12 @@ entry in `AGENT_TYPES` (`src/config/agents.ts`) whose `template` is the template
 - **Check a channel credential before writing it** where the provider lets you (Telegram's
   `getMe`). The agent's messaging gateway refuses to start on a bad token, which takes
   every other channel on that agent down with it.
+- **A file path from the browser is checked before it reaches the instance** (`assertInDrive`).
+  Server code that must read outside the drive (the routines key file) does so itself, never
+  through a path the caller supplied.
+- **An active channel or routine keeps the instance awake** (`keepAwake` in `src/lib/agent37.ts`):
+  a sleeping instance hears neither. It costs compute around the clock, so nothing else turns
+  auto-sleep off.
 - **Payments are intentionally excluded.** Add Stripe (or anything) yourself when
   you're ready to charge your own customers — the create route (`src/app/api/agents/route.ts`)
   has a commented `canCreateAgent()` seam marking where an entitlement gate would go.

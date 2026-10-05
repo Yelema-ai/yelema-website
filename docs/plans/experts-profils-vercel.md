@@ -3,7 +3,8 @@
 > Suite de `docs/plans/yelema-single-tenant.md`. Branche : `feat/experts-profils`, partie de
 > `develop`. Pendant côté back-office : branche `feat/tenant-apps-vercel` de `yelema-platform`.
 > Rédigé le 2026-10-05.
-> **STATUS : décisions prises le 2026-10-05 ; plan à valider avant implémentation.**
+> **STATUS : lots 1 à 7 implémentés le 2026-10-05 sur `feat/experts-profils` (non poussée) ; voir § 11.
+> Vérifié par `typecheck` et `build` seulement : aucun essai sur une instance réelle.**
 
 ## 1. Objectif
 
@@ -125,3 +126,29 @@ et le retrait de membres, les liens `/acces` et `/bienvenue`, le sélecteur d'es
 | Mise en veille : la couper seulement pour les membres qui ont un canal ou une routine active | Produit et coût |
 | Instances encore en ancien nommage (`djeneba` sans préfixe) : gérer les deux formes ou migrer | Back-office |
 | Nombre de projets et durée maximale des requêtes permis par l'offre Vercel | Ops |
+
+## 11. État d'avancement (2026-10-05)
+
+| Lot | État | Commit | Reste à faire |
+|---|---|---|---|
+| Mise en route | Fait | `0c1f05e` | Pousser la branche. `yelema-hermes` est publié avec le tag `v1.0.0` |
+| 1 Garde-fou des fichiers | Fait | `13e44b5` | — |
+| 2 Parler à un profil | Fait | `1a734bb` | Essai sur une instance réelle |
+| 3 Catalogue | Fait | `e9d3be4` | Le back-office doit ajouter pronom, titre court, suggestions, dossier du drive, catégories ordonnées, expert par défaut : l'app les lit déjà s'ils arrivent |
+| 4 Présentation | Fait | `2c0801c` | La vidéo au survol des cartes n'est pas reprise (le catalogue ne la sert que sur la fiche). `AgentsView`, `SettingsView`, `MembersView` sont encore en anglais |
+| 5 Composio | Fait | `4281f4f` | Actif seulement pour une instance dont `agents.apps_token_hash` est renseigné par le back-office ; les autres restent sur le Composio géré par Agent37 |
+| 6 Vercel | Fait en partie | `43de79f` | `Dockerfile` et `scripts/build-image.sh` restent jusqu'au premier client sur Vercel. Tag `v0.2.0` à poser après essai |
+| 7 Routines | Fait | `d3bce2b` | Demande l'image `yelema-hermes` (révision 4 ou plus) |
+| 7 Sujets Telegram | **Non repris** | — | Le back-office crée déjà les routes par profil à l'installation (`profileRouting.ts`) ; le reprendre dans l'app ferait doublon. À confirmer |
+
+Écarts par rapport au plan initial :
+
+- **Mise en veille.** Connecter un canal ou activer une routine coupe la mise en veille de
+  l'instance (`keepAwake`). C'est l'option listée au § 10 ; elle coûte du calcul en continu pour
+  ces membres.
+- **Composio par instance.** Plutôt qu'une bascule globale, le choix se fait instance par
+  instance, pour que l'onglet Connecteurs montre toujours ce que les experts utilisent vraiment.
+- **Jointure catalogue.** Sur la clé après `__`, puis sur le prénom de l'expert : la clé du
+  catalogue (`expert-templates.key`) peut décrire le métier alors que le profil porte le prénom.
+- **Tableau de bord des instances** déplacé de `/` vers `/administration/agents`.
+- **Dépendances ajoutées** : `@composio/core`, `yaml`.
