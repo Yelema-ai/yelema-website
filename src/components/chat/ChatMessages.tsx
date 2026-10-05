@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, ChevronDown, ChevronRight, FileText, Image as ImageIcon, Loader2, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useChatContext } from "./ChatProvider";
 import { Markdown } from "./Markdown";
 import type { ChatMessage, MessageAttachment, ToolEvent } from "./types";
 
@@ -83,6 +84,8 @@ function TypingDots() {
 }
 
 export function ChatMessages({ messages, isStreaming }: { messages: ChatMessage[]; isStreaming: boolean }) {
+  // The instance whose drive the paths in a reply point into (they become download links).
+  const { agentId } = useChatContext();
   return (
     <div className="mx-auto w-full max-w-2xl space-y-5 px-5 py-6">
       {messages.map((m, i) => {
@@ -118,7 +121,7 @@ export function ChatMessages({ messages, isStreaming }: { messages: ChatMessage[
                   ))}
                 </div>
               )}
-              {m.content ? <Markdown content={m.content} /> : showDots ? <TypingDots /> : null}
+              {m.content ? <Markdown content={m.content} agentId={agentId} /> : showDots ? <TypingDots /> : null}
             </div>
           </div>
         );

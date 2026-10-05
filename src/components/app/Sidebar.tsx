@@ -3,35 +3,28 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import {
-  House,
-  LayoutDashboard,
-  MessagesSquare,
-  PanelLeftClose,
-  Settings2,
-  UserPlus,
-} from "lucide-react";
+import { House, LayoutDashboard, PanelLeftClose, Settings2, UserPlus } from "lucide-react";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { AccountMenu } from "@/components/AccountMenu";
-import { useExperts } from "@/components/experts/useExperts";
+import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { ExpertItem } from "@/components/experts/ExpertItem";
 import { cn } from "@/lib/utils";
 
-// Le menu des maquettes. Les trois entrées sans écran sont visibles mais inertes : on montre
-// la forme du produit sans promettre une page qui n'existe pas (décision du 2 octobre 2026).
+// Le menu des maquettes. L'entrée sans écran reste visible mais inerte : on montre la forme du
+// produit sans promettre une page qui n'existe pas (décision du 2 octobre 2026). Pas de « Chat
+// entreprise » : chaque membre a sa propre instance, il n'y a pas de discussion commune.
 const NAV = [
   { href: "/", label: "Accueil", icon: House, exact: true },
   { href: null, label: "Tableau de bord", icon: LayoutDashboard },
-  { href: null, label: "Recruter", icon: UserPlus },
-  { href: null, label: "Chat entreprise", icon: MessagesSquare },
+  { href: "/recruter", label: "Recruter", icon: UserPlus },
 ] as const;
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();
   const { current } = useWorkspace();
   const { logoUrl } = usePublicConfig();
-  const { experts, unreadable } = useExperts(current?.id);
+  const { experts, unreadable } = useExpertsContext();
 
   return (
     <aside
@@ -70,7 +63,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
       {NAV.map((item) => {
         const Icon = item.icon;
-        const active = item.href ? (item.exact ? pathname === item.href : pathname.startsWith(item.href)) : false;
+        const active = item.href ? ("exact" in item && item.exact ? pathname === item.href : pathname.startsWith(item.href)) : false;
         const base =
           "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors";
         if (!item.href) {

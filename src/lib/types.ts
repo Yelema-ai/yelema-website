@@ -51,6 +51,8 @@ export interface Expert {
   tagline?: string | null;
   /** Portrait de l'Expert. */
   photoUrl?: string | null;
+  /** Son dossier dans le drive (~/Livrables/<dossier>), quand le catalogue le connaît. */
+  driveFolder?: string | null;
 }
 
 /** Un expert tel que le back-office le présente : textes et médias, jamais de réglage d'agent. */

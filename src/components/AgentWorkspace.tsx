@@ -9,6 +9,8 @@ import { isTransitional } from "@/lib/format";
 import { agentTabPath, parseAgentRoute, type AgentTab } from "@/lib/expert-tabs";
 import type { MergedAgent, Role } from "@/lib/types";
 import { useWorkspace } from "@/components/WorkspaceProvider";
+import { useExpertsContext } from "@/components/experts/ExpertsProvider";
+import { DRIVE_ROOT } from "@/lib/drive-paths";
 import { AgentSettingsTab } from "@/components/AgentSettingsTab";
 import { IntegrationsTab } from "@/components/IntegrationsTab";
 import { ChannelsTab } from "@/components/channels/ChannelsTab";
@@ -19,11 +21,11 @@ import { FilesTab } from "@/components/files/FilesTab";
 import { cn } from "@/lib/utils";
 
 const TABS: { id: AgentTab; label: string; icon: typeof MessageSquare }[] = [
-  { id: "chat", label: "Chat", icon: MessageSquare },
-  { id: "files", label: "Files", icon: FolderOpen },
-  { id: "messaging", label: "Messaging", icon: MessagesSquare },
-  { id: "integrations", label: "Integrations", icon: Blocks },
-  { id: "settings", label: "Settings", icon: Settings2 },
+  { id: "chat", label: "Discussion", icon: MessageSquare },
+  { id: "files", label: "Livrables", icon: FolderOpen },
+  { id: "messaging", label: "Canaux", icon: MessagesSquare },
+  { id: "integrations", label: "Connecteurs", icon: Blocks },
+  { id: "settings", label: "Réglages", icon: Settings2 },
 ];
 
 // The per-expert tabbed SPA, laid out as a SINGLE left rail + the active tab's pane. The instance
@@ -91,6 +93,16 @@ export function AgentWorkspace({
 
   const active = agents.find((a) => a.agent37_id === agentId) ?? null;
 
+  // The expert this page is about, dressed by the catalogue; its own folder is where Livrables opens.
+  const { experts } = useExpertsContext();
+  const expert = experts.find((e) => e.agentId === agentId && e.profileId === profileId) ?? null;
+  const driveFolder = expert?.driveFolder ? `${DRIVE_ROOT}/${expert.driveFolder}` : undefined;
+
+  // A message typed on the home page rides the URL as ?q= and is sent once the chat is up.
+  const [initialMessage] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("q")
+  );
+
   // The open tab follows the URL (history.pushState updates usePathname in the App Router). Fall
   // back to the server-resolved initialTab on the first paint before the path is parsed.
   const segments = pathname.split("/").filter(Boolean); // ["experts", agentId, profileId?, tab?]
@@ -149,7 +161,7 @@ export function AgentWorkspace({
       navigateToSession={navigateToSession}
     >
       <div className="flex min-h-0 flex-1">
-        <aside className="flex w-64 shrink-0 flex-col border-r bg-card">
+        <aside className="hidden w-64 shrink-0 flex-col border-r bg-card md:flex">
           <div className="flex flex-col p-4 pb-3">
             <nav className="flex flex-col gap-1">
               {TABS.map((t) => {
@@ -188,22 +200,39 @@ export function AgentWorkspace({
 
         </aside>
 
-        <main className="min-w-0 flex-1 overflow-hidden">
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* On a phone the rail is hidden: the tabs become a strip above the pane. */}
+          <nav className="flex shrink-0 gap-1 overflow-x-auto border-b bg-card px-3 py-2 md:hidden">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => selectTab(t.id)}
+                aria-current={currentTab === t.id ? "page" : undefined}
+                className={cn(
+                  "shrink-0 rounded-md px-3 py-1.5 text-sm font-medium",
+                  currentTab === t.id ? "bg-secondary text-secondary-foreground" : "text-muted-foreground"
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
           {/* Chat owns its full height and stays MOUNTED (just hidden) across tab switches. */}
           {chatOpened && (
-            <div className={cn("h-full", !isChat && "hidden")}>
-              <ChatView />
+            <div className={cn("min-h-0 flex-1", !isChat && "hidden")}>
+              <ChatView initialMessage={initialMessage} />
             </div>
           )}
           {/* Files mirrors Chat: full-height, kept MOUNTED so the current directory survives. */}
           {filesOpened && (
-            <div className={cn("h-full", !isFiles && "hidden")}>
-              <FilesTab agentId={agentId} />
+            <div className={cn("min-h-0 flex-1", !isFiles && "hidden")}>
+              <FilesTab agentId={agentId} initialPath={driveFolder} />
             </div>
           )}
           {/* Integrations + Settings mount lazily in the padded scroll area. */}
           {!isChat && !isFiles && (
-            <div className="h-full overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               {currentTab === "integrations" ? (
                 <div className="mx-auto w-full max-w-5xl p-6 md:px-10 md:py-8">
                   <IntegrationsTab agentId={agentId} canManage={canManage} />
@@ -213,7 +242,7 @@ export function AgentWorkspace({
                   {active ? (
                     <ChannelsTab agentId={agentId} agent={active} canManage={canManage} />
                   ) : (
-                    <p className="text-sm text-muted-foreground">Loading...</p>
+                    <p className="text-sm text-muted-foreground">Chargement…</p>
                   )}
                 </div>
               ) : (
@@ -226,7 +255,7 @@ export function AgentWorkspace({
                       onChanged={load}
                     />
                   ) : (
-                    <p className="text-sm text-muted-foreground">Loading...</p>
+                    <p className="text-sm text-muted-foreground">Chargement…</p>
                   )}
                 </div>
               )}

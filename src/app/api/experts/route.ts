@@ -38,6 +38,7 @@ export async function GET(request: Request) {
         title: entry?.title ?? null,
         tagline: entry?.tagline ?? null,
         photoUrl: entry?.avatarUrl ?? null,
+        driveFolder: entry?.driveFolder ?? entry?.name ?? null,
       };
     });
 

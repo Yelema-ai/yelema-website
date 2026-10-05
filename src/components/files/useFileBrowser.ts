@@ -24,7 +24,7 @@ async function runPool<T>(items: T[], limit: number, worker: (item: T) => Promis
 // from the Agents API (it resolves ~ / defaults), so navigation, upload targets, and
 // new-folder/rename paths are all derived from the listing the server returns. Every call targets
 // the active agent via the `agentId` prop (this app is multi-agent).
-export function useFileBrowser(agentId: string) {
+export function useFileBrowser(agentId: string, initialPath?: string) {
   const [path, setPath] = useState<string | null>(null); // resolved abs dir; null until first load
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [entries, setEntries] = useState<FileEntry[]>([]);
@@ -69,10 +69,27 @@ export function useFileBrowser(agentId: string) {
     [agentId]
   );
 
-  // Initial load (default workspace dir).
+  // Initial load: the drive's root, or the folder the caller starts in (an expert's own). A
+  // starting folder that does not exist yet falls back to the root instead of an error screen.
+  const initialPathRef = useRef(initialPath);
   useEffect(() => {
-    load();
-  }, [load]);
+    const start = initialPathRef.current;
+    if (!start) {
+      load();
+      return;
+    }
+    let cancelled = false;
+    apiFetch<FileListResponse>(`/api/agents/${agentId}/files/list?path=${encodeURIComponent(start)}`)
+      .then(() => {
+        if (!cancelled) void load(start);
+      })
+      .catch(() => {
+        if (!cancelled) void load();
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [agentId, load]);
 
   const navigate = useCallback((target: string) => load(target), [load]);
   const refresh = useCallback(() => load(path ?? undefined), [load, path]);

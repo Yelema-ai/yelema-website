@@ -2,6 +2,7 @@ import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const SIZES = {
+  xs: { box: "size-7 text-xs", dot: "size-2.5" },
   sm: { box: "size-[34px] text-[13px]", dot: "size-[11px]" },
   md: { box: "size-[48px] text-base", dot: "size-[13px]" },
   lg: { box: "size-[72px] text-2xl", dot: "size-4" },

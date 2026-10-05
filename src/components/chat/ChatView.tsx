@@ -16,7 +16,7 @@ import { useChatAttachments } from "./useChatAttachments";
 // scrolling transcript with the composer docked at the bottom. The composer is kept at a STABLE
 // position in the tree across both states so it never remounts (preserving the draft, model, and
 // effort selection through the first send).
-export function ChatView() {
+export function ChatView({ initialMessage }: { initialMessage?: string | null }) {
   const {
     agentId,
     profile,
@@ -53,6 +53,18 @@ export function ChatView() {
     clearFiles();
   }, [activeSessionId, clearFiles]);
 
+  // A message handed over by the home page ("Demander à mon équipe") is sent once, into a new
+  // thread, and dropped from the URL so a refresh does not send it again.
+  const sentInitial = useRef(false);
+  useEffect(() => {
+    if (!initialMessage || sentInitial.current || activeSessionId) return;
+    sentInitial.current = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("q");
+    window.history.replaceState(window.history.state, "", url);
+    void send(initialMessage);
+  }, [initialMessage, activeSessionId, send]);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   // Whether the user is pinned near the bottom — controls whether new tokens auto-scroll.
   const stickRef = useRef(true);
@@ -75,7 +87,7 @@ export function ChatView() {
     () => sessions.find((s) => s.session_id === activeSessionId)?.title?.trim(),
     [sessions, activeSessionId]
   );
-  const headerTitle = activeTitle || (activeSessionId ? "Chat" : "New chat");
+  const headerTitle = activeTitle || (activeSessionId ? "Discussion" : "Nouvelle discussion");
   // The expert's name when the chat targets one, the instance's otherwise.
   const agentName = useMemo(() => {
     if (profile) return expertDisplayName(profile);
@@ -85,7 +97,7 @@ export function ChatView() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col" {...att.dragHandlers}>
-      {att.dragOver && <DropOverlay label="Drop files to attach" />}
+      {att.dragOver && <DropOverlay label="Déposez vos fichiers pour les joindre" />}
       <header className="flex h-16 shrink-0 items-center justify-between border-b bg-background px-6 md:px-10">
         <div className="min-w-0">
           <h1 className="truncate text-base font-semibold text-foreground">{headerTitle}</h1>
@@ -94,8 +106,8 @@ export function ChatView() {
         <button
           type="button"
           onClick={startNewChat}
-          aria-label="New chat"
-          title="New chat"
+          aria-label="Nouvelle discussion"
+          title="Nouvelle discussion"
           className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         >
           <Plus className="h-4 w-4" />
@@ -119,7 +131,7 @@ export function ChatView() {
           <ChatMessages messages={messages} isStreaming={isStreaming} />
         ) : (
           <h1 className="text-[26px] font-semibold tracking-tight text-foreground sm:text-[30px]">
-            What can I help with?
+            {profile ? `Que voulez-vous confier à ${agentName} ?` : "Que puis-je faire pour vous ?"}
           </h1>
         )}
       </div>
@@ -149,7 +161,7 @@ export function ChatView() {
       {showWelcome && (
         <div className="flex flex-1 flex-col items-center px-4 pt-3">
           <p className="text-sm text-muted-foreground">
-            The more context you give, the better your agent can help.
+            Plus vous donnez de contexte, meilleure sera la réponse.
           </p>
         </div>
       )}

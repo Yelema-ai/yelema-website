@@ -40,8 +40,8 @@ type ViewMode = "list" | "grid";
 // mounted/hidden across tab switches, like ChatView, so the current directory survives). The whole
 // pane is a drop zone for uploads. Look + primitives mirror the Chat tab: same shadcn Dialog/Input,
 // lucide icons, sonner toasts (raised inside the hook), and the hover-action pattern.
-export function FilesView({ agentId }: { agentId: string }) {
-  const fb = useFileBrowser(agentId);
+export function FilesView({ agentId, initialPath }: { agentId: string; initialPath?: string }) {
+  const fb = useFileBrowser(agentId, initialPath);
   const [preview, setPreview] = useState<FileEntry | null>(null);
   const [pendingDelete, setPendingDelete] = useState<FileEntry | null>(null);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
