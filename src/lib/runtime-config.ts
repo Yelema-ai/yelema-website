@@ -37,14 +37,14 @@ export function brandLogoUrl(): string | undefined {
   return read("BRAND_LOGO_URL");
 }
 
-// The Yelema back office's public origin: it serves the expert catalogue (names, roles, photos,
-// videos). Optional: without it the app still works and shows each expert by its profile name.
 // Yelema's Composio project key: the Connecteurs tab and the experts' tool proxy run on it.
 // Server-only. Optional: without it, an instance wired for it answers "pas encore activés".
 export function composioApiKey(): string | undefined {
   return read("COMPOSIO_API_KEY");
 }
 
+// The Yelema back office's public origin: it serves the expert catalogue (names, roles, photos,
+// videos). Optional: without it the app still works and shows each expert by its profile name.
 export function backofficeUrl(): string | undefined {
   return read("BACKOFFICE_URL")?.replace(/\/+$/, "");
 }
@@ -57,8 +57,10 @@ export function deploymentWorkspaceId(): string | undefined {
   return read("WORKSPACE_ID");
 }
 
+// The version this deployment runs: the git tag the back office deployed (APP_VERSION), else the
+// ref Vercel built, else "dev" locally.
 export function appVersion(): string {
-  return read("APP_VERSION") ?? "dev";
+  return read("APP_VERSION") ?? read("VERCEL_GIT_COMMIT_REF") ?? "dev";
 }
 
 // Names of the required variables that are unset. Used by /api/health, which reports only
