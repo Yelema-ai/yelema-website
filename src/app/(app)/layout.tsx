@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getWorkspaceAgent, loadWorkspaces, pickWorkspace } from "@/lib/workspace";
 import { AppProvider } from "@/components/app/AppProvider";
 import { AppShell } from "@/components/app/AppShell";
+import { ComputerProvider } from "@/components/experts/ComputerProvider";
 import { InstallingScreen, NoWorkspaceScreen } from "@/components/app/InstallingScreen";
 
 // The signed-in user's workspaces and the one they're looking at, read once per request (the
@@ -43,7 +44,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         agentId: agent?.ready ? agent.agent37_id : null,
       }}
     >
-      <AppShell>{agent?.ready ? children : <InstallingScreen />}</AppShell>
+      <AppShell>
+        {agent?.ready ? (
+          <ComputerProvider key={agent.agent37_id} agentId={agent.agent37_id}>
+            {children}
+          </ComputerProvider>
+        ) : (
+          <InstallingScreen />
+        )}
+      </AppShell>
     </AppProvider>
   );
 }

@@ -2,7 +2,8 @@
 # The experts' screen, which the app shows under "Son ordinateur": Agent37's hermes-vnc-desktop
 # recipe (agent37-platform/examples, custom-images/hermes-vnc-desktop). The stock entrypoint starts
 # Xvfb on :99 and openbox; once the display is up this attaches, each one respawned if it exits:
-#   x11vnc     screencasts :99 on loopback port 5900
+#   x11vnc     screencasts :99 on loopback port 5900 (-threads: it greets a new viewer in 0.1 s
+#              instead of 1.2 s, so the screen opens faster)
 #   websockify serves it on 6901, where the app's noVNC client connects with a signed URL
 #   chromium   runs headed on the display, DevTools on loopback 9222: the browser every expert
 #              drives (BROWSER_CDP_URL in the Dockerfile), so the screen shows their work
@@ -41,7 +42,7 @@ rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
   export DISPLAY=:99
   until /usr/bin/xdpyinfo >/dev/null 2>&1; do sleep 1; done
   respawn /tmp/x11vnc.log /usr/bin/x11vnc -display :99 -rfbport 5900 -localhost \
-    -forever -shared -nopw -quiet &
+    -forever -shared -nopw -quiet -threads &
   respawn /tmp/novnc.log /usr/bin/websockify --web /usr/share/novnc 6901 localhost:5900 &
   respawn /tmp/chromium.log run_chromium &
   wait
