@@ -61,15 +61,24 @@ export function TelegramTopics({
         <Steps
           items={[
             <>
-              Créez un groupe Telegram, puis activez les <span className="font-semibold text-ink">Sujets</span> dans
-              ses paramètres.
+              Dans Telegram, créez un groupe (<span className="font-semibold text-ink">Nouveau groupe</span>) et
+              ajoutez-y votre bot.
             </>,
             <>
-              Ajoutez votre bot au groupe, en <span className="font-semibold text-ink">administrateur</span>.
+              Ouvrez les paramètres du groupe : touchez son nom puis{" "}
+              <span className="font-semibold text-ink">Modifier</span> sur téléphone, ou{" "}
+              <span className="font-semibold text-ink">⋮</span> puis{" "}
+              <span className="font-semibold text-ink">Gérer le groupe</span> sur ordinateur. Activez{" "}
+              <span className="font-semibold text-ink">Sujets</span>.
             </>,
             <>
-              Tapez <code className="rounded bg-surface px-1 font-mono text-[13px] text-ink">/sethome</code> dans le
-              groupe.
+              Toujours dans les paramètres, ouvrez <span className="font-semibold text-ink">Administrateurs</span>,
+              ajoutez votre bot et laissez-lui le droit <span className="font-semibold text-ink">Gérer les sujets</span>.
+            </>,
+            <>
+              Depuis votre compte (celui qui a écrit au bot), envoyez{" "}
+              <code className="rounded bg-surface px-1 font-mono text-[13px] text-ink">/sethome</code> dans le sujet{" "}
+              <span className="font-semibold text-ink">Général</span> du groupe. Le bot répond pour confirmer.
             </>,
           ]}
         />
