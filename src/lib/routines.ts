@@ -160,42 +160,8 @@ export function scheduleLabel(schedule: string): string {
   return parts ? `${recurrenceOf(parts)} à ${parts.time}` : `Horaire : ${schedule}`;
 }
 
-// ---- The form's assistant: a sentence in, the fields out ----
-
-export interface ParsedRoutine {
-  task: string;
-  name: string;
-  recurring: boolean;
-  parts: CronParts;
-  date: string | null; // one-off day, "YYYY-MM-DD"
-}
-
+// Today, or a day ahead, as "YYYY-MM-DD" (the form's date field).
 export function todayIso(offsetDays = 0): string {
   const d = new Date(Date.now() + offsetDays * 86_400_000);
   return d.toISOString().slice(0, 10);
-}
-
-// "Chaque lundi à 9 h, prépare le point de la semaine" → recurring every Monday at 09:00, with the
-// task "Prépare le point de la semaine". Plain patterns, no model: it fills the form, the user checks.
-export function parseRoutineSentence(sentence: string): ParsedRoutine {
-  const text = sentence.trim();
-  const hour = text.match(/(\d{1,2})\s*(?:h|:)\s*(\d{2})?/i);
-  const time = hour ? `${pad(Math.min(23, Number(hour[1])))}:${hour[2] ?? "00"}` : "09:00";
-  const recurring = /\b(chaque|tous les|toutes les)\b/i.test(text);
-  const day = DAYS.findIndex((d) => new RegExp(`\\b${d}s?\\b`, "i").test(text));
-  let dom = "*";
-  let dow = "*";
-  if (/ouvr|en semaine/i.test(text)) dow = "1-5";
-  else if (day >= 0) dow = String(day);
-  else if (/\bmois\b/i.test(text)) dom = "1";
-  const task = text
-    .replace(/^(chaque|tous les|toutes les|demain|aujourd[’']hui|le)\b[^,]*,\s*/i, "")
-    .replace(/^./, (c) => c.toUpperCase());
-  return {
-    task,
-    name: nameFrom(task),
-    recurring,
-    parts: { dom, dow, time },
-    date: recurring ? null : /aujourd/i.test(text) ? todayIso() : todayIso(1),
-  };
 }
