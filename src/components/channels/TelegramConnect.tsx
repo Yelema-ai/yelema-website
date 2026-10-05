@@ -163,8 +163,15 @@ export function TelegramConnect({
                 </a>{" "}
                 dans Telegram et envoyez <code className="rounded bg-soft px-1 font-mono text-[13px] text-ink">/newbot</code>.
               </>,
-              <>Choisissez un nom et un identifiant pour le bot.</>,
-              <>Collez ici le jeton que BotFather vous envoie.</>,
+              <>
+                Donnez-lui un nom (par exemple « Yelema Unifood »), puis un identifiant qui se termine par « bot »
+                (par exemple <code className="rounded bg-soft px-1 font-mono text-[13px] text-ink">yelema_unifood_bot</code>).
+              </>,
+              <>
+                BotFather répond avec un jeton, une ligne du type{" "}
+                <code className="rounded bg-soft px-1 font-mono text-[13px] text-ink">123456789:AA…</code> : copiez-le
+                et collez-le ci-dessous.
+              </>,
             ]}
           />
           <div className="space-y-2">
