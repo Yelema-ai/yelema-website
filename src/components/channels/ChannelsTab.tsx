@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { channelBrand } from "@/components/channels/BrandIcons";
 import { ChannelCredentialsForm } from "@/components/channels/ChannelCredentialsForm";
 import { TelegramConnect } from "@/components/channels/TelegramConnect";
+import { TelegramTopics } from "@/components/channels/TelegramTopics";
 import { WhatsAppConnect } from "@/components/channels/WhatsAppConnect";
 
 // The Messaging tab: connect this agent to the apps its owner already uses, so they can talk to it
@@ -132,6 +133,14 @@ export function ChannelsTab({
               />
             ))}
           </div>
+
+          {/* One Telegram topic per expert, once the bot is connected. */}
+          {canManage && (
+            <TelegramTopics
+              agentId={agentId}
+              telegramConnected={(channels ?? []).some((c) => c.id === "telegram" && isChannelConnected(c))}
+            />
+          )}
 
           {rest.length > connectedRest.length && (
             <div className="space-y-3">

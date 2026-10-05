@@ -5,7 +5,8 @@ import { ApiError } from "@/lib/http";
 import { composePrompt, splitPrompt, summarize, type Routine } from "@/lib/routines";
 
 // Hermes's own scheduler: each expert's routines live in its profile, the instance's gateway runs
-// them (so an instance with an active routine is kept awake, see keepAwake in lib/agent37), and each run is a conversation under the expert plus a
+// them ONLY while the instance is awake (instances sleep after 45 idle minutes, so a routine due
+// during a sleep is missed; see docs/plans/experts-profils-vercel.md § 10), and each run is a conversation under the expert plus a
 // message on the chats the run delivers to. We drive it through Hermes's API server, its documented
 // programmatic API, whose Jobs API serves each expert at /p/<expert>/api/jobs. The yelema-hermes image
 // turns it on, on port 8642, reached on the instance's preview URL; this module is the only one that

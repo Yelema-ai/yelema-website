@@ -230,9 +230,9 @@ goes away once every client is on Vercel.
 - **A file path from the browser is checked before it reaches the instance** (`assertInDrive`).
   Server code that must read outside the drive (the routines key file) does so itself, never
   through a path the caller supplied.
-- **An active channel or routine keeps the instance awake** (`keepAwake` in `src/lib/agent37.ts`):
-  a sleeping instance hears neither. It costs compute around the clock, so nothing else turns
-  auto-sleep off.
+- **The app never changes an instance's sleep or size.** The back office creates each member's
+  instance (2 vCPU, auto-sleep after 45 idle minutes). A sleeping instance wakes on any request
+  from the app, but hears no Telegram/WhatsApp message and runs no Hermes routine until then.
 - **Payments are intentionally excluded.** Add Stripe (or anything) yourself when
   you're ready to charge your own customers — the create route (`src/app/api/agents/route.ts`)
   has a commented `canCreateAgent()` seam marking where an entitlement gate would go.

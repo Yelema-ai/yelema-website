@@ -1,4 +1,3 @@
-import { keepAwake } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { hermesCron } from "@/lib/hermes-cron";
 import { handleError, json, readJson } from "@/lib/http";
@@ -30,7 +29,6 @@ export async function POST(request: Request, { params }: Ctx) {
     const body = await readJson<RoutineBody>(request);
     const expert = await routineExpert(row, body.expert);
     const routine = await hermesCron.create(id, expert.profile, expert.name, routineFields(body, expert));
-    await keepAwake(id);
     return json({ routine }, 201);
   } catch (e) {
     return handleError(e);

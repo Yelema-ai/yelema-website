@@ -26,6 +26,9 @@ dans ce dépôt, et avec un déploiement Vercel piloté par le back-office.
 | Comptes, rôles, adhésions, instances, profils | Back-office seul ; l'app ne crée ni membre ni agent |
 | Déploiement | Vercel, **un projet par client**, version choisie par client, piloté par l'API depuis le back-office |
 | Image d'agent | Dépôt `Yelema-ai/yelema-hermes`, versions dans son `versions.json` |
+| Base | Projet Supabase **mutualisé** (`yelema`) pour tous les clients ; chaque déploiement verrouillé par `WORKSPACE_ID` |
+| Taille et veille des instances | **2 vCPU / 4 Go**, mise en veille après **45 minutes** d'inactivité (`idle_timeout_seconds: 2700`), réglées par le back-office à la création. L'app n'y touche pas *(décidé le 2026-10-05)* |
+| Sujets Telegram | **Dans l'app** : bouton « Créer les sujets des experts » dans l'onglet Canaux *(décidé le 2026-10-05)* |
 | Vue admin | L'admin voit son propre espace ; celui d'un membre s'ouvre depuis Administration *(hypothèse, à confirmer)* |
 | Clé et proxy Composio | Dans l'app ; le back-office fournit la clé et le jeton de l'instance *(hypothèse, à confirmer)* |
 
@@ -123,7 +126,7 @@ et le retrait de membres, les liens `/acces` et `/bienvenue`, le sélecteur d'es
 | Point | À trancher par |
 |---|---|
 | Ce que l'admin peut faire dans l'espace d'un membre (lire ses conversations, utiliser son Gmail, ou seulement voir l'état) | Produit |
-| Mise en veille : la couper seulement pour les membres qui ont un canal ou une routine active | Produit et coût |
+| **Routines et canaux pendant la veille.** Une instance endormie ne lance pas les routines du planificateur de Hermes et n'entend pas Telegram ni WhatsApp (connexion ouverte, qui ne réveille pas). Les « crons » d'Agent37 (`/v1/instances/{id}/crons`, avec `profile`) réveillent l'instance à l'heure dite : y porter les routines les rendrait fiables avec la veille, et sans dépendre de l'image | Produit, puis app |
 | Instances encore en ancien nommage (`djeneba` sans préfixe) : gérer les deux formes ou migrer | Back-office |
 | Nombre de projets et durée maximale des requêtes permis par l'offre Vercel | Ops |
 
@@ -139,13 +142,12 @@ et le retrait de membres, les liens `/acces` et `/bienvenue`, le sélecteur d'es
 | 5 Composio | Fait | `4281f4f` | Actif seulement pour une instance dont `agents.apps_token_hash` est renseigné par le back-office ; les autres restent sur le Composio géré par Agent37 |
 | 6 Vercel | Fait en partie | `43de79f` | `Dockerfile` et `scripts/build-image.sh` restent jusqu'au premier client sur Vercel. Tag `v0.2.0` à poser après essai |
 | 7 Routines | Fait | `d3bce2b` | Demande l'image `yelema-hermes` (révision 4 ou plus) |
-| 7 Sujets Telegram | **Non repris** | — | Le back-office crée déjà les routes par profil à l'installation (`profileRouting.ts`) ; le reprendre dans l'app ferait doublon. À confirmer |
+| 7 Sujets Telegram | Fait | voir `git log` | Le script est idempotent : il cohabite avec les routes que le back-office crée à l'installation |
 
 Écarts par rapport au plan initial :
 
-- **Mise en veille.** Connecter un canal ou activer une routine coupe la mise en veille de
-  l'instance (`keepAwake`). C'est l'option listée au § 10 ; elle coûte du calcul en continu pour
-  ces membres.
+- **Mise en veille.** L'app ne coupe plus la mise en veille (un premier jet le faisait à la
+  connexion d'un canal ou à l'activation d'une routine). Voir la conséquence au § 10.
 - **Composio par instance.** Plutôt qu'une bascule globale, le choix se fait instance par
   instance, pour que l'onglet Connecteurs montre toujours ce que les experts utilisent vraiment.
 - **Jointure catalogue.** Sur la clé après `__`, puis sur le prénom de l'expert : la clé du

@@ -144,6 +144,14 @@ export interface TelegramPairingState {
   bot_username?: string | null;
 }
 
+// POST /api/agents/[id]/channels/telegram/topics: `message` is the French line for the page,
+// `output` the tail of what the instance printed (for support).
+export interface TelegramTopicsResult {
+  ok: boolean;
+  message: string;
+  output: string;
+}
+
 // ---- WhatsApp ----
 
 export type WhatsappPairingStatus =

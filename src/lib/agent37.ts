@@ -181,10 +181,6 @@ export const agent37 = {
       image_digest: string | null;
       template_revision: number | null;
     }>(`/instances/${id}/update`, { method: "POST" }),
-  // Auto-sleep on or off. A sleeping instance misses Telegram/WhatsApp messages and its routines'
-  // schedule, so connecting a channel or turning a routine on switches it off (see keepAwake).
-  setAutoSleep: (id: string, on: boolean) =>
-    call<Agent>(`/instances/${id}`, { method: "PATCH", body: JSON.stringify({ auto_sleep: on }) }),
   resize: (id: string, body: ResizeInput) =>
     call<{ id: string; status: string; resources: { cpu: number; memory: number; disk: number } }>(
       `/instances/${id}/resize`,
@@ -282,13 +278,3 @@ export const agent37 = {
       { method: "DELETE" }
     ),
 };
-
-// A channel only receives messages, and a routine only fires, while the instance is awake: once
-// one is switched on, auto-sleep goes off. Best effort: the channel or routine is saved either way.
-export async function keepAwake(agentId: string): Promise<void> {
-  try {
-    await agent37.setAutoSleep(agentId, false);
-  } catch (e) {
-    console.error(`[agent37] could not turn auto-sleep off on ${agentId}`, e);
-  }
-}

@@ -1,4 +1,3 @@
-import { keepAwake } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { hermesCron } from "@/lib/hermes-cron";
 import { handleError, json, readJson } from "@/lib/http";
@@ -20,7 +19,6 @@ export async function PATCH(request: Request, { params }: Ctx) {
       typeof body.enabled === "boolean"
         ? await hermesCron.setEnabled(id, expert.profile, expert.name, routineId, body.enabled)
         : await hermesCron.update(id, expert.profile, expert.name, routineId, routineFields(body, expert));
-    if (routine.enabled) await keepAwake(id);
     return json({ routine });
   } catch (e) {
     return handleError(e);
