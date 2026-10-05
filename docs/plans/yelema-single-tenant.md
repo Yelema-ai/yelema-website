@@ -3,6 +3,10 @@
 > Pendant de `yelema-platform/docs/plans/agent37-espaces-dedies.md` (mise en service depuis le
 > back-office). Branche prévue : `feat/yelema-single-tenant`. Rédigé le 2026-09-30.
 > **STATUS : validé le 2026-09-30 — étapes A, B, C, D réalisées ; v0.1.0 publiée (voir § 8).**
+> **Suite (2026-10-05) : `docs/plans/experts-profils-vercel.md`.** Il remplace l'image Docker et le
+> script de publication (§ 3.1, § 3.7) par un projet Vercel par client, et sort l'image d'agent
+> dans `Yelema-ai/yelema-hermes`. Le reste de ce plan (config au runtime, `WORKSPACE_ID`, rôles,
+> une instance par membre, back-office maître des comptes) reste en vigueur.
 
 ## 1. Objectif
 
