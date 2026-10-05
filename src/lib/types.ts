@@ -106,6 +106,8 @@ export interface AgentRow {
   workspace_id: string;
   // The profiles installed on the instance, mirrored by the back office (absent on older rows).
   profiles?: string[] | null;
+  // SHA-256 of the instance's token for the tool proxy; set = the instance runs on Yelema's Composio.
+  apps_token_hash?: string | null;
   name: string | null;
   status: string | null;
   template: string | null;

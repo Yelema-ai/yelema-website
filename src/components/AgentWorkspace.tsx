@@ -12,7 +12,7 @@ import { useWorkspace } from "@/components/WorkspaceProvider";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { DRIVE_ROOT } from "@/lib/drive-paths";
 import { AgentSettingsTab } from "@/components/AgentSettingsTab";
-import { IntegrationsTab } from "@/components/IntegrationsTab";
+import { ConnectorsView } from "@/components/integrations/ConnectorsView";
 import { ChannelsTab } from "@/components/channels/ChannelsTab";
 import { ChatProvider } from "@/components/chat/ChatProvider";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
@@ -235,7 +235,7 @@ export function AgentWorkspace({
             <div className="min-h-0 flex-1 overflow-y-auto">
               {currentTab === "integrations" ? (
                 <div className="mx-auto w-full max-w-5xl p-6 md:px-10 md:py-8">
-                  <IntegrationsTab agentId={agentId} canManage={canManage} />
+                  <ConnectorsView agentId={agentId} />
                 </div>
               ) : currentTab === "messaging" ? (
                 <div className="mx-auto w-full max-w-3xl p-6 md:px-10 md:py-8">

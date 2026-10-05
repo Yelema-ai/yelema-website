@@ -1,18 +1,16 @@
-import { agent37 } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { handleError, json } from "@/lib/http";
+import { integrations } from "@/lib/integrations";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    await requireAgentAccess(id);
+    const { row } = await requireAgentAccess(id);
 
-    const { searchParams } = new URL(request.url);
-    const search = searchParams.get("search")?.trim() || undefined;
-
-    return json(await agent37.listIntegrationToolkits(id, { search }));
+    const search = new URL(request.url).searchParams.get("search")?.trim() || undefined;
+    return json(await integrations.toolkits(row, search));
   } catch (e) {
     return handleError(e);
   }
