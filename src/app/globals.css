@@ -108,6 +108,11 @@
   --ring: var(--link);
 }
 
+/* `wide`: room for an expert's chat with the computer panel beside it ("Son ordinateur"). */
+@theme {
+  --breakpoint-wide: 85rem;
+}
+
 @theme inline {
   --font-sans: var(--font-funnel-sans);
   --font-display: var(--font-space-grotesk);

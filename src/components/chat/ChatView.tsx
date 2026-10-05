@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { Loader2, Plus } from "lucide-react";
+import { ComputerButton, ComputerDialog, ComputerPanel } from "@/components/experts/ExpertComputer";
+import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
+import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { expertDisplayName } from "@/lib/experts";
 import { cn } from "@/lib/utils";
 import { DropOverlay } from "@/components/DropOverlay";
@@ -88,21 +91,37 @@ export function ChatView({ initialMessage }: { initialMessage?: string | null })
     [sessions, activeSessionId]
   );
   const headerTitle = activeTitle || (activeSessionId ? "Discussion" : "Nouvelle discussion");
+  // The expert this chat talks to, dressed by the catalogue (name, portrait); null on the
+  // instance's default home or while the list loads.
+  const { experts } = useExpertsContext();
+  const expert = useMemo(
+    () => (profile ? (experts.find((e) => e.agentId === agentId && e.profileId === profile) ?? null) : null),
+    [experts, agentId, profile]
+  );
+  const instance = useMemo(() => agents.find((x) => x.agent37_id === agentId) ?? null, [agents, agentId]);
   // The expert's name when the chat targets one, the instance's otherwise.
-  const agentName = useMemo(() => {
-    if (profile) return expertDisplayName(profile);
-    const a = agents.find((x) => x.agent37_id === agentId);
-    return a?.name?.trim() || agentId;
-  }, [agents, agentId, profile]);
+  const agentName = profile
+    ? (expert?.displayName ?? expertDisplayName(profile))
+    : instance?.name?.trim() || agentId;
+  // The avatar shown in the header, the welcome and beside each reply.
+  const face = profile ? { displayName: agentName, photoUrl: expert?.photoUrl ?? null, gateway: null } : null;
+  // "Son ordinateur" needs the screen the yelema-hermes image streams; other instances have none.
+  const hasComputer = Boolean(profile) && (instance?.template ?? "").startsWith("yelema-hermes");
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col" {...att.dragHandlers}>
+    <div className="flex h-full min-h-0">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col wide:min-w-[400px]" {...att.dragHandlers}>
       {att.dragOver && <DropOverlay label="Déposez vos fichiers pour les joindre" />}
-      <header className="flex h-16 shrink-0 items-center justify-between border-b bg-background px-6 md:px-10">
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold text-foreground">{headerTitle}</h1>
-          <p className="truncate text-xs text-muted-foreground">{agentName}</p>
+      <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b bg-background px-4 sm:px-6 md:px-10">
+        <div className="flex min-w-0 items-center gap-3">
+          {face && <ExpertAvatar expert={face} size="sm" />}
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-semibold text-foreground">{headerTitle}</h1>
+            <p className="truncate text-xs text-muted-foreground">{agentName}</p>
+          </div>
         </div>
+        <div className="flex shrink-0 items-center gap-2">
+        {hasComputer && <ComputerButton />}
         <button
           type="button"
           onClick={startNewChat}
@@ -112,6 +131,7 @@ export function ChatView({ initialMessage }: { initialMessage?: string | null })
         >
           <Plus className="h-4 w-4" />
         </button>
+        </div>
       </header>
       {/* Top: scrolling transcript when there are messages; the centered welcome heading when
           empty (justify-end seats it just above the composer). */}
@@ -128,11 +148,15 @@ export function ChatView({ initialMessage }: { initialMessage?: string | null })
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : messages.length > 0 ? (
-          <ChatMessages messages={messages} isStreaming={isStreaming} />
+          <ChatMessages messages={messages} isStreaming={isStreaming} face={face} />
         ) : (
-          <h1 className="text-[26px] font-semibold tracking-tight text-foreground sm:text-[30px]">
+          <>
+            {face && <ExpertAvatar expert={face} size="lg" className="mb-4" />}
+          <h1 className="text-center text-[26px] font-semibold tracking-tight text-foreground sm:text-[30px]">
             {profile ? `Que voulez-vous confier à ${agentName} ?` : "Que puis-je faire pour vous ?"}
           </h1>
+            {expert?.tagline && <p className="mt-2 max-w-md text-center text-sm text-muted-foreground">{expert.tagline}</p>}
+          </>
         )}
       </div>
 
@@ -164,6 +188,13 @@ export function ChatView({ initialMessage }: { initialMessage?: string | null })
             Plus vous donnez de contexte, meilleure sera la réponse.
           </p>
         </div>
+      )}
+    </div>
+      {hasComputer && (
+        <>
+          <ComputerPanel expert={{ name: agentName }} busy={isStreaming} onTakeOver={stop} />
+          <ComputerDialog expert={{ name: agentName }} busy={isStreaming} onTakeOver={stop} onWrite={requestComposerFocus} />
+        </>
       )}
     </div>
   );

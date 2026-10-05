@@ -144,6 +144,16 @@ et le retrait de membres, les liens `/acces` et `/bienvenue`, le sélecteur d'es
 | 7 Routines | Fait | `d3bce2b` | Demande l'image `yelema-hermes` (révision 4 ou plus) |
 | 7 Sujets Telegram | Fait | voir `git log` | Le script est idempotent : il cohabite avec les routes que le back-office crée à l'installation |
 
+Ajouts du 2026-10-05, version `v0.3.0` :
+
+| Sujet | État | Reste à faire |
+|---|---|---|
+| Portrait de l'expert dans le chat | Fait | En-tête, écran d'accueil du chat et à côté de chaque réponse |
+| « Son ordinateur » (repris des PR #15 et #16 de `main`) | Fait | Écran de l'instance du membre en direct, panneau à côté du chat sur grand écran, prise en main. Visible seulement sur une instance `yelema-hermes` (image `v1.1.0`, révision 6). À essayer sur 2 vCPU / 4 Go : le prestataire le fait tourner sur 4 vCPU / 8 Go |
+
+Point ouvert : un admin de l'espace peut ouvrir, et piloter, l'écran de l'instance d'un membre
+(même règle que le reste de l'espace d'un expert). À restreindre au propriétaire si ce n'est pas voulu.
+
 Écarts par rapport au plan initial :
 
 - **Mise en veille.** L'app ne coupe plus la mise en veille (un premier jet le faisait à la

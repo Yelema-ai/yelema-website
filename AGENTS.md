@@ -169,6 +169,7 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 | `src/lib/drive.ts`, `src/lib/drive-paths.ts` | The drive (`~/Livrables`) and the path guard every files route applies |
 | `src/lib/hermes-cron.ts`, `src/app/api/agents/[id]/routines/**` | Routines: Hermes's scheduler through its API server (port 8642, `yelema-hermes` image) |
 | `src/components/home`, `src/components/experts`, `src/components/integrations` | Home, gallery, sheet, routines, connectors |
+| `src/app/api/agents/[id]/computer/`, `src/components/experts/ComputerProvider.tsx`, `ExpertComputer.tsx` | "Son ordinateur": the instance's screen live beside the chat (noVNC, 60-second signed URL), and taking over mouse and keyboard |
 | `src/app/api/agents/[id]/channels/**` | Messaging channels BFF (list / write / disconnect, Telegram checks, WhatsApp pairing) |
 | `src/lib/hermes-messaging.ts` | The agent's own messaging API, reached over `exec`; the only module that speaks it |
 | `src/lib/telegram.ts` | Telegram Bot API calls made BEFORE anything is written into the agent (token check, owner lookup) |
@@ -204,7 +205,8 @@ Nothing here builds or pushes an agent image. Yelema's agent image lives in its 
 **`Yelema-ai/yelema-hermes`**, with a `versions.json` registry the back office reads to pin each
 instance. This app only relies on what that image provides: the `apps` tool server wired from
 `~/.yelema/apps-mcp.json` (Connecteurs) and Hermes's API server on port 8642 with its key in
-`~/.yelema/api-server-key` (Routines). Chat by profile needs no custom image.
+`~/.yelema/api-server-key` (Routines), and the screen streamed on port 6901 ("Son ordinateur",
+image v1.1.0 and later). Chat by profile needs no custom image.
 
 The root `Dockerfile` builds **this app** for the older per-client containers (see
 `docs/plans/yelema-single-tenant.md`). New clients run on Vercel, one project per client, deployed
@@ -233,6 +235,9 @@ goes away once every client is on Vercel.
 - **The app never changes an instance's sleep or size.** The back office creates each member's
   instance (2 vCPU, auto-sleep after 45 idle minutes). A sleeping instance wakes on any request
   from the app, but hears no Telegram/WhatsApp message and runs no Hermes routine until then.
+- **"Son ordinateur" hands out full control of the instance.** The signed URL for the screen lets
+  its holder click and type on the member's machine and cannot be revoked: it is minted only for
+  the instance's owner or a workspace admin, for 60 seconds, and never logged.
 - **Payments are intentionally excluded.** Add Stripe (or anything) yourself when
   you're ready to charge your own customers — the create route (`src/app/api/agents/route.ts`)
   has a commented `canCreateAgent()` seam marking where an entitlement gate would go.

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/app/Sidebar";
 import { TopBar } from "@/components/app/TopBar";
+import { ComputerProvider } from "@/components/experts/ComputerProvider";
 import { ExpertsProvider } from "@/components/experts/ExpertsProvider";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // "Son ordinateur" keeps ONE live connection, to the instance last opened, so moving between its
+  // experts (or to another page and back) does not reconnect. Another instance starts afresh.
+  const routeAgentId = pathname.startsWith("/experts/") ? (pathname.split("/")[2] ?? null) : null;
+  const [computerAgentId, setComputerAgentId] = useState<string | null>(routeAgentId);
+  if (routeAgentId && routeAgentId !== computerAgentId) setComputerAgentId(routeAgentId);
 
   useEffect(() => {
     try {
@@ -83,7 +90,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             fichiers gardent leur barre de saisie en bas, les pages longues défilant à l'intérieur. */}
         <main className="flex h-screen min-w-0 flex-col overflow-y-auto">
           <TopBar onMenu={() => setDrawerOpen(true)} />
-          {children}
+          <ComputerProvider key={computerAgentId ?? "none"} agentId={computerAgentId}>
+            {children}
+          </ComputerProvider>
         </main>
       </div>
     </ExpertsProvider>

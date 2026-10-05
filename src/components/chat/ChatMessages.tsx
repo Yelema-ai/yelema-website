@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Check, ChevronDown, ChevronRight, FileText, Image as ImageIcon, Loader2, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
+import type { Expert } from "@/lib/types";
 import { useChatContext } from "./ChatProvider";
 import { Markdown } from "./Markdown";
 import type { ChatMessage, MessageAttachment, ToolEvent } from "./types";
@@ -83,7 +85,17 @@ function TypingDots() {
   );
 }
 
-export function ChatMessages({ messages, isStreaming }: { messages: ChatMessage[]; isStreaming: boolean }) {
+// `face` is the expert whose replies these are: its portrait sits beside each one. Null on the
+// instance's default home, which has no persona.
+export function ChatMessages({
+  messages,
+  isStreaming,
+  face = null,
+}: {
+  messages: ChatMessage[];
+  isStreaming: boolean;
+  face?: Pick<Expert, "displayName" | "photoUrl" | "gateway"> | null;
+}) {
   // The instance whose drive the paths in a reply point into (they become download links).
   const { agentId } = useChatContext();
   return (
@@ -111,8 +123,9 @@ export function ChatMessages({ messages, isStreaming }: { messages: ChatMessage[
           lastAssistant && isStreaming && !m.content && !m.thinking && !tools.some((t) => t.status === "running");
 
         return (
-          <div key={m.id} className="flex justify-start">
-            <div className="min-w-0 max-w-full">
+          <div key={m.id} className="flex justify-start gap-3">
+            {face && <ExpertAvatar expert={face} size="xs" className="mt-0.5" />}
+            <div className="min-w-0 max-w-full flex-1">
               {m.thinking && <ThinkingBlock content={m.thinking} live={lastAssistant && isStreaming && !m.content} />}
               {tools.length > 0 && (
                 <div className="mb-3 space-y-2">
