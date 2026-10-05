@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, FolderOpen, MessageCircle } from "lucide-react";
+import { FileText, FolderOpen, MessageCircle, Repeat } from "lucide-react";
 import { getExpert } from "@/config/experts";
 import { expertFolder } from "@/lib/drive-paths";
 import { cn } from "@/lib/utils";
@@ -12,12 +12,14 @@ import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatView } from "@/components/chat/ChatView";
 import { FilesView } from "@/components/files/FilesView";
 import { ExpertFiche } from "./ExpertFiche";
+import { ExpertRoutines } from "./ExpertRoutines";
 
-export type ExpertTab = "discussion" | "livrables" | "fiche";
+export type ExpertTab = "discussion" | "livrables" | "routines" | "fiche";
 
 const TABS: { id: ExpertTab; label: string; icon: typeof MessageCircle; path: string }[] = [
   { id: "discussion", label: "Discussion", icon: MessageCircle, path: "" },
   { id: "livrables", label: "Livrables", icon: FolderOpen, path: "/livrables" },
+  { id: "routines", label: "Routines", icon: Repeat, path: "/routines" },
   { id: "fiche", label: "Fiche de poste", icon: FileText, path: "/fiche" },
 ];
 
@@ -113,6 +115,10 @@ export function ExpertWorkspace({
               Ce qu’{e.pronoun === "elle" ? "elle" : "il"} a produit pour vous, rangé dans son dossier du drive de l’équipe.
             </p>
             <FilesView agentId={agentId} root={expertFolder(e.name)} rootLabel={`Livrables de ${e.name}`} />
+          </div>
+        ) : tab === "routines" ? (
+          <div className="px-4 py-6 sm:px-8">
+            <ExpertRoutines expertKey={expertKey} />
           </div>
         ) : (
           <div className="px-4 py-6 sm:px-8">

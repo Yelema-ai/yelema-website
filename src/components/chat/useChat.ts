@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, readApiError } from "@/lib/api";
+import { routineRunText, SILENT_RUN } from "@/lib/routines";
 import { type SessionDetail } from "@/lib/types";
 import { uid, type ChatMessage, type MessageAttachment, type ToolEvent, type ToolStatus } from "./types";
 
@@ -105,13 +106,18 @@ interface LiveRun {
 
 // --- Transcript merging ------------------------------------------------------------------------
 
+// A routine's run is a conversation too: its first message is shown as the routine's own text.
 function mapHistory(history: SessionDetail["history"]): ChatMessage[] {
-  return (history ?? []).map((h) => ({
-    id: h.id || uid("h"),
-    role: h.role,
-    content: h.content ?? "",
-    thinking: h.thinking,
-  }));
+  return (history ?? []).map((h) => {
+    const content = h.content ?? "";
+    return {
+      id: h.id || uid("h"),
+      role: h.role,
+      content:
+        h.role === "user" ? routineRunText(content) : content.trim() === SILENT_RUN ? "Rien de nouveau à signaler." : content,
+      thinking: h.thinking,
+    };
+  });
 }
 
 // Overlay a live run's bubbles onto the fetched transcript. The harness persists a turn's

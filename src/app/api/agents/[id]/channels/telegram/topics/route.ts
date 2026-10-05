@@ -1,5 +1,7 @@
+import { EXPERT_KEYS } from "@/config/experts";
 import { agent37, instanceFetch } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
+import { repointRoutines } from "@/lib/hermes-cron";
 import { handleError, json } from "@/lib/http";
 import type { TelegramTopicsResult } from "@/lib/channels";
 import {
@@ -58,6 +60,9 @@ export async function POST(_request: Request, { params }: Ctx) {
       console.error(`[telegram/topics] gateway restart failed on ${id}`, outputTail(restart.stdout, restart.stderr));
       return json<TelegramTopicsResult>({ ok: false, message: RESTART_FAILED, output: fullOutput });
     }
+    // Routines that posted only in the app now post to their expert's topic too. Best effort: the
+    // topics exist either way, and turning a routine on points it at them again.
+    await repointRoutines(id, EXPERT_KEYS).catch((e) => console.error(`[telegram/topics] routines not repointed on ${id}`, e));
     return json<TelegramTopicsResult>({ ok: true, message: TOPICS_CREATED, output: fullOutput });
   } catch (e) {
     return handleError(e);

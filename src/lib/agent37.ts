@@ -20,8 +20,10 @@ const BASE = "https://api.agent37.com";
 // Like BASE, a code constant — no per-deployment reason to change it.
 const INSTANCE_DOMAIN = "agent37.app";
 
-function instanceBaseUrl(id: string): string {
-  return `https://${id}.${INSTANCE_DOMAIN}`;
+// Any other port of the instance has its own preview host, `https://{id}-{port}.agent37.app`,
+// behind the same key (https://www.agent37.com/docs/agents-api/urls).
+function instanceBaseUrl(id: string, port?: number): string {
+  return `https://${id}${port ? `-${port}` : ""}.${INSTANCE_DOMAIN}`;
 }
 
 export class Agent37Error extends Error {
@@ -110,6 +112,20 @@ export async function instanceFetch(id: string, path: string, init?: RequestInit
   return fetch(`${instanceBaseUrl(id)}${path}`, {
     ...init,
     body,
+    headers: { "X-Agent37-Key": key, ...(init?.headers || {}) },
+    cache: "no-store",
+  });
+}
+
+// Raw fetch against another port of the instance, through its preview URL. Here it is how the
+// Routines tab reaches the Hermes dashboard's scheduler API (lib/hermes-cron). JSON bodies only.
+export async function instancePortFetch(id: string, port: number, path: string, init?: RequestInit): Promise<Response> {
+  const key = process.env.AGENT37_API_KEY;
+  if (!key) {
+    throw new Agent37Error(500, "config_error", "AGENT37_API_KEY is not set on the server");
+  }
+  return fetch(`${instanceBaseUrl(id, port)}${path}`, {
+    ...init,
     headers: { "X-Agent37-Key": key, ...(init?.headers || {}) },
     cache: "no-store",
   });
