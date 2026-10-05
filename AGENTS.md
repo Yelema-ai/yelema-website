@@ -142,7 +142,7 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 | `src/app/api/agents/[id]/channels/**` | Messaging channels BFF (list / write / disconnect, Telegram checks, WhatsApp pairing) |
 | `src/lib/hermes-messaging.ts` | The agent's own messaging API, reached over `exec`; the only module that speaks it |
 | `src/lib/hermes-cron.ts` | Hermes's own scheduler (an expert's Routines tab), through Hermes's API server (Jobs API, port 8642, its own key on top of ours); the only module that speaks it |
-| `src/app/api/agents/[id]/computer` + `src/components/experts/ExpertComputer.tsx` | "Son ordinateur": the experts' live screen (noVNC on port 6901 of the `yelema-hermes` image, signed URL minted per connection), with take over / give back |
+| `src/app/api/agents/[id]/computer` + `src/components/experts/{ComputerProvider,ExpertComputer}.tsx` | "Son ordinateur": the experts' live screen (noVNC on port 6901 of the `yelema-hermes` image, signed URL minted per connection), one connection for the whole app, shown in a panel beside the chat or a large dialog, with take over / give back |
 | `src/lib/routines.ts` | Routine types, schedule labels and the prompt format, shared by the BFF and the Routines tab |
 | `src/lib/telegram.ts` | Telegram Bot API calls made BEFORE anything is written into the agent (token check, owner lookup) |
 | `src/lib/channels.ts` | Channel types + the featured list, shared by the BFF and the Messaging tab |

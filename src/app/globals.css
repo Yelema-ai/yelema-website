@@ -48,6 +48,11 @@
   --ring: var(--brand);
 }
 
+/* `wide`: room for an expert's chat with the computer panel beside it ("Son ordinateur"). */
+@theme {
+  --breakpoint-wide: 85rem;
+}
+
 @theme inline {
   --font-sans: var(--font-onest), system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: var(--font-bricolage), var(--font-onest), system-ui, sans-serif;
