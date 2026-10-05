@@ -30,7 +30,9 @@ export interface RoutineBody {
 export function routineFields(body: RoutineBody, expert: Expert): RoutineFields {
   const task = (body.task ?? "").trim();
   if (!task) throw new ApiError(400, "invalid_request", "Décrivez la tâche à faire.");
-  if (task.length > 6000) throw new ApiError(400, "invalid_request", "La description est trop longue.");
+  // A bound only: the experts' own routines run past 7,000 characters and come back whole when just
+  // their schedule is edited. Hermes refuses a new or changed description over 5,000 (lib/hermes-cron).
+  if (task.length > 10_000) throw new ApiError(400, "invalid_request", "La description est trop longue.");
 
   const schedule = (body.schedule ?? "").trim();
   if (!CRON.test(schedule) && !ONE_OFF.test(schedule)) throw new ApiError(400, "invalid_request", "Horaire non reconnu.");

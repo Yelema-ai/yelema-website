@@ -7,6 +7,10 @@ call, with Yelema's own Composio in place of Agent37's:
 - `yelema-entrypoint.sh` switches Agent37's managed Composio off, then starts the stock entrypoint.
 - `yelema-apps-mcp.py` adds the `apps` MCP server (the app's `/api/composio-mcp`) to every Hermes
   profile at each start, from `~/.yelema/apps-mcp.json`, which provisioning writes.
+- `yelema-api-server.py` turns on Hermes's API server on port 8642, where the app manages the
+  experts' routines (`/p/<expert>/api/jobs`). Its key is made on the instance at first start
+  (`~/.yelema/api-server-key`, which the app reads through the Agent37 files API) and written into
+  every profile's `.env` at each start. Requests need both the Agent37 key and this one.
 - `hermes-heartbeat-fix.py` applies, at build time, upstream's fix for Hermes refusing every
   ordinary command from GPT models (the default model). Once `HERMES_TAG` ships a Hermes with the
   fix, the build prints "already has the fix": then remove the step from the Dockerfile.

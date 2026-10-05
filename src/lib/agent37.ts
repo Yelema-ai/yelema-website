@@ -118,7 +118,8 @@ export async function instanceFetch(id: string, path: string, init?: RequestInit
 }
 
 // Raw fetch against another port of the instance, through its preview URL. Here it is how the
-// Routines tab reaches the Hermes dashboard's scheduler API (lib/hermes-cron). JSON bodies only.
+// Routines tab reaches Hermes's API server (lib/hermes-cron), which checks its own Bearer key: the
+// edge passes Authorization through untouched. JSON bodies only.
 export async function instancePortFetch(id: string, port: number, path: string, init?: RequestInit): Promise<Response> {
   const key = process.env.AGENT37_API_KEY;
   if (!key) {
