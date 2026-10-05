@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, MessageCircle, Sparkles } from "lucide-react";
 import { useWorkspace } from "@/components/WorkspaceProvider";
+import { ExpertImage } from "@/components/experts/ExpertImage";
 import { useCatalogue } from "@/components/experts/useCatalogue";
 import { Button } from "@/components/ui/button";
 import { agentTabPath } from "@/lib/expert-tabs";
@@ -38,8 +39,11 @@ function ExpertCard({ expert }: { expert: Entry }) {
   return (
     <article className="relative aspect-[4/5] overflow-hidden rounded-card bg-[#8E6FB0] text-white sm:aspect-[400/698]">
       {image && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={image} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover object-top" />
+        <ExpertImage
+          src={image}
+          sizes="(min-width: 80rem) 300px, (min-width: 64rem) 33vw, (min-width: 40rem) 50vw, 100vw"
+          className="object-cover object-top"
+        />
       )}
       <div aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,rgba(23,10,40,0)_42%,rgba(23,10,40,0.9)_82%)]" />
       <Link href={fiche} tabIndex={-1} aria-hidden className="absolute inset-0" />

@@ -1,11 +1,12 @@
+import { ExpertImage } from "@/components/experts/ExpertImage";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const SIZES = {
-  xs: { box: "size-7 text-xs", dot: "size-2.5" },
-  sm: { box: "size-[34px] text-[13px]", dot: "size-[11px]" },
-  md: { box: "size-[48px] text-base", dot: "size-[13px]" },
-  lg: { box: "size-[72px] text-2xl", dot: "size-4" },
+  xs: { px: 28, box: "size-7 text-xs", dot: "size-2.5" },
+  sm: { px: 34, box: "size-[34px] text-[13px]", dot: "size-[11px]" },
+  md: { px: 48, box: "size-[48px] text-base", dot: "size-[13px]" },
+  lg: { px: 72, box: "size-[72px] text-2xl", dot: "size-4" },
 } as const;
 
 /**
@@ -26,12 +27,7 @@ export function ExpertAvatar({
   return (
     <span className={cn("relative shrink-0", className)}>
       {expert.photoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={expert.photoUrl}
-          alt=""
-          className={cn(s.box, "rounded-full object-cover object-[50%_20%]")}
-        />
+        <ExpertImage src={expert.photoUrl} size={s.px} className={cn(s.box, "rounded-full object-cover object-[50%_20%]")} />
       ) : (
         <span
           className={cn(s.box, "grid place-items-center rounded-full bg-tint font-bold text-brand-ink")}

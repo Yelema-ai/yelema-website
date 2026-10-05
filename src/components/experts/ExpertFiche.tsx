@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FileText, MapPin, MessageCircle, Play, Sparkles, type LucideIcon } from "lucide-react";
 import { useWorkspace } from "@/components/WorkspaceProvider";
+import { ExpertImage } from "@/components/experts/ExpertImage";
 import { useCatalogue, useCatalogueExpert } from "@/components/experts/useCatalogue";
 import { Button } from "@/components/ui/button";
 import { agentTabPath } from "@/lib/expert-tabs";
@@ -71,8 +72,7 @@ export function ExpertFiche({ expertKey }: { expertKey: string }) {
           {expert.tagline && <p className="mt-2 text-sm text-ink-3">{expert.tagline}</p>}
         </div>
         {image && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={image} alt="" className="hidden h-[180px] w-[180px] shrink-0 rounded-tile bg-tint object-cover object-top @2xl:block" />
+          <ExpertImage src={image} size={180} className="hidden h-[180px] w-[180px] shrink-0 rounded-tile bg-tint object-cover object-top @2xl:block" />
         )}
       </header>
 

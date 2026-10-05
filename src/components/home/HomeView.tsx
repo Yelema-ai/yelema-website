@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { MessageCircle, Send } from "lucide-react";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
+import { ExpertImage } from "@/components/experts/ExpertImage";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { useCatalogue } from "@/components/experts/useCatalogue";
 import { agentTabPath } from "@/lib/expert-tabs";
@@ -16,6 +17,9 @@ function today(): string {
   const s = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+// How wide a team card is at each breakpoint (1, 2, 3 then 4 per row).
+const CARD_SIZES = "(min-width: 80rem) 300px, (min-width: 64rem) 33vw, (min-width: 40rem) 50vw, 100vw";
 
 const expertId = (e: Expert) => `${e.agentId}:${e.profileId}`;
 
@@ -28,8 +32,7 @@ function ExpertCard({ expert, entry }: { expert: Expert; entry: CatalogueExpert 
     <div className="group flex flex-col overflow-hidden rounded-card border bg-card transition-shadow hover:shadow-[0_20px_40px_-26px_rgba(23,17,43,.45)]">
       <Link href={href} className="relative block aspect-[4/5] overflow-hidden bg-tint">
         {image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={image} alt="" loading="lazy" className="h-full w-full object-cover object-top" />
+          <ExpertImage src={image} sizes={CARD_SIZES} className="object-cover object-top" />
         ) : (
           <span className="grid h-full w-full place-items-center font-display text-7xl font-bold text-brand-ink/40">
             {expert.displayName.trim()[0]?.toUpperCase() ?? "?"}
