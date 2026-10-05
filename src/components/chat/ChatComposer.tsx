@@ -8,6 +8,7 @@ import { EffortMenu } from "./EffortMenu";
 import { ModelMenu } from "./ModelMenu";
 import type { ChatAttachments } from "./useChatAttachments";
 import { useChatModels } from "./useChatModels";
+import { useChatContext } from "./ChatProvider";
 import { findModel, prettyModelLabel, type ChatSettings } from "./types";
 import type { SendSettings } from "./useChat";
 
@@ -30,7 +31,9 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
   const [settings, setSettings] = useState<ChatSettings>({ model: null, provider: null, reasoningEffort: null });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { groups, defaultModel, loading } = useChatModels(agentId);
+  // Each expert's profile has its own model configuration.
+  const { profile } = useChatContext();
+  const { groups, defaultModel, loading } = useChatModels(agentId, profile);
 
   useEffect(() => {
     if (focusToken === 0) return;

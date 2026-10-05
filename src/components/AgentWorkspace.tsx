@@ -6,7 +6,7 @@ import { Blocks, FolderOpen, MessageSquare, MessagesSquare, Settings2 } from "lu
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { isTransitional } from "@/lib/format";
-import { agentTabPath, parseAgentTab, type AgentTab } from "@/lib/expert-tabs";
+import { agentTabPath, parseAgentRoute, type AgentTab } from "@/lib/expert-tabs";
 import type { MergedAgent, Role } from "@/lib/types";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { AgentSettingsTab } from "@/components/AgentSettingsTab";
@@ -26,8 +26,9 @@ const TABS: { id: AgentTab; label: string; icon: typeof MessageSquare }[] = [
   { id: "settings", label: "Settings", icon: Settings2 },
 ];
 
-// The per-agent tabbed SPA, laid out as a SINGLE left rail + the active tab's pane. The active agent
-// is bound to the URL (agentId); the open tab rides the URL as a path segment. Tabs switch via
+// The per-expert tabbed SPA, laid out as a SINGLE left rail + the active tab's pane. The instance
+// (agentId) and the expert (profileId, a Hermes profile on that instance; null = its default home)
+// are bound to the URL; the open tab rides the URL as a path segment. Tabs switch via
 // history.pushState (no full navigation) so Chat's in-flight stream and Files' current directory
 // survive moving between tabs — those two mount lazily then stay MOUNTED-BUT-HIDDEN; Integrations
 // and Settings mount lazily in the scroll area.
@@ -38,12 +39,14 @@ const TABS: { id: AgentTab; label: string; icon: typeof MessageSquare }[] = [
 // provider and ChatView never unmount.
 export function AgentWorkspace({
   agentId,
+  profileId,
   workspaceId,
   role,
   isOwner,
   initialTab,
 }: {
   agentId: string;
+  profileId: string | null;
   workspaceId: string;
   role: Role;
   isOwner: boolean;
@@ -90,13 +93,13 @@ export function AgentWorkspace({
 
   // The open tab follows the URL (history.pushState updates usePathname in the App Router). Fall
   // back to the server-resolved initialTab on the first paint before the path is parsed.
-  const segments = pathname.split("/").filter(Boolean); // ["dashboard","agents",id,tab?]
-  const currentTab = parseAgentTab(segments.slice(3)) ?? initialTab;
+  const segments = pathname.split("/").filter(Boolean); // ["experts", agentId, profileId?, tab?]
+  const currentTab = parseAgentRoute(segments.slice(2))?.tab ?? initialTab;
   const isChat = currentTab === "chat";
   const isFiles = currentTab === "files";
 
   function selectTab(tab: AgentTab) {
-    const path = agentTabPath(agentId, tab);
+    const path = agentTabPath(agentId, tab, profileId);
     if (typeof window !== "undefined" && window.location.pathname !== path) {
       window.history.pushState(null, "", path);
     }
@@ -113,7 +116,7 @@ export function AgentWorkspace({
     return () => window.removeEventListener("popstate", read);
   }, []);
 
-  const chatPath = agentTabPath(agentId, "chat");
+  const chatPath = agentTabPath(agentId, "chat", profileId);
   // Write the open thread into the chat URL without adding a path segment. pushState for an explicit
   // switch (so Back returns to the previous thread); replaceState when promoting a freshly-minted
   // session or re-stamping the URL on tab return (so Back doesn't bounce through transient states).
@@ -139,6 +142,7 @@ export function AgentWorkspace({
   return (
     <ChatProvider
       agentId={agentId}
+      profile={profileId}
       agents={agents}
       urlSessionId={urlSessionId}
       onChatTab={isChat}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, readApiError } from "@/lib/api";
+import { profileQuery } from "@/lib/profile-id";
 import { type SessionDetail } from "@/lib/types";
 import { uid, type ChatMessage, type ChatSettings, type MessageAttachment, type ToolEvent, type ToolStatus } from "./types";
 
@@ -13,6 +14,9 @@ export interface SendSettings extends Partial<ChatSettings> {
 
 interface UseChatArgs {
   agentId: string;
+  // The expert's Hermes profile, or null for the instance's default home. Sent on every turn and
+  // on every session read: the instance does not remember it per session.
+  profile: string | null;
   sessionId: string | null;
   // Called once when a brand-new conversation mints its session id mid-stream. The provider
   // records the rail row; `promote` says whether to also make it the open thread (false when the
@@ -120,7 +124,8 @@ function mergeLiveRun(history: ChatMessage[], run: LiveRun): ChatMessage[] {
   return run.user ? [...history, run.user, run.assistant] : [...history, run.assistant];
 }
 
-export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: UseChatArgs) {
+export function useChat({ agentId, profile, sessionId, onSessionCreated, onActivity }: UseChatArgs) {
+  const q = profileQuery(profile);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -192,7 +197,7 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
   const refreshHistory = useCallback(
     async (sid: string) => {
       try {
-        const res = await apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sid}`);
+        const res = await apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sid}${q}`);
         if (activeSessionRef.current !== sid || runsRef.current.get(sid)) return;
         setMessages(mapHistory(res.history));
         setIsStreaming(false);
@@ -200,7 +205,7 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
         // Leave whatever's on screen.
       }
     },
-    [agentId]
+    [agentId, q]
   );
 
   // Drain a turn's SSE stream into its run. Shared by send() and reattach; runs to completion
@@ -360,12 +365,12 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
         cancelUpstream(run.responseId);
         runsRef.current.delete(sid);
       } else if (!run) {
-        apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sid}`)
+        apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sid}${q}`)
           .then((res) => cancelUpstream(res.active_response_id ?? null))
           .catch(() => {});
       }
     },
-    [agentId, cancelUpstream]
+    [agentId, q, cancelUpstream]
   );
 
   // Load history when the selected thread changes; reset for a fresh chat. Switching threads no
@@ -398,7 +403,7 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
 
     let cancelled = false;
     setLoadingHistory(true);
-    apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sessionId}`)
+    apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`)
       .then((res) => {
         if (cancelled) return;
         const history = mapHistory(res.history);
@@ -444,7 +449,7 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
     return () => {
       cancelled = true;
     };
-  }, [agentId, sessionId, startReattach, forgetRun, refreshHistory]);
+  }, [agentId, q, sessionId, startReattach, forgetRun, refreshHistory]);
 
   const send = useCallback(
     async (text: string, settings: SendSettings = {}) => {
@@ -485,6 +490,7 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             input: trimmed,
+            profile: profile ?? undefined,
             session_id: run.sessionId ?? undefined,
             model: settings.model ?? undefined,
             provider: settings.provider ?? undefined,
@@ -516,7 +522,7 @@ export function useChat({ agentId, sessionId, onSessionCreated, onActivity }: Us
         }
       }
     },
-    [agentId, isStreaming, consume, isViewed, forgetRun]
+    [agentId, profile, isStreaming, consume, isViewed, forgetRun]
   );
 
   // Stop the current turn: abort the local stream and cancel it upstream so the agent stops work.

@@ -27,7 +27,7 @@ export function ExpertItem({
 
   return (
     <Link
-      href={agentTabPath(expert.agentId, "chat")}
+      href={agentTabPath(expert.agentId, "chat", expert.profileId)}
       title={`${expert.displayName} · ${expert.profileId}${expert.distribution ? ` · ${expert.distribution}` : ""}`}
       className={cn(
         "flex min-h-12 items-center gap-2.5 rounded-xl px-2 text-sm font-semibold hover:bg-soft",

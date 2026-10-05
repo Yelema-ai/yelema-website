@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { profileQuery } from "@/lib/profile-id";
 import type { ModelsResponse } from "@/lib/types";
 import type { ModelGroup, ModelOption } from "./types";
 
@@ -13,7 +14,8 @@ export interface ChatModelsState {
 
 // Loads the agent's available models (GET /v1/models) and groups them by provider for the
 // composer's model switcher. Failures degrade to an empty list (the agent default still runs).
-export function useChatModels(agentId: string): ChatModelsState {
+export function useChatModels(agentId: string, profile: string | null = null): ChatModelsState {
+  const q = profileQuery(profile);
   const [state, setState] = useState<ChatModelsState>({
     groups: [],
     defaultModel: null,
@@ -22,7 +24,7 @@ export function useChatModels(agentId: string): ChatModelsState {
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<ModelsResponse>(`/api/agents/${agentId}/chat/models`)
+    apiFetch<ModelsResponse>(`/api/agents/${agentId}/chat/models${q}`)
       .then((res) => {
         if (cancelled) return;
         const byProvider = new Map<string, ModelOption[]>();
@@ -53,7 +55,7 @@ export function useChatModels(agentId: string): ChatModelsState {
     return () => {
       cancelled = true;
     };
-  }, [agentId]);
+  }, [agentId, q]);
 
   return state;
 }

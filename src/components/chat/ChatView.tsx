@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { Loader2, Plus } from "lucide-react";
+import { expertDisplayName } from "@/lib/experts";
 import { cn } from "@/lib/utils";
 import { DropOverlay } from "@/components/DropOverlay";
 import { ChatComposer } from "./ChatComposer";
@@ -18,6 +19,7 @@ import { useChatAttachments } from "./useChatAttachments";
 export function ChatView() {
   const {
     agentId,
+    profile,
     agents,
     sessions,
     activeSessionId,
@@ -30,6 +32,7 @@ export function ChatView() {
   } = useChatContext();
   const { messages, isStreaming, loadingHistory, error, send, stop, killRun } = useChat({
     agentId,
+    profile,
     sessionId: activeSessionId,
     onSessionCreated,
     onActivity: bumpSession,
@@ -73,10 +76,12 @@ export function ChatView() {
     [sessions, activeSessionId]
   );
   const headerTitle = activeTitle || (activeSessionId ? "Chat" : "New chat");
+  // The expert's name when the chat targets one, the instance's otherwise.
   const agentName = useMemo(() => {
+    if (profile) return expertDisplayName(profile);
     const a = agents.find((x) => x.agent37_id === agentId);
     return a?.name?.trim() || agentId;
-  }, [agents, agentId]);
+  }, [agents, agentId, profile]);
 
   return (
     <div className="relative flex h-full min-h-0 flex-col" {...att.dragHandlers}>

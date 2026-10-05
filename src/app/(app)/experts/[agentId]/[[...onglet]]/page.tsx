@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import { agentAccessRole, getAgentRow, requireUser } from "@/lib/auth";
-import { parseAgentTab } from "@/lib/expert-tabs";
+import { parseAgentRoute } from "@/lib/expert-tabs";
 import { AgentWorkspace } from "@/components/AgentWorkspace";
 
-// L'espace d'un expert. L'expert actif est porté par l'URL ; le segment optionnel porte
-// l'onglet (/experts/{agentId}/{onglet}, « chat » par défaut). La route vit dans le groupe
+// L'espace d'un expert. L'instance et l'expert (son profil Hermes) sont portés par l'URL, puis
+// l'onglet : /experts/{agentId}/{profileId}/{onglet}, « chat » par défaut. Sans profil, c'est le
+// profil par défaut de l'instance. La route vit dans le groupe
 // (app), donc dans le chrome commun : plus d'écran de choix d'instance, la liste des experts
 // est en permanence dans la barre latérale.
 export default async function AgentWorkspacePage({
@@ -15,8 +16,8 @@ export default async function AgentWorkspacePage({
   const { agentId, onglet } = await params;
 
   // One grammar, shared with the client SPA: an unknown tab or extra segments 404 here.
-  const initialTab = parseAgentTab(onglet);
-  if (initialTab === null) notFound();
+  const route = parseAgentRoute(onglet);
+  if (route === null) notFound();
 
   const { db, user } = await requireUser();
 
@@ -30,11 +31,14 @@ export default async function AgentWorkspacePage({
 
   return (
     <AgentWorkspace
+      // A different expert is a different chat: remount so no thread or draft carries over.
+      key={`${agentId}:${route.profileId ?? ""}`}
       agentId={agentId}
+      profileId={route.profileId}
       workspaceId={row.workspace_id}
       role={role}
       isOwner={row.owner_user_id === user.id}
-      initialTab={initialTab}
+      initialTab={route.tab}
     />
   );
 }

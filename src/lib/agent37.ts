@@ -197,24 +197,27 @@ export const agent37 = {
   // ---- Per-instance Agents API (data plane: web chat) — served on the instance host, see
   // instanceFetch. The streaming surfaces (POST /v1/responses SSE, GET/PUT /v1/files/content,
   // GET /v1/files/archive) go through instanceFetch directly from their routes. ----
-  listModels: (id: string) => instanceCall<ModelsResponse>(id, "/v1/models"),
+  // `profileQuery` is the "?profile=…" of one Hermes profile (see lib/profile-id), empty for the
+  // instance's default home. Every session read below takes it too.
+  listModels: (id: string, profileQuery = "") => instanceCall<ModelsResponse>(id, `/v1/models${profileQuery}`),
   // The thread rail: every session on the instance. Items carry `title`, a `preview` of the first
   // message, and timestamps — the sessions route turns these into the rail's label + ordering.
-  listSessions: (id: string) => instanceCall<SessionListResponse>(id, "/v1/sessions"),
-  getSession: (id: string, sessionId: string) =>
-    instanceCall<SessionDetail>(id, `/v1/sessions/${encodeURIComponent(sessionId)}`),
-  deleteSession: (id: string, sessionId: string) =>
+  listSessions: (id: string, profileQuery = "") =>
+    instanceCall<SessionListResponse>(id, `/v1/sessions${profileQuery}`),
+  getSession: (id: string, sessionId: string, profileQuery = "") =>
+    instanceCall<SessionDetail>(id, `/v1/sessions/${encodeURIComponent(sessionId)}${profileQuery}`),
+  deleteSession: (id: string, sessionId: string, profileQuery = "") =>
     instanceCall<{ id: string; deleted: boolean }>(
       id,
-      `/v1/sessions/${encodeURIComponent(sessionId)}`,
+      `/v1/sessions/${encodeURIComponent(sessionId)}${profileQuery}`,
       { method: "DELETE" }
     ),
   // Set a session's title. Supported on newer Hermes builds; older ones answer 404/405 (the
   // PATCH route maps that to a friendly "not supported yet" so the rail degrades gracefully).
-  renameSession: (id: string, sessionId: string, title: string) =>
+  renameSession: (id: string, sessionId: string, title: string, profileQuery = "") =>
     instanceCall<{ id: string; agent: string; renamed: boolean }>(
       id,
-      `/v1/sessions/${encodeURIComponent(sessionId)}`,
+      `/v1/sessions/${encodeURIComponent(sessionId)}${profileQuery}`,
       { method: "PATCH", body: JSON.stringify({ title }) }
     ),
   cancelResponse: (id: string, responseId: string) =>

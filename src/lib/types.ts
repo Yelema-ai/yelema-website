@@ -51,6 +51,8 @@ export interface Expert {
 export interface AgentRow {
   agent37_id: string;
   workspace_id: string;
+  // The profiles installed on the instance, mirrored by the back office (absent on older rows).
+  profiles?: string[] | null;
   name: string | null;
   status: string | null;
   template: string | null;

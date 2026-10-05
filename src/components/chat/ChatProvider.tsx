@@ -3,11 +3,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
+import { profileQuery } from "@/lib/profile-id";
 import type { MergedAgent } from "@/lib/types";
 import { type ChatSession } from "./types";
 
 interface ChatContextValue {
   agentId: string;
+  // The expert this chat talks to: a Hermes profile on the instance, or null for its default home.
+  profile: string | null;
   // The workspace's agent list, threaded down so the composer's agent switcher can list them.
   agents: MergedAgent[];
   sessions: ChatSession[];
@@ -44,11 +47,12 @@ export function useChatContext() {
 }
 
 // Holds the thread rail + the active selection, shared by the sidebar rail and the conversation
-// pane. The rail comes straight from the Agent37 Agents API (GET /v1/sessions) — there is no local
+// pane, for ONE expert. The rail comes straight from the Agent37 Agents API (GET /v1/sessions?profile=) — there is no local
 // sessions table. Each row's label (server-side title, else the first-message preview) is resolved
 // by the sessions route, so the rail paints in one fetch with no per-session hydration.
 export function ChatProvider({
   agentId,
+  profile,
   agents,
   urlSessionId,
   onChatTab,
@@ -56,6 +60,7 @@ export function ChatProvider({
   children,
 }: {
   agentId: string;
+  profile: string | null;
   agents: MergedAgent[];
   // The open thread's id, taken from the URL (?session=) — null for a new chat. The URL is the
   // source of truth so refresh, Back/Forward, and shared links all reopen the same thread.
@@ -67,6 +72,8 @@ export function ChatProvider({
   navigateToSession: (sessionId: string | null, mode?: "push" | "replace") => void;
   children: ReactNode;
 }) {
+  // Every chat route takes the expert as ?profile=; threads of one expert are invisible to another.
+  const q = profileQuery(profile);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(urlSessionId);
   const [composerFocusToken, setComposerFocusToken] = useState(0);
@@ -98,7 +105,7 @@ export function ChatProvider({
   useEffect(() => {
     let cancelled = false;
 
-    apiFetch<{ sessions: ChatSession[] }>(`/api/agents/${agentId}/chat/sessions`)
+    apiFetch<{ sessions: ChatSession[] }>(`/api/agents/${agentId}/chat/sessions${q}`)
       .then((res) => {
         if (!cancelled) setSessions(res.sessions);
       })
@@ -110,7 +117,7 @@ export function ChatProvider({
     return () => {
       cancelled = true;
     };
-  }, [agentId]);
+  }, [agentId, q]);
 
   const requestComposerFocus = useCallback(() => setComposerFocusToken((n) => n + 1), []);
 
@@ -176,7 +183,7 @@ export function ChatProvider({
       // from any tab, so off-tab this stays silent rather than yanking the user's URL).
       if (wasActive) setOpenThread(null);
       try {
-        await apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}`, { method: "DELETE" });
+        await apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`, { method: "DELETE" });
       } catch (e) {
         // Functional rollback: re-insert only the removed row (preserving any threads added
         // concurrently) and restore the open thread.
@@ -185,7 +192,7 @@ export function ChatProvider({
         toast.error((e as Error).message || "Couldn't delete that chat.");
       }
     },
-    [agentId, activeSessionId, sessions, setOpenThread]
+    [agentId, q, activeSessionId, sessions, setOpenThread]
   );
 
   const renameSession = useCallback(
@@ -195,7 +202,7 @@ export function ChatProvider({
       if (!next || next === prev) return;
       setSessions((s) => s.map((x) => (x.session_id === sessionId ? { ...x, title: next } : x))); // optimistic
       try {
-        await apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}`, {
+        await apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`, {
           method: "PATCH",
           body: JSON.stringify({ title: next }),
         });
@@ -204,7 +211,7 @@ export function ChatProvider({
         toast.error((e as Error).message || "Couldn't rename that chat.");
       }
     },
-    [agentId, sessions]
+    [agentId, q, sessions]
   );
 
   // Move a thread to the top of the rail on new activity. Upstream ordering (last_active) only
@@ -220,6 +227,7 @@ export function ChatProvider({
   const value = useMemo<ChatContextValue>(
     () => ({
       agentId,
+      profile,
       agents,
       sessions,
       activeSessionId,
@@ -235,7 +243,7 @@ export function ChatProvider({
       renameSession,
       bumpSession,
     }),
-    [agentId, agents, sessions, activeSessionId, onChatTab, composerFocusToken, requestComposerFocus, loadingSessions, selectSession, startNewChat, onSessionCreated, registerRunKiller, deleteSession, renameSession, bumpSession]
+    [agentId, profile, agents, sessions, activeSessionId, onChatTab, composerFocusToken, requestComposerFocus, loadingSessions, selectSession, startNewChat, onSessionCreated, registerRunKiller, deleteSession, renameSession, bumpSession]
   );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
