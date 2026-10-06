@@ -29,7 +29,7 @@ dans ce dépôt, et avec un déploiement Vercel piloté par le back-office.
 | Base | Projet Supabase **mutualisé** (`yelema`) pour tous les clients ; chaque déploiement verrouillé par `WORKSPACE_ID` |
 | Taille et veille des instances | **2 vCPU / 4 Go**, mise en veille après **45 minutes** d'inactivité (`idle_timeout_seconds: 2700`), réglées par le back-office à la création. L'app n'y touche pas *(décidé le 2026-10-05)* |
 | Sujets Telegram | **Dans l'app** : bouton « Créer les sujets des experts » dans l'onglet Canaux *(décidé le 2026-10-05)* |
-| Vue admin | L'admin voit son propre espace ; celui d'un membre s'ouvre depuis Administration *(hypothèse, à confirmer)* |
+| Vue admin | **L'admin n'accède qu'à sa propre instance et à ses experts, comme tout utilisateur** ; il voit en plus la liste des membres *(décidé le 2026-10-06)* |
 | Clé et proxy Composio | Dans l'app ; le back-office fournit la clé et le jeton de l'instance *(hypothèse, à confirmer)* |
 
 ## 3. Contrat avec le back-office (à ne pas casser)
@@ -151,8 +151,8 @@ Ajouts du 2026-10-05, version `v0.3.0` :
 | Portrait de l'expert dans le chat | Fait | En-tête, écran d'accueil du chat et à côté de chaque réponse |
 | « Son ordinateur » (repris des PR #15 et #16 de `main`) | Fait | Écran de l'instance du membre en direct, panneau à côté du chat sur grand écran, prise en main. Visible seulement sur une instance `yelema-hermes` (image `v1.1.0`, révision 6). À essayer sur 2 vCPU / 4 Go : le prestataire le fait tourner sur 4 vCPU / 8 Go |
 
-Point ouvert : un admin de l'espace peut ouvrir, et piloter, l'écran de l'instance d'un membre
-(même règle que le reste de l'espace d'un expert). À restreindre au propriétaire si ce n'est pas voulu.
+Depuis la `v0.3.5`, seul le propriétaire d'une instance y accède (chat, fichiers, connecteurs,
+routines, canaux, écran) : un admin de l'espace n'ouvre plus celle d'un membre.
 
 Écarts par rapport au plan initial :
 

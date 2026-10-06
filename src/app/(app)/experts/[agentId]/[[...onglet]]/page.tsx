@@ -22,7 +22,7 @@ export default async function AgentWorkspacePage({
   const { db, user } = await requireUser();
 
   // The Supabase mirror is the source of truth for which app-workspace owns an agent. A missing
-  // row, or a viewer who is neither its owner nor an admin of its workspace, is a 404 (we don't
+  // row, or a viewer who is not its owner (workspace admins included), is a 404 (we don't
   // leak existence).
   const row = await getAgentRow(db, agentId).catch(() => null);
   if (!row) notFound();

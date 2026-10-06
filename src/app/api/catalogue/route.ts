@@ -13,8 +13,8 @@ export async function GET(request: Request) {
     const workspaceId = new URL(request.url).searchParams.get("workspace");
     if (!workspaceId) throw new ApiError(400, "invalid_request", "workspace query param is required");
 
-    const role = await requireMember(db, workspaceId, user.id);
-    const agents = await visibleAgents(db, workspaceId, user.id, role);
+    await requireMember(db, workspaceId, user.id);
+    const agents = await visibleAgents(db, workspaceId, user.id);
     const [{ profiles }, catalogue] = await Promise.all([installedProfiles(agents), loadCatalogue()]);
 
     const installed = new Map<string, InstalledExpert[]>();

@@ -57,20 +57,20 @@ export async function getAgentRow(db: DB, agent37Id: string): Promise<AgentRow> 
   return data as AgentRow;
 }
 
-// Who may reach an agent: its owner, or any admin of its workspace. Everyone else — including
-// other members of the same workspace — gets null, which callers turn into a 404 (we don't leak
-// that the agent exists). Returns the caller's workspace role otherwise.
+// Who may reach an agent: its owner, and nobody else. An admin of the workspace is a user like any
+// other here: they reach their own instance and its experts, never a colleague's (conversations,
+// files, connected accounts and screen are personal). Everyone else gets null, which callers turn
+// into a 404 (we don't leak that the agent exists). Returns the owner's workspace role otherwise.
+// An agent without an owner (rows older than per-member instances) is reachable by no one.
 export async function agentAccessRole(db: DB, row: AgentRow, userId: string): Promise<Role | null> {
-  const role = await getRole(db, row.workspace_id, userId);
-  if (role === "admin") return role;
-  if (role && row.owner_user_id === userId) return role;
-  return null;
+  if (!row.owner_user_id || row.owner_user_id !== userId) return null;
+  return getRole(db, row.workspace_id, userId);
 }
 
 // The auth + ownership preamble every per-agent BFF route repeats: require a signed-in user,
 // resolve the agent's mirror row, then gate on access. "owner" (the default) lets the agent's
-// owner or a workspace admin in — using, configuring and starting/stopping the agent. "admin" is
-// for what spends or destroys (delete, resize, budget): workspace admins only. Returns the
+// owner in — using and configuring their own agent. "admin" is for what spends or destroys
+// (resize, budget): the owner again, and only if they are a workspace admin. Returns the
 // privileged client, user, and row so the handler can get on with its work.
 export async function requireAgentAccess(agent37Id: string, access: "owner" | "admin" = "owner") {
   const { db, user } = await requireUser();

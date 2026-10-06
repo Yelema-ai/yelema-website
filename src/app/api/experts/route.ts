@@ -6,7 +6,7 @@ import { installedProfiles, visibleAgents } from "@/lib/installed-experts";
 import type { Expert } from "@/lib/types";
 
 // `GET /api/experts?workspace={id}` — les Experts de l'utilisateur, c'est-à-dire les PROFILS
-// Hermes installés sur ses instances (toutes celles de l'organisation pour un admin).
+// Hermes installés sur SON instance. Un admin n'en voit pas plus qu'un membre.
 //
 // L'agrégation se fait ici, pas dans le navigateur : la barre latérale se charge à chaque page.
 // Chaque profil est ensuite habillé par le catalogue du back-office (nom, métier, portrait) ;
@@ -20,8 +20,8 @@ export async function GET(request: Request) {
     const workspaceId = new URL(request.url).searchParams.get("workspace");
     if (!workspaceId) throw new ApiError(400, "invalid_request", "workspace query param is required");
 
-    const role = await requireMember(db, workspaceId, user.id);
-    const agents = await visibleAgents(db, workspaceId, user.id, role);
+    await requireMember(db, workspaceId, user.id);
+    const agents = await visibleAgents(db, workspaceId, user.id);
     const [{ profiles, unreadable }, catalogue] = await Promise.all([installedProfiles(agents), loadCatalogue()]);
 
     const experts: Expert[] = profiles.map((p) => {

@@ -2,11 +2,10 @@ import "server-only";
 import type { DB } from "@/lib/auth";
 import { listInstanceProfiles } from "@/lib/hermes-profiles";
 import { ApiError } from "@/lib/http";
-import type { AgentRow, Role } from "@/lib/types";
+import type { AgentRow } from "@/lib/types";
 
-// The profiles installed on the instances a user can see: every instance of the workspace for an
-// admin, their own for a member. Shared by the experts list and the catalogue, so both screens
-// agree on what "installed" means.
+// The profiles installed on the instance a user owns (admins included: nobody sees a colleague's).
+// Shared by the experts list and the catalogue, so both screens agree on what "installed" means.
 
 export interface InstalledProfile {
   agent: AgentRow;
@@ -22,10 +21,13 @@ export interface InstalledProfiles {
   unreadable: AgentRow[];
 }
 
-export async function visibleAgents(db: DB, workspaceId: string, userId: string, role: Role): Promise<AgentRow[]> {
-  let query = db.from("agents").select("*").eq("workspace_id", workspaceId);
-  if (role !== "admin") query = query.eq("owner_user_id", userId);
-  const { data, error } = await query.order("created_at", { ascending: false });
+export async function visibleAgents(db: DB, workspaceId: string, userId: string): Promise<AgentRow[]> {
+  const { data, error } = await db
+    .from("agents")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("owner_user_id", userId)
+    .order("created_at", { ascending: false });
   if (error) throw new ApiError(500, "db_error", error.message);
   return (data ?? []) as AgentRow[];
 }

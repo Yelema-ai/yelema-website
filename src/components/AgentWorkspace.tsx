@@ -57,9 +57,9 @@ export function AgentWorkspace({
   isOwner: boolean;
   initialTab: AgentTab;
 }) {
-  // The page only renders for the agent's owner or a workspace admin (see its server check); both
+  // The page only renders for the agent's owner (see its server check); they
   // operate the agent, only an admin deletes it.
-  const canManage = role === "admin" || isOwner;
+  const canManage = isOwner;
   const pathname = usePathname();
   const { setCurrentId } = useWorkspace();
 

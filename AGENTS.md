@@ -118,14 +118,15 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   the `sk_live_` key nor the service-role key ever reaches the browser.
 - **Yelema fork: one client per deployment, roles, one agent per member.** The back-office creates
   the deployment's single workspace and its admin; there is no open sign-up (only on the way to an
-  invitation) and no workspace creation or deletion (`403`). Roles are `admin` (sees and manages
-  every agent) and `member` (`0002_roles_owner.sql`). The back-office creates every member and
+  invitation) and no workspace creation or deletion (`403`). Roles are `admin` and `member`
+  (`0002_roles_owner.sql`); an admin sees the members list, and like any member reaches only
+  their OWN agent and its experts. The back-office creates every member and
   their agent, one per member (`agents.owner_user_id`, unique index); the app creates neither.
   All clients share ONE Supabase project: `WORKSPACE_ID` pins a deployment to its workspace and
   `getRole` answers null for any other (`docs/decisions/supabase-projet-partage.md`), so
   migrations must stay additive. `requireAgentAccess` lets in the
-  owner or a workspace admin — anyone else gets a `404`; `"admin"` access (delete, resize,
-  budget) is admins only. Configuration is read at runtime (`src/lib/runtime-config.ts`).
+  agent's OWNER only — anyone else, workspace admins included, gets a `404`; `"admin"` access
+  (resize, budget) is the owner again, and only if they are an admin. Configuration is read at runtime (`src/lib/runtime-config.ts`).
 - **`src/lib/agent37.ts` is the only thing that calls the Agent37 API**
   (`server-only`) — both the control-plane base and each instance's data-plane host.
   Internal `src/app/api/**` routes are this app's BFF: the browser calls them, they
@@ -242,7 +243,7 @@ goes away once every client is on Vercel.
   from the app, but hears no Telegram/WhatsApp message and runs no Hermes routine until then.
 - **"Son ordinateur" hands out full control of the instance.** The signed URL for the screen lets
   its holder click and type on the member's machine and cannot be revoked: it is minted only for
-  the instance's owner or a workspace admin, for 60 seconds, and never logged.
+  the instance's owner, for 60 seconds, and never logged.
 - **Payments are intentionally excluded.** Add Stripe (or anything) yourself when
   you're ready to charge your own customers — the create route (`src/app/api/agents/route.ts`)
   has a commented `canCreateAgent()` seam marking where an entitlement gate would go.

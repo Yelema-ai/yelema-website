@@ -101,7 +101,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
       {experts.map((e) => (
         <ExpertItem
-          // The same profile can sit on two instances (an admin sees them all): key on both.
+          // Keyed on instance and profile: a profile name alone is not unique across instances.
           key={`${e.agentId}:${e.profileId}`}
           expert={e}
           active={pathname === `/experts/${e.agentId}/${e.profileId}` || pathname.startsWith(`/experts/${e.agentId}/${e.profileId}/`)}

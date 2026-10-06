@@ -35,7 +35,7 @@ export function ChannelsTab({
 }: {
   agentId: string;
   agent: MergedAgent;
-  // Connecting a channel: the agent's owner or a workspace admin.
+  // Connecting a channel: the agent's owner.
   canManage: boolean;
 }) {
   // Reaching the harness runs a command inside the instance, which wakes a sleeper but cannot start a

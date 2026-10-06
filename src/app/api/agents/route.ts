@@ -33,10 +33,13 @@ export async function GET(request: Request) {
 
     const role = await requireMember(db, workspaceId, user.id);
 
-    // An admin sees every agent of the workspace; a member only the one they own.
-    let query = db.from("agents").select("*").eq("workspace_id", workspaceId);
-    if (role !== "admin") query = query.eq("owner_user_id", user.id);
-    const { data: rows, error } = await query.order("created_at", { ascending: false });
+    // Everyone, admins included, sees only the agent they own.
+    const { data: rows, error } = await db
+      .from("agents")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .eq("owner_user_id", user.id)
+      .order("created_at", { ascending: false });
     if (error) throw new ApiError(500, "db_error", error.message);
 
     // "Created by": the member each agent belongs to, by email (one RPC for the whole workspace).
