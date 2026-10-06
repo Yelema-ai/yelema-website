@@ -70,7 +70,7 @@ export function AgentWorkspace({
   }, [workspaceId, setCurrentId]);
 
   // Live data for every agent in the workspace: the switcher lists them, and `active` carries this
-  // agent's live ports / status / update flag. Poll while any agent is mid-transition (AgentsView's
+  // agent's live ports / status / update flag. Poll while any agent is mid-transition (the old fleet view's
   // approach), so a starting agent's ports light up without a manual refresh.
   const [agents, setAgents] = useState<MergedAgent[]>([]);
   const load = useCallback(async () => {

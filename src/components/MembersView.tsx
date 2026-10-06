@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 // Read-only: members (and their agent) are added and removed from the Yelema back-office.
 
 function roleLabel(role: Role) {
-  return role === "admin" ? "Admin" : "Member";
+  return role === "admin" ? "Admin" : "Membre";
 }
 
 function formatDate(iso: string) {
@@ -39,27 +39,27 @@ export function MembersView() {
     load();
   }, [load]);
 
-  if (!current) return <p className="text-sm text-muted-foreground">No workspace selected.</p>;
+  if (!current) return <p className="text-sm text-muted-foreground">Aucun espace sélectionné.</p>;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Members</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Membres</h1>
         <p className="text-sm text-muted-foreground">
-          {current.name} · members are added and removed by your Yelema administrator.
+          {current.name} · les membres sont ajoutés et retirés par votre administrateur Yelema.
         </p>
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <p className="text-sm text-muted-foreground">Chargement…</p>
       ) : (
         <div className="overflow-hidden rounded-lg border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
               <tr>
-                <th className="px-4 py-2.5 font-medium">Email</th>
-                <th className="px-4 py-2.5 font-medium">Role</th>
-                <th className="px-4 py-2.5 font-medium">Added</th>
+                <th className="px-4 py-2.5 font-medium">E-mail</th>
+                <th className="px-4 py-2.5 font-medium">Rôle</th>
+                <th className="px-4 py-2.5 font-medium">Ajouté le</th>
               </tr>
             </thead>
             <tbody>

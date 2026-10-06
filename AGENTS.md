@@ -136,8 +136,8 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   them; `/` is the home, `/recruter` the gallery of every expert Yelema offers, and
   `/experts/{agentId}/{profileId}/{tab}` the expert's workspace (Discussion / Livrables /
   Routines / Canaux / Connecteurs). Without a profile segment the page is the
-  instance's default Hermes home. Administration (`/administration`) holds the workspace, its
-  members and its instances. The app creates neither members nor agents.
+  instance's default Hermes home. Administration (`/administration`) is the read-only list of the workspace's
+  members. The app creates neither members nor agents, and shows no list of instances.
 - **Talking to an expert is the Agent37 API's `profile`**, not an image feature: `profile` on
   `POST /v1/responses` and `?profile=` on every session read, sent on EVERY turn. The profile is
   checked against what is installed on that instance (`src/lib/profiles.ts`), never a fixed list.

@@ -1,10 +1,6 @@
-import { MembersView } from "@/components/MembersView";
-import { PageBody } from "@/components/app/PageBody";
+import { redirect } from "next/navigation";
 
+// Ancienne adresse de la liste des membres : elle est maintenant la page Administration elle-même.
 export default function Page() {
-  return (
-    <PageBody>
-      <MembersView />
-    </PageBody>
-  );
+  redirect("/administration");
 }
