@@ -217,6 +217,16 @@ export interface IntegrationConnectResult {
   redirectUrl: string;
 }
 
+/** GET /api/workspaces/{id}/instances : une instance telle qu'un admin la lit, sans rien pour y entrer. */
+export interface WorkspaceInstance {
+  name: string | null;
+  /** Le membre à qui elle appartient. */
+  member_email: string | null;
+  /** Qui l'a créée, quand c'est un membre de l'espace ; sinon Yelema. */
+  created_by_email: string | null;
+  created_at: string;
+}
+
 export interface MergedAgent extends AgentRow {
   // Email of the member the agent belongs to (owner_user_id, else created_by); null if unknown.
   owner_email: string | null;

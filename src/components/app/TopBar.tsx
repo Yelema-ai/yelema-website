@@ -13,6 +13,7 @@ function crumb(pathname: string, experts: Expert[]): string {
   if (pathname === "/") return "Accueil";
   if (pathname === "/recruter") return "Recruter";
   if (pathname.startsWith("/recruter/")) return "Recruter · Fiche de poste";
+  if (pathname.startsWith("/administration/instances")) return "Administration · Instances";
   if (pathname.startsWith("/administration")) return "Administration · Membres";
   if (pathname.startsWith("/experts/")) {
     const [, agentId, ...rest] = pathname.split("/").filter(Boolean);
