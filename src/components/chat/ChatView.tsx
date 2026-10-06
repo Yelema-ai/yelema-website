@@ -19,6 +19,10 @@ import { useChatAttachments } from "./useChatAttachments";
 // scrolling transcript with the composer docked at the bottom. The composer is kept at a STABLE
 // position in the tree across both states so it never remounts (preserving the draft, model, and
 // effort selection through the first send).
+// The image, and its first revision, that stream the instance's screen (Yelema-ai/yelema-hermes).
+const SCREEN_TEMPLATE = "yelema-hermes";
+const SCREEN_MIN_REVISION = 5;
+
 export function ChatView({ initialMessage }: { initialMessage?: string | null }) {
   const {
     agentId,
@@ -105,8 +109,12 @@ export function ChatView({ initialMessage }: { initialMessage?: string | null })
     : instance?.name?.trim() || agentId;
   // The avatar shown in the header, the welcome and beside each reply.
   const face = profile ? { displayName: agentName, photoUrl: expert?.photoUrl ?? null, gateway: null } : null;
-  // "Son ordinateur" needs the screen the yelema-hermes image streams; other instances have none.
-  const hasComputer = Boolean(profile) && (instance?.template ?? "").startsWith("yelema-hermes");
+  // "Son ordinateur" needs the screen the yelema-hermes image streams, from its revision 5 on
+  // (image v1.1.0); an instance on another image, or on an older revision, has none to show.
+  const hasComputer =
+    Boolean(profile) &&
+    instance?.image?.template === SCREEN_TEMPLATE &&
+    (instance.image.revision ?? 0) >= SCREEN_MIN_REVISION;
 
   return (
     <div className="flex h-full min-h-0">

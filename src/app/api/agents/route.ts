@@ -97,6 +97,7 @@ export async function GET(request: Request) {
                 url: previewUrl(row.agent37_id, port, l?.domain_urls?.[0]),
               })),
         update_available: updateAvailable(l),
+        image: l ? { template: l.template.split("@")[0], revision: l.template_revision ?? null } : null,
       };
     });
 

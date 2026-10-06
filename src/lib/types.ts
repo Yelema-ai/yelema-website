@@ -225,6 +225,9 @@ export interface MergedAgent extends AgentRow {
   past_due: boolean;
   ports: NonNullable<Agent["ports"]>;
   update_available: boolean;
+  // The image the instance really runs: its template's name (without any "@pin") and the revision
+  // installed. Null when the instance could not be read.
+  image: { template: string; revision: number | null } | null;
 }
 
 // ---- Agent37 Agents API (data plane: per-instance web chat) ----
