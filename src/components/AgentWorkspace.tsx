@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Blocks, FolderOpen, MessageSquare, MessagesSquare, Repeat, Settings2 } from "lucide-react";
+import { Blocks, FolderOpen, MessageSquare, MessagesSquare, Repeat } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { isTransitional } from "@/lib/format";
@@ -14,7 +14,6 @@ import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { useCatalogueExpert } from "@/components/experts/useCatalogue";
 import { expertDisplayName } from "@/lib/experts";
 import { DRIVE_ROOT } from "@/lib/drive-paths";
-import { AgentSettingsTab } from "@/components/AgentSettingsTab";
 import { ConnectorsView } from "@/components/integrations/ConnectorsView";
 import { ChannelsTab } from "@/components/channels/ChannelsTab";
 import { ChatProvider } from "@/components/chat/ChatProvider";
@@ -29,15 +28,15 @@ const TABS: { id: AgentTab; label: string; icon: typeof MessageSquare }[] = [
   { id: "routines", label: "Routines", icon: Repeat },
   { id: "messaging", label: "Canaux", icon: MessagesSquare },
   { id: "integrations", label: "Connecteurs", icon: Blocks },
-  { id: "settings", label: "Réglages", icon: Settings2 },
 ];
 
 // The per-expert tabbed SPA, laid out as a SINGLE left rail + the active tab's pane. The instance
 // (agentId) and the expert (profileId, a Hermes profile on that instance; null = its default home)
 // are bound to the URL; the open tab rides the URL as a path segment. Tabs switch via
 // history.pushState (no full navigation) so Chat's in-flight stream and Files' current directory
-// survive moving between tabs — those two mount lazily then stay MOUNTED-BUT-HIDDEN; Integrations
-// and Settings mount lazily in the scroll area.
+// survive moving between tabs — those two mount lazily then stay MOUNTED-BUT-HIDDEN; the other tabs
+// mount lazily in the scroll area. There is no settings tab: the instance (its size, its own
+// dashboard and terminal, its budget) is run by Yelema from the back office, not by the member.
 //
 // ChatProvider wraps the WHOLE workspace (not just the Chat pane) so the "Chats" thread list can live
 // in this one sidebar — folded in under the nav on the Chat tab — instead of a second rail. The chat
@@ -238,7 +237,7 @@ export function AgentWorkspace({
               <FilesTab agentId={agentId} initialPath={driveFolder} />
             </div>
           )}
-          {/* Integrations + Settings mount lazily in the padded scroll area. */}
+          {/* Routines, Connecteurs and Canaux mount lazily in the padded scroll area. */}
           {!isChat && !isFiles && (
             <div className="min-h-0 flex-1 overflow-y-auto">
               {currentTab === "routines" && profileId ? (
@@ -257,23 +256,10 @@ export function AgentWorkspace({
                 <div className="mx-auto w-full max-w-5xl p-6 md:px-10 md:py-8">
                   <ConnectorsView agentId={agentId} />
                 </div>
-              ) : currentTab === "messaging" ? (
-                <div className="mx-auto w-full max-w-3xl p-6 md:px-10 md:py-8">
-                  {active ? (
-                    <ChannelsTab agentId={agentId} agent={active} canManage={canManage} />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Chargement…</p>
-                  )}
-                </div>
               ) : (
                 <div className="mx-auto w-full max-w-3xl p-6 md:px-10 md:py-8">
                   {active ? (
-                    <AgentSettingsTab
-                      agentId={agentId}
-                      agent={active}
-                      canManage={canManage}
-                      onChanged={load}
-                    />
+                    <ChannelsTab agentId={agentId} agent={active} canManage={canManage} />
                   ) : (
                     <p className="text-sm text-muted-foreground">Chargement…</p>
                   )}

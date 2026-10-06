@@ -18,7 +18,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AgentNameCell } from "@/components/AgentNameCell";
-import { OpenPortButtons } from "@/components/OpenPortButtons";
 import { useAsyncAction } from "@/components/useAsyncAction";
 
 export function AgentsView() {
@@ -121,14 +120,6 @@ export function AgentsView() {
                           Chat
                         </Link>
                       </Button>
-                      <OpenPortButtons
-                        agentId={a.agent37_id}
-                        ports={a.ports}
-                        disabled={a.live_status !== "running"}
-                        template={a.template}
-                        size="sm"
-                        className="justify-end"
-                      />
                       <AgentOptionsMenu agent={a} onChanged={load} />
                     </div>
                   </td>

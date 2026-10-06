@@ -135,7 +135,7 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   (`client__expert`) installed on the member's instance. The shell (`src/components/app`) lists
   them; `/` is the home, `/recruter` the gallery of every expert Yelema offers, and
   `/experts/{agentId}/{profileId}/{tab}` the expert's workspace (Discussion / Livrables /
-  Routines / Canaux / Connecteurs / Réglages). Without a profile segment the page is the
+  Routines / Canaux / Connecteurs). Without a profile segment the page is the
   instance's default Hermes home. Administration (`/administration`) holds the workspace, its
   members and its instances. The app creates neither members nor agents.
 - **Talking to an expert is the Agent37 API's `profile`**, not an image feature: `profile` on
@@ -233,6 +233,10 @@ goes away once every client is on Vercel.
 - **A file path from the browser is checked before it reaches the instance** (`assertInDrive`).
   Server code that must read outside the drive (the routines key file) does so itself, never
   through a path the caller supplied.
+- **A member never reaches the instance's own dashboard, terminal or files UI.** There is no
+  settings tab and no route that mints a signed URL for an arbitrary port; running the instance is
+  Yelema's job, from the back office. The one exception is "Son ordinateur", whose route signs
+  the screen's port only.
 - **The app never changes an instance's sleep or size.** The back office creates each member's
   instance (2 vCPU, auto-sleep after 45 idle minutes). A sleeping instance wakes on any request
   from the app, but hears no Telegram/WhatsApp message and runs no Hermes routine until then.
