@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { getSession, type DB } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { deploymentWorkspaceId } from "@/lib/runtime-config";
+import { authViaBackoffice, deploymentWorkspaceId } from "@/lib/runtime-config";
+import { currentPrincipal } from "@/lib/session";
 import { WorkspaceProvider } from "@/components/WorkspaceProvider";
 import { UnlinkedAccount } from "@/components/UnlinkedAccount";
 import { AppShell } from "@/components/app/AppShell";
@@ -41,9 +42,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { user } = await getSession();
   if (!user) redirect("/login");
 
-  // Table access goes through the privileged client; the user came from the verified session above.
-  const db = createAdminClient();
-  const workspaces = await loadWorkspaces(db, user.id);
+  // Signed in through the back office: it already said which workspace this is and the user's role.
+  // Otherwise table access goes through the privileged client; the user came from the verified
+  // session above.
+  const me = authViaBackoffice() ? await currentPrincipal() : null;
+  const workspaces: WorkspaceWithRole[] = me
+    ? [{ id: me.workspace.id, name: me.workspace.name, owner_id: "", created_at: "", role: me.user.role }]
+    : authViaBackoffice()
+      ? []
+      : await loadWorkspaces(createAdminClient(), user.id);
   // One client per deployment: the back-office creates THE workspace and its admin, and everyone
   // else joins by invitation. A signed-in account with no membership is simply not attached yet.
   if (workspaces.length === 0) return <UnlinkedAccount email={user.email ?? ""} />;

@@ -200,3 +200,32 @@ l'instance ; le catalogue reste public ; le proxy `/api/composio-mcp` continue d
 et le middleware quittent `@supabase/ssr` pour un cookie `httpOnly` posé par l'app et un jeton
 vérifié par JWKS. C'est le plus gros chantier du plan pour ce dépôt ; à faire derrière un réglage
 pour pouvoir revenir en arrière.
+
+## 13. L'app lit le back-office (`v0.4.0`, 2026-10-06)
+
+Côté app du « temps 2 » de `yelema-platform/docs/plans/app-cliente-via-back-office.md`, écrit contre
+le guide `docs/specs/client-api-v1/app.md`. **Désactivé par défaut** : il s'allume par déploiement
+avec `AUTH_VIA_BACKOFFICE=true` (plus `BACKOFFICE_URL` et `WORKSPACE_ID`, déjà posées). Sans la
+variable, l'app fonctionne exactement comme la `v0.3.7`. Retour arrière : retirer la variable et
+redéployer.
+
+| Sujet | Avec le réglage |
+|---|---|
+| Connexion, mot de passe oublié, premier accès, déconnexion | Routes `/api/auth/*` de l'app, qui appellent le back-office. Le navigateur ne parle plus à Supabase |
+| Session | Un cookie `httpOnly` (`yelema_session`) ; le proxy la renouvelle 2 minutes avant l'expiration |
+| Qui est l'utilisateur, son rôle, son espace | `GET /app/me`, gardé 30 secondes |
+| Son instance et ses experts | `GET /app/instance` (identifiant, état, image et révision, experts, Composio) |
+| Listes Membres et Instances | `GET /app/members`, `GET /app/instances` (admins) |
+| Lien reçu par e-mail | `/auth/callback` ne consomme plus le jeton : il le passe à la page du mot de passe, qui l'envoie avec le nouveau mot de passe |
+
+Ce qui ne change pas : chat, fichiers, routines, canaux et écran en direct avec l'instance ;
+catalogue public ; proxy Composio (il lit toujours `agents.apps_token_hash` en base) ; les clés
+`AGENT37_API_KEY` et `SUPABASE_SERVICE_ROLE_KEY` restent nécessaires tant que le temps 3 n'est pas fait.
+
+Vérifié le 2026-10-06 contre un faux back-office local reproduisant le guide (25 contrôles :
+connexion, refus, suspension, renouvellement, cloisonnement entre membres, listes, liens). **Pas
+encore essayé contre le vrai back-office** : ses routes ne sont pas déployées sur la QA.
+
+À surveiller au premier essai réel : l'unité de `expiresAt` (traitée comme des secondes), la forme
+du lien de mot de passe oublié (`token_hash` et `type` dans l'adresse de `/auth/callback`), et la
+taille du cookie (deux jetons Supabase).

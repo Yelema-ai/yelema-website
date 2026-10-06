@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ApiError } from "@/lib/http";
-import { deploymentWorkspaceId } from "@/lib/runtime-config";
+import { authViaBackoffice, deploymentWorkspaceId } from "@/lib/runtime-config";
+import { currentInstance, currentPrincipal } from "@/lib/session";
 import type { AgentRow, Role } from "@/lib/types";
 
 // `db` is the privileged service-role client (RLS bypassed). All table access in this app goes
@@ -11,12 +12,28 @@ import type { AgentRow, Role } from "@/lib/types";
 // session-derived user id has been checked against the memberships table.
 export type DB = ReturnType<typeof createAdminClient>;
 
-export async function getSession() {
+// The signed-in user as the rest of the app needs it, whoever vouches for it.
+export interface SessionUser {
+  id: string;
+  email: string | null;
+  name: string | null;
+}
+
+// Two ways to know who is signed in, chosen per deployment (authViaBackoffice in runtime-config):
+// the back office, which also says the user's role and instance and enforces suspensions; or
+// Supabase Auth with this app's own tables, the first way. Every helper below has the two branches,
+// so no route needs to know which one is on.
+export async function getSession(): Promise<{ user: SessionUser | null }> {
+  if (authViaBackoffice()) {
+    const me = await currentPrincipal();
+    return { user: me ? { id: me.user.id, email: me.user.email, name: me.user.name } : null };
+  }
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  return { user };
+  const name = (user?.user_metadata?.name as string | undefined)?.trim() || null;
+  return { user: user ? { id: user.id, email: user.email ?? null, name } : null };
 }
 
 export async function requireUser() {
@@ -30,6 +47,11 @@ export async function requireUser() {
 export async function getRole(db: DB, workspaceId: string, userId: string): Promise<Role | null> {
   const pinned = deploymentWorkspaceId();
   if (pinned && workspaceId !== pinned) return null;
+  if (authViaBackoffice()) {
+    // The back office only admits an active member of this deployment's workspace.
+    const me = await currentPrincipal();
+    return me && me.user.id === userId && me.workspace.id === workspaceId ? me.user.role : null;
+  }
   const { data } = await db
     .from("memberships")
     .select("role")
@@ -51,7 +73,37 @@ export async function requireAdmin(db: DB, workspaceId: string, userId: string):
   if (role !== "admin") throw new ApiError(403, "forbidden", "Admin role required");
 }
 
+// The signed-in user's own instance, in the shape of an `agents` row, when the back office is the
+// source: it is what says which instance is theirs and which experts are installed on it.
+export async function backofficeAgentRow(): Promise<AgentRow | null> {
+  const [me, instance] = await Promise.all([currentPrincipal(), currentInstance()]);
+  if (!me || !instance) return null;
+  return {
+    agent37_id: instance.id,
+    workspace_id: me.workspace.id,
+    profiles: instance.experts.map((e) => e.profile),
+    // Only its presence is read here (which Composio the instance uses); the tool proxy looks the
+    // real hash up in the database.
+    apps_token_hash: instance.tools === "yelema" ? "backoffice" : null,
+    name: instance.name,
+    status: instance.state,
+    template: instance.image.template,
+    cpu: null,
+    memory: null,
+    disk: null,
+    created_by: null,
+    owner_user_id: me.user.id,
+    created_at: instance.createdAt ?? "",
+  };
+}
+
 export async function getAgentRow(db: DB, agent37Id: string): Promise<AgentRow> {
+  if (authViaBackoffice()) {
+    // Any id other than the caller's own instance does not exist for them.
+    const row = await backofficeAgentRow();
+    if (!row || row.agent37_id !== agent37Id) throw new ApiError(404, "not_found", "Agent not found");
+    return row;
+  }
   const { data } = await db.from("agents").select("*").eq("agent37_id", agent37Id).maybeSingle();
   if (!data) throw new ApiError(404, "not_found", "Agent not found");
   return data as AgentRow;

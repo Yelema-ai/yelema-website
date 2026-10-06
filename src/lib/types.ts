@@ -17,7 +17,12 @@ export interface WorkspaceMember {
   user_id: string;
   email: string;
   role: Role;
-  created_at: string;
+  /** When they joined; null when the source does not say. */
+  created_at: string | null;
+  // Known only when the back office lists the members.
+  name?: string | null;
+  status?: string | null;
+  instance_name?: string | null;
 }
 
 export interface Invitation {
@@ -224,7 +229,10 @@ export interface WorkspaceInstance {
   member_email: string | null;
   /** Qui l'a créée, quand c'est un membre de l'espace ; sinon Yelema. */
   created_by_email: string | null;
-  created_at: string;
+  created_at: string | null;
+  // Known only when the back office lists the instances.
+  state?: string | null;
+  experts?: string[];
 }
 
 export interface MergedAgent extends AgentRow {

@@ -1,5 +1,6 @@
 import "server-only";
-import type { DB } from "@/lib/auth";
+import { backofficeAgentRow, type DB } from "@/lib/auth";
+import { authViaBackoffice } from "@/lib/runtime-config";
 import { listInstanceProfiles } from "@/lib/hermes-profiles";
 import { ApiError } from "@/lib/http";
 import type { AgentRow } from "@/lib/types";
@@ -22,6 +23,11 @@ export interface InstalledProfiles {
 }
 
 export async function visibleAgents(db: DB, workspaceId: string, userId: string): Promise<AgentRow[]> {
+  if (authViaBackoffice()) {
+    // The back office says which instance is the caller's, with the experts installed on it.
+    const row = await backofficeAgentRow();
+    return row && row.workspace_id === workspaceId && row.owner_user_id === userId ? [row] : [];
+  }
   const { data, error } = await db
     .from("agents")
     .select("*")

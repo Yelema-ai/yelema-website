@@ -13,9 +13,12 @@ function roleLabel(role: Role) {
   return role === "admin" ? "Admin" : "Membre";
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString();
+function formatDate(iso: string | null) {
+  return iso ? new Date(iso).toLocaleDateString("fr-FR") : "—";
 }
+
+// The back office's word for a member's state, in French; anything else is shown as it comes.
+const STATUS: Record<string, string> = { active: "Actif", suspended: "Suspendu", pending: "En attente", provisioning: "En installation" };
 
 export function MembersView() {
   const { current } = useWorkspace();
@@ -40,6 +43,8 @@ export function MembersView() {
   }, [load]);
 
   if (!current) return <p className="text-sm text-muted-foreground">Aucun espace sélectionné.</p>;
+  // State and instance columns appear when the source gives them (the back office's list).
+  const detailed = members.some((m) => m.status != null || m.instance_name != null);
 
   return (
     <div className="space-y-6">
@@ -57,18 +62,25 @@ export function MembersView() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
               <tr>
-                <th className="px-4 py-2.5 font-medium">E-mail</th>
+                <th className="px-4 py-2.5 font-medium">Membre</th>
                 <th className="px-4 py-2.5 font-medium">Rôle</th>
+                {detailed && <th className="px-4 py-2.5 font-medium">État</th>}
+                {detailed && <th className="px-4 py-2.5 font-medium">Instance</th>}
                 <th className="px-4 py-2.5 font-medium">Ajouté le</th>
               </tr>
             </thead>
             <tbody>
               {members.map((m) => (
                 <tr key={m.user_id} className="border-t">
-                  <td className="px-4 py-3 font-medium">{m.email}</td>
+                  <td className="px-4 py-3">
+                    <span className="block font-medium">{m.name?.trim() || m.email}</span>
+                    {m.name?.trim() && <span className="block text-xs text-muted-foreground">{m.email}</span>}
+                  </td>
                   <td className="px-4 py-3">
                     <Badge variant={m.role === "admin" ? "default" : "outline"}>{roleLabel(m.role)}</Badge>
                   </td>
+                  {detailed && <td className="px-4 py-3">{m.status ? (STATUS[m.status] ?? m.status) : "—"}</td>}
+                  {detailed && <td className="px-4 py-3">{m.instance_name ?? "—"}</td>}
                   <td className="px-4 py-3 text-muted-foreground">{formatDate(m.created_at)}</td>
                 </tr>
               ))}

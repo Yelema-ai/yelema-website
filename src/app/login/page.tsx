@@ -6,12 +6,23 @@ import { useSupabase } from "@/lib/supabase/client";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { AuthShell, AuthHeading } from "@/components/auth/AuthShell";
 import { Field, PasswordField } from "@/components/auth/Field";
+import { readApiError } from "@/lib/api";
 import { publicSiteOrigin, safeNextPath } from "@/lib/site-url";
 import { toast } from "sonner";
 
 // Pas d'inscription ici : chaque compte est créé par le back-office Yelema, qui envoie
 // son lien d'accès. Trois écrans : connexion, demande de lien, lien envoyé.
 type Mode = "signin" | "forgot" | "sent";
+
+// POST to one of this app's /api/auth routes; the message to show when it refuses, else null.
+async function post(path: string, body: unknown): Promise<string | null> {
+  try {
+    const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    return res.ok ? null : await readApiError(res, "Une erreur est survenue. Réessayez dans un instant.");
+  } catch {
+    return "Connexion impossible. Vérifiez votre réseau, puis réessayez.";
+  }
+}
 
 const RESEND_DELAY = 30;
 
@@ -65,11 +76,18 @@ export default function LoginPage() {
 
   async function sendResetLink(mail: string) {
     setLoading(true);
-    const { error: err } = await supabase.auth.resetPasswordForEmail(mail, {
-      redirectTo: callbackUrl("/reset-password"),
-    });
+    let failure: string | null = null;
+    if (supabase) {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(mail, {
+        redirectTo: callbackUrl("/reset-password"),
+      });
+      failure = err?.message ?? null;
+    } else {
+      // The back office sends the link, and answers the same whether or not the account exists.
+      failure = await post("/api/auth/forgot", { email: mail });
+    }
     setLoading(false);
-    if (err) return toast.error(err.message);
+    if (failure) return toast.error(failure);
     sentTo.current = mail;
     setCooldown(RESEND_DELAY);
     setMode("sent");
@@ -85,10 +103,17 @@ export default function LoginPage() {
     if (!password) return;
     setLoading(true);
     setError(null);
-    const { error: err } = await supabase.auth.signInWithPassword({ email: mail, password });
+    let failure: string | null = null;
+    if (supabase) {
+      const { error: err } = await supabase.auth.signInWithPassword({ email: mail, password });
+      failure = err ? "Adresse ou mot de passe incorrect." : null;
+    } else {
+      // Through the back office: it says a wrong password, a suspended access, or too many tries.
+      failure = await post("/api/auth/login", { email: mail, password });
+    }
     setLoading(false);
-    if (err) {
-      setError("Adresse ou mot de passe incorrect.");
+    if (failure) {
+      setError(failure);
       return;
     }
     // Navigation dure : les cookies de session fraîchement écrits partent avec la requête suivante.

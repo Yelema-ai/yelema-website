@@ -1,4 +1,4 @@
-import { appVersion, backofficeUrl, composioApiKey, missingRequired } from "@/lib/runtime-config";
+import { appVersion, authViaBackoffice, backofficeUrl, composioApiKey, missingRequired } from "@/lib/runtime-config";
 
 // Liveness + configuration probe for the back-office. Public (no session) and secret-free:
 // 200 when every required variable is set, 503 otherwise — without saying which is missing.
@@ -7,6 +7,11 @@ export const dynamic = "force-dynamic";
 
 export function GET() {
   const ok = missingRequired().length === 0;
-  const features = { composio: Boolean(composioApiKey()), catalogue: Boolean(backofficeUrl()) };
+  const features = {
+    composio: Boolean(composioApiKey()),
+    catalogue: Boolean(backofficeUrl()),
+    // "backoffice" when the back office signs users in and lists what they see.
+    auth: authViaBackoffice() ? "backoffice" : "supabase",
+  };
   return Response.json({ ok, version: appVersion(), features }, { status: ok ? 200 : 503 });
 }

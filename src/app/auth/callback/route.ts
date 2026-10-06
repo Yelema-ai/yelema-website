@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { siteUrl } from "@/lib/runtime-config";
+import { authViaBackoffice, siteUrl } from "@/lib/runtime-config";
 import { publicSiteOrigin, safeNextPath } from "@/lib/site-url";
 
 export async function GET(request: Request) {
@@ -12,6 +12,16 @@ export async function GET(request: Request) {
   const next = safeNextPath(url.searchParams.get("next"));
   // Behind a reverse proxy request.url carries the listen address (0.0.0.0:3000), not the public host.
   const origin = publicSiteOrigin(siteUrl(), url.origin);
+
+  if (authViaBackoffice()) {
+    // The back office consumes the link together with the new password (POST /api/auth/accept), so
+    // it is NOT verified here: it goes on to the page that asks for the password.
+    if (!tokenHash || !type) return NextResponse.redirect(new URL("/login?error=auth", origin));
+    const target = new URL("/reset-password", origin);
+    target.searchParams.set("token_hash", tokenHash);
+    target.searchParams.set("type", type);
+    return NextResponse.redirect(target);
+  }
 
   const supabase = await createClient();
 

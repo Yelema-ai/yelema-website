@@ -140,6 +140,12 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   instance's default Hermes home. Administration (`/administration`) is two read-only lists: the workspace's
   members, and for admins its instances by name and member (no id, no state, no way in). The app
   creates neither members nor agents.
+- **Two ways to know the user, one switch.** With `AUTH_VIA_BACKOFFICE=true` the Yelema back office
+  signs users in and says what they see (`/api/v1/app/*`, `src/lib/backoffice.ts`): the session is
+  one httpOnly cookie (`src/lib/session.ts`), renewed by the proxy, and the user's role, workspace,
+  instance and installed experts come from the back office on every read, so a suspended member or
+  client is stopped there. Without the switch the app uses Supabase Auth and its own tables. The
+  helpers in `src/lib/auth.ts` carry both branches; routes do not know which is on.
 - **Talking to an expert is the Agent37 API's `profile`**, not an image feature: `profile` on
   `POST /v1/responses` and `?profile=` on every session read, sent on EVERY turn. The profile is
   checked against what is installed on that instance (`src/lib/profiles.ts`), never a fixed list.
@@ -166,6 +172,7 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 | `src/app/api/agents/[id]/integrations/**` | Connecteurs BFF: Yelema's Composio or Agent37's managed one, per instance (`src/lib/integrations.ts`) |
 | `src/lib/composio.ts`, `src/app/api/composio-mcp/` | Yelema's Composio (server-only key) and the experts' tool proxy; identity = the instance's owner |
 | `src/lib/profile-id.ts`, `src/lib/profiles.ts` | The profile a chat targets: shape, `?profile=`, and the check against the instance's real profiles |
+| `src/lib/backoffice.ts`, `src/lib/session.ts`, `src/app/api/auth/**` | Sign-in through the back office: its client, the cookie session, and the login / logout / forgot / accept routes |
 | `src/lib/catalogue.ts`, `src/app/api/catalogue/**` | The back office's expert catalogue, cached, and its join with installed profiles |
 | `src/components/experts/ExpertImage.tsx`, `images` in `next.config.ts` | Expert pictures resized by the image optimizer (the catalogue serves them full size); only Yelema hosts are optimized |
 | `src/lib/installed-experts.ts`, `src/app/api/experts/` | The profiles installed on the instances a user can see |

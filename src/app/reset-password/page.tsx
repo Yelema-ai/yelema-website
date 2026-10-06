@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Check, CircleAlert, CircleCheck, CircleX } from "lucide-react";
+import { readApiError } from "@/lib/api";
 import { useSupabase } from "@/lib/supabase/client";
 import { AuthShell, AuthHeading } from "@/components/auth/AuthShell";
 import { PasswordField } from "@/components/auth/Field";
@@ -19,12 +20,23 @@ export default function ResetPasswordPage() {
   // null = on vérifie encore la session de récupération.
   const [hasSession, setHasSession] = useState<boolean | null>(null);
   const [done, setDone] = useState(false);
+  const [link, setLink] = useState<{ tokenHash: string; type: string } | null>(null);
 
   useEffect(() => {
     // Le lien de récupération passe par /auth/callback, qui ouvre une session avant de
     // rediriger ici. Pas d'utilisateur = lien invalide, déjà utilisé, expiré, ou ouvert
     // dans un autre navigateur que celui qui l'a demandé.
-    supabase.auth.getUser().then(({ data }) => setHasSession(!!data.user));
+    if (supabase) {
+      supabase.auth.getUser().then(({ data }) => setHasSession(!!data.user));
+      return;
+    }
+    // Through the back office the link is not consumed on arrival: it rides the URL until the new
+    // password is sent with it. No token = the page was opened without a link.
+    const params = new URLSearchParams(window.location.search);
+    const tokenHash = params.get("token_hash");
+    const type = params.get("type");
+    setLink(tokenHash && type ? { tokenHash, type } : null);
+    setHasSession(Boolean(tokenHash && type));
   }, [supabase]);
 
   const score = useMemo(() => passwordScore(password), [password]);
@@ -35,9 +47,23 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     if (!canSave) return;
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
+    let failure: string | null = null;
+    if (supabase) {
+      failure = (await supabase.auth.updateUser({ password })).error?.message ?? null;
+    } else {
+      try {
+        const res = await fetch("/api/auth/accept", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...link, password }),
+        });
+        if (!res.ok) failure = await readApiError(res, "Une erreur est survenue. Réessayez dans un instant.");
+      } catch {
+        failure = "Connexion impossible. Vérifiez votre réseau, puis réessayez.";
+      }
+    }
     setLoading(false);
-    if (error) return toast.error(error.message);
+    if (failure) return toast.error(failure);
     setDone(true);
   }
 
@@ -59,10 +85,10 @@ export default function ResetPasswordPage() {
           C’est fait. Par sécurité, vous êtes déconnecté de vos autres appareils.
         </AuthHeading>
         <a
-          href="/login"
+          href={supabase ? "/login" : "/"}
           className="inline-flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-brand px-5 text-[15px] font-semibold text-white hover:opacity-90"
         >
-          Se connecter <ArrowRight className="size-[18px]" />
+          {supabase ? "Se connecter" : "Entrer dans mon espace"} <ArrowRight className="size-[18px]" />
         </a>
       </AuthShell>
     );

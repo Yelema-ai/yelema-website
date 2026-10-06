@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChevronsUpDown, LogOut, Settings2 } from "lucide-react";
-import { useSupabase } from "@/lib/supabase/client";
+import { signOutEverywhere, useSupabase } from "@/lib/supabase/client";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import {
   DropdownMenu,
@@ -23,7 +23,7 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
   const initial = (userEmail.trim()[0] ?? "?").toUpperCase();
 
   async function signOut() {
-    await supabase.auth.signOut();
+    await signOutEverywhere(supabase);
     window.location.href = "/login?out=1";
   }
 

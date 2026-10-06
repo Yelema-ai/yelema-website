@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Agent37Error } from "@/lib/agent37";
+import { BackofficeError } from "@/lib/backoffice";
 
 export class ApiError extends Error {
   status: number;
@@ -29,7 +30,8 @@ export function apiError(message: string, status = 400, code = "error") {
 }
 
 export function handleError(e: unknown) {
-  if (e instanceof ApiError || e instanceof Agent37Error) {
+  // The back office's own refusals and outages keep their status and message (already in French).
+  if (e instanceof ApiError || e instanceof Agent37Error || e instanceof BackofficeError) {
     return apiError(e.message, e.status, e.code);
   }
   console.error("[api]", e);

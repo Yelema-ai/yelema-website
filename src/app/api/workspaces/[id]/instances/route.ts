@@ -1,5 +1,8 @@
 import { requireAdmin, requireUser } from "@/lib/auth";
+import { backoffice, BackofficeError } from "@/lib/backoffice";
 import { ApiError, handleError, json } from "@/lib/http";
+import { authViaBackoffice } from "@/lib/runtime-config";
+import { readSession } from "@/lib/session";
 import type { WorkspaceInstance } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -12,6 +15,30 @@ export async function GET(_request: Request, { params }: Ctx) {
     const { id } = await params;
     const { db, user } = await requireUser();
     await requireAdmin(db, id, user.id);
+
+    if (authViaBackoffice()) {
+      // The back office lists them itself, already without any instance id.
+      const session = await readSession();
+      if (!session) throw new ApiError(401, "unauthorized", "Sign in required");
+      try {
+        const items = await backoffice.instances(session.accessToken);
+        return json({
+          instances: items.map(
+            (i): WorkspaceInstance => ({
+              name: i.instance.name,
+              member_email: i.member.email,
+              created_by_email: null,
+              created_at: i.instance.createdAt,
+              state: i.instance.state,
+              experts: i.instance.experts.map((e) => e.key),
+            })
+          ),
+        });
+      } catch (e) {
+        if (e instanceof BackofficeError) throw new ApiError(e.status, e.code, e.message);
+        throw e;
+      }
+    }
 
     const [{ data: rows, error }, { data: members }] = await Promise.all([
       db

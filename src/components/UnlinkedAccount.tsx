@@ -1,7 +1,7 @@
 "use client";
 
 import { branding } from "@/config/branding";
-import { useSupabase } from "@/lib/supabase/client";
+import { signOutEverywhere, useSupabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
 // Shown to a signed-in account that belongs to no workspace: in a one-client deployment only the
@@ -10,7 +10,7 @@ export function UnlinkedAccount({ email }: { email: string }) {
   const supabase = useSupabase();
 
   async function signOut() {
-    await supabase.auth.signOut();
+    await signOutEverywhere(supabase);
     window.location.href = "/login";
   }
 

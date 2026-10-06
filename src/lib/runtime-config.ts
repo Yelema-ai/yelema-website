@@ -59,6 +59,15 @@ export function deploymentWorkspaceId(): string | undefined {
 
 // The version this deployment runs: the git tag the back office deployed (APP_VERSION), else the
 // ref Vercel built, else "dev" locally.
+// Who signs users in and says what they may see. "backoffice": the Yelema back office does, through
+// its /api/v1/app routes (src/lib/backoffice.ts), and this app no longer asks Supabase who the user
+// is. It takes the switch AND the two settings those routes need; otherwise the app keeps its
+// first way (Supabase Auth and its own tables), so a deployment can be moved, and moved back, by
+// redeploying with one variable.
+export function authViaBackoffice(): boolean {
+  return read("AUTH_VIA_BACKOFFICE") === "true" && Boolean(backofficeUrl()) && Boolean(deploymentWorkspaceId());
+}
+
 export function appVersion(): string {
   return read("APP_VERSION") ?? read("VERCEL_GIT_COMMIT_REF") ?? "dev";
 }
@@ -79,6 +88,8 @@ export function missingRequired(): string[] {
 // What the browser needs: Supabase Auth runs client-side with the anon key, which is public
 // by design (the tables are granted to the service role only).
 export type PublicConfig = {
+  // "backoffice": the pages sign in through this app's /api/auth routes, not Supabase.
+  authVia: "supabase" | "backoffice";
   supabaseUrl: string;
   supabaseAnonKey: string;
   siteUrl: string | null;
@@ -87,6 +98,7 @@ export type PublicConfig = {
 
 export function publicConfig(): PublicConfig {
   return {
+    authVia: authViaBackoffice() ? "backoffice" : "supabase",
     supabaseUrl: supabaseUrl() ?? "",
     supabaseAnonKey: supabaseAnonKey() ?? "",
     siteUrl: siteUrl() ?? null,
