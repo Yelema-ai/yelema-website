@@ -239,6 +239,10 @@ goes away once every client is on Vercel.
   settings tab and no route that mints a signed URL for an arbitrary port; running the instance is
   Yelema's job, from the back office. The one exception is "Son ordinateur", whose route signs
   the screen's port only.
+- **The app cannot act on an instance.** No route starts, stops, restarts, updates, resizes or
+  re-budgets one, and `src/lib/agent37.ts` no longer has those calls: the app holds Yelema's
+  workspace-wide key, so any such route would let a signed-in user change an instance behind the
+  back office's back.
 - **The app never changes an instance's sleep or size.** The back office creates each member's
   instance (2 vCPU, auto-sleep after 45 idle minutes). A sleeping instance wakes on any request
   from the app, but hears no Telegram/WhatsApp message and runs no Hermes routine until then.

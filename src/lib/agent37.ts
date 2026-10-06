@@ -147,46 +147,12 @@ async function instanceCall<T>(id: string, path: string, init?: RequestInit): Pr
   return parseAgent37<T>(res);
 }
 
-export interface CreateAgentInput {
-  template?: string;
-  resources?: { cpu?: number; memory?: number; disk?: number };
-  user?: string;
-  name?: string;
-  metadata?: Record<string, unknown>;
-  budget?: { monthly_cap_micros?: number; credit_micros?: number };
-}
-
-export interface ResizeInput {
-  cpu?: number;
-  memory?: number;
-  disk?: number;
-}
-
+// Reads, and the instance's own surfaces (chat, files, exec, one signed URL). Nothing here creates,
+// deletes, starts, stops, updates, resizes or re-budgets an instance: those are the back office's,
+// and an app holding the workspace-wide key must not be able to do them for a signed-in user.
 export const agent37 = {
   listAgents: () => call<{ data: Agent[] }>("/instances"),
   getAgent: (id: string) => call<Agent>(`/instances/${id}`),
-  createAgent: (body: CreateAgentInput) =>
-    call<Agent>("/instances", { method: "POST", body: JSON.stringify(body) }),
-  deleteAgent: (id: string) =>
-    call<{ id: string; deleted: boolean }>(`/instances/${id}`, { method: "DELETE" }),
-
-  start: (id: string) => call<{ id: string; status: string }>(`/instances/${id}/start`, { method: "POST" }),
-  stop: (id: string) => call<{ id: string; status: string }>(`/instances/${id}/stop`, { method: "POST" }),
-  restart: (id: string) => call<{ id: string; status: string }>(`/instances/${id}/restart`, { method: "POST" }),
-  update: (id: string) =>
-    call<{
-      id: string;
-      status: string;
-      image_ref: string | null;
-      image_digest: string | null;
-      template_revision: number | null;
-    }>(`/instances/${id}/update`, { method: "POST" }),
-  resize: (id: string, body: ResizeInput) =>
-    call<{ id: string; status: string; resources: { cpu: number; memory: number; disk: number } }>(
-      `/instances/${id}/resize`,
-      { method: "POST", body: JSON.stringify(body) }
-    ),
-
   // Run a shell command inside the instance. The escape hatch for anything the API does not wrap as
   // its own call. Here it is how the Messaging tab reaches the harness's own messaging API, which
   // listens on a loopback port inside the sandbox. A command that exits nonzero is a normal 200 with
@@ -202,12 +168,6 @@ export const agent37 = {
       method: "POST",
       body: JSON.stringify({ port, ...(ttlSeconds ? { ttl_seconds: ttlSeconds } : {}) }),
     }),
-
-  getBudget: (id: string) => call<Budget>(`/instances/${id}/budget`),
-  setBudget: (id: string, body: { monthly_cap_micros: number }) =>
-    call<Budget>(`/instances/${id}/budget`, { method: "PATCH", body: JSON.stringify(body) }),
-  getUsage: (id: string, month?: string) =>
-    call<Usage>(`/instances/${id}/usage${month ? `?month=${encodeURIComponent(month)}` : ""}`),
 
   listTemplates: () => call<{ data: Template[] }>("/templates"),
 

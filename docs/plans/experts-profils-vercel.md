@@ -164,3 +164,39 @@ routines, canaux, écran) : un admin de l'espace n'ouvre plus celle d'un membre.
   catalogue (`expert-templates.key`) peut décrire le métier alors que le profil porte le prénom.
 - **Tableau de bord des instances** déplacé de `/` vers `/administration/agents`.
 - **Dépendances ajoutées** : `@composio/core`, `yaml`.
+
+## 12. Retour sur le plan du back-office « l'app passe par le back-office » (2026-10-06)
+
+Plan lu : `yelema-platform/docs/plans/app-cliente-via-back-office.md` (§ 4). Vu depuis l'app `v0.3.7`.
+
+**Fait côté app (`v0.3.7`)** : les routes `api/agents/[id]/[action]`, `resize`, `budget` et `usage`
+sont supprimées, ainsi que les appels correspondants dans `src/lib/agent37.ts` (création,
+suppression, démarrage, arrêt, redémarrage, mise à jour, taille, budget). La route des liens signés
+vers les ports de l'instance l'était depuis la `v0.3.2`.
+
+**À corriger dans le § 4 du plan**
+
+| Point du plan | Remarque |
+|---|---|
+| `GET /app/instances` : « toutes celles du workspace pour un admin » | Contraire à la décision du 2026-10-06 : un admin n'accède qu'à **sa** instance. La route doit rendre, pour tout appelant, uniquement la sienne |
+| `GET /app/members` : nom, e-mail, rôle, état | Y ajouter, pour l'onglet Instances des admins, le **nom de l'instance** du membre et sa date de création — sans identifiant Agent37 |
+| Connexion : « utilisateur » | Doit contenir l'**identifiant Supabase** de l'utilisateur. L'identité Composio en dépend (`user:<id>`) : la changer détacherait les comptes déjà connectés |
+| Mot de passe oublié | Il manque la route qui **envoie** le lien (`POST /app/auth/forgot { email }`). Aujourd'hui le navigateur appelle Supabase lui-même ; si l'app ne lui parle plus, ce geste n'a plus de chemin |
+| Refus de connexion | Un **code** distinct pour « compte, membre ou client suspendu », pour que l'app affiche autre chose que « mot de passe incorrect » |
+
+**Ce dont l'app a besoin par instance** (`GET /app/instances`)
+
+- identifiant Agent37, nom, état ;
+- image : nom du template **et révision installée** (« Son ordinateur » demande `yelema-hermes` ≥ 5, les routines ≥ 4) ;
+- experts installés : **nom du profil tel qu'installé** (c'est lui qui part dans `profile`), clé du catalogue, version ;
+- prête ou en cours d'installation ;
+- outils : Composio de Yelema ou celui d'Agent37 (aujourd'hui déduit de `agents.apps_token_hash`).
+
+**Ce qui ne change pas** : chat, fichiers, routines, canaux et écran restent en direct entre l'app et
+l'instance ; le catalogue reste public ; le proxy `/api/composio-mcp` continue de lire
+`agents.apps_token_hash`.
+
+**Conséquence côté app du temps 2** : la connexion, le rafraîchissement de session, `requireUser`
+et le middleware quittent `@supabase/ssr` pour un cookie `httpOnly` posé par l'app et un jeton
+vérifié par JWKS. C'est le plus gros chantier du plan pour ce dépôt ; à faire derrière un réglage
+pour pouvoir revenir en arrière.
