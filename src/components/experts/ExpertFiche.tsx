@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { getExpert } from "@/config/experts";
 import { Button } from "@/components/ui/button";
+import { useApp } from "@/components/app/AppProvider";
 import { cn } from "@/lib/utils";
 
 // Colors of the numbered skill badges, cycling brand / coral / blue like the mockup.
@@ -79,7 +80,9 @@ function IconList({ items, icon: Icon, iconClass }: { items: string[]; icon: Luc
 
 function ExpertEmailCard({ expertKey, expertName }: { expertKey: string; expertName: string }) {
   const [copied, setCopied] = useState(false);
-  const email = `${expertKey}@agentmail.to`;
+  const { workspace } = useApp();
+  const slug = workspace?.name ? workspace.name.toLowerCase().replace(/[^a-z0-9]/g, "") : "mstudio";
+  const email = `${expertKey}.${slug}@agentmail.to`;
 
   const copy = () => {
     navigator.clipboard.writeText(email);
@@ -107,11 +110,6 @@ function ExpertEmailCard({ expertKey, expertName }: { expertKey: string; expertN
         <Button variant="outline" size="sm" onClick={copy} className="rounded-full flex-1 sm:flex-none">
           {copied ? <Check className="h-4 w-4 text-ok" /> : <Copy className="h-4 w-4" />}
           {copied ? "Copié !" : "Copier"}
-        </Button>
-        <Button asChild size="sm" variant="secondary" className="rounded-full flex-1 sm:flex-none">
-          <a href={`mailto:${email}`}>
-            Écrire par e-mail
-          </a>
         </Button>
       </div>
     </div>

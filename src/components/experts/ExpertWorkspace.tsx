@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, FolderOpen, MessageCircle, Repeat } from "lucide-react";
+import { FileText, FolderOpen, Mail, MessageCircle, Repeat } from "lucide-react";
 import { getExpert } from "@/config/experts";
 import { expertFolder } from "@/lib/drive-paths";
 import { cn } from "@/lib/utils";
@@ -12,14 +12,16 @@ import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatView } from "@/components/chat/ChatView";
 import { FilesView } from "@/components/files/FilesView";
 import { ExpertFiche } from "./ExpertFiche";
+import { ExpertEmails } from "./ExpertEmails";
 import { ExpertRoutines } from "./ExpertRoutines";
 
-export type ExpertTab = "discussion" | "livrables" | "routines" | "fiche";
+export type ExpertTab = "discussion" | "livrables" | "routines" | "emails" | "fiche";
 
 const TABS: { id: ExpertTab; label: string; icon: typeof MessageCircle; path: string }[] = [
   { id: "discussion", label: "Discussion", icon: MessageCircle, path: "" },
   { id: "livrables", label: "Livrables", icon: FolderOpen, path: "/livrables" },
   { id: "routines", label: "Routines", icon: Repeat, path: "/routines" },
+  { id: "emails", label: "E-mails", icon: Mail, path: "/emails" },
   { id: "fiche", label: "Fiche de poste", icon: FileText, path: "/fiche" },
 ];
 
@@ -119,6 +121,10 @@ export function ExpertWorkspace({
         ) : tab === "routines" ? (
           <div className="px-4 py-6 sm:px-8">
             <ExpertRoutines expertKey={expertKey} />
+          </div>
+        ) : tab === "emails" ? (
+          <div className="px-4 py-6 sm:px-8">
+            <ExpertEmails expertKey={expertKey} />
           </div>
         ) : (
           <div className="px-4 py-6 sm:px-8">

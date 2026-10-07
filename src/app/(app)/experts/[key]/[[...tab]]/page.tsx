@@ -5,6 +5,7 @@ import { ExpertWorkspace, type ExpertTab } from "@/components/experts/ExpertWork
 const TABS: Record<string, ExpertTab> = {
   livrables: "livrables",
   routines: "routines",
+  emails: "emails",
   fiche: "fiche",
 };
 
