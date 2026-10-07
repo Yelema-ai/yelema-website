@@ -41,6 +41,12 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/api/webhooks");
 
   if (!user && !isPublic) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: { code: "unauthorized", message: "Sign in required" } },
+        { status: 401 }
+      );
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);

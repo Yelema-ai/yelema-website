@@ -4,7 +4,14 @@ export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
   });
   const text = await res.text();
-  const data = text ? JSON.parse(text) : {};
+  let data: any = {};
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { error: { message: text.startsWith("<") ? `Request failed (${res.status})` : text } };
+    }
+  }
   if (!res.ok) {
     const message = (data as { error?: { message?: string } })?.error?.message;
     throw new Error(message || `Request failed (${res.status})`);
