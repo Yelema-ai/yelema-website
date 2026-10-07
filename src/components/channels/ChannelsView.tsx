@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, RefreshCw } from "lucide-react";
+import { Check, RefreshCw, Mail } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
@@ -13,6 +13,7 @@ import {
   type ChannelsResponse,
   type MessagingPlatform,
 } from "@/lib/channels";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { CHANNEL_BRANDS } from "@/components/channels/BrandIcons";
@@ -89,6 +90,26 @@ export function ChannelsView({ agentId }: { agentId: string }) {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex flex-col rounded-[22px] border border-line bg-surface p-5">
+            <div className="flex items-start justify-between gap-3">
+              <span className="grid h-11 w-11 place-items-center rounded-xl bg-soft text-brand">
+                <Mail className="h-6 w-6" />
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-ok-pale px-2.5 py-1 text-xs font-semibold text-ok">
+                <Check className="h-3.5 w-3.5" />
+                Connecté (AgentMail)
+              </span>
+            </div>
+            <h3 className="mt-3 font-display text-lg font-bold text-ink">E-mail des experts</h3>
+            <p className="mt-1 text-sm text-ink-3">
+              Chaque expert dispose d'une adresse e-mail dédiée (@agentmail.to) pour recevoir des demandes externes et envoyer des livrables.
+            </p>
+            <div className="mt-auto pt-4">
+              <Button asChild size="sm" variant="outline">
+                <Link href="/experts/djeneba/fiche">Consulter les adresses</Link>
+              </Button>
+            </div>
+          </div>
           {SUPPORTED_CHANNELS.map((id) => (
             <ChannelCard
               key={id}
