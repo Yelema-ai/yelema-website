@@ -1,4 +1,3 @@
-import "server-only";
 import { AgentMailClient } from "agentmail";
 import { ApiError } from "@/lib/http";
 import { getExpert } from "@/config/experts";
