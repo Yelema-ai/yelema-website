@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""
+AgentMail CLI for Yelema Hermes Experts
+Sends emails, lists messages, and handles attachments via AgentMail API.
+"""
+import sys
+import os
+import re
+import json
+import argparse
+import base64
+import mimetypes
+import urllib.request
+import urllib.parse
+import urllib.error
+
+def get_config():
+    api_key = os.environ.get("AGENTMAIL_API_KEY")
+    workspace_slug = os.environ.get("WORKSPACE_SLUG", "mstudio")
+
+    home = os.path.expanduser("~")
+    cfg_file = os.path.join(home, ".yelema", "agentmail.json")
+    if os.path.exists(cfg_file):
+        try:
+            with open(cfg_file, encoding="utf-8") as f:
+                data = json.load(f)
+                api_key = data.get("api_key") or api_key
+                workspace_slug = data.get("workspace_slug") or workspace_slug
+        except Exception:
+            pass
+
+    if not api_key:
+        env_file = os.path.join(home, ".hermes", ".env")
+        if os.path.exists(env_file):
+            try:
+                with open(env_file, encoding="utf-8") as f:
+                    for line in f:
+                        if line.startswith("AGENTMAIL_API_KEY="):
+                            api_key = line.strip().split("=", 1)[1].strip("'\"")
+                        elif line.startswith("WORKSPACE_SLUG="):
+                            workspace_slug = line.strip().split("=", 1)[1].strip("'\"")
+            except Exception:
+                pass
+
+    return api_key, workspace_slug
+
+def resolve_expert_profile(explicit_profile=None):
+    if explicit_profile:
+        return re.sub(r'[^a-z0-9]', '', explicit_profile.lower())
+    p = os.environ.get("HERMES_PROFILE")
+    if p:
+        return re.sub(r'[^a-z0-9]', '', p.lower())
+    cwd = os.getcwd()
+    if "/profiles/" in cwd:
+        parts = cwd.split("/profiles/")
+        if len(parts) > 1:
+            return re.sub(r'[^a-z0-9]', '', parts[1].split("/")[0].lower())
+    return "djeneba"
+
+def send_email(args):
+    api_key, workspace_slug = get_config()
+    if not api_key:
+        print(json.dumps({"error": "AGENTMAIL_API_KEY is not configured on this instance"}))
+        sys.exit(1)
+
+    profile = resolve_expert_profile(args.profile)
+    clean_slug = re.sub(r'[^a-z0-9]', '', (workspace_slug or "mstudio").lower())
+    inbox_id = f"{profile}.{clean_slug}@agentmail.to"
+
+    # Prepare attachments
+    attachments = []
+    if args.attach:
+        for file_path in args.attach:
+            expanded = os.path.expanduser(file_path)
+            if not os.path.exists(expanded):
+                print(json.dumps({"error": f"Attachment file not found: {file_path}"}))
+                sys.exit(1)
+            filename = os.path.basename(expanded)
+            mime_type, _ = mimetypes.guess_type(expanded)
+            with open(expanded, "rb") as f:
+                content_b64 = base64.b64encode(f.read()).decode("utf-8")
+            attachments.append({
+                "filename": filename,
+                "content": content_b64,
+                "content_type": mime_type or "application/octet-stream"
+            })
+
+    # Prepare payload
+    body_text = args.body or args.text or ""
+    html_content = args.html or f"<div style='font-family: sans-serif; line-height: 1.6;'>{body_text.replace(chr(10), '<br/>')}</div>"
+
+    payload = {
+        "to": args.to,
+        "subject": args.subject,
+        "text": body_text,
+        "html": html_content,
+    }
+    if args.cc:
+        payload["cc"] = [c.strip() for c in args.cc.split(",") if c.strip()]
+    if args.bcc:
+        payload["bcc"] = [c.strip() for c in args.bcc.split(",") if c.strip()]
+    if attachments:
+        payload["attachments"] = attachments
+
+    url = f"https://api.agentmail.to/v0/inboxes/{urllib.parse.quote(inbox_id)}/messages/send"
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+    )
+
+    try:
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            print(json.dumps({
+                "success": True,
+                "from": inbox_id,
+                "to": args.to,
+                "subject": args.subject,
+                "message_id": data.get("message_id") or data.get("id"),
+                "status": "sent"
+            }, indent=2))
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8")
+        try:
+            err_json = json.loads(err_body)
+            print(json.dumps({"error": err_json.get("message") or err_body, "details": err_json}))
+        except Exception:
+            print(json.dumps({"error": f"HTTP {e.code}: {err_body}"}))
+        sys.exit(1)
+    except Exception as e:
+        print(json.dumps({"error": str(e)}))
+        sys.exit(1)
+
+def main():
+    parser = argparse.ArgumentParser(description="AgentMail CLI for Yelema")
+    parser.add_argument("cmd", nargs="?", default="send", help="Command (send)")
+    parser.add_argument("--to", help="Recipient email address")
+    parser.add_argument("--subject", help="Email subject")
+    parser.add_argument("--body", "--text", dest="body", help="Plain text body")
+    parser.add_argument("--html", help="HTML body")
+    parser.add_argument("--attach", nargs="*", help="File paths to attach")
+    parser.add_argument("--cc", help="Comma-separated CC addresses")
+    parser.add_argument("--bcc", help="Comma-separated BCC addresses")
+    parser.add_argument("--profile", help="Sender expert profile (e.g. djeneba)")
+
+    args = parser.parse_args()
+
+    if not args.to or not args.subject:
+        parser.print_help()
+        sys.exit(1)
+
+    send_email(args)
+
+if __name__ == "__main__":
+    main()

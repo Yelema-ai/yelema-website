@@ -22,6 +22,7 @@ RUN /usr/local/lib/hermes/hermes-agent/venv/bin/python /tmp/hermes-heartbeat-fix
 # The stock browser tool runs its own headless Chromium, which the screen can't show; this points
 # every expert at the visible one yelema-desktop.sh starts.
 ENV BROWSER_CDP_URL=http://127.0.0.1:9222
-COPY --chmod=0755 yelema-entrypoint.sh yelema-apps-mcp.py yelema-api-server.py yelema-desktop.sh /usr/local/bin/
+COPY --chmod=0755 yelema-entrypoint.sh yelema-apps-mcp.py yelema-api-server.py yelema-desktop.sh agentmail-send /usr/local/bin/
+RUN ln -s /usr/local/bin/agentmail-send /usr/local/bin/agentmail-cli
 USER node
 ENTRYPOINT ["/usr/local/bin/yelema-entrypoint.sh"]

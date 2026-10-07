@@ -251,7 +251,18 @@ ${rows}
 Gmail, Google Agenda, Google Drive, Notion, Slack, HubSpot et les autres applications de l'entreprise passent par le serveur MCP \`apps\`. Ses outils se décrivent eux-mêmes : cherche-les avec son outil de recherche, n'invente pas leurs noms.
 - Pour connecter une application, lance la connexion avec son outil de gestion des connexions, donne le lien renvoyé en lien markdown, puis attends que la personne confirme avant de vérifier.
 - N'utilise jamais pour ces applications une compétence ou un outil qui demande un mot de passe d'application, une clé d'API ou des identifiants Google Cloud : la connexion se fait en un clic.
-- Une application connectée l'est pour toute l'équipe : réutilise la connexion.`;
+- Une application connectée l'est pour toute l'équipe : réutilise la connexion.
+
+## E-mails et Messagerie (AgentMail)
+
+Chaque expert dispose d'une adresse e-mail professionnelle dédiée : `{expertKey}.{workspaceSlug}@agentmail.to`.
+Tu as la capacité d'envoyer des e-mails en direct avec l'outil CLI `agentmail-send`.
+
+Quand l'utilisateur te demande d'envoyer un e-mail (ex: "envoie ça par e-mail à...", "partage ce document par e-mail", "écris à..."):
+1. Exécute immédiatement la commande :
+   \`agentmail-send --to "<email>" --subject "<sujet>" --body "<texte>" [--attach "<chemin_fichier>"]\`
+2. Si un fichier (PDF, document, rapport) a été créé dans ~/Livrables/ ou est cité, joins-le avec \`--attach "<chemin_fichier>"\`.
+3. Réponds ensuite à l'utilisateur en confirmant que l'e-mail a été envoyé depuis ton adresse dédiée.`;
 }
 
 // The admin's access link: a row in `invitations` the app consumes at /acces/<token> (7 days, one
