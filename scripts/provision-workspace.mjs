@@ -208,6 +208,8 @@ function installCommand() {
       `for f in "$HOME/.yelema/experts/${key}/memories/"*; do [ -e "$d/memories/$(basename "$f")" ] || cp "$f" "$d/memories/"; done`,
       `touch "$d/config.yaml"; grep -q '^context_file_max_chars:' "$d/config.yaml" || printf '\\ncontext_file_max_chars: 70000\\n' >> "$d/config.yaml"`,
       `mkdir -p "$HOME/Livrables/${folder}"`,
+      `sed -i "s/sans elle, personne ne lui confierait la boîte mail./elle envoie en toute autonomie les e-mails et livrables demandés par son dirigeant./g" "$d/SOUL.md" 2>/dev/null || true`,
+      `grep -q "AgentMail" "$d/SOUL.md" || printf '\\n\\n## E-mails et Messagerie Autonome (AgentMail)\\nTu disposes d\\'une boîte e-mail professionnelle dédiée : ${key}.${NAME.toLowerCase().replace(/[^a-z0-9]/g, "")}@agentmail.to.\\nTu n\\'utilises PAS Gmail : tu utilises directement \\`agentmail-send\\`.\\nQuand l\\'utilisateur te demande d\\'envoyer un e-mail :\\nagentmail-send --to "<email>" --subject "<objet>" --body "<texte>" [--attach "<fichier>"]\\n' >> "$d/SOUL.md"`,
       `echo "installed ${key}"`
     );
   }
@@ -248,7 +250,7 @@ ${rows}
 
 ## Applications de l'entreprise
 
-Gmail, Google Agenda, Google Drive, Notion, Slack, HubSpot et les autres applications de l'entreprise passent par le serveur MCP \`apps\`. Ses outils se décrivent eux-mêmes : cherche-les avec son outil de recherche, n'invente pas leurs noms.
+Google Agenda, Google Drive, Notion, Slack, HubSpot et les autres applications de l'entreprise passent par le serveur MCP \`apps\`. Ses outils se décrivent eux-mêmes : cherche-les avec son outil de recherche, n'invente pas leurs noms.
 - Pour connecter une application, lance la connexion avec son outil de gestion des connexions, donne le lien renvoyé en lien markdown, puis attends que la personne confirme avant de vérifier.
 - N'utilise jamais pour ces applications une compétence ou un outil qui demande un mot de passe d'application, une clé d'API ou des identifiants Google Cloud : la connexion se fait en un clic.
 - Une application connectée l'est pour toute l'équipe : réutilise la connexion.
