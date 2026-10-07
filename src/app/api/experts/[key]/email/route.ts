@@ -2,13 +2,14 @@ import { requireUser } from "@/lib/auth";
 import { handleError, json, readJson, ApiError } from "@/lib/http";
 import { getOrCreateExpertInbox, listExpertMessages, sendExpertEmail, isAgentMailConfigured } from "@/lib/agentmail";
 import { getExpert } from "@/config/experts";
+import { loadWorkspaces, pickWorkspace } from "@/lib/workspace";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ key: string }> }
 ) {
   try {
-    await requireUser();
+    const { db, user } = await requireUser();
     const { key } = await params;
     const expert = getExpert(key);
     if (!expert) {
@@ -23,7 +24,11 @@ export async function GET(
       });
     }
 
-    const inbox = await getOrCreateExpertInbox(key);
+    const workspaces = await loadWorkspaces(db, user.id);
+    const currentWs = await pickWorkspace(workspaces);
+    const workspaceSlug = currentWs?.slug;
+
+    const inbox = await getOrCreateExpertInbox(key, workspaceSlug);
     const messages = await listExpertMessages(inbox.inboxId, 15);
 
     return json({
@@ -41,7 +46,7 @@ export async function POST(
   { params }: { params: Promise<{ key: string }> }
 ) {
   try {
-    await requireUser();
+    const { db, user } = await requireUser();
     const { key } = await params;
     const expert = getExpert(key);
     if (!expert) {
@@ -58,7 +63,11 @@ export async function POST(
       attachments?: Array<{ filename: string; content: string; contentType?: string }>;
     }>(request);
 
-    const inbox = await getOrCreateExpertInbox(key);
+    const workspaces = await loadWorkspaces(db, user.id);
+    const currentWs = await pickWorkspace(workspaces);
+    const workspaceSlug = currentWs?.slug;
+
+    const inbox = await getOrCreateExpertInbox(key, workspaceSlug);
     const result = await sendExpertEmail(inbox.inboxId, body);
 
     return json({

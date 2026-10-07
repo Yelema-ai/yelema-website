@@ -3,6 +3,7 @@ export type Role = "admin";
 export interface Workspace {
   id: string;
   name: string;
+  slug?: string;
   owner_id: string;
   logo_url: string | null;
   created_at: string;

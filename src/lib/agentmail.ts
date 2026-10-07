@@ -20,8 +20,17 @@ export function isAgentMailConfigured(): boolean {
 }
 
 /**
+ * Nettoie le nom d'affichage pour respecter les contraintes strictes d'AgentMail
+ * (AgentMail n'autorise pas les parenthèses () ou certains caractères spéciaux).
+ */
+export function sanitizeDisplayName(name?: string): string {
+  if (!name) return "Expert";
+  return name.replace(/[()\[\]{}<>&"'/\\@:;,?!=+*#~`%$^|]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
  * Format normalisé pour le username de la boîte e-mail d'un expert.
- * Ex: 'djeneba-mstudio' ou 'djeneba'
+ * Ex: 'djeneba.mstudio' ou 'djeneba'
  */
 export function getExpertInboxUsername(expertKey: string, workspaceSlug?: string): string {
   const cleanKey = expertKey.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -51,27 +60,49 @@ export async function getOrCreateExpertInbox(
 ): Promise<ExpertInboxInfo> {
   const client = getAgentMailClient();
   const expert = getExpert(expertKey);
-  const displayName = customDisplayName || (expert ? `${expert.name} (${expert.title})` : `Expert ${expertKey}`);
+  const rawDisplayName = customDisplayName || (expert ? `${expert.name} - ${expert.role}` : `Expert ${expertKey}`);
+  const displayName = sanitizeDisplayName(rawDisplayName);
   const username = getExpertInboxUsername(expertKey, workspaceSlug);
+  const expectedInboxId = `${username}@agentmail.to`;
 
-  // 1. Chercher si la boîte existe déjà
+  // 1. Chercher si la boîte existe déjà par son identifiant complet
   try {
-    const existing = await client.inboxes.get(username);
+    const existing = await client.inboxes.get(expectedInboxId);
     if (existing && existing.inboxId) {
       return {
         inboxId: existing.inboxId,
-        email: existing.email || (existing as any).inbox_id || `${username}@agentmail.to`,
+        email: existing.email || (existing as any).inbox_id || expectedInboxId,
         displayName: existing.displayName || displayName,
         createdAt: (existing as any).createdAt || (existing as any).created_at || new Date().toISOString(),
         statusUntil: (existing as any).statusUntil || (existing as any).status_until,
         expertKey,
       };
     }
-  } catch (e: any) {
-    // Si non trouvée (404), on passe à la création
+  } catch {
+    // Si non trouvée (404), on passe à la vérification par liste
   }
 
-  // 2. Créer la boîte e-mail
+  // 2. Chercher dans la liste existante
+  try {
+    const list = await client.inboxes.list({ limit: 50 });
+    const found = list.inboxes?.find(
+      (i) => i.inboxId === expectedInboxId || i.email === expectedInboxId || i.inboxId.startsWith(`${username}@`)
+    );
+    if (found) {
+      return {
+        inboxId: found.inboxId,
+        email: found.email || (found as any).inbox_id || expectedInboxId,
+        displayName: found.displayName || displayName,
+        createdAt: (found as any).createdAt || (found as any).created_at || new Date().toISOString(),
+        statusUntil: (found as any).statusUntil || (found as any).status_until,
+        expertKey,
+      };
+    }
+  } catch {
+    // Ignorer
+  }
+
+  // 3. Créer la boîte e-mail chez AgentMail
   try {
     const created = await client.inboxes.create({
       username,
@@ -84,35 +115,16 @@ export async function getOrCreateExpertInbox(
 
     return {
       inboxId: created.inboxId,
-      email: created.email || (created as any).inbox_id || `${username}@agentmail.to`,
+      email: created.email || (created as any).inbox_id || expectedInboxId,
       displayName: created.displayName || displayName,
       createdAt: (created as any).createdAt || (created as any).created_at || new Date().toISOString(),
       statusUntil: (created as any).statusUntil || (created as any).status_until,
       expertKey,
     };
   } catch (err: any) {
-    // Si la boîte existait déjà sous un domaine ou identifiant
-    try {
-      const list = await client.inboxes.list({ limit: 50 });
-      const found = list.inboxes?.find(
-        (i) => i.inboxId.startsWith(`${username}@`) || i.inboxId === username || (i as any).email?.startsWith(`${username}@`)
-      );
-      if (found) {
-        return {
-          inboxId: found.inboxId,
-          email: found.email || (found as any).inbox_id,
-          displayName: found.displayName || displayName,
-          createdAt: (found as any).createdAt || (found as any).created_at || new Date().toISOString(),
-          statusUntil: (found as any).statusUntil || (found as any).status_until,
-          expertKey,
-        };
-      }
-    } catch {
-      // Ignorer fallback
-    }
-
     console.error(`[AgentMail] Erreur création inbox pour ${expertKey}:`, err);
-    throw new ApiError(500, "agentmail_error", `Impossible de créer la boîte e-mail de l'expert : ${err.message || err}`);
+    const detailMessage = err.body?.errors?.[0]?.message || err.body?.message || err.message || String(err);
+    throw new ApiError(500, "agentmail_error", `Impossible de créer la boîte e-mail de l'expert : ${detailMessage}`);
   }
 }
 
