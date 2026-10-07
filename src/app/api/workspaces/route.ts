@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
-import { authViaBackoffice, deploymentWorkspaceId } from "@/lib/runtime-config";
+import { authViaBackoffice } from "@/lib/runtime-config";
+import { pinnedWorkspaceId } from "@/lib/tenant";
 import { currentPrincipal } from "@/lib/session";
 import { handleError, json, ApiError } from "@/lib/http";
 import type { BoMe } from "@/lib/backoffice";
@@ -14,7 +15,7 @@ export async function GET() {
     }
     // A deployment only ever lists its own client's workspace (shared database).
     let query = db.from("memberships").select("role, workspaces(*)").eq("user_id", user.id);
-    const pinned = deploymentWorkspaceId();
+    const pinned = await pinnedWorkspaceId();
     if (pinned) query = query.eq("workspace_id", pinned);
     const { data, error } = await query;
     if (error) throw new ApiError(500, "db_error", error.message);

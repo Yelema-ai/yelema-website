@@ -127,6 +127,13 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   migrations must stay additive. `requireAgentAccess` lets in the
   agent's OWNER only — anyone else, workspace admins included, gets a `404`; `"admin"` access
   (resize, budget) is the owner again, and only if they are an admin. Configuration is read at runtime (`src/lib/runtime-config.ts`).
+- **One deployment per client, or one for every client.** With `WORKSPACE_ID` a deployment serves
+  that client. Without it, and with `BACKOFFICE_URL` and `APP_RESOLVER_TOKEN`, ONE deployment serves
+  every client: the request's host (`<client>.app.yelema.ai`) says whose it is, and the back office
+  resolves it (`GET /api/v1/app/tenant`, `src/lib/tenant-resolver.ts`). The proxy answers a host
+  that is no client's, or a suspended one, with its own page; `pinnedWorkspaceId()`
+  (`src/lib/tenant.ts`) is the workspace a request is confined to, and no route reads the host
+  itself. Sign-in is then always the back office's. Plan: `docs/plans/app-unique-resolver.md`.
 - **`src/lib/agent37.ts` is the only thing that calls the Agent37 API**
   (`server-only`) — both the control-plane base and each instance's data-plane host.
   Internal `src/app/api/**` routes are this app's BFF: the browser calls them, they
@@ -142,7 +149,7 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   creates neither members nor agents.
 - **Two ways to know the user, one switch.** With `AUTH_VIA_BACKOFFICE=true` the Yelema back office
   signs users in and says what they see (`/api/v1/app/*`, `src/lib/backoffice.ts`): the session is
-  one httpOnly cookie (`src/lib/session.ts`), renewed by the proxy, and the user's role, workspace,
+  one httpOnly cookie bound to its host (`__Host-`, `src/lib/session.ts`), renewed by the proxy, and the user's role, workspace,
   instance and installed experts come from the back office on every read, so a suspended member or
   client is stopped there. Without the switch the app uses Supabase Auth and its own tables. The
   helpers in `src/lib/auth.ts` carry both branches; routes do not know which is on.
@@ -172,6 +179,7 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 | `src/app/api/agents/[id]/integrations/**` | Connecteurs BFF: Yelema's Composio or Agent37's managed one, per instance (`src/lib/integrations.ts`) |
 | `src/lib/composio.ts`, `src/app/api/composio-mcp/` | Yelema's Composio (server-only key) and the experts' tool proxy; identity = the instance's owner |
 | `src/lib/profile-id.ts`, `src/lib/profiles.ts` | The profile a chat targets: shape, `?profile=`, and the check against the instance's real profiles |
+| `src/lib/tenant-resolver.ts`, `src/lib/tenant.ts`, `src/app/espace-*` | The client a request is for when one deployment serves every client: host lookup at the back office, the workspace a request is confined to, and the pages for an unknown or suspended client |
 | `src/lib/backoffice.ts`, `src/lib/session.ts`, `src/app/api/auth/**` | Sign-in through the back office: its client, the cookie session, and the login / logout / forgot / accept routes |
 | `src/lib/catalogue.ts`, `src/app/api/catalogue/**` | The back office's expert catalogue, cached, and its join with installed profiles |
 | `src/components/experts/ExpertImage.tsx`, `images` in `next.config.ts` | Expert pictures resized by the image optimizer (the catalogue serves them full size); only Yelema hosts are optimized |
@@ -192,6 +200,7 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 | `supabase/migrations/0001_init.sql` | Schema, RLS policies (dormant backstop), SECURITY DEFINER RPCs; grants tables to the service role only (clients have no direct DB access) |
 | `supabase/migrations/0003_agent_backoffice_columns.sql` | Columns the back office fills on `agents`: `profiles`, `ready`, `apps_token_hash` |
 | `docs/plans/experts-profils-vercel.md` | The current plan and the contract with the back office |
+| `docs/plans/app-unique-resolver.md` | One deployment for every client: the resolver and its contract with the back office |
 | `src/lib/supabase/admin.ts` | Service-role client (server-only, bypasses RLS) — the DB egress |
 | `scripts/setup.mjs` | One-command Supabase setup (`npm run setup`) |
 
@@ -219,9 +228,10 @@ instance. This app only relies on what that image provides: the `apps` tool serv
 image v1.1.0 and later). Chat by profile needs no custom image.
 
 The root `Dockerfile` builds **this app** for the older per-client containers (see
-`docs/plans/yelema-single-tenant.md`). New clients run on Vercel, one project per client, deployed
-by the back office from a git tag (`vercel.json` turns automatic deployments off). The Dockerfile
-goes away once every client is on Vercel.
+`docs/plans/yelema-single-tenant.md`). Clients run on Vercel, deployed by the back office from a
+git tag (`vercel.json` turns automatic deployments off): one project per client so far, moving to
+one project for every client behind `*.app.yelema.ai` (`docs/plans/app-unique-resolver.md`). The
+Dockerfile goes away once every client is on Vercel.
 
 - [Build a custom image](https://www.agent37.com/docs/agents-api/custom-image) — the guide.
 
@@ -251,7 +261,7 @@ goes away once every client is on Vercel.
   workspace-wide key, so any such route would let a signed-in user change an instance behind the
   back office's back.
 - **The app never changes an instance's sleep or size.** The back office creates each member's
-  instance (2 vCPU, auto-sleep after 45 idle minutes). A sleeping instance wakes on any request
+  instance (2 vCPU, auto-sleep after 30 idle minutes). A sleeping instance wakes on any request
   from the app, but hears no Telegram/WhatsApp message and runs no Hermes routine until then.
 - **"Son ordinateur" hands out full control of the instance.** The signed URL for the screen lets
   its holder click and type on the member's machine and cannot be revoked: it is minted only for

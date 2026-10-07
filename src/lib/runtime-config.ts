@@ -57,14 +57,27 @@ export function deploymentWorkspaceId(): string | undefined {
   return read("WORKSPACE_ID");
 }
 
+// The secret this app shows the back office to ask which client a host belongs to. Server-only.
+export function resolverToken(): string | undefined {
+  return read("APP_RESOLVER_TOKEN");
+}
+
+// One deployment for every client: no WORKSPACE_ID, and what the resolver needs. The client of a
+// request is then the one its host belongs to (src/lib/tenant.ts). With WORKSPACE_ID the deployment
+// serves that one client, as before, so the same version runs in both set-ups.
+export function multiTenant(): boolean {
+  return !deploymentWorkspaceId() && Boolean(backofficeUrl()) && Boolean(resolverToken());
+}
+
 // The version this deployment runs: the git tag the back office deployed (APP_VERSION), else the
 // ref Vercel built, else "dev" locally.
 // Who signs users in and says what they may see. "backoffice": the Yelema back office does, through
 // its /api/v1/app routes (src/lib/backoffice.ts), and this app no longer asks Supabase who the user
 // is. It takes the switch AND the two settings those routes need; otherwise the app keeps its
 // first way (Supabase Auth and its own tables), so a deployment can be moved, and moved back, by
-// redeploying with one variable.
+// redeploying with one variable. A deployment that serves every client knows only the back office's way.
 export function authViaBackoffice(): boolean {
+  if (multiTenant()) return true;
   return read("AUTH_VIA_BACKOFFICE") === "true" && Boolean(backofficeUrl()) && Boolean(deploymentWorkspaceId());
 }
 
@@ -80,8 +93,9 @@ export function missingRequired(): string[] {
     ["SUPABASE_URL", supabaseUrl()],
     ["SUPABASE_ANON_KEY", supabaseAnonKey()],
     ["SUPABASE_SERVICE_ROLE_KEY", supabaseServiceRoleKey()],
-    ["SITE_URL", siteUrl()],
   ];
+  // One deployment for every client has no address of its own: each request brings its host.
+  if (!multiTenant()) required.push(["SITE_URL", siteUrl()]);
   return required.filter(([, value]) => !value).map(([name]) => name);
 }
 

@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { getSession, type DB } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { authViaBackoffice, deploymentWorkspaceId } from "@/lib/runtime-config";
+import { authViaBackoffice } from "@/lib/runtime-config";
+import { pinnedWorkspaceId } from "@/lib/tenant";
 import { currentPrincipal } from "@/lib/session";
 import { WorkspaceProvider } from "@/components/WorkspaceProvider";
 import { UnlinkedAccount } from "@/components/UnlinkedAccount";
@@ -17,7 +18,7 @@ import type { Role, Workspace, WorkspaceWithRole } from "@/lib/types";
 async function loadWorkspaces(db: DB, userId: string): Promise<WorkspaceWithRole[]> {
   // A deployment only ever shows its own client's workspace (shared database).
   let query = db.from("memberships").select("workspace_id, role").eq("user_id", userId);
-  const pinned = deploymentWorkspaceId();
+  const pinned = await pinnedWorkspaceId();
   if (pinned) query = query.eq("workspace_id", pinned);
   const { data: memberships, error: memErr } = await query;
   if (memErr) throw new Error(`Couldn't load your workspaces: ${memErr.message}`);

@@ -1,13 +1,15 @@
 import "server-only";
-import { backofficeUrl, deploymentWorkspaceId } from "@/lib/runtime-config";
+import { backofficeUrl } from "@/lib/runtime-config";
+import { pinnedWorkspaceId } from "@/lib/tenant";
 
 // The Yelema back office's API for this app (`/api/v1/app/*`, guide: yelema-platform
 // docs/specs/client-api-v1/app.md). It signs users in and says what they may see: their account,
 // their workspace, THEIR instance and its installed experts, and for admins the workspace's members
 // and instances. It applies its own rules on every call (suspended account, member or client).
 //
-// Every call names the workspace this deployment serves (X-Workspace-Id); the user's session rides
-// as a Bearer token. This module is the only one that speaks that API.
+// Every call names the workspace the request is for (X-Workspace-Id): the deployment's own, or the
+// one its host belongs to (src/lib/tenant.ts). The user's session rides as a Bearer token. This
+// module is the only one that speaks that API.
 
 const TIMEOUT_MS = 15_000;
 
@@ -65,10 +67,11 @@ export interface BoMember {
 
 export type BoOpenedSession = { session: BoSession } & BoMe;
 
-async function call<T>(path: string, init: { method?: string; token?: string | null; body?: unknown } = {}): Promise<T> {
+// `workspace` is given by the proxy, which runs before a request has a scope to read it from.
+async function call<T>(path: string, init: { method?: string; token?: string | null; body?: unknown; workspace?: string } = {}): Promise<T> {
   const base = backofficeUrl();
-  const workspace = deploymentWorkspaceId();
-  if (!base || !workspace) throw new BackofficeError(500, "config_error", "BACKOFFICE_URL and WORKSPACE_ID are required");
+  const workspace = init.workspace ?? (await pinnedWorkspaceId());
+  if (!base || !workspace) throw new BackofficeError(500, "config_error", "BACKOFFICE_URL and a workspace are required");
 
   let res: Response;
   try {
@@ -113,8 +116,8 @@ async function call<T>(path: string, init: { method?: string; token?: string | n
 export const backoffice = {
   login: (email: string, password: string) =>
     call<BoOpenedSession>("/app/auth/login", { method: "POST", body: { email, password } }),
-  refresh: (refreshToken: string) =>
-    call<BoOpenedSession>("/app/auth/refresh", { method: "POST", body: { refreshToken } }),
+  refresh: (refreshToken: string, workspace?: string) =>
+    call<BoOpenedSession>("/app/auth/refresh", { method: "POST", body: { refreshToken }, workspace }),
   // First access or a new password: consumes the link the back office sent.
   accept: (tokenHash: string, type: string, password: string) =>
     call<BoOpenedSession>("/app/auth/accept", { method: "POST", body: { tokenHash, type, password } }),

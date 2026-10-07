@@ -3,12 +3,18 @@ import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { cache } from "react";
 import { backoffice, BackofficeError, type BoInstance, type BoMe, type BoSession } from "@/lib/backoffice";
+import { pinnedWorkspaceId } from "@/lib/tenant";
 
 // The signed-in user when the back office owns the sign-in (AUTH_VIA_BACKOFFICE): its session
 // tokens live in ONE httpOnly cookie set by this server, never readable by the page's scripts.
 // The proxy (src/lib/supabase/middleware.ts) renews it shortly before it expires.
 
-export const SESSION_COOKIE = "yelema_session";
+// `__Host-` binds the cookie to the exact host that set it (no Domain, Secure, Path=/): on a
+// deployment that serves every client, one client's sub-domain can neither read nor replace
+// another's. It needs HTTPS, so plain HTTP in development keeps the bare name. The bare name is
+// still READ in production for one version, so nobody is signed out by the rename.
+export const LEGACY_SESSION_COOKIE = "yelema_session";
+export const SESSION_COOKIE = process.env.NODE_ENV === "production" ? `__Host-${LEGACY_SESSION_COOKIE}` : LEGACY_SESSION_COOKIE;
 // The renewal token outlives the access token by weeks; the cookie follows it.
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 // Who the user is and what their instance holds, kept this long: a page makes many BFF calls, and
@@ -44,26 +50,37 @@ export const sessionCookieOptions = {
   maxAge: COOKIE_MAX_AGE,
 };
 
+/** The session cookie's value under its current name, else under the one it had before. */
+export function sessionCookieValue(jar: { get(name: string): { value: string } | undefined }): string | undefined {
+  return jar.get(SESSION_COOKIE)?.value ?? jar.get(LEGACY_SESSION_COOKIE)?.value;
+}
+
 export async function writeSession(session: BoSession): Promise<void> {
-  (await cookies()).set(SESSION_COOKIE, encodeSession(session), sessionCookieOptions);
+  const jar = await cookies();
+  jar.set(SESSION_COOKIE, encodeSession(session), sessionCookieOptions);
+  if (SESSION_COOKIE !== LEGACY_SESSION_COOKIE) jar.delete(LEGACY_SESSION_COOKIE);
 }
 
 export async function clearSession(): Promise<void> {
-  (await cookies()).delete(SESSION_COOKIE);
+  const jar = await cookies();
+  jar.delete(SESSION_COOKIE);
+  if (SESSION_COOKIE !== LEGACY_SESSION_COOKIE) jar.delete(LEGACY_SESSION_COOKIE);
 }
 
 export async function readSession(): Promise<BoSession | null> {
-  return decodeSession((await cookies()).get(SESSION_COOKIE)?.value);
+  return decodeSession(sessionCookieValue(await cookies()));
 }
 
 // ---- Who is signed in, and their instance ------------------------------------------------------
 
 const fingerprint = (token: string) => createHash("sha256").update(token).digest("hex");
 
+// Keyed by the workspace as well as the session: an answer given for one client is never served
+// to a request for another, even with the same token.
 function memo<T>(load: (token: string) => Promise<T>) {
   const store = new Map<string, { at: number; value: T }>();
-  return async (token: string): Promise<T> => {
-    const key = fingerprint(token);
+  return async (workspace: string, token: string): Promise<T> => {
+    const key = `${workspace}:${fingerprint(token)}`;
     const hit = store.get(key);
     if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
     const value = await load(token);
@@ -84,16 +101,27 @@ function nobodyOn(e: unknown): null {
   throw e;
 }
 
-/** The signed-in user, their role and workspace; null when nobody is. Read once per request. */
+/**
+ * The signed-in user, their role and workspace; null when nobody is. Read once per request. A
+ * session of another client than the request's is nobody here: the back office refuses it, and the
+ * workspace it answers with is checked again.
+ */
 export const currentPrincipal = cache(async (): Promise<BoMe | null> => {
   const session = await readSession();
   if (!session) return null;
-  return meOf(session.accessToken).catch(nobodyOn);
+  const workspace = await pinnedWorkspaceId();
+  if (!workspace) return null;
+  const me = await meOf(workspace, session.accessToken).catch(nobodyOn);
+  return me && me.workspace.id === workspace ? me : null;
 });
 
 /** The signed-in user's own instance with its installed experts; null when they have none yet. */
 export const currentInstance = cache(async (): Promise<BoInstance | null> => {
   const session = await readSession();
   if (!session) return null;
-  return instanceOf(session.accessToken).catch(nobodyOn);
+  // Only for a user this request's client admits.
+  if (!(await currentPrincipal())) return null;
+  const workspace = await pinnedWorkspaceId();
+  if (!workspace) return null;
+  return instanceOf(workspace, session.accessToken).catch(nobodyOn);
 });

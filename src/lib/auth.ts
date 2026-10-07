@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ApiError } from "@/lib/http";
-import { authViaBackoffice, deploymentWorkspaceId } from "@/lib/runtime-config";
+import { authViaBackoffice } from "@/lib/runtime-config";
+import { pinnedWorkspaceId } from "@/lib/tenant";
 import { currentInstance, currentPrincipal } from "@/lib/session";
 import type { AgentRow, Role } from "@/lib/types";
 
@@ -42,10 +43,11 @@ export async function requireUser() {
   return { db: createAdminClient(), user };
 }
 
-// Every authorization helper below goes through here, so this is where a deployment stays inside
-// its own workspace: on a shared database, another client's workspace has no role at all (404).
+// Every authorization helper below goes through here, so this is where a request stays inside its
+// own client: the deployment's, or the one its host belongs to. Another client's workspace has no
+// role at all (404).
 export async function getRole(db: DB, workspaceId: string, userId: string): Promise<Role | null> {
-  const pinned = deploymentWorkspaceId();
+  const pinned = await pinnedWorkspaceId();
   if (pinned && workspaceId !== pinned) return null;
   if (authViaBackoffice()) {
     // The back office only admits an active member of this deployment's workspace.

@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { composioUserId, hashAppsToken, mintMcpSession, type McpSession } from "@/lib/composio";
-import { deploymentWorkspaceId } from "@/lib/runtime-config";
+import { pinnedWorkspaceId } from "@/lib/tenant";
+import { TenantError } from "@/lib/tenant-resolver";
 
 // The MCP proxy between the experts and Yelema's Composio: the only place their tool traffic meets
 // the key. Each instance's Hermes has an `apps` MCP server pointed here with its own Bearer token
@@ -59,6 +60,15 @@ async function handle(request: Request): Promise<Response> {
   const token = /^Bearer\s+(.+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]?.trim();
   if (!token) return errorJson(401, "missing bearer token");
 
+  // The client this address belongs to: the deployment's, or the one of the host that was called.
+  let pinned: string | undefined;
+  try {
+    pinned = await pinnedWorkspaceId();
+  } catch (e) {
+    // An outage must not look like a revoked token; a host that is no client's has no valid token.
+    return e instanceof TenantError && e.status < 500 ? errorJson(401, "invalid token") : errorJson(503, "token lookup unavailable");
+  }
+
   const { data: row, error } = await createAdminClient()
     .from("agents")
     .select("agent37_id, workspace_id, owner_user_id")
@@ -67,8 +77,7 @@ async function handle(request: Request): Promise<Response> {
   // A database outage must not look like a revoked token to the expert.
   if (error) return errorJson(503, "token lookup unavailable");
   if (!row) return errorJson(401, "invalid token");
-  // This deployment serves one workspace: an instance of another client is not ours to proxy.
-  const pinned = deploymentWorkspaceId();
+  // An instance of another client than this address's is not ours to proxy.
   if (pinned && row.workspace_id !== pinned) return errorJson(401, "invalid token");
   const userId = composioUserId(row);
 

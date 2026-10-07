@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { deploymentWorkspaceId } from "@/lib/runtime-config";
+import { pinnedWorkspaceId } from "@/lib/tenant";
 import { ApiError, handleError, json } from "@/lib/http";
 
 type Ctx = { params: Promise<{ token: string }> };
@@ -10,7 +10,7 @@ export async function POST(_request: Request, { params }: Ctx) {
     const { db, user } = await requireUser();
 
     // On a shared database, an invitation to another client's workspace is not valid here.
-    const pinned = deploymentWorkspaceId();
+    const pinned = await pinnedWorkspaceId();
     if (pinned) {
       const { data: inv } = await db.rpc("get_invitation", { p_token: token });
       const row = (Array.isArray(inv) ? inv[0] : null) as { workspace_id: string } | null;

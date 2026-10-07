@@ -1,4 +1,4 @@
-import { appVersion, authViaBackoffice, backofficeUrl, composioApiKey, missingRequired } from "@/lib/runtime-config";
+import { appVersion, authViaBackoffice, backofficeUrl, composioApiKey, missingRequired, multiTenant } from "@/lib/runtime-config";
 
 // Liveness + configuration probe for the back-office. Public (no session) and secret-free:
 // 200 when every required variable is set, 503 otherwise — without saying which is missing.
@@ -12,6 +12,8 @@ export function GET() {
     catalogue: Boolean(backofficeUrl()),
     // "backoffice" when the back office signs users in and lists what they see.
     auth: authViaBackoffice() ? "backoffice" : "supabase",
+    // "multi": one deployment for every client, each request resolved by its host.
+    mode: multiTenant() ? "multi" : "single",
   };
   return Response.json({ ok, version: appVersion(), features }, { status: ok ? 200 : 503 });
 }
