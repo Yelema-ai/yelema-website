@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Onest } from "next/font/google";
 import "./globals.css";
+import Script from "next/script";
 import { Toaster } from "sonner";
 import { branding } from "@/config/branding";
 
@@ -35,9 +36,9 @@ const TRANSLATE_GUARD = `(() => {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={`${onest.variable} ${bricolage.variable}`}>
+    <html lang="fr" className={`${onest.variable} ${bricolage.variable}`} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: TRANSLATE_GUARD }} />
+        <Script id="translate-guard" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: TRANSLATE_GUARD }} />
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
         {children}

@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { deploymentWorkspaceId } from "@/lib/runtime-config";
 import type { DB } from "@/lib/auth";
 import type { AgentRow, Role, Workspace, WorkspaceWithRole } from "@/lib/types";
 
@@ -9,10 +10,15 @@ export const WORKSPACE_COOKIE = "yelema_ws";
 // Read the user's workspaces with two plain table queries joined in JS, NOT a PostgREST relationship
 // embed: right after a migration PostgREST's schema cache can lag and the embed comes back empty.
 export async function loadWorkspaces(db: DB, userId: string): Promise<WorkspaceWithRole[]> {
-  const { data: memberships, error: memErr } = await db
+  const pinned = deploymentWorkspaceId();
+  let query = db
     .from("memberships")
     .select("workspace_id, role")
     .eq("user_id", userId);
+  if (pinned) {
+    query = query.eq("workspace_id", pinned);
+  }
+  const { data: memberships, error: memErr } = await query;
   if (memErr) throw new Error(`Impossible de charger vos espaces : ${memErr.message}`);
   if (!memberships?.length) return [];
 
@@ -30,6 +36,10 @@ export async function loadWorkspaces(db: DB, userId: string): Promise<WorkspaceW
 }
 
 export async function pickWorkspace(workspaces: WorkspaceWithRole[]): Promise<WorkspaceWithRole | null> {
+  const pinned = deploymentWorkspaceId();
+  if (pinned) {
+    return workspaces.find((w) => w.id === pinned) ?? null;
+  }
   const wanted = (await cookies()).get(WORKSPACE_COOKIE)?.value;
   return workspaces.find((w) => w.id === wanted) ?? workspaces[0] ?? null;
 }
