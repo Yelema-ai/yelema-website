@@ -26,7 +26,7 @@ export async function GET(
 
     const workspaces = await loadWorkspaces(db, user.id);
     const currentWs = await pickWorkspace(workspaces);
-    const workspaceSlug = currentWs?.slug;
+    const workspaceSlug = currentWs?.name || currentWs?.slug || "mstudio";
 
     const inbox = await getOrCreateExpertInbox(key, workspaceSlug);
     const messages = await listExpertMessages(inbox.inboxId, 15);
@@ -65,7 +65,7 @@ export async function POST(
 
     const workspaces = await loadWorkspaces(db, user.id);
     const currentWs = await pickWorkspace(workspaces);
-    const workspaceSlug = currentWs?.slug;
+    const workspaceSlug = currentWs?.name || currentWs?.slug || "mstudio";
 
     const inbox = await getOrCreateExpertInbox(key, workspaceSlug);
     const result = await sendExpertEmail(inbox.inboxId, body);

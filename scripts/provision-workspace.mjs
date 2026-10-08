@@ -47,7 +47,7 @@ const SERVICE_KEY = get("SUPABASE_SERVICE_ROLE_KEY");
 const A37_KEY = get("AGENT37_API_KEY");
 
 // The roster: Hermes profile name -> the expert's folder in the shared drive.
-const EXPERTS = {
+const ALL_EXPERTS = {
   djeneba: "Djénéba",
   fatima: "Fatima",
   koffi: "Koffi",
@@ -60,6 +60,13 @@ const EXPERTS = {
   nadia: "Nadia",
   ibrahim: "Ibrahim",
 };
+
+// Filter experts if specific profiles are requested (e.g. --profiles djeneba,fatima)
+const selectedKeys = args.profiles
+  ? args.profiles.split(",").map((k) => k.trim().toLowerCase()).filter((k) => ALL_EXPERTS[k])
+  : Object.keys(ALL_EXPERTS);
+
+const EXPERTS = Object.fromEntries(selectedKeys.map((k) => [k, ALL_EXPERTS[k]]));
 
 if (!NAME || !EMAIL) {
   console.error('Usage: node scripts/provision-workspace.mjs --name "Client" --email admin@client.com [--logo URL] [--experts DIR] [--template NAME] [--skip-experts]');
@@ -219,6 +226,14 @@ function installCommand() {
 // The experts' connected apps (Yelema's Composio, through the app's /api/composio-mcp): a new
 // token for the instance, its hash for the proxy's lookup, and both written where the image's
 // start-up wiring reads them. Returns the shell that writes the file.
+function agentmailCommand() {
+  const apiKey = get("AGENTMAIL_API_KEY")?.trim();
+  if (!apiKey) return "";
+  const cleanSlug = (NAME || "mstudio").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const state = JSON.stringify({ api_key: apiKey, workspace_slug: cleanSlug });
+  return `mkdir -p "$HOME/.yelema" && cat > "$HOME/.yelema/agentmail.json" <<'EOF'\n${state}\nEOF`;
+}
+
 async function appsCommand(id) {
   if (!/^https:\/\//.test(SITE)) {
     console.warn(`  ! NEXT_PUBLIC_SITE_URL is not the deployed app (${SITE}): connected apps not wired`);
@@ -232,6 +247,57 @@ async function appsCommand(id) {
   const state = JSON.stringify({ url: `${SITE}/api/composio-mcp`, token });
   return `mkdir -p "$HOME/.yelema" && cat > "$HOME/.yelema/apps-mcp.json" <<'EOF'\n${state}\nEOF`;
 }
+// Provisions the dedicated AgentMail inbox for a given expert profile as part of its installation
+async function provisionExpertInbox(expertKey, expertDisplayName, workspaceSlug) {
+  const apiKey = get("AGENTMAIL_API_KEY")?.trim();
+  if (!apiKey) return;
+  const cleanSlug = (workspaceSlug || NAME || "mstudio").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const username = `${expertKey}.${cleanSlug}`;
+  const displayName = `${expertDisplayName} - Expert Yelema`;
+
+  try {
+    const res = await fetch("https://api.agentmail.to/v0/inboxes", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username,
+        display_name: displayName,
+        metadata: { expertKey, workspaceSlug: cleanSlug },
+      }),
+    });
+    if (res.ok) {
+      console.log(`    ✓ E-mail attribué et créé : ${username}@agentmail.to`);
+    } else if (res.status === 409 || res.status === 400) {
+      console.log(`    ✓ E-mail opérationnel : ${username}@agentmail.to`);
+    } else if (res.status === 403) {
+      const body = await res.json().catch(() => ({}));
+      if (body.code === "limit_exceeded") {
+        console.warn(`    ! Quota AgentMail atteint pour ${username}@agentmail.to (${body.message})`);
+      }
+    }
+  } catch (err) {
+    console.warn(`    ! Erreur attribution e-mail pour ${expertKey}: ${err.message}`);
+  }
+}
+
+// Provisions inboxes for all deployed profiles during workspace installation
+async function provisionInstalledProfilesInboxes(workspaceSlug) {
+  const apiKey = get("AGENTMAIL_API_KEY")?.trim();
+  if (!apiKey) {
+    console.log("  ! AGENTMAIL_API_KEY non configurée dans l'environnement, attribution e-mail différée");
+    return;
+  }
+  const cleanSlug = (workspaceSlug || NAME || "mstudio").toLowerCase().replace(/[^a-z0-9]/g, "");
+  console.log(`  Attribution automatique des e-mails pour les ${Object.keys(EXPERTS).length} profil(s) déployé(s)...`);
+
+  for (const [key, folder] of Object.entries(EXPERTS)) {
+    await provisionExpertInbox(key, folder, cleanSlug);
+  }
+}
+
 
 function agentsMd() {
   const rows = Object.entries(EXPERTS).map(([, folder]) => `- ${folder} : ~/Livrables/${folder}/`).join("\n");
@@ -293,10 +359,13 @@ async function main() {
     step(`Installing ${Object.keys(EXPERTS).length} expert profiles from ${EXPERTS_DIR}`);
     await uploadExperts(id);
     console.log((await exec(id, installCommand())).trim().replace(/^/gm, "  "));
+
+    step(`Attribution des e-mails pour chaque profil installé (${Object.keys(EXPERTS).length} expert(s))`);
+    await provisionInstalledProfilesInboxes(NAME);
   }
 
   step("AGENTS.md and the connected apps (Yelema's Composio)");
-  await exec(id, [`cat > "$HOME/AGENTS.md" <<'EOF'\n${agentsMd()}\nEOF`, await appsCommand(id)].filter(Boolean).join("\n"));
+  await exec(id, [`cat > "$HOME/AGENTS.md" <<'EOF'\n${agentsMd()}\nEOF`, await appsCommand(id), agentmailCommand()].filter(Boolean).join("\n"));
 
   step("Restarting so every profile gets the managed model and the apps server");
   await a37(`/instances/${id}/restart`, { method: "POST" });

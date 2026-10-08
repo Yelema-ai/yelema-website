@@ -34,11 +34,10 @@ export function sanitizeDisplayName(name?: string): string {
  */
 export function getExpertInboxUsername(expertKey: string, workspaceSlug?: string): string {
   const cleanKey = expertKey.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (!workspaceSlug || workspaceSlug === "default") {
-    return cleanKey;
-  }
-  const cleanSlug = workspaceSlug.toLowerCase().replace(/[^a-z0-9]/g, "");
-  return `${cleanKey}.${cleanSlug}`;
+  const cleanSlug = (workspaceSlug && workspaceSlug !== "default" ? workspaceSlug : "mstudio")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  return `${cleanKey}.${cleanSlug || "mstudio"}`;
 }
 
 export interface ExpertInboxInfo {

@@ -12,6 +12,10 @@ only. Built on [Agent37](https://www.agent37.com) Cloud; started from the Agent3
 - **One Supabase project for every client** (auth, workspaces, memberships, the workspace's
   agent row). All table access goes through the server with the service-role key; authorization
   is in `src/lib/auth.ts`.
+- **E-mails autonomes (AgentMail) :** Chaque expert dispose d'une adresse professionnelle dédiée
+  (`<key>.<workspace>@agentmail.to`) gérée par AgentMail. Les experts peuvent envoyer des livrables
+  et e-mails directement depuis les conversations de chat via l'outil CLI `agentmail-send`, et un
+  onglet **E-mails** permet de consulter la boîte de réception dans l'interface.
 - **Files** live on the instance under `~/Livrables` (each expert saves in `~/Livrables/<Prénom>`);
   the files routes refuse any other path (`src/lib/drive.ts`).
 - **No public signup.** The Yelema back office creates each client (workspace, instance, expert
