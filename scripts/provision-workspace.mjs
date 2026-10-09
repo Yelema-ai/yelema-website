@@ -24,6 +24,12 @@ import { createHash, randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadEnv } from "./setup.mjs";
+import {
+  provisionExpertInboxes,
+  agentmailInstanceConfig,
+  agentmailSoulSnippet,
+  agentmailAgentsMdSection,
+} from "./agentmail.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const env = loadEnv(path.join(ROOT, ".env.local")).map;
@@ -46,27 +52,25 @@ const SUPABASE_URL = get("NEXT_PUBLIC_SUPABASE_URL");
 const SERVICE_KEY = get("SUPABASE_SERVICE_ROLE_KEY");
 const A37_KEY = get("AGENT37_API_KEY");
 
-// The roster: Hermes profile name -> the expert's folder in the shared drive.
-const ALL_EXPERTS = {
-  djeneba: "Djénéba",
-  fatima: "Fatima",
-  koffi: "Koffi",
-  kouassi: "Kouassi",
-  awa: "Awa",
-  adjoua: "Adjoua",
-  mamadou: "Mamadou",
-  salif: "Salif",
-  alioune: "Alioune",
-  nadia: "Nadia",
-  ibrahim: "Ibrahim",
-};
+// Roster of experts: dynamically detected from folders in EXPERTS_DIR
+function getAvailableExperts(dir) {
+  if (!fs.existsSync(dir)) {
+    console.warn(`Directory ${dir} not found. No expert profiles detected.`);
+    return {};
+  }
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const found = {};
+  for (const ent of entries) {
+    if (ent.isDirectory() && !ent.name.startsWith(".") && ent.name !== "node_modules") {
+      const key = ent.name.toLowerCase();
+      // Capitalized name for folder display in ~/Livrables
+      found[key] = key.charAt(0).toUpperCase() + key.slice(1);
+    }
+  }
+  return found;
+}
 
-// Filter experts if specific profiles are requested (e.g. --profiles djeneba,fatima)
-const selectedKeys = args.profiles
-  ? args.profiles.split(",").map((k) => k.trim().toLowerCase()).filter((k) => ALL_EXPERTS[k])
-  : Object.keys(ALL_EXPERTS);
-
-const EXPERTS = Object.fromEntries(selectedKeys.map((k) => [k, ALL_EXPERTS[k]]));
+const EXPERTS = getAvailableExperts(EXPERTS_DIR);
 
 if (!NAME || !EMAIL) {
   console.error('Usage: node scripts/provision-workspace.mjs --name "Client" --email admin@client.com [--logo URL] [--experts DIR] [--template NAME] [--skip-experts]');
@@ -211,12 +215,15 @@ function installCommand() {
   for (const [key, folder] of Object.entries(EXPERTS)) {
     lines.push(
       `hermes profile install "$HOME/.yelema/experts/${key}" --name ${key} --yes --force >/dev/null`,
-      `d="$HOME/.hermes/profiles/${key}"; mkdir -p "$d/memories"`,
+      `d="$HOME/.hermes/profiles/${key}"; mkdir -p "$d/memories" "$d/home/.local/bin" "$d/home/.yelema" "$d/skills/agentmail"`,
       `for f in "$HOME/.yelema/experts/${key}/memories/"*; do [ -e "$d/memories/$(basename "$f")" ] || cp "$f" "$d/memories/"; done`,
       `touch "$d/config.yaml"; grep -q '^context_file_max_chars:' "$d/config.yaml" || printf '\\ncontext_file_max_chars: 70000\\n' >> "$d/config.yaml"`,
       `mkdir -p "$HOME/Livrables/${folder}"`,
+      `ln -sf "$HOME/.local/bin/agentmail-send" "$d/home/.local/bin/agentmail-send"`,
+      `ln -sf "$HOME/.yelema/agentmail.json" "$d/home/.yelema/agentmail.json"`,
+      `ln -sf "$HOME/Livrables" "$d/home/Livrables"`,
       `sed -i "s/sans elle, personne ne lui confierait la boîte mail./elle envoie en toute autonomie les e-mails et livrables demandés par son dirigeant./g" "$d/SOUL.md" 2>/dev/null || true`,
-      `grep -q "AgentMail" "$d/SOUL.md" || printf '\\n\\n## E-mails et Messagerie Autonome (AgentMail)\\nTu disposes d\\'une boîte e-mail professionnelle dédiée : ${key}.${NAME.toLowerCase().replace(/[^a-z0-9]/g, "")}@agentmail.to.\\nTu n\\'utilises PAS Gmail : tu utilises directement \\`agentmail-send\\`.\\nQuand l\\'utilisateur te demande d\\'envoyer un e-mail :\\nagentmail-send --to "<email>" --subject "<objet>" --body "<texte>" [--attach "<fichier>"]\\n' >> "$d/SOUL.md"`,
+      `grep -q "AgentMail" "$d/SOUL.md" 2>/dev/null || cat >> "$d/SOUL.md" <<'EOF'\n${agentmailSoulSnippet(key, NAME)}\nEOF`,
       `echo "installed ${key}"`
     );
   }
@@ -226,14 +233,6 @@ function installCommand() {
 // The experts' connected apps (Yelema's Composio, through the app's /api/composio-mcp): a new
 // token for the instance, its hash for the proxy's lookup, and both written where the image's
 // start-up wiring reads them. Returns the shell that writes the file.
-function agentmailCommand() {
-  const apiKey = get("AGENTMAIL_API_KEY")?.trim();
-  if (!apiKey) return "";
-  const cleanSlug = (NAME || "mstudio").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const state = JSON.stringify({ api_key: apiKey, workspace_slug: cleanSlug });
-  return `mkdir -p "$HOME/.yelema" && cat > "$HOME/.yelema/agentmail.json" <<'EOF'\n${state}\nEOF`;
-}
-
 async function appsCommand(id) {
   if (!/^https:\/\//.test(SITE)) {
     console.warn(`  ! NEXT_PUBLIC_SITE_URL is not the deployed app (${SITE}): connected apps not wired`);
@@ -247,57 +246,6 @@ async function appsCommand(id) {
   const state = JSON.stringify({ url: `${SITE}/api/composio-mcp`, token });
   return `mkdir -p "$HOME/.yelema" && cat > "$HOME/.yelema/apps-mcp.json" <<'EOF'\n${state}\nEOF`;
 }
-// Provisions the dedicated AgentMail inbox for a given expert profile as part of its installation
-async function provisionExpertInbox(expertKey, expertDisplayName, workspaceSlug) {
-  const apiKey = get("AGENTMAIL_API_KEY")?.trim();
-  if (!apiKey) return;
-  const cleanSlug = (workspaceSlug || NAME || "mstudio").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const username = `${expertKey}.${cleanSlug}`;
-  const displayName = `${expertDisplayName} - Expert Yelema`;
-
-  try {
-    const res = await fetch("https://api.agentmail.to/v0/inboxes", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        username,
-        display_name: displayName,
-        metadata: { expertKey, workspaceSlug: cleanSlug },
-      }),
-    });
-    if (res.ok) {
-      console.log(`    ✓ E-mail attribué et créé : ${username}@agentmail.to`);
-    } else if (res.status === 409 || res.status === 400) {
-      console.log(`    ✓ E-mail opérationnel : ${username}@agentmail.to`);
-    } else if (res.status === 403) {
-      const body = await res.json().catch(() => ({}));
-      if (body.code === "limit_exceeded") {
-        console.warn(`    ! Quota AgentMail atteint pour ${username}@agentmail.to (${body.message})`);
-      }
-    }
-  } catch (err) {
-    console.warn(`    ! Erreur attribution e-mail pour ${expertKey}: ${err.message}`);
-  }
-}
-
-// Provisions inboxes for all deployed profiles during workspace installation
-async function provisionInstalledProfilesInboxes(workspaceSlug) {
-  const apiKey = get("AGENTMAIL_API_KEY")?.trim();
-  if (!apiKey) {
-    console.log("  ! AGENTMAIL_API_KEY non configurée dans l'environnement, attribution e-mail différée");
-    return;
-  }
-  const cleanSlug = (workspaceSlug || NAME || "mstudio").toLowerCase().replace(/[^a-z0-9]/g, "");
-  console.log(`  Attribution automatique des e-mails pour les ${Object.keys(EXPERTS).length} profil(s) déployé(s)...`);
-
-  for (const [key, folder] of Object.entries(EXPERTS)) {
-    await provisionExpertInbox(key, folder, cleanSlug);
-  }
-}
-
 
 function agentsMd() {
   const rows = Object.entries(EXPERTS).map(([, folder]) => `- ${folder} : ~/Livrables/${folder}/`).join("\n");
@@ -321,16 +269,7 @@ Google Agenda, Google Drive, Notion, Slack, HubSpot et les autres applications d
 - N'utilise jamais pour ces applications une compétence ou un outil qui demande un mot de passe d'application, une clé d'API ou des identifiants Google Cloud : la connexion se fait en un clic.
 - Une application connectée l'est pour toute l'équipe : réutilise la connexion.
 
-## E-mails et Messagerie (AgentMail)
-
-Chaque expert dispose d'une adresse e-mail professionnelle dédiée : `{expertKey}.{workspaceSlug}@agentmail.to`.
-Tu as la capacité d'envoyer des e-mails en direct avec l'outil CLI `agentmail-send`.
-
-Quand l'utilisateur te demande d'envoyer un e-mail (ex: "envoie ça par e-mail à...", "partage ce document par e-mail", "écris à..."):
-1. Exécute immédiatement la commande :
-   \`agentmail-send --to "<email>" --subject "<sujet>" --body "<texte>" [--attach "<chemin_fichier>"]\`
-2. Si un fichier (PDF, document, rapport) a été créé dans ~/Livrables/ ou est cité, joins-le avec \`--attach "<chemin_fichier>"\`.
-3. Réponds ensuite à l'utilisateur en confirmant que l'e-mail a été envoyé depuis ton adresse dédiée.`;
+${agentmailAgentsMdSection()}`;
 }
 
 // The admin's access link: a row in `invitations` the app consumes at /acces/<token> (7 days, one
@@ -361,11 +300,11 @@ async function main() {
     console.log((await exec(id, installCommand())).trim().replace(/^/gm, "  "));
 
     step(`Attribution des e-mails pour chaque profil installé (${Object.keys(EXPERTS).length} expert(s))`);
-    await provisionInstalledProfilesInboxes(NAME);
+    await provisionExpertInboxes({ apiKey: get("AGENTMAIL_API_KEY"), experts: EXPERTS, workspaceName: NAME });
   }
 
   step("AGENTS.md and the connected apps (Yelema's Composio)");
-  await exec(id, [`cat > "$HOME/AGENTS.md" <<'EOF'\n${agentsMd()}\nEOF`, await appsCommand(id), agentmailCommand()].filter(Boolean).join("\n"));
+  await exec(id, [`cat > "$HOME/AGENTS.md" <<'EOF'\n${agentsMd()}\nEOF`, await appsCommand(id), agentmailInstanceConfig(get("AGENTMAIL_API_KEY"), NAME)].filter(Boolean).join("\n"));
 
   step("Restarting so every profile gets the managed model and the apps server");
   await a37(`/instances/${id}/restart`, { method: "POST" });

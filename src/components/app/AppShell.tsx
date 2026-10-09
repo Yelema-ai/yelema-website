@@ -144,7 +144,8 @@ function AccountMenu() {
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { workspace } = useApp();
+  const { workspace, profiles } = useApp();
+  const teamExperts = profiles && profiles.length > 0 ? EXPERTS.filter((e) => profiles.includes(e.key)) : EXPERTS;
 
   return (
     <nav className="flex h-full flex-col gap-0.5 overflow-y-auto px-3 py-3.5" onClick={onNavigate}>
@@ -167,7 +168,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       })}
 
       <div className="px-2.5 pb-1.5 pt-4 text-xs font-semibold uppercase tracking-wide text-ink-3">Mon équipe</div>
-      {EXPERTS.map((e) => (
+      {teamExperts.map((e) => (
         <SidebarLink key={e.key} href={`/experts/${e.key}`} active={pathname.startsWith(`/experts/${e.key}`)} className="min-h-12 px-2">
           <ExpertAvatar expertKey={e.key} />
           <span className="min-w-0">

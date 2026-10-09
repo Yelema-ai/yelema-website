@@ -8,6 +8,7 @@ export interface AppContextValue {
   workspaces: { id: string; name: string }[];
   // The workspace's Agent37 instance (all experts live on it); null while it's being set up.
   agentId: string | null;
+  profiles: string[];
 }
 
 const AppContext = createContext<AppContextValue | null>(null);

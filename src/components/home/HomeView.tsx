@@ -56,10 +56,11 @@ function ExpertCard({ expertKey }: { expertKey: string }) {
 // opens that expert's chat with the message on its way), then the team.
 export function HomeView() {
   const router = useRouter();
-  const { user } = useApp();
-  const [to, setTo] = useState(DEFAULT_EXPERT);
+  const { user, profiles } = useApp();
+  const teamExperts = profiles && profiles.length > 0 ? EXPERTS.filter((e) => profiles.includes(e.key)) : EXPERTS;
+  const [to, setTo] = useState(teamExperts[0]?.key ?? DEFAULT_EXPERT);
   const [text, setText] = useState("");
-  const expert = getExpert(to)!;
+  const expert = getExpert(to) ?? teamExperts[0] ?? getExpert(DEFAULT_EXPERT)!;
   const hello = firstName(user.name) || user.email.split("@")[0];
 
   function send(message: string) {
@@ -83,7 +84,7 @@ export function HomeView() {
       <section className="mt-5 rounded-[22px] border border-line bg-surface p-4 shadow-[0_8px_30px_rgb(48_22_103_/_0.05)]">
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           <span className="shrink-0 text-sm text-ink-3">À</span>
-          {EXPERTS.map((e) => (
+          {teamExperts.map((e) => (
             <button
               key={e.key}
               type="button"
@@ -131,9 +132,9 @@ export function HomeView() {
         ))}
       </div>
 
-      <h2 className="mt-10 font-display text-[22px] font-bold tracking-tight text-ink">Mon équipe ({EXPERTS.length})</h2>
+      <h2 className="mt-10 font-display text-[22px] font-bold tracking-tight text-ink">Mon équipe ({teamExperts.length})</h2>
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {EXPERTS.map((e) => (
+        {teamExperts.map((e) => (
           <ExpertCard key={e.key} expertKey={e.key} />
         ))}
       </div>

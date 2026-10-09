@@ -34,11 +34,13 @@ export async function updateSession(request: NextRequest) {
     pathname === "/" ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
+    pathname.startsWith("/bienvenue") ||
     pathname.startsWith("/reset-password") ||
     pathname.startsWith("/acces") ||
     pathname.startsWith("/api/acces") ||
     pathname.startsWith("/api/health") ||
-    pathname.startsWith("/api/webhooks");
+    pathname.startsWith("/api/webhooks") ||
+    pathname.startsWith("/supabase-api");
 
   if (!user && !isPublic) {
     if (pathname.startsWith("/api/")) {

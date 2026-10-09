@@ -42,6 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         workspace: { id: workspace.id, name: workspace.name, logoUrl: workspace.logo_url },
         workspaces: workspaces.map((w) => ({ id: w.id, name: w.name })),
         agentId: agent?.ready ? agent.agent37_id : null,
+        profiles: (agent?.profiles as string[] | undefined) ?? [],
       }}
     >
       <AppShell>

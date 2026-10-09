@@ -1,8 +1,8 @@
 import { requireUser } from "@/lib/auth";
 import { handleError, json, readJson, ApiError } from "@/lib/http";
-import { getOrCreateExpertInbox, listExpertMessages, sendExpertEmail, isAgentMailConfigured } from "@/lib/agentmail";
+import { getOrCreateExpertInbox, listExpertMessages, sendExpertEmail, isAgentMailConfigured, type EmailAttachment } from "@/lib/agentmail";
 import { getExpert } from "@/config/experts";
-import { loadWorkspaces, pickWorkspace } from "@/lib/workspace";
+import { getWorkspaceAgent, loadWorkspaces, pickWorkspace } from "@/lib/workspace";
 
 export async function GET(
   request: Request,
@@ -16,6 +16,16 @@ export async function GET(
       throw new ApiError(404, "expert_not_found", "Expert introuvable");
     }
 
+    const workspaces = await loadWorkspaces(db, user.id);
+    const currentWs = await pickWorkspace(workspaces);
+    if (currentWs) {
+      const agent = await getWorkspaceAgent(db, currentWs.id);
+      const profiles = (agent?.profiles as string[] | undefined) ?? [];
+      if (profiles.length > 0 && !profiles.includes(key)) {
+        throw new ApiError(404, "expert_not_found", "Expert non activé pour cet espace");
+      }
+    }
+
     if (!isAgentMailConfigured()) {
       return json({
         configured: false,
@@ -24,10 +34,7 @@ export async function GET(
       });
     }
 
-    const workspaces = await loadWorkspaces(db, user.id);
-    const currentWs = await pickWorkspace(workspaces);
     const workspaceSlug = currentWs?.name || currentWs?.slug || "mstudio";
-
     const inbox = await getOrCreateExpertInbox(key, workspaceSlug);
     const messages = await listExpertMessages(inbox.inboxId, 15);
 
@@ -53,6 +60,16 @@ export async function POST(
       throw new ApiError(404, "expert_not_found", "Expert introuvable");
     }
 
+    const workspaces = await loadWorkspaces(db, user.id);
+    const currentWs = await pickWorkspace(workspaces);
+    if (currentWs) {
+      const agent = await getWorkspaceAgent(db, currentWs.id);
+      const profiles = (agent?.profiles as string[] | undefined) ?? [];
+      if (profiles.length > 0 && !profiles.includes(key)) {
+        throw new ApiError(404, "expert_not_found", "Expert non activé pour cet espace");
+      }
+    }
+
     const body = await readJson<{
       to: string;
       subject: string;
@@ -60,20 +77,17 @@ export async function POST(
       html?: string;
       cc?: string[];
       bcc?: string[];
-      attachments?: Array<{ filename: string; content: string; contentType?: string }>;
+      attachments?: EmailAttachment[];
     }>(request);
 
-    const workspaces = await loadWorkspaces(db, user.id);
-    const currentWs = await pickWorkspace(workspaces);
     const workspaceSlug = currentWs?.name || currentWs?.slug || "mstudio";
-
     const inbox = await getOrCreateExpertInbox(key, workspaceSlug);
     const result = await sendExpertEmail(inbox.inboxId, body);
 
     return json({
       success: true,
-      messageId: result.messageId || (result as any).id,
-      threadId: result.threadId || (result as any).thread_id,
+      messageId: (result as any).messageId || (result as any).id,
+      threadId: (result as any).threadId || (result as any).thread_id,
     });
   } catch (e) {
     return handleError(e);

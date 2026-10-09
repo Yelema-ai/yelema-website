@@ -20,24 +20,39 @@ export function isAgentMailConfigured(): boolean {
 }
 
 /**
+ * Nettoie le slug d'un workspace en supprimant accents et caractères non alphanumériques.
+ */
+export function getCleanSlug(name?: string): string {
+  return (name || "mstudio")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
  * Nettoie le nom d'affichage pour respecter les contraintes strictes d'AgentMail
  * (AgentMail n'autorise pas les parenthèses () ou certains caractères spéciaux).
  */
 export function sanitizeDisplayName(name?: string): string {
   if (!name) return "Expert";
-  return name.replace(/[()\[\]{}<>&"'/\\@:;,?!=+*#~`%$^|]/g, " ").replace(/\s+/g, " ").trim();
+  return name.replace(/[()[\]{}<>&"'/\\@:;,?!=+*#~`%$^|]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 /**
  * Format normalisé pour le username de la boîte e-mail d'un expert.
- * Ex: 'djeneba.mstudio' ou 'djeneba'
+ * Ex: 'djeneba.develle' ou 'djeneba.mstudio'
  */
 export function getExpertInboxUsername(expertKey: string, workspaceSlug?: string): string {
   const cleanKey = expertKey.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const cleanSlug = (workspaceSlug && workspaceSlug !== "default" ? workspaceSlug : "mstudio")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
+  const cleanSlug = getCleanSlug(workspaceSlug && workspaceSlug !== "default" ? workspaceSlug : "mstudio");
   return `${cleanKey}.${cleanSlug || "mstudio"}`;
+}
+
+export interface EmailAttachment {
+  filename: string;
+  content: string; // Base64 ou chaîne
+  contentType?: string;
 }
 
 export interface ExpertInboxInfo {
@@ -139,7 +154,7 @@ export async function sendExpertEmail(
     html?: string;
     cc?: string[];
     bcc?: string[];
-    attachments?: Array<{ filename: string; content: string; contentType?: string }>;
+    attachments?: EmailAttachment[];
   }
 ) {
   const client = getAgentMailClient();
@@ -154,6 +169,12 @@ export async function sendExpertEmail(
   const plainText = params.text || (params.html ? params.html.replace(/<[^>]+>/g, "") : "");
   const htmlContent = params.html || `<div style="font-family: sans-serif; line-height: 1.6;">${params.text?.replace(/\n/g, "<br/>")}</div>`;
 
+  const cleanedAttachments = params.attachments?.map((att) => ({
+    filename: att.filename,
+    content: att.content.replace(/^data:[^;]+;base64,/, ""),
+    contentType: att.contentType,
+  }));
+
   const sent = await client.inboxes.messages.send(inboxId, {
     to: params.to,
     subject: params.subject,
@@ -161,7 +182,7 @@ export async function sendExpertEmail(
     html: htmlContent,
     cc: params.cc,
     bcc: params.bcc,
-    attachments: params.attachments as any,
+    attachments: cleanedAttachments as any,
   });
 
   return sent;
@@ -194,15 +215,22 @@ export async function replyToExpertMessage(
   params: {
     text?: string;
     html?: string;
-    attachments?: Array<{ filename: string; content: string; contentType?: string }>;
+    attachments?: EmailAttachment[];
   }
 ) {
   const client = getAgentMailClient();
   const plainText = params.text || (params.html ? params.html.replace(/<[^>]+>/g, "") : "");
+
+  const cleanedAttachments = params.attachments?.map((att) => ({
+    filename: att.filename,
+    content: att.content.replace(/^data:[^;]+;base64,/, ""),
+    contentType: att.contentType,
+  }));
+
   const reply = await client.inboxes.messages.reply(inboxId, messageId, {
     text: plainText,
     html: params.html,
-    attachments: params.attachments as any,
+    attachments: cleanedAttachments as any,
   });
   return reply;
 }

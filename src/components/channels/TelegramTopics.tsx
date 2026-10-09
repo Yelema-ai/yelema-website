@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { TelegramTopicsResult } from "@/lib/channels";
 import { EXPERTS } from "@/config/experts";
+import { useApp } from "@/components/app/AppProvider";
 import { Button } from "@/components/ui/button";
 import { ExpertAvatar } from "@/components/app/ExpertAvatar";
 import { Steps } from "@/components/channels/TelegramConnect";
@@ -21,6 +22,8 @@ export function TelegramTopics({
   // null while the channels are loading
   telegramConnected: boolean | null;
 }) {
+  const { profiles } = useApp();
+  const teamExperts = profiles && profiles.length > 0 ? EXPERTS.filter((e) => profiles.includes(e.key)) : EXPERTS;
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<TelegramTopicsResult | null>(null);
 
@@ -52,7 +55,7 @@ export function TelegramTopics({
       </div>
 
       <div className="mt-4 flex -space-x-2" aria-hidden="true">
-        {EXPERTS.map((e) => (
+        {teamExperts.map((e) => (
           <ExpertAvatar key={e.key} expertKey={e.key} size={30} className="ring-2 ring-surface" />
         ))}
       </div>
