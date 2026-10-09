@@ -104,8 +104,19 @@ async function getJson(path: string): Promise<unknown | null> {
   }
 }
 
+let listLoading: Promise<Catalogue> | null = null;
+
 export async function loadCatalogue(): Promise<Catalogue> {
   if (listCache && Date.now() - listCache.at < TTL_MS) return listCache.value;
+  // One fetch for every caller waiting on it; a copy past its time is served while it runs.
+  listLoading ??= fetchCatalogue().finally(() => {
+    listLoading = null;
+  });
+  return listCache?.value ?? listLoading;
+}
+
+// Never throws: without an answer it gives the last copy, or nothing.
+async function fetchCatalogue(): Promise<Catalogue> {
   const body = await getJson("/api/v1/public/experts");
   // A bare array today; an envelope ({ experts, categories, defaultExpertKey }) once the back
   // office adds the ordered categories and the default expert.

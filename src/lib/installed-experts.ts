@@ -1,9 +1,11 @@
 import "server-only";
 import { backofficeAgentRow, type DB } from "@/lib/auth";
+import { loadCatalogue, matchCatalogue } from "@/lib/catalogue";
+import { expertDisplayName } from "@/lib/experts";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { listInstanceProfiles } from "@/lib/hermes-profiles";
 import { ApiError } from "@/lib/http";
-import type { AgentRow } from "@/lib/types";
+import type { AgentRow, Expert } from "@/lib/types";
 
 // The profiles installed on the instance a user owns (admins included: nobody sees a colleague's).
 // Shared by the experts list and the catalogue, so both screens agree on what "installed" means.
@@ -59,4 +61,43 @@ export async function installedProfiles(agents: AgentRow[]): Promise<InstalledPr
     else unreadable.push(agents[i]);
   });
   return { profiles, unreadable };
+}
+
+/** True when listing these instances' profiles asks nothing of the instances themselves. */
+export function profilesMirrored(agents: AgentRow[]): boolean {
+  return agents.every((a) => Array.isArray(a.profiles) && a.profiles.length > 0);
+}
+
+export interface UserExperts {
+  experts: Expert[];
+  unreadable: { agentId: string; agentName: string | null }[];
+}
+
+// The experts of these instances as the screens show them: each installed profile dressed by the
+// back office's catalogue (name, role, portrait), or named after its profile id without one. An
+// instance that cannot be read does not take the others down: it is reported in `unreadable`.
+// Shared by the experts route and the shell's first render, so both say the same thing.
+export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
+  const [{ profiles, unreadable }, catalogue] = await Promise.all([installedProfiles(agents), loadCatalogue()]);
+
+  const experts: Expert[] = profiles.map((p) => {
+    const entry = matchCatalogue(catalogue.experts, p.profileId);
+    return {
+      profileId: p.profileId,
+      displayName: entry?.name ?? expertDisplayName(p.profileId),
+      agentId: p.agent.agent37_id,
+      agentName: p.agent.name,
+      gateway: p.gateway,
+      distribution: p.distribution,
+      catalogueKey: entry?.key ?? null,
+      role: entry?.role ?? null,
+      title: entry?.title ?? null,
+      tagline: entry?.tagline ?? null,
+      photoUrl: entry?.avatarUrl ?? null,
+      driveFolder: entry?.driveFolder ?? entry?.name ?? null,
+    };
+  });
+
+  experts.sort((a, b) => a.displayName.localeCompare(b.displayName, "fr"));
+  return { experts, unreadable: unreadable.map((a) => ({ agentId: a.agent37_id, agentName: a.name })) };
 }

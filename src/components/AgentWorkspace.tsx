@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Blocks, FolderOpen, MessageSquare, MessagesSquare, Repeat } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
+import { cached, remember } from "@/lib/client-cache";
 import { isTransitional } from "@/lib/format";
 import { agentTabPath, parseAgentRoute, type AgentTab } from "@/lib/expert-tabs";
 import type { MergedAgent, Role } from "@/lib/types";
@@ -61,7 +62,7 @@ export function AgentWorkspace({
   // operate the agent, only an admin deletes it.
   const canManage = isOwner;
   const pathname = usePathname();
-  const { setCurrentId } = useWorkspace();
+  const { setCurrentId, userEmail } = useWorkspace();
 
   // Deep-linking to an agent scopes the WorkspaceProvider to its workspace, so the fleet/switcher
   // and any workspace-derived UI stay in sync after a refresh or shared link.
@@ -72,17 +73,19 @@ export function AgentWorkspace({
   // Live data for every agent in the workspace: the switcher lists them, and `active` carries this
   // agent's live ports / status / update flag. Poll while any agent is mid-transition (the old fleet view's
   // approach), so a starting agent's ports light up without a manual refresh.
-  const [agents, setAgents] = useState<MergedAgent[]>([]);
+  // Opening another expert starts from the last reading rather than from nothing; `load` renews it.
+  const agentsKey = `agents:${userEmail}:${workspaceId}`;
+  const [agents, setAgents] = useState<MergedAgent[]>(() => cached<MergedAgent[]>(agentsKey) ?? []);
   const load = useCallback(async () => {
     try {
       const data = await apiFetch<{ agents: MergedAgent[]; role: Role }>(
         `/api/agents?workspace=${workspaceId}`
       );
-      setAgents(data.agents);
+      setAgents(remember(agentsKey, data.agents));
     } catch (e) {
       toast.error((e as Error).message);
     }
-  }, [workspaceId]);
+  }, [workspaceId, agentsKey]);
 
   useEffect(() => {
     load();

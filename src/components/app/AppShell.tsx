@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/app/Sidebar";
 import { TopBar } from "@/components/app/TopBar";
 import { ComputerProvider } from "@/components/experts/ComputerProvider";
 import { ExpertsProvider } from "@/components/experts/ExpertsProvider";
+import type { InitialExperts } from "@/components/experts/useExperts";
 import { cn } from "@/lib/utils";
 
 const COLLAPSE_KEY = "sbmini";
@@ -23,7 +24,7 @@ const COLLAPSE_KEY = "sbmini";
  * Le <main> ne pose aucune marge : chaque page choisit son mode en enveloppant ou non
  * son contenu dans <Page>.
  */
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, initialExperts }: { children: React.ReactNode; initialExperts: InitialExperts | null }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -65,7 +66,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <ExpertsProvider>
+    <ExpertsProvider initial={initialExperts}>
       <div
         className="min-h-screen md:grid"
         style={{ gridTemplateColumns: `${collapsed ? 72 : 250}px minmax(0,1fr)` }}

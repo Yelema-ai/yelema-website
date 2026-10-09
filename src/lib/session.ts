@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
+import { after } from "next/server";
 import { cache } from "react";
 import { backoffice, BackofficeError, type BoInstance, type BoMe, type BoSession } from "@/lib/backoffice";
 import { pinnedWorkspaceId } from "@/lib/tenant";
@@ -18,8 +19,11 @@ export const SESSION_COOKIE = process.env.NODE_ENV === "production" ? `__Host-${
 // The renewal token outlives the access token by weeks; the cookie follows it.
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 // Who the user is and what their instance holds, kept this long: a page makes many BFF calls, and
-// each would otherwise be a round-trip to the back office. A suspension is felt within this delay.
+// each would otherwise be a round-trip to the back office.
 const TTL_MS = 30_000;
+// An answer older than TTL_MS is served once more while it is renewed, never one older than this.
+// A suspension is felt at the request after the renewal, so within this delay at the very most.
+const STALE_MS = 5 * 60_000;
 
 export function encodeSession(session: BoSession): string {
   return Buffer.from(JSON.stringify(session), "utf8").toString("base64url");
@@ -75,21 +79,61 @@ export async function readSession(): Promise<BoSession | null> {
 
 const fingerprint = (token: string) => createHash("sha256").update(token).digest("hex");
 
+const refused = (e: unknown) => e instanceof BackofficeError && (e.status === 401 || e.status === 403);
+
 // Keyed by the workspace as well as the session: an answer given for one client is never served
 // to a request for another, even with the same token.
+//
+// The calls a page makes together share ONE round-trip (the request in flight is what is kept, not
+// only its answer). An answer past TTL_MS is still served while a new one is fetched, so nobody
+// waits on the back office after a pause; past STALE_MS it is not, and the request waits. A refusal
+// drops the kept answer at once, so a suspended user gets at most the requests already under way.
 function memo<T>(load: (token: string) => Promise<T>) {
   const store = new Map<string, { at: number; value: T }>();
+  const flying = new Map<string, Promise<T>>();
+
+  function refresh(key: string, token: string): Promise<T> {
+    let pending = flying.get(key);
+    if (!pending) {
+      pending = load(token).then(
+        (value) => {
+          flying.delete(key);
+          store.set(key, { at: Date.now(), value });
+          // Sessions come and go: keep the map from growing without bound.
+          if (store.size > 500) for (const [k, v] of store) if (Date.now() - v.at >= STALE_MS) store.delete(k);
+          return value;
+        },
+        (e) => {
+          flying.delete(key);
+          if (refused(e)) store.delete(key);
+          throw e;
+        }
+      );
+      flying.set(key, pending);
+    }
+    return pending;
+  }
+
   return async (workspace: string, token: string): Promise<T> => {
     const key = `${workspace}:${fingerprint(token)}`;
     const hit = store.get(key);
-    if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
-    const value = await load(token);
-    store.set(key, { at: Date.now(), value });
-    // Sessions come and go: keep the map from growing without bound.
-    if (store.size > 500) for (const [k, v] of store) if (Date.now() - v.at >= TTL_MS) store.delete(k);
-    return value;
+    const age = hit ? Date.now() - hit.at : Infinity;
+    if (hit && age < TTL_MS) return hit.value;
+    const fresh = refresh(key, token);
+    if (!hit || age >= STALE_MS) return fresh;
+    // Nobody waits for this one: its failure is the next request's to see.
+    const settled = fresh.then(noop, noop);
+    try {
+      // Keeps the function alive until the answer is in, where the host would otherwise freeze it.
+      after(() => settled);
+    } catch {
+      // Outside a request there is nothing to keep alive.
+    }
+    return hit.value;
   };
 }
+
+function noop(): void {}
 
 const meOf = memo((token) => backoffice.me(token));
 const instanceOf = memo((token) => backoffice.instance(token));
@@ -97,7 +141,7 @@ const instanceOf = memo((token) => backoffice.instance(token));
 // A refused session (expired, suspended, no longer a member) reads as "nobody signed in"; an
 // outage is NOT that, and is thrown so the caller answers "try again" rather than signing out.
 function nobodyOn(e: unknown): null {
-  if (e instanceof BackofficeError && (e.status === 401 || e.status === 403)) return null;
+  if (refused(e)) return null;
   throw e;
 }
 
@@ -119,9 +163,10 @@ export const currentPrincipal = cache(async (): Promise<BoMe | null> => {
 export const currentInstance = cache(async (): Promise<BoInstance | null> => {
   const session = await readSession();
   if (!session) return null;
-  // Only for a user this request's client admits.
-  if (!(await currentPrincipal())) return null;
   const workspace = await pinnedWorkspaceId();
   if (!workspace) return null;
-  return instanceOf(workspace, session.accessToken).catch(nobodyOn);
+  // Asked alongside "who is this" rather than after it. The back office refuses the instance to a
+  // session this client does not admit, and the answer is kept only for a user this request admits.
+  const [me, instance] = await Promise.all([currentPrincipal(), instanceOf(workspace, session.accessToken).catch(nobodyOn)]);
+  return me ? instance : null;
 });

@@ -3,10 +3,12 @@ import { getSession, type DB } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { pinnedWorkspaceId } from "@/lib/tenant";
-import { currentPrincipal } from "@/lib/session";
+import { currentInstance, currentPrincipal } from "@/lib/session";
+import { profilesMirrored, userExperts, visibleAgents } from "@/lib/installed-experts";
 import { WorkspaceProvider } from "@/components/WorkspaceProvider";
 import { UnlinkedAccount } from "@/components/UnlinkedAccount";
 import { AppShell } from "@/components/app/AppShell";
+import type { InitialExperts } from "@/components/experts/useExperts";
 import type { Role, Workspace, WorkspaceWithRole } from "@/lib/types";
 
 // Read the user's workspaces with two plain table queries joined in JS, NOT a PostgREST relationship
@@ -39,7 +41,22 @@ async function loadWorkspaces(db: DB, userId: string): Promise<WorkspaceWithRole
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
+// The user's experts, read with the page so the menu and the home arrive filled instead of asking
+// for them once the page is up. Only when it costs no call into an instance (the profiles are
+// mirrored); otherwise, or on any failure, the browser asks as before and shows the error itself.
+async function loadInitialExperts(workspaceId: string, userId: string): Promise<InitialExperts | null> {
+  try {
+    const agents = await visibleAgents(createAdminClient(), workspaceId, userId);
+    if (!profilesMirrored(agents)) return null;
+    return { workspaceId, ...(await userExperts(agents)) };
+  } catch {
+    return null;
+  }
+}
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  // Asked now, alongside "who is this", so the experts below do not wait for it in turn.
+  if (authViaBackoffice()) void currentInstance().catch(() => null);
   const { user } = await getSession();
   if (!user) redirect("/login");
 
@@ -59,9 +76,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Un seul chrome pour tout le groupe (app), espace expert compris : c'est ce qui remplace
   // l'écran de choix d'instance. Le <main> ne pose aucune marge — chaque page choisit son mode
   // en enveloppant ou non son contenu dans <Page>.
+  const initialExperts = await loadInitialExperts(workspaces[0].id, user.id);
+
   return (
     <WorkspaceProvider initialWorkspaces={workspaces} userEmail={user.email ?? ""}>
-      <AppShell>{children}</AppShell>
+      <AppShell initialExperts={initialExperts}>{children}</AppShell>
     </WorkspaceProvider>
   );
 }

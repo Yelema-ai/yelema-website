@@ -1,9 +1,6 @@
 import { requireMember, requireUser } from "@/lib/auth";
-import { loadCatalogue, matchCatalogue } from "@/lib/catalogue";
-import { expertDisplayName } from "@/lib/experts";
 import { ApiError, handleError, json } from "@/lib/http";
-import { installedProfiles, visibleAgents } from "@/lib/installed-experts";
-import type { Expert } from "@/lib/types";
+import { userExperts, visibleAgents } from "@/lib/installed-experts";
 
 // `GET /api/experts?workspace={id}` — les Experts de l'utilisateur, c'est-à-dire les PROFILS
 // Hermes installés sur SON instance. Un admin n'en voit pas plus qu'un membre.
@@ -21,32 +18,7 @@ export async function GET(request: Request) {
     if (!workspaceId) throw new ApiError(400, "invalid_request", "workspace query param is required");
 
     await requireMember(db, workspaceId, user.id);
-    const agents = await visibleAgents(db, workspaceId, user.id);
-    const [{ profiles, unreadable }, catalogue] = await Promise.all([installedProfiles(agents), loadCatalogue()]);
-
-    const experts: Expert[] = profiles.map((p) => {
-      const entry = matchCatalogue(catalogue.experts, p.profileId);
-      return {
-        profileId: p.profileId,
-        displayName: entry?.name ?? expertDisplayName(p.profileId),
-        agentId: p.agent.agent37_id,
-        agentName: p.agent.name,
-        gateway: p.gateway,
-        distribution: p.distribution,
-        catalogueKey: entry?.key ?? null,
-        role: entry?.role ?? null,
-        title: entry?.title ?? null,
-        tagline: entry?.tagline ?? null,
-        photoUrl: entry?.avatarUrl ?? null,
-        driveFolder: entry?.driveFolder ?? entry?.name ?? null,
-      };
-    });
-
-    experts.sort((a, b) => a.displayName.localeCompare(b.displayName, "fr"));
-    return json({
-      experts,
-      unreadable: unreadable.map((a) => ({ agentId: a.agent37_id, agentName: a.name })),
-    });
+    return json(await userExperts(await visibleAgents(db, workspaceId, user.id)));
   } catch (e) {
     return handleError(e);
   }
