@@ -43,7 +43,7 @@ export function TelegramQrConnect({
     try {
       setSession(await pair({ bot_name: botName.trim() }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Telegram setup is not available right now.");
+      setError(e instanceof Error ? e.message : "La connexion à Telegram est indisponible pour le moment.");
     } finally {
       setStarting(false);
     }
@@ -60,19 +60,19 @@ export function TelegramQrConnect({
         if (cancelled) return;
         if (next.status === "connected" && !done.current) {
           done.current = true;
-          toast.success("Telegram connected");
+          toast.success("Telegram connecté");
           onConnected(next.bot_username ?? null);
           return;
         }
         if (next.status === "expired") {
           setSession(null);
-          setError("That code expired. Generate a new one.");
+          setError("Ce code a expiré. Générez-en un nouveau.");
           return;
         }
       } catch (e) {
         if (cancelled) return;
         setSession(null);
-        setError(e instanceof Error ? e.message : "Telegram setup failed. Try again.");
+        setError(e instanceof Error ? e.message : "La connexion à Telegram a échoué. Réessayez.");
         return;
       }
       if (!cancelled) timer = setTimeout(() => void poll(), POLL_MS);
@@ -89,19 +89,19 @@ export function TelegramQrConnect({
     return (
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          We create a Telegram bot for this agent: scan a code with your phone and confirm in Telegram. No BotFather,
-          no token to copy.
+          Nous créons un bot Telegram pour vos experts : scannez un code avec votre téléphone et confirmez dans
+          Telegram. Pas de BotFather, aucun jeton à copier.
         </p>
         <div className="space-y-1.5">
           <Label htmlFor="telegram-bot-name" className="text-xs">
-            Bot name
+            Nom du bot
           </Label>
           <Input
             id="telegram-bot-name"
             maxLength={BOT_NAME_MAX}
             value={botName}
             onChange={(e) => setBotName(e.target.value)}
-            placeholder="My assistant"
+            placeholder="Mon assistant"
           />
         </div>
         {error && (
@@ -109,7 +109,7 @@ export function TelegramQrConnect({
         )}
         <Button onClick={() => void start()} disabled={starting || botName.trim().length === 0}>
           {starting ? <Loader2 className="animate-spin" /> : null}
-          Generate the QR code
+          Générer le QR code
         </Button>
       </div>
     );
@@ -118,26 +118,26 @@ export function TelegramQrConnect({
   return (
     <div className="space-y-4">
       <ol className="list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
-        <li>Scan this code with your phone camera, or open the link on the phone where Telegram is installed.</li>
-        <li>Confirm the new bot in Telegram{session.suggested_username ? ` (@${session.suggested_username})` : ""}.</li>
-        <li>Come back here: the agent connects on its own.</li>
+        <li>Scannez ce code avec l’appareil photo de votre téléphone, ou ouvrez le lien sur le téléphone où Telegram est installé.</li>
+        <li>Confirmez le nouveau bot dans Telegram{session.suggested_username ? ` (@${session.suggested_username})` : ""}.</li>
+        <li>Revenez ici : la connexion se fait toute seule.</li>
       </ol>
       <div className="flex flex-col items-center gap-3">
         {session.qr_data_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={session.qr_data_url} alt="Telegram setup QR code" className="h-56 w-56 rounded-md bg-white p-2" />
+          <img src={session.qr_data_url} alt="QR code de connexion à Telegram" className="h-56 w-56 rounded-md bg-white p-2" />
         ) : null}
         {session.deep_link ? (
           <Button asChild variant="outline">
             <a href={session.deep_link} target="_blank" rel="noopener noreferrer">
-              Open in Telegram
+              Ouvrir dans Telegram
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           </Button>
         ) : null}
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" />
-          Waiting for you to confirm in Telegram
+          En attente de votre confirmation dans Telegram
         </p>
       </div>
     </div>

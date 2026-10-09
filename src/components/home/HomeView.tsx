@@ -3,7 +3,7 @@
 import { useMemo, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MessageCircle, Send } from "lucide-react";
+import { Loader2, MessageCircle, Send } from "lucide-react";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { ExpertMedia } from "@/components/experts/ExpertMedia";
@@ -59,13 +59,34 @@ function ExpertCard({ expert, entry }: { expert: Expert; entry: CatalogueExpert 
   );
 }
 
+// What the home shows while the back office installs the first experts. The list is read again on
+// its own (useExperts), so the team replaces this card without a reload.
+function Installing() {
+  return (
+    <section role="status" className="mt-4 max-w-2xl rounded-[22px] border border-line bg-surface p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-tint text-brand-ink">
+          <Loader2 className="h-5 w-5 animate-spin" />
+        </span>
+        <div className="min-w-0">
+          <h3 className="font-display text-lg font-bold text-ink">Votre équipe s’installe</h3>
+          <p className="mt-1 text-sm text-ink-2">
+            Nous préparons vos experts. Cela prend quelques minutes : ils apparaîtront ici dès qu’ils seront prêts,
+            sans que vous ayez à recharger la page.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // Accueil: greeting, "Demander à mon équipe" (chips pick the expert; sending opens that expert's
 // chat with the message on its way), then the team. Everything shown is what is installed for
 // this user; the catalogue only dresses it.
 export function HomeView() {
   const router = useRouter();
   const { current, userEmail } = useWorkspace();
-  const { experts, loading, unreadable } = useExpertsContext();
+  const { experts, loading, unreadable, installing } = useExpertsContext();
   const { catalogue } = useCatalogue(current?.id);
   const [picked, setPicked] = useState<string | null>(null);
   const [text, setText] = useState("");
@@ -155,7 +176,14 @@ export function HomeView() {
       <h2 className="mt-10 font-display text-[22px] font-bold tracking-tight text-ink">
         Mon équipe{experts.length > 0 ? ` (${experts.length})` : ""}
       </h2>
-      {loading && experts.length === 0 ? (
+      {installing && experts.length > 0 && (
+        <p role="status" className="mt-2 flex items-center gap-2 text-sm text-ink-3">
+          <Loader2 className="h-4 w-4 animate-spin" /> D’autres experts sont en cours d’installation.
+        </p>
+      )}
+      {installing && experts.length === 0 ? (
+        <Installing />
+      ) : loading && experts.length === 0 ? (
         <p className="mt-4 text-sm text-ink-3">Chargement de votre équipe…</p>
       ) : experts.length === 0 ? (
         <p className="mt-4 max-w-xl text-sm text-ink-2">

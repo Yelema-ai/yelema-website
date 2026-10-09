@@ -3,6 +3,7 @@ import { backofficeAgentRow, type DB } from "@/lib/auth";
 import { loadCatalogue, matchCatalogue } from "@/lib/catalogue";
 import { expertDisplayName } from "@/lib/experts";
 import { authViaBackoffice } from "@/lib/runtime-config";
+import { currentInstance } from "@/lib/session";
 import { listInstanceProfiles } from "@/lib/hermes-profiles";
 import { ApiError } from "@/lib/http";
 import type { AgentRow, Expert } from "@/lib/types";
@@ -71,6 +72,15 @@ export function profilesMirrored(agents: AgentRow[]): boolean {
 export interface UserExperts {
   experts: Expert[];
   unreadable: { agentId: string; agentName: string | null }[];
+  /** True while the back office is still installing profiles on the caller's instance. */
+  installing: boolean;
+}
+
+// The back office says so itself (`ready`); without it nothing here can tell.
+async function isInstalling(): Promise<boolean> {
+  if (!authViaBackoffice()) return false;
+  const instance = await currentInstance().catch(() => null);
+  return instance?.ready === false;
 }
 
 // The experts of these instances as the screens show them: each installed profile dressed by the
@@ -78,7 +88,11 @@ export interface UserExperts {
 // instance that cannot be read does not take the others down: it is reported in `unreadable`.
 // Shared by the experts route and the shell's first render, so both say the same thing.
 export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
-  const [{ profiles, unreadable }, catalogue] = await Promise.all([installedProfiles(agents), loadCatalogue()]);
+  const installing = await isInstalling();
+  // An instance being set up is not asked for its profiles: the experts are the ones the back
+  // office reports installed, and the rest arrive when it is done.
+  const readable = installing ? agents.filter((a) => Array.isArray(a.profiles) && a.profiles.length > 0) : agents;
+  const [{ profiles, unreadable }, catalogue] = await Promise.all([installedProfiles(readable), loadCatalogue()]);
 
   const experts: Expert[] = profiles.map((p) => {
     const entry = matchCatalogue(catalogue.experts, p.profileId);
@@ -99,5 +113,5 @@ export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
   });
 
   experts.sort((a, b) => a.displayName.localeCompare(b.displayName, "fr"));
-  return { experts, unreadable: unreadable.map((a) => ({ agentId: a.agent37_id, agentName: a.name })) };
+  return { experts, unreadable: unreadable.map((a) => ({ agentId: a.agent37_id, agentName: a.name })), installing };
 }

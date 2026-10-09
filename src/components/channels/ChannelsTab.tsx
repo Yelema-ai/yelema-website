@@ -71,7 +71,7 @@ export function ChannelsTab({
       <div className="space-y-6">
         <Header />
         <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
-          Start this agent to connect it to a messaging app.
+          Vos experts ne sont pas joignables pour le moment. Réessayez dans un instant.
         </p>
       </div>
     );
@@ -104,7 +104,7 @@ export function ChannelsTab({
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <Header />
-        <Button variant="ghost" size="sm" disabled={loading} onClick={() => load()} aria-label="Refresh channels">
+        <Button variant="ghost" size="sm" disabled={loading} onClick={() => load()} aria-label="Actualiser les canaux">
           <RefreshCw className={loading ? "animate-spin" : undefined} />
         </Button>
       </div>
@@ -150,7 +150,7 @@ export function ChannelsTab({
                 className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
               >
                 {showAll ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                More channels ({rest.length - connectedRest.length})
+                Autres canaux ({rest.length - connectedRest.length})
               </button>
               {showAll && (
                 <div className="divide-y rounded-lg border bg-card">
@@ -177,8 +177,8 @@ export function ChannelsTab({
 function Header() {
   return (
     <header className="space-y-1">
-      <h2 className="text-lg font-semibold">Messaging apps</h2>
-      <p className="text-sm text-muted-foreground">Message this agent from the apps you already use.</p>
+      <h2 className="text-lg font-semibold">Messageries</h2>
+      <p className="text-sm text-muted-foreground">Écrivez à vos experts depuis les messageries que vous utilisez déjà.</p>
     </header>
   );
 }
@@ -203,15 +203,15 @@ function ChannelRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-medium">{channel.name}</p>
-          {connected && <Badge variant="success">Connected</Badge>}
-          {!connected && error && <Badge variant="warning">Needs attention</Badge>}
+          {connected && <Badge variant="success">Connecté</Badge>}
+          {!connected && error && <Badge variant="warning">À vérifier</Badge>}
         </div>
         <p className="truncate text-xs text-muted-foreground">
           {error || channel.description || channelStateLabel(channel)}
         </p>
       </div>
       <Button variant="outline" size="sm" disabled={!canManage} onClick={onOpen}>
-        {connected ? "Manage" : isFeaturedChannel(channel.id) ? `Connect ${channel.name}` : "Connect"}
+        {connected ? "Gérer" : isFeaturedChannel(channel.id) ? `Connecter ${channel.name}` : "Connecter"}
       </Button>
     </div>
   );

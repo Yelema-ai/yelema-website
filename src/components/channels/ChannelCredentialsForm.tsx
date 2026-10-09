@@ -40,14 +40,14 @@ export function ChannelCredentialsForm({
         method: "PUT",
         body: JSON.stringify({ env: values, enabled: true }),
       });
-      toast.success(`${channel.name} saved. The agent is connecting.`);
+      toast.success(`${channel.name} enregistré. La connexion est en cours.`);
       onBack();
     });
 
   const disconnect = () =>
     run(async () => {
       await apiFetch(`/api/agents/${agentId}/channels/${channel.id}`, { method: "DELETE" });
-      toast.success(`${channel.name} disconnected`);
+      toast.success(`${channel.name} déconnecté`);
       onBack();
     });
 
@@ -72,7 +72,7 @@ export function ChannelCredentialsForm({
               onClick={() => setShowAdvanced((v) => !v)}
               className="text-xs font-medium text-muted-foreground hover:text-foreground"
             >
-              {showAdvanced ? "Hide" : "Show"} advanced settings ({advanced.length})
+              {showAdvanced ? "Masquer" : "Afficher"} les réglages avancés ({advanced.length})
             </button>
             {showAdvanced &&
               advanced.map((field) => (
@@ -89,11 +89,11 @@ export function ChannelCredentialsForm({
 
       <div className="flex items-center gap-2">
         <Button onClick={save} disabled={busy}>
-          {connected ? "Save" : `Connect ${channel.name}`}
+          {connected ? "Enregistrer" : `Connecter ${channel.name}`}
         </Button>
         {channel.configured && (
           <Button variant="ghost" onClick={disconnect} disabled={busy}>
-            Disconnect
+            Déconnecter
           </Button>
         )}
       </div>
@@ -114,7 +114,7 @@ export function ChannelPanelHeader({
     <div className="space-y-3">
       <Button type="button" variant="ghost" size="sm" className="gap-1.5 px-2" onClick={onBack}>
         <ArrowLeft className="h-4 w-4" />
-        Messaging apps
+        Messageries
       </Button>
       <div className="space-y-1">
         <h3 className="text-base font-semibold">{channel.name}</h3>
@@ -132,7 +132,7 @@ export function ChannelPanelHeader({
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
-          {channel.name} setup guide
+          Guide de configuration {channel.name}
           <ExternalLink className="h-3 w-3" />
         </a>
       )}
@@ -153,14 +153,14 @@ function FieldInput({
     <div className="space-y-1.5">
       <Label htmlFor={field.key} className="text-xs">
         {field.prompt || field.key}
-        {!field.required && <span className="ml-1 font-normal text-muted-foreground">(optional)</span>}
+        {!field.required && <span className="ml-1 font-normal text-muted-foreground">(facultatif)</span>}
       </Label>
       <Input
         id={field.key}
         type={field.is_password ? "password" : "text"}
         autoComplete="off"
         value={value ?? ""}
-        placeholder={field.is_set ? field.redacted_value ?? "Already set" : ""}
+        placeholder={field.is_set ? field.redacted_value ?? "Déjà renseigné" : ""}
         onChange={(e) => onChange(e.target.value)}
       />
       {(field.help || field.description) && (
@@ -173,7 +173,7 @@ function FieldInput({
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-4 hover:underline"
         >
-          Where to get this
+          Où le trouver
           <ExternalLink className="h-3 w-3" />
         </a>
       )}

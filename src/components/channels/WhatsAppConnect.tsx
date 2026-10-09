@@ -56,7 +56,7 @@ export function WhatsAppConnect({
       setSession(result);
       if (result.status === "connected" || result.status === "linking") return;
       if (result.status === "expired") {
-        setError("That code expired. Start again.");
+        setError("Ce code a expiré. Recommencez.");
         return;
       }
       timer = setTimeout(() => void poll(result.pairing_id), POLL_MS);
@@ -96,7 +96,7 @@ export function WhatsAppConnect({
   const disconnect = () =>
     run(async () => {
       await apiFetch(`/api/agents/${agentId}/channels/whatsapp`, { method: "DELETE" });
-      toast.success("WhatsApp disconnected");
+      toast.success("WhatsApp déconnecté");
       onBack();
     });
 
@@ -116,15 +116,16 @@ export function WhatsAppConnect({
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
             <div className="space-y-1">
               <p className="text-sm font-medium">
-                {session.phone ? `+${session.phone} is connected.` : "WhatsApp is connected."}
+                {session.phone ? `+${session.phone} est connecté.` : "WhatsApp est connecté."}
               </p>
               <p className="text-xs text-muted-foreground">
-                Open the chat with yourself in WhatsApp and message the agent there. Nobody else can reach it.
+                Dans WhatsApp, ouvrez la conversation avec vous-même et écrivez-y à vos experts. Personne d’autre ne
+                peut les joindre.
               </p>
             </div>
           </div>
           <Button variant="ghost" onClick={disconnect} disabled={busy}>
-            Disconnect
+            Déconnecter
           </Button>
         </div>
       ) : error ? (
@@ -132,39 +133,39 @@ export function WhatsAppConnect({
           <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
             {error}
           </p>
-          <Button onClick={retry}>Try again</Button>
+          <Button onClick={retry}>Réessayer</Button>
         </div>
       ) : session?.status === "linking" ? (
         <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Scan received. Saving it on the agent, about a minute.
+          Scan reçu. Enregistrement en cours, environ une minute.
         </div>
       ) : session?.status === "waiting" && session.qr_data_url ? (
         <div className="space-y-4">
           <ol className="list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
-            <li>On your phone, open WhatsApp.</li>
+            <li>Sur votre téléphone, ouvrez WhatsApp.</li>
             <li>
-              Go to <span className="font-medium text-foreground">Settings, Linked devices, Link a device</span>.
+              Allez dans <span className="font-medium text-foreground">Réglages, Appareils connectés, Connecter un appareil</span>.
             </li>
-            <li>Point your phone at the code below.</li>
+            <li>Pointez votre téléphone vers le code ci-dessous.</li>
           </ol>
           <div className="flex flex-col items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={session.qr_data_url}
-              alt="WhatsApp linking QR code"
+              alt="QR code de connexion à WhatsApp"
               className="h-56 w-56 rounded-md bg-white p-2"
             />
             <p className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Waiting for you to scan
+              En attente de votre scan
             </p>
           </div>
         </div>
       ) : (
         <div className="flex flex-col items-center gap-3 py-10">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          <p className="text-xs text-muted-foreground">Getting your code ready. The first time takes a minute.</p>
+          <p className="text-xs text-muted-foreground">Préparation de votre code. La première fois prend une minute.</p>
         </div>
       )}
     </div>

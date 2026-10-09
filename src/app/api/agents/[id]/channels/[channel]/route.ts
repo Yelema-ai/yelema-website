@@ -99,7 +99,7 @@ export async function POST(request: Request, { params }: Ctx) {
       return json(await pairWhatsapp(id, body.pairing_id, body.finish === true));
     }
 
-    throw new ApiError(400, "invalid_request", "Unsupported action for this channel");
+    throw new ApiError(400, "invalid_request", "Action non prise en charge pour ce canal.");
   } catch (e) {
     return handleError(e);
   }
@@ -119,12 +119,12 @@ async function pairWhatsapp(agentId: string, pairingId: string | undefined, fini
     if (!finish) return { pairing_id: id, status: "linking" };
     const applied = await applyWhatsappPairing(agentId, id);
     if (applied.ok !== true) {
-      throw new ApiError(502, "pairing_failed", applied.detail || "WhatsApp linked but could not be saved. Try again.");
+      throw new ApiError(502, "pairing_failed", applied.detail || "WhatsApp est relié mais n’a pas pu être enregistré. Réessayez.");
     }
     return { pairing_id: id, status: "connected", phone: session.account_phone ?? null };
   }
   if (session.status === "error") {
-    throw new ApiError(502, "pairing_failed", session.error || "WhatsApp setup failed.");
+    throw new ApiError(502, "pairing_failed", session.error || "La connexion à WhatsApp a échoué.");
   }
   if (session.status === "waiting" && session.qr_payload) {
     return { pairing_id: id, status: "waiting", qr_data_url: await QRCode.toDataURL(session.qr_payload, QR_OPTIONS) };
@@ -144,7 +144,7 @@ async function pairTelegram(agentId: string, pairingId: string | undefined, botN
     const name = (botName ?? "").trim().slice(0, BOT_NAME_MAX) || "Agent";
     const started = await startTelegramPairing(agentId, name);
     if (!started.pairing_id || !(started.qr_payload || started.deep_link)) {
-      throw new ApiError(502, "pairing_failed", started.detail || "Telegram setup is not available right now. Try again.");
+      throw new ApiError(502, "pairing_failed", started.detail || "La connexion à Telegram est indisponible pour le moment. Réessayez.");
     }
     return {
       pairing_id: started.pairing_id,
@@ -159,13 +159,13 @@ async function pairTelegram(agentId: string, pairingId: string | undefined, botN
   if (session.status === "waiting") return { pairing_id: pairingId, status: "waiting" };
   if (session.status !== "ready") {
     if (/no longer available|expired|claimed|not found/i.test(session.detail ?? "")) return { pairing_id: pairingId, status: "expired" };
-    throw new ApiError(502, "pairing_failed", session.detail || "Telegram setup failed. Try again.");
+    throw new ApiError(502, "pairing_failed", session.detail || "La connexion à Telegram a échoué. Réessayez.");
   }
   const owner = session.owner_user_id == null ? "" : String(session.owner_user_id);
-  if (!/^\d+$/.test(owner)) throw new ApiError(502, "pairing_failed", "Telegram did not say who owns the new bot. Start again.");
+  if (!/^\d+$/.test(owner)) throw new ApiError(502, "pairing_failed", "Telegram n’a pas indiqué à qui appartient le nouveau bot. Recommencez.");
   const applied = await applyTelegramPairing(agentId, pairingId, [owner]);
   if (applied.ok !== true) {
-    throw new ApiError(502, "pairing_failed", applied.detail || "The bot was created but could not be saved on the agent. Try again.");
+    throw new ApiError(502, "pairing_failed", applied.detail || "Le bot a été créé mais n’a pas pu être enregistré. Réessayez.");
   }
   return { pairing_id: pairingId, status: "connected", bot_username: applied.bot_username ?? session.bot_username ?? null };
 }

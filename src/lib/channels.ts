@@ -62,11 +62,11 @@ export function channelError(channel: MessagingPlatform): string | null {
 }
 
 export function channelStateLabel(channel: MessagingPlatform): string {
-  if (isChannelConnected(channel)) return "Connected";
-  if (channelError(channel)) return "Needs attention";
-  if (channel.enabled) return "Starting";
-  if (channel.configured) return "Off";
-  return "Not connected";
+  if (isChannelConnected(channel)) return "Connecté";
+  if (channelError(channel)) return "À vérifier";
+  if (channel.enabled) return "Démarrage";
+  if (channel.configured) return "Désactivé";
+  return "Non connecté";
 }
 
 // A channel with no credentials to fill in cannot be connected from this app at all (it is set up
