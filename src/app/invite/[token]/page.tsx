@@ -33,7 +33,7 @@ function Message({ text }: { text: string }) {
       <AuthHeading title="Invitation indisponible">{text}</AuthHeading>
       <a
         href="/login"
-        className="inline-flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-brand px-5 text-[15px] font-semibold text-white hover:opacity-90"
+        className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[15px] font-semibold text-on-brand hover:opacity-90"
       >
         Retour à la connexion
       </a>

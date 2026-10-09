@@ -10,6 +10,8 @@ import { isTransitional } from "@/lib/format";
 import { agentTabPath, parseAgentRoute, type AgentTab } from "@/lib/expert-tabs";
 import type { MergedAgent, Role } from "@/lib/types";
 import { useWorkspace } from "@/components/WorkspaceProvider";
+import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
+import { ExpertImage } from "@/components/experts/ExpertImage";
 import { ExpertRoutines } from "@/components/experts/ExpertRoutines";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { useCatalogueExpert } from "@/components/experts/useCatalogue";
@@ -107,6 +109,8 @@ export function AgentWorkspace({
   const tabs = profileId ? TABS : TABS.filter((t) => t.id !== "routines");
   const sheet = useCatalogueExpert(expert?.catalogueKey);
   const expertName = expert?.displayName ?? (profileId ? expertDisplayName(profileId) : "");
+  // The rail's picture: the face, or the full-body portrait cropped to it.
+  const portrait = expert?.photoUrl ?? (sheet ? sheet.portraitUrl : null);
 
   // A message typed on the home page rides the URL as ?q= and is sent once the chat is up.
   const [initialMessage] = useState<string | null>(() =>
@@ -171,48 +175,60 @@ export function AgentWorkspace({
       navigateToSession={navigateToSession}
     >
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-64 shrink-0 flex-col border-r bg-card md:flex">
-          <div className="flex flex-col p-4 pb-3">
-            <nav className="flex flex-col gap-1">
-              {tabs.map((t) => {
-                const Icon = t.icon;
-                const isActive = currentTab === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => selectTab(t.id)}
-                    aria-current={isActive ? "page" : undefined}
-                    className={cn(
-                      "flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-secondary text-secondary-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {t.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
+        <aside className="hidden w-[262px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-surface px-3 py-3.5 lg:flex">
+          {expert && (
+            <>
+              {/* Fixed colors on purpose: a picture with white text over it, in both themes. */}
+              <div className="relative isolate aspect-[1/1.02] shrink-0 overflow-hidden rounded-[22px] bg-[#8E6FB0] text-white">
+                {portrait && <ExpertImage src={portrait} sizes="238px" className="-z-20 object-cover object-[50%_15%]" />}
+                <div className="absolute inset-0 -z-10 bg-gradient-to-b from-transparent from-45% to-[rgba(8,5,16,.82)]" />
+                <div className="absolute inset-x-3 bottom-3">
+                  <p className="text-[17px] font-bold">{expert.displayName}</p>
+                  {expert.role && <p className="text-[11px] font-semibold uppercase tracking-[0.06em] opacity-85">{expert.role}</p>}
+                </div>
+              </div>
+              {expert.tagline && <p className="px-1.5 pb-1 pt-2 text-[13px] text-ink-3">{expert.tagline}</p>}
+            </>
+          )}
+          <nav className="flex flex-col gap-0.5">
+            {tabs.map((t) => {
+              const Icon = t.icon;
+              const isActive = currentTab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => selectTab(t.id)}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(
+                    "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-left text-sm font-semibold transition-colors",
+                    isActive ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft"
+                  )}
+                >
+                  <Icon className="h-[18px] w-[18px]" />
+                  {t.label}
+                </button>
+              );
+            })}
+          </nav>
 
-          {/* The "Chats" thread list folds into this one rail on the Chat tab (no second sidebar).
-              On other tabs a spacer keeps the account footer pinned to the bottom. */}
-          {isChat ? (
-            <div className="flex min-h-0 flex-1 flex-col border-t">
+          {/* The thread list folds into this one rail on the Chat tab (no second sidebar). */}
+          {isChat && (
+            <div className="mt-3 flex min-h-[200px] flex-1 flex-col border-t border-line pt-3">
               <ChatSidebar />
             </div>
-          ) : (
-            <div className="flex-1" />
           )}
-
         </aside>
 
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          {/* On a phone the rail is hidden: the tabs become a strip above the pane. */}
-          <nav className="flex shrink-0 gap-1 overflow-x-auto border-b bg-card px-3 py-2 md:hidden">
+          {/* Phones and tablets: the rail folds into a header with tab pills. */}
+          <nav className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-line bg-surface px-4 py-2.5 lg:hidden">
+            {expert && (
+              <>
+                <ExpertAvatar expert={{ ...expert, gateway: null }} size="sm" />
+                <span className="ml-2 mr-2 shrink-0 text-sm font-bold text-ink">{expert.displayName}</span>
+              </>
+            )}
             {tabs.map((t) => (
               <button
                 key={t.id}
@@ -220,8 +236,8 @@ export function AgentWorkspace({
                 onClick={() => selectTab(t.id)}
                 aria-current={currentTab === t.id ? "page" : undefined}
                 className={cn(
-                  "shrink-0 rounded-md px-3 py-1.5 text-sm font-medium",
-                  currentTab === t.id ? "bg-secondary text-secondary-foreground" : "text-muted-foreground"
+                  "shrink-0 rounded-full px-3 py-1.5 text-[13px] font-semibold",
+                  currentTab === t.id ? "bg-tint text-brand-ink" : "text-ink-2 hover:bg-soft"
                 )}
               >
                 {t.label}
@@ -264,7 +280,7 @@ export function AgentWorkspace({
                   {active ? (
                     <ChannelsTab agentId={agentId} agent={active} canManage={canManage} />
                   ) : (
-                    <p className="text-sm text-muted-foreground">Chargement…</p>
+                    <p className="text-sm text-ink-3">Chargement…</p>
                   )}
                 </div>
               )}

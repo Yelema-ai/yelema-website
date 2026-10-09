@@ -39,7 +39,7 @@ function category(v: unknown): { key: string; label: string } | null {
 }
 
 // One catalogue row in this app's words. Fields the back office does not send yet (pronoun, short
-// title, suggestions, drive folder) come back empty rather than guessed.
+// title, suggestions, drive folder, the cards' looping video) come back empty rather than guessed.
 function toExpert(raw: Raw): CatalogueExpert | null {
   const key = str(raw.key);
   if (!key) return null;
@@ -55,6 +55,7 @@ function toExpert(raw: Raw): CatalogueExpert | null {
     category: category(raw.category),
     avatarUrl: str(raw.avatarUrl) ?? str(raw.thumbnailUrl),
     portraitUrl: str(raw.profileUrl),
+    videoUrl: str(raw.loopVideoUrl),
     driveFolder: str(raw.driveFolder),
     suggestions: strings(raw.suggestions),
   };

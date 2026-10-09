@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronsUpDown, LogOut, Settings2 } from "lucide-react";
+import { MoreHorizontal, LogOut, Settings2 } from "lucide-react";
 import { signOutEverywhere, useSupabase } from "@/lib/supabase/client";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import {
@@ -31,29 +31,29 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "mt-1 flex w-full items-center gap-2.5 rounded-[14px] px-2.5 py-2 text-left text-ink hover:bg-soft-2",
+          "flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left text-ink transition-colors hover:bg-soft",
           collapsed && "w-auto justify-center px-1"
         )}
       >
-        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-[13px] font-bold text-white">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-[13px] font-bold text-on-brand">
           {initial}
         </span>
         {!collapsed && (
           <>
             <span className="min-w-0 grow">
-              <b className="block truncate text-sm">{userEmail}</b>
+              <span className="block truncate text-sm font-semibold text-ink">{userEmail}</span>
               <small className="block truncate text-xs text-ink-3">
                 {current?.role === "admin" ? "Administrateur" : "Membre"}
               </small>
             </span>
-            <ChevronsUpDown className="size-4 shrink-0 text-ink-3" />
+            <MoreHorizontal className="size-4 shrink-0 text-ink-3" />
           </>
         )}
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="start" side="top" className="w-[272px] rounded-2xl p-1.5">
-        <div className="flex items-center gap-2.5 border-b px-2.5 pt-2.5 pb-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-[13px] font-bold text-white">
+      <DropdownMenuContent align="start" side="top" className="w-60 p-1.5">
+        <div className="flex items-center gap-2.5 border-b border-line px-2.5 pt-2.5 pb-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-[13px] font-bold text-on-brand">
             {initial}
           </span>
           <span className="min-w-0">

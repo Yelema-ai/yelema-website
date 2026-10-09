@@ -23,15 +23,15 @@ export function ExpertItem({
   compact?: boolean;
   className?: string;
 }) {
-  const subtitle = expert.role ?? expert.agentName ?? expert.agentId;
+  const subtitle = expert.title ?? expert.role ?? expert.agentName ?? expert.agentId;
 
   return (
     <Link
       href={agentTabPath(expert.agentId, "chat", expert.profileId)}
       title={`${expert.displayName} · ${expert.profileId}${expert.distribution ? ` · ${expert.distribution}` : ""}`}
       className={cn(
-        "flex min-h-12 items-center gap-2.5 rounded-xl px-2 text-sm font-semibold hover:bg-soft",
-        active && "bg-soft-2",
+        "flex min-h-12 items-center gap-2.5 rounded-[11px] px-2 text-sm font-semibold transition-colors",
+        active ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
         compact && "justify-center px-0",
         className
       )}

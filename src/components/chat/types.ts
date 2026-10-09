@@ -131,4 +131,7 @@ export function uid(prefix = "c"): string {
 export interface ChatSession {
   session_id: string;
   title: string | null;
+  // When it was last active (seconds or milliseconds, as Hermes reports it), for the rail's
+  // Aujourd'hui / Hier / … groups.
+  last_active: number;
 }

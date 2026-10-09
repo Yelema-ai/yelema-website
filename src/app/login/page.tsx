@@ -131,7 +131,7 @@ export default function LoginPage() {
           valable 30 minutes.
         </AuthHeading>
 
-        <div className="flex items-start gap-2.5 rounded-[14px] bg-soft px-3.5 py-3 text-[13.5px] text-ink-2">
+        <div className="flex items-start gap-2.5 rounded-xl bg-soft px-3.5 py-3 text-[13.5px] text-ink-2">
           <Info className="mt-px size-4 shrink-0 text-ink-3" />
           <span>Rien reçu ? Regardez dans les courriers indésirables, ou vérifiez l’adresse.</span>
         </div>
@@ -162,7 +162,7 @@ export default function LoginPage() {
   return (
     <AuthShell>
       {signedOut && !forgot ? (
-        <p className="flex items-center gap-2 rounded-[14px] bg-ok-pale px-3.5 py-3 text-sm font-semibold text-ok">
+        <p className="flex items-center gap-2 rounded-xl bg-ok-pale px-3.5 py-3 text-sm font-semibold text-ok">
           <CheckCircle2 className="size-4 shrink-0" />
           Vous êtes déconnecté. À bientôt.
         </p>
@@ -175,13 +175,13 @@ export default function LoginPage() {
       </AuthHeading>
 
       {error ? (
-        <p className="flex items-start gap-2.5 rounded-[14px] bg-ko-pale px-3.5 py-3 text-[13.5px] text-ko">
+        <p className="flex items-start gap-2.5 rounded-xl bg-ko-pale px-3.5 py-3 text-[13.5px] text-ko">
           <CircleAlert className="mt-px size-4 shrink-0" />
           <span>{error}</span>
         </p>
       ) : null}
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
+      <form onSubmit={onSubmit} className="flex flex-col gap-5">
         <Field
           label="Adresse email"
           type="email"
@@ -217,7 +217,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="mt-1 inline-flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-brand px-5 text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[15px] font-semibold text-on-brand transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {loading
             ? forgot

@@ -69,19 +69,19 @@ export function AppShell({ children, initialExperts }: { children: React.ReactNo
     <ExpertsProvider initial={initialExperts}>
       <div
         className="min-h-screen md:grid"
-        style={{ gridTemplateColumns: `${collapsed ? 72 : 250}px minmax(0,1fr)` }}
+        style={{ gridTemplateColumns: `${collapsed ? 72 : 272}px minmax(0,1fr)` }}
       >
         {drawerOpen && (
           <button
             type="button"
             aria-label="Fermer le menu"
             onClick={() => setDrawerOpen(false)}
-            className="fixed inset-0 z-30 bg-black/40 md:hidden"
+            className="fixed inset-0 z-30 bg-ink/40 md:hidden"
           />
         )}
         <div
           className={cn(
-            "fixed inset-y-0 left-0 z-40 w-[270px] transition-transform md:static md:z-auto md:w-auto md:translate-x-0",
+            "fixed inset-y-0 left-0 z-40 w-[284px] shadow-xl transition-transform md:shadow-none md:static md:z-auto md:w-auto md:translate-x-0",
             drawerOpen ? "translate-x-0" : "-translate-x-full"
           )}
         >

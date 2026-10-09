@@ -65,7 +65,7 @@ const FR = {
 // tables) so we can feed it the running output buffer on every delta without flicker.
 export const Markdown = memo(function Markdown({ content, agentId }: { content: string; agentId?: string }) {
   return (
-    <Streamdown className="chat-markdown text-sm leading-relaxed" linkSafety={LINK_SAFETY} translations={FR}>
+    <Streamdown className="chat-markdown text-[15px] leading-relaxed" linkSafety={LINK_SAFETY} translations={FR}>
       {agentId ? linkDriveFiles(content, agentId) : content}
     </Streamdown>
   );

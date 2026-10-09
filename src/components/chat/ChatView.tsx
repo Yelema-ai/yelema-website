@@ -120,12 +120,12 @@ export function ChatView({ initialMessage }: { initialMessage?: string | null })
     <div className="flex h-full min-h-0">
     <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col wide:min-w-[400px]" {...att.dragHandlers}>
       {att.dragOver && <DropOverlay label="Déposez vos fichiers pour les joindre" />}
-      <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b bg-background px-4 sm:px-6 md:px-10">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           {face && <ExpertAvatar expert={face} size="sm" />}
           <div className="min-w-0">
-            <h1 className="truncate text-base font-semibold text-foreground">{headerTitle}</h1>
-            <p className="truncate text-xs text-muted-foreground">{agentName}</p>
+            <h1 className="truncate text-sm font-semibold leading-tight text-ink">{headerTitle}</h1>
+            <p className="truncate text-xs text-ink-3">{agentName}</p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -133,11 +133,11 @@ export function ChatView({ initialMessage }: { initialMessage?: string | null })
         <button
           type="button"
           onClick={startNewChat}
-          aria-label="Nouvelle discussion"
-          title="Nouvelle discussion"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          aria-label="Nouvelle conversation"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-[13px] font-semibold text-ink hover:bg-soft"
         >
           <Plus className="h-4 w-4" />
+          <span className="hidden sm:inline">Nouvelle conversation</span>
         </button>
         </div>
       </header>
@@ -152,7 +152,7 @@ export function ChatView({ initialMessage }: { initialMessage?: string | null })
         )}
       >
         {loadingHistory ? (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
+          <div className="flex h-full items-center justify-center text-ink-3">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : messages.length > 0 ? (
@@ -160,23 +160,23 @@ export function ChatView({ initialMessage }: { initialMessage?: string | null })
         ) : (
           <>
             {face && <ExpertAvatar expert={face} size="lg" className="mb-4" />}
-          <h1 className="text-center text-[26px] font-semibold tracking-tight text-foreground sm:text-[30px]">
+          <h1 className="text-center font-display text-[26px] font-bold tracking-tight text-ink sm:text-[30px]">
             {profile ? `Que voulez-vous confier à ${agentName} ?` : "Que puis-je faire pour vous ?"}
           </h1>
-            {expert?.tagline && <p className="mt-2 max-w-md text-center text-sm text-muted-foreground">{expert.tagline}</p>}
+            {expert?.tagline && <p className="mt-2 max-w-md text-center text-[15px] text-ink-2">{expert.tagline}</p>}
           </>
         )}
       </div>
 
       {/* Composer wrapper — the STABLE 2nd child. Its chrome (docked vs bare centered) is a
           className swap so the ChatComposer inside never changes tree position. */}
-      <div className={cn("relative", showWelcome ? "w-full px-6 md:px-10" : "bg-background px-6 py-3 md:px-10 sm:py-4")}>
+      <div className={cn("relative", showWelcome ? "w-full px-4 sm:px-6" : "bg-background px-4 py-3 sm:px-6 sm:py-4")}>
         {/* No hard divider — a short fade dissolves the transcript into the composer instead. */}
         {!showWelcome && (
           <div className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-background to-transparent" />
         )}
         <div className={cn("mx-auto w-full", showWelcome ? "max-w-2xl" : "max-w-3xl")} aria-live="polite">
-          {error && <p className="mb-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
+          {error && <p className="mb-2 rounded-xl bg-ko-pale px-3 py-2 text-[13px] text-ko">{error}</p>}
         </div>
         <ChatComposer
           agentId={agentId}
@@ -192,7 +192,7 @@ export function ChatView({ initialMessage }: { initialMessage?: string | null })
       {/* Bottom: balances the vertical centering and carries the welcome subtitle. */}
       {showWelcome && (
         <div className="flex flex-1 flex-col items-center px-4 pt-3">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-3">
             Plus vous donnez de contexte, meilleure sera la réponse.
           </p>
         </div>

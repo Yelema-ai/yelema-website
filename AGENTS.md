@@ -156,7 +156,9 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 - **Talking to an expert is the Agent37 API's `profile`**, not an image feature: `profile` on
   `POST /v1/responses` and `?profile=` on every session read, sent on EVERY turn. The profile is
   checked against what is installed on that instance (`src/lib/profiles.ts`), never a fixed list.
-- **Nothing about experts is written in this repo.** Names, roles, photos, sheets come from the
+- **Nothing about experts is written in this repo**, bar two stopgaps: the hover videos in
+  `public/experts/vid` (looked up by first name, never listed in code) and the three faces of the
+  sign-in pitch (`AuthShell`). Names, roles, photos, sheets come from the
   back office's public catalogue (`BACKOFFICE_URL`, `src/lib/catalogue.ts`), joined to installed
   profiles by the part of the profile name after `__`. Which experts a member HAS is what is
   installed (`agents.profiles`, written by the back office; the instance itself as a fallback).
@@ -183,6 +185,8 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 | `src/lib/backoffice.ts`, `src/lib/session.ts`, `src/app/api/auth/**` | Sign-in through the back office: its client, the cookie session, and the login / logout / forgot / accept routes |
 | `src/lib/catalogue.ts`, `src/app/api/catalogue/**` | The back office's expert catalogue, cached, and its join with installed profiles |
 | `src/components/experts/ExpertImage.tsx`, `images` in `next.config.ts` | Expert pictures resized by the image optimizer (the catalogue serves them full size); only Yelema hosts are optimized |
+| `src/components/experts/ExpertMedia.tsx`, `public/experts/vid/` | A card's picture, swapped for the expert's looping video on hover. The video is the catalogue's when it lists one (`loopVideoUrl`), else the file named after the expert's first name in `public/experts/vid`: a stopgap to delete once the back office serves them |
+| `src/app/globals.css`, `src/components/ui/**` | The Yelema skin: tokens (light and `.dark`), radii, Onest and Bricolage Grotesque, and the primitives that follow them |
 | `src/lib/installed-experts.ts`, `src/app/api/experts/` | The profiles installed on the instances a user can see |
 | `src/lib/drive.ts`, `src/lib/drive-paths.ts` | The drive (`~/Livrables`) and the path guard every files route applies |
 | `src/lib/hermes-cron.ts`, `src/app/api/agents/[id]/routines/**` | Routines: Hermes's scheduler through its API server (port 8642, `yelema-hermes` image) |

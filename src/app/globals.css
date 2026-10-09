@@ -2,23 +2,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Charte Yelema. Source : maquettes `yelema-front-v2` (source/app.css, app.css v4),
-   habillage [data-brand="yelema"]. Les valeurs sont en hexadécimal, comme la charte,
-   pour rester vérifiables à l'œil par l'équipe design.
+/* Yelema skin (tokens from the yelema-front-v2 mockup). The shadcn names (--primary, --card, …)
+   map onto the brand so the ui/ primitives follow it; the Yelema names (brand, ink, soft, line, …)
+   are what the screens use. Values are hexadecimal, like the brand sheet.
 
-   Deux familles de jetons cohabitent :
-   - les noms shadcn (--background, --primary, …) que consomment les 43 composants du kit ;
-   - les jetons Yelema (--brand, --coral, --ink-2, --c1…--c6) pour les écrans portés
-     depuis les maquettes.
-
-   ⚠️ --accent (shadcn) est une teinte de SURVOL, pas le corail de la charte. Le corail
-   Yelema — réservé à ce qui demande une action : à valider, micro, recruter — est --coral. */
-
+   --accent (shadcn) is a HOVER tint, not the brand's coral. The coral, kept for what asks for an
+   action, is --coral. */
 :root {
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 
-  /* — Jetons Yelema — */
   --brand: #301667;
+  /* Brand-colored TEXT: the brand itself in light, a pale violet in dark where the brand is a fill. */
   --brand-ink: #301667;
   --on-brand: #ffffff;
   --coral: #e4765a;
@@ -27,8 +21,11 @@
   --link: #5b3fd0;
   --tint: #ecebf8;
   --tint-2: #e0e1ff;
+  --bg: #f6f6fa;
   --soft: #f1f0f7;
   --soft-2: #e9e8f3;
+  --surface: #ffffff;
+  --line: rgba(48, 22, 103, 0.1);
   --ink: #17112b;
   --ink-2: #4a4563;
   --ink-3: #625d7c;
@@ -36,38 +33,30 @@
   --ok-pale: #dff3e8;
   --ko: #b42318;
   --ko-pale: #fde8e6;
-  --band: linear-gradient(105deg, #2e4ec4 0%, #5b4fe6 48%, #8d68fa 100%);
-  --c1: #8d68fa;
-  --c2: #2e4ec4;
-  --c3: #e4765a;
-  --c4: #c5c4ff;
-  --c5: #301667;
-  --c6: #b9b5cc;
 
-  /* — Noms shadcn, dérivés des jetons ci-dessus — */
-  --background: #f6f6fa;
+  --background: var(--bg);
   --foreground: var(--ink);
-  --card: #ffffff;
+  --card: var(--surface);
   --card-foreground: var(--ink);
-  --popover: #ffffff;
+  --popover: var(--surface);
   --popover-foreground: var(--ink);
   --primary: var(--brand);
   --primary-foreground: var(--on-brand);
   --secondary: var(--soft);
   --secondary-foreground: var(--ink);
   --muted: var(--soft);
-  --muted-foreground: var(--ink-2);
-  --accent: var(--tint);
-  --accent-foreground: var(--brand-ink);
+  --muted-foreground: var(--ink-3);
+  --accent: var(--soft);
+  --accent-foreground: var(--ink);
   --destructive: var(--ko);
   --destructive-foreground: #ffffff;
-  --border: rgba(48, 22, 103, 0.1);
-  --input: rgba(48, 22, 103, 0.1);
-  --ring: var(--link);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--brand);
 }
 
-/* Thème sombre. Source : app.css v4, html[data-mode="nuit"]. Le kit pilote le sombre
-   par la classe .dark (cf. @custom-variant ci-dessus), pas par un attribut. */
+/* Dark theme (mockup app.css v4, html[data-mode="nuit"]), driven by the .dark class on <html>.
+   Only the Yelema tokens change; the shadcn names above follow them. */
 .dark {
   --brand: #7a5af0;
   --brand-ink: #cdbeff;
@@ -76,8 +65,11 @@
   --coral-pale: #3b2520;
   --tint: #2a2346;
   --tint-2: #352c5a;
+  --bg: #110e1b;
   --soft: #221d33;
   --soft-2: #2c2642;
+  --surface: #1a1627;
+  --line: rgba(255, 255, 255, 0.09);
   --ink: #f2f0fa;
   --ink-2: #c6c0dc;
   --ink-3: #9f98ba;
@@ -85,26 +77,8 @@
   --ok-pale: #173528;
   --ko: #ff8f86;
   --ko-pale: #3e1d1b;
-  --c5: #a98bff;
 
-  --background: #110e1b;
-  --foreground: var(--ink);
-  --card: #1a1627;
-  --card-foreground: var(--ink);
-  --popover: #1a1627;
-  --popover-foreground: var(--ink);
-  --primary: var(--brand);
-  --primary-foreground: #ffffff;
-  --secondary: var(--soft);
-  --secondary-foreground: var(--ink);
-  --muted: var(--soft);
-  --muted-foreground: var(--ink-2);
-  --accent: var(--tint);
-  --accent-foreground: var(--brand-ink);
-  --destructive: var(--ko);
-  --destructive-foreground: #1a1627;
-  --border: rgba(255, 255, 255, 0.09);
-  --input: rgba(255, 255, 255, 0.09);
+  --destructive-foreground: var(--surface);
   --ring: var(--link);
 }
 
@@ -114,8 +88,8 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-funnel-sans);
-  --font-display: var(--font-space-grotesk);
+  --font-sans: var(--font-onest), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-bricolage), var(--font-onest), system-ui, sans-serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -137,17 +111,20 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* Jetons Yelema exposés en utilitaires : bg-coral, text-ink-2, bg-c1… */
   --color-brand: var(--brand);
   --color-brand-ink: var(--brand-ink);
+  --color-on-brand: var(--on-brand);
   --color-coral: var(--coral);
   --color-coral-ink: var(--coral-ink);
   --color-coral-pale: var(--coral-pale);
   --color-link: var(--link);
   --color-tint: var(--tint);
   --color-tint-2: var(--tint-2);
+  --color-bg: var(--bg);
   --color-soft: var(--soft);
   --color-soft-2: var(--soft-2);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-ink-3: var(--ink-3);
@@ -155,24 +132,16 @@
   --color-ok-pale: var(--ok-pale);
   --color-ko: var(--ko);
   --color-ko-pale: var(--ko-pale);
-  --color-c1: var(--c1);
-  --color-c2: var(--c2);
-  --color-c3: var(--c3);
-  --color-c4: var(--c4);
-  --color-c5: var(--c5);
-  --color-c6: var(--c6);
 
-  /* Rayons de la charte : 24 cartes portrait, 20 tuiles, 14 boutons et champs. */
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
+  --radius-2xl: 22px;
+  --radius-3xl: 24px;
+  /* Portrait cards and tiles. */
   --radius-tile: 20px;
   --radius-card: 24px;
-  --radius-control: 14px;
-
-  /* Mouvements de la charte : 150 à 250 ms sur cette courbe. */
-  --ease-brand: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @layer base {
@@ -180,9 +149,21 @@
     border-color: var(--border);
     outline-color: var(--ring);
   }
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
   body {
     background-color: var(--background);
     color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    line-height: 1.15;
   }
   /* Tailwind v4 Preflight sets buttons to `cursor: default`; restore the
      hand pointer on interactive controls (but not disabled ones). */
@@ -190,10 +171,17 @@
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
-  /* Chiffres tabulaires pour les compteurs et les montants (charte : Space Grotesk). */
-  .num {
-    font-family: var(--font-display), var(--font-sans);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.02em;
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
+}
+
+/* Assistant replies (Streamdown). Keep them readable at chat width. */
+.chat-markdown p + p {
+  margin-top: 0.6em;
+}
+.chat-markdown a {
+  color: var(--link);
+  text-decoration: underline;
 }

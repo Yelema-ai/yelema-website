@@ -86,7 +86,7 @@ export default function ResetPasswordPage() {
         </AuthHeading>
         <a
           href={supabase ? "/login" : "/"}
-          className="inline-flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-brand px-5 text-[15px] font-semibold text-white hover:opacity-90"
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[15px] font-semibold text-on-brand hover:opacity-90"
         >
           {supabase ? "Se connecter" : "Entrer dans mon espace"} <ArrowRight className="size-[18px]" />
         </a>
@@ -106,7 +106,7 @@ export default function ResetPasswordPage() {
         </AuthHeading>
         <a
           href="/login"
-          className="inline-flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-brand px-5 text-[15px] font-semibold text-white hover:opacity-90"
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[15px] font-semibold text-on-brand hover:opacity-90"
         >
           Recevoir un nouveau lien <ArrowRight className="size-[18px]" />
         </a>
@@ -118,7 +118,7 @@ export default function ResetPasswordPage() {
     <AuthShell>
       <AuthHeading title="Nouveau mot de passe">Choisissez-le, puis reconnectez-vous.</AuthHeading>
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
+      <form onSubmit={onSubmit} className="flex flex-col gap-5">
         <PasswordField
           label="Nouveau mot de passe"
           autoComplete="new-password"
@@ -170,7 +170,7 @@ export default function ResetPasswordPage() {
         <button
           type="submit"
           disabled={!canSave}
-          className="mt-1 inline-flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-brand px-5 text-[15px] font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[15px] font-semibold text-on-brand hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? "Enregistrement…" : "Enregistrer le mot de passe"}
           <ArrowRight className="size-[18px]" />

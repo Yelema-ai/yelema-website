@@ -29,7 +29,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   return (
     <aside
       className={cn(
-        "sticky top-0 flex h-screen flex-col gap-0.5 overflow-y-auto border-r bg-card px-3 py-3.5",
+        "sticky top-0 flex h-screen flex-col gap-0.5 overflow-y-auto border-r border-line bg-surface px-3 py-3.5",
         collapsed && "px-2.5 items-center"
       )}
     >
@@ -38,15 +38,15 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           {logoUrl ? (
             // Le logo du client. Yelema reste en pied, en « Powered by ».
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="" className="size-[38px] shrink-0 object-contain" />
+            <img src={logoUrl} alt="" className="size-[38px] shrink-0 rounded-xl object-contain" />
           ) : (
-            <span className="grid size-[38px] shrink-0 place-items-center rounded-xl bg-tint text-[15px] font-bold text-brand-ink">
+            <span className="grid size-[38px] shrink-0 place-items-center rounded-xl bg-brand font-display text-lg font-bold text-on-brand">
               {(current?.name?.trim()[0] ?? "?").toUpperCase()}
             </span>
           )}
           {!collapsed && (
             <span className="min-w-0">
-              <b className="block truncate text-[15px]">{current?.name ?? "…"}</b>
+              <b className="block truncate text-[15px] text-ink">{current?.name ?? "…"}</b>
               <span className="block text-[11px] text-ink-3">Espace de travail</span>
             </span>
           )}
@@ -74,7 +74,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
               title="Bientôt disponible"
               className={cn(base, "cursor-default text-ink-3/55", collapsed && "justify-center px-0")}
             >
-              <Icon className="size-[18px] shrink-0" />
+              <Icon className="size-5 shrink-0" strokeWidth={1.9} />
               {!collapsed && item.label}
             </span>
           );
@@ -89,14 +89,14 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
               collapsed && "justify-center px-0"
             )}
           >
-            <Icon className="size-[18px] shrink-0" />
+            <Icon className="size-5 shrink-0" strokeWidth={1.9} />
             {!collapsed && item.label}
           </Link>
         );
       })}
 
       {!collapsed && (
-        <div className="px-2.5 pt-4 pb-1.5 text-xs font-semibold text-ink-3">Mon équipe</div>
+        <div className="px-2.5 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-3">Mon équipe</div>
       )}
 
       {experts.map((e) => (
@@ -116,7 +116,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         </p>
       )}
 
-      <div className="mt-auto flex w-full flex-col gap-0.5 border-t pt-3">
+      <div className="mt-auto flex w-full flex-col gap-0.5 border-t border-line pt-3">
         <Link
           href="/administration"
           className={cn(
@@ -127,7 +127,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             collapsed && "justify-center px-0"
           )}
         >
-          <Settings2 className="size-[18px] shrink-0" />
+          <Settings2 className="size-5 shrink-0" strokeWidth={1.9} />
           {!collapsed && "Administration"}
         </Link>
 
@@ -138,12 +138,12 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           target="_blank"
           rel="noopener"
           className={cn(
-            "mt-2.5 flex items-center justify-center gap-2 rounded-[14px] bg-soft px-2.5 py-3 text-xs font-semibold text-ink-3",
+            "mt-1 flex items-center justify-center gap-2 rounded-xl bg-soft px-2.5 py-2.5 text-xs text-ink-3",
             collapsed && "px-0"
           )}
         >
           {!collapsed && "Powered by"}
-          <Image src="/yelema-long.png" alt="Yelema" width={78} height={22} className="h-[22px] w-auto" />
+          <Image src="/yelema-long.png" alt="Yelema" width={55} height={16} className="h-4 w-auto" />
         </a>
       </div>
     </aside>

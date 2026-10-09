@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Funnel_Sans, Space_Grotesk } from "next/font/google";
+import { Bricolage_Grotesque, Onest } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { branding } from "@/config/branding";
@@ -7,17 +7,13 @@ import { PublicConfigProvider } from "@/components/PublicConfigProvider";
 import { requestPublicConfig } from "@/lib/tenant";
 import { THEME_BOOTSTRAP } from "@/lib/theme";
 
-// Charte Yelema : Funnel Sans pour l'interface, Space Grotesk pour les chiffres, les
-// salutations et les prénoms des experts (classe `.num`, cf. globals.css).
-const funnelSans = Funnel_Sans({
+// Onest for the interface, Bricolage Grotesque for headings, greetings and expert names
+// (`font-display`).
+const onest = Onest({ subsets: ["latin"], variable: "--font-onest", display: "swap" });
+const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
-  variable: "--font-funnel-sans",
-  display: "swap",
-});
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-space-grotesk",
+  weight: ["600", "700"],
+  variable: "--font-bricolage",
   display: "swap",
 });
 
@@ -35,12 +31,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const config = await requestPublicConfig();
   return (
     // THEME_BOOTSTRAP adds `dark` to this element before React hydrates it.
-    <html lang="fr" className={`${funnelSans.variable} ${spaceGrotesk.variable}`} suppressHydrationWarning>
+    <html lang="fr" className={`${onest.variable} ${bricolage.variable}`} suppressHydrationWarning>
       <head>
         {/* Pose la classe `dark` avant le premier rendu : sans ça, l'écran clignote en clair. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
       </head>
-      <body className="min-h-screen bg-background font-sans text-foreground antialiased">
+      <body className="min-h-screen bg-background text-foreground antialiased">
         <PublicConfigProvider config={config}>{children}</PublicConfigProvider>
         <Toaster richColors position="top-center" />
       </body>

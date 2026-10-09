@@ -73,6 +73,8 @@ export interface CatalogueExpert {
   avatarUrl: string | null;
   /** Portrait en pied. */
   portraitUrl: string | null;
+  /** Short looping video for the cards, when the catalogue lists one. */
+  videoUrl: string | null;
   /** Dossier de l'expert dans le drive (~/Livrables/<dossier>). */
   driveFolder: string | null;
   /** Messages qu'on peut lui envoyer pour démarrer. */

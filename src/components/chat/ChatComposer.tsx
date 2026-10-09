@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { ArrowUp, Loader2, Square } from "lucide-react";
+import { Loader2, Send, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AttachButton, AttachmentTray } from "./Attachments";
 import { EffortMenu } from "./EffortMenu";
@@ -56,7 +56,7 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
 
   const grow = (el: HTMLTextAreaElement) => {
     const minHeight = large ? 76 : 44;
-    const maxHeight = large ? 180 : 160;
+    const maxHeight = 180;
     el.style.height = "auto";
     el.style.height = `${Math.max(minHeight, Math.min(el.scrollHeight, maxHeight))}px`;
   };
@@ -81,7 +81,7 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
   return (
     <div
       className={cn(
-        "mx-auto w-full rounded-[20px] border border-border/80 bg-card shadow-[0_8px_30px_rgb(15_23_42_/_0.06)] transition-[border-color,box-shadow] focus-within:border-ring/50 focus-within:shadow-[0_10px_34px_rgb(15_23_42_/_0.1)]",
+        "mx-auto w-full rounded-[22px] border border-line bg-surface shadow-[0_8px_30px_rgb(48_22_103_/_0.06)] transition-[border-color,box-shadow] focus-within:border-brand/30",
         large ? "max-w-2xl" : "max-w-3xl"
       )}
     >
@@ -95,10 +95,10 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
         onKeyDown={onKeyDown}
         onPaste={att.handlePaste}
         rows={1}
-        placeholder="Ask anything..."
+        placeholder="Écrivez votre message…"
         className={cn(
-          "w-full resize-none bg-transparent px-5 pb-2 pt-4 text-foreground placeholder:text-muted-foreground focus:outline-none",
-          large ? "min-h-[76px] max-h-[180px] text-[15px] leading-6" : "min-h-[44px] max-h-[160px] text-sm leading-relaxed"
+          "w-full resize-none bg-transparent px-5 pb-2 pt-4 text-ink placeholder:text-ink-3 focus:outline-none",
+          large ? "min-h-[76px] max-h-[180px] text-[15px] leading-6" : "min-h-[44px] max-h-[180px] text-[15px] leading-relaxed"
         )}
       />
       <AttachmentTray files={att.files} onRemove={att.removeFile} onRetry={att.retryFile} />
@@ -126,22 +126,19 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
             <button
               type="button"
               onClick={onStop}
-              aria-label="Stop response"
-              title="Stop response"
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-80"
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-bg hover:opacity-90"
             >
-              <Square className="h-3 w-3" fill="currentColor" strokeWidth={0} />
+              <Square className="h-3 w-3" fill="currentColor" strokeWidth={0} /> Arrêter
             </button>
           ) : (
             <button
               type="button"
               onClick={submit}
               disabled={!canSend}
-              aria-label="Send message"
-              title="Send message"
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:opacity-30"
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-on-brand transition-opacity hover:opacity-90 disabled:opacity-40"
             >
-              {att.uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+              {att.uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Envoyer
             </button>
           )}
         </div>

@@ -5,10 +5,9 @@ import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Champ des écrans d'authentification. Porté des maquettes (.mdf / .mdi) :
- * libellé au-dessus, boîte de 50 px, rayon 14, anneau de focus à la couleur de marque.
- * Distinct de `ui/input` à dessein — les écrans d'authentification ont leur propre
- * gabarit dans la charte.
+ * A field of the signed-out screens: label above, then a box with the measures of `ui/input`
+ * (44px, the same radius and focus ring). Kept apart from it because the box also holds what
+ * sits beside the input (the eye button).
  */
 export function Field({
   label,
@@ -24,19 +23,19 @@ export function Field({
 }) {
   const id = useId();
   return (
-    <label htmlFor={id} className="flex flex-col gap-1.5 text-[13.5px] font-semibold text-ink-2">
+    <label htmlFor={id} className="flex flex-col gap-2 text-[13px] font-semibold leading-none text-ink-2">
       <span>{label}</span>
       <span
         className={cn(
-          "flex h-[50px] items-center gap-1.5 rounded-[14px] border bg-card pr-1.5 pl-3.5 transition-shadow",
-          "focus-within:border-brand focus-within:shadow-[0_0_0_3px_var(--soft-2)]",
-          invalid && "border-ko shadow-[0_0_0_3px_rgba(180,35,24,0.14)]",
+          "flex h-11 items-center gap-1.5 rounded-xl border border-line bg-surface pr-1 pl-4 transition-colors",
+          "focus-within:border-brand/40 focus-within:ring-2 focus-within:ring-brand/15",
+          invalid && "border-ko ring-2 ring-ko/15",
           className
         )}
       >
         <input
           id={id}
-          className="min-w-0 flex-1 border-0 bg-transparent text-[15px] font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-3"
+          className="min-w-0 flex-1 border-0 bg-transparent text-[15px] font-normal text-ink outline-none placeholder:text-ink-3"
           {...props}
         />
         {children}
@@ -58,9 +57,9 @@ export function PasswordField({
         type="button"
         onClick={() => setShown((s) => !s)}
         aria-label={shown ? "Masquer le mot de passe" : "Afficher le mot de passe"}
-        className="grid size-[38px] shrink-0 place-items-center rounded-[10px] text-ink-3 hover:text-ink-2"
+        className="grid size-9 shrink-0 place-items-center rounded-[10px] text-ink-3 hover:text-ink"
       >
-        {shown ? <EyeOff className="size-[18px]" /> : <Eye className="size-[18px]" />}
+        {shown ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
       </button>
     </Field>
   );

@@ -23,7 +23,7 @@ function SectionTitle({ title, sub }: { title: string; sub?: string }) {
 
 function Box({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-tile border bg-card p-4">
+    <section className="rounded-tile border border-line bg-surface p-4">
       <h3 className="mb-2.5 flex items-center gap-2 text-base font-semibold text-ink">
         <Icon className="h-[18px] w-[18px] shrink-0 text-brand-ink" />
         {title}
@@ -58,10 +58,14 @@ export function ExpertFiche({ expertKey }: { expertKey: string }) {
   const pitch = expert.salesDescription ?? expert.description;
   const skills = expert.skills.length > 0 ? expert.skills : expert.competencies.map((name) => ({ name, summary: null }));
   const image = expert.avatarUrl ?? expert.portraitUrl;
+  const counts = [
+    { n: skills.length, one: "compétence", many: "compétences" },
+    { n: expert.deliverables.length, one: "livrable", many: "livrables" },
+  ].filter((c) => c.n > 0);
 
   return (
     <div className="@container flex w-full max-w-[1100px] flex-col gap-3.5">
-      <header className="flex items-center gap-6 rounded-card border bg-card p-6 @xl:p-7">
+      <header className="flex items-center gap-6 rounded-card border border-line bg-surface p-6 @xl:p-7">
         <div className="min-w-0 flex-1">
           <p className="text-[12.5px] font-semibold text-brand-ink">Fiche de poste</p>
           <h1 className="mt-1.5 font-display text-2xl font-semibold tracking-[-0.02em] text-ink @xl:text-[28px]">
@@ -70,15 +74,24 @@ export function ExpertFiche({ expertKey }: { expertKey: string }) {
           </h1>
           {pitch && <p className="mt-2.5 max-w-[760px] text-[17px] leading-[1.55] text-ink">{pitch}</p>}
           {expert.tagline && <p className="mt-2 text-sm text-ink-3">{expert.tagline}</p>}
+          {counts.length > 0 && (
+            <div className="mt-3.5 flex flex-wrap gap-2">
+              {counts.map((c) => (
+                <span key={c.one} className="rounded-full bg-soft-2 px-3 py-1.5 text-[13px] text-ink-2">
+                  <b className="tabular-nums text-brand-ink">{c.n}</b> {c.n > 1 ? c.many : c.one}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         {image && (
-          <ExpertImage src={image} size={180} className="hidden h-[180px] w-[180px] shrink-0 rounded-tile bg-tint object-cover object-top @2xl:block" />
+          <ExpertImage src={image} size={180} className="hidden h-[180px] w-[180px] shrink-0 rounded-tile bg-[#B79BD8] object-cover object-top @2xl:block" />
         )}
       </header>
 
       {expert.useCase && (
         <div className="flex flex-col items-start gap-2 rounded-[18px] bg-tint px-5 py-4 @xl:flex-row @xl:gap-3.5">
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-2.5 py-1 text-[12.5px] font-semibold text-primary-foreground">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand px-2.5 py-1 text-[12.5px] font-semibold text-on-brand">
             <Play className="h-3 w-3 fill-current" />
             En action
           </span>
@@ -92,7 +105,7 @@ export function ExpertFiche({ expertKey }: { expertKey: string }) {
           preload="none"
           poster={expert.video.posterUrl ?? undefined}
           src={expert.video.url}
-          className="aspect-video w-full rounded-card border bg-black"
+          className="aspect-video w-full rounded-card border border-line bg-black"
         />
       )}
 
@@ -101,7 +114,7 @@ export function ExpertFiche({ expertKey }: { expertKey: string }) {
           <SectionTitle title="Ses compétences" sub="Des savoir-faire déjà construits dans l’atelier Yelema" />
           <div className="grid gap-2.5 @xl:grid-cols-2 @3xl:grid-cols-3">
             {skills.map((s, i) => (
-              <div key={s.name} className="flex gap-3 rounded-2xl border bg-card p-3.5">
+              <div key={s.name} className="flex gap-3 rounded-2xl border border-line bg-surface p-3.5">
                 <span
                   className={cn(
                     "grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[10px] text-[13px] font-extrabold tabular-nums",
@@ -125,7 +138,7 @@ export function ExpertFiche({ expertKey }: { expertKey: string }) {
           <SectionTitle title="Ses livrables" sub="Prêts à relire, envoyés seulement après votre accord" />
           <div className="grid gap-2.5 @2xl:grid-cols-2">
             {expert.deliverables.map((d) => (
-              <div key={d.label} className="flex items-center gap-3 rounded-2xl border bg-card p-3.5">
+              <div key={d.label} className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-3.5">
                 {d.thumbnailUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={d.thumbnailUrl} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-[10px] object-cover" />
@@ -156,7 +169,7 @@ export function ExpertFiche({ expertKey }: { expertKey: string }) {
         </div>
       )}
 
-      <div className="mt-3.5 flex flex-wrap items-center gap-3 rounded-card border-2 border-primary bg-card p-[22px]">
+      <div className="mt-3.5 flex flex-wrap items-center gap-3 rounded-card border-2 border-brand bg-surface p-[22px]">
         {mine ? (
           <>
             <div className="min-w-0 flex-1">

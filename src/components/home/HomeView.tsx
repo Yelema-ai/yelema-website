@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { MessageCircle, Send } from "lucide-react";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
-import { ExpertImage } from "@/components/experts/ExpertImage";
+import { ExpertMedia } from "@/components/experts/ExpertMedia";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { useCatalogue } from "@/components/experts/useCatalogue";
 import { agentTabPath } from "@/lib/expert-tabs";
@@ -23,21 +23,26 @@ const CARD_SIZES = "(min-width: 80rem) 300px, (min-width: 64rem) 33vw, (min-widt
 
 const expertId = (e: Expert) => `${e.agentId}:${e.profileId}`;
 
-// One expert's card: portrait, name, title, tagline, "Écrire". The portrait comes from the
-// catalogue; without one the card shows the expert's initial.
+// One expert's card: full-body portrait (the looping video on hover), name, title, tagline,
+// "Écrire". The portrait comes from the catalogue; without one the card shows the expert's initial.
 function ExpertCard({ expert, entry }: { expert: Expert; entry: CatalogueExpert | null }) {
   const href = agentTabPath(expert.agentId, "chat", expert.profileId);
-  const image = entry?.portraitUrl ?? expert.photoUrl ?? null;
+  const [hovered, setHovered] = useState(false);
   return (
-    <div className="group flex flex-col overflow-hidden rounded-card border bg-card transition-shadow hover:shadow-[0_20px_40px_-26px_rgba(23,17,43,.45)]">
-      <Link href={href} className="relative block aspect-[4/5] overflow-hidden bg-tint">
-        {image ? (
-          <ExpertImage src={image} sizes={CARD_SIZES} className="object-cover object-top" />
-        ) : (
-          <span className="grid h-full w-full place-items-center font-display text-7xl font-bold text-brand-ink/40">
-            {expert.displayName.trim()[0]?.toUpperCase() ?? "?"}
-          </span>
-        )}
+    <div className="group flex flex-col overflow-hidden rounded-card border border-line bg-surface transition-shadow hover:shadow-[0_20px_40px_-26px_rgba(23,17,43,.45)]">
+      <Link
+        href={href}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        className="relative block aspect-[4/5] overflow-hidden bg-[#8D68FA]/30"
+      >
+        <ExpertMedia
+          name={expert.displayName}
+          image={entry?.portraitUrl ?? expert.photoUrl ?? null}
+          videoUrl={entry?.videoUrl}
+          hovered={hovered}
+          sizes={CARD_SIZES}
+        />
       </Link>
       <div className="flex flex-1 flex-col p-4">
         <h3 className="font-display text-[22px] font-bold tracking-tight text-ink">{expert.displayName}</h3>
@@ -45,7 +50,7 @@ function ExpertCard({ expert, entry }: { expert: Expert; entry: CatalogueExpert 
         <p className="mt-3 line-clamp-2 flex-1 text-sm text-ink-2">{expert.tagline ?? ""}</p>
         <Link
           href={href}
-          className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-xl border text-[15px] font-semibold text-ink hover:bg-soft"
+          className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line text-[15px] font-semibold text-ink hover:bg-soft"
         >
           <MessageCircle className="h-4 w-4" /> Écrire
         </Link>
@@ -92,7 +97,7 @@ export function HomeView() {
 
       {to && (
         <>
-          <section className="mt-5 rounded-[22px] border bg-card p-4 shadow-[0_8px_30px_rgb(48_22_103_/_0.05)]">
+          <section className="mt-5 rounded-[22px] border border-line bg-surface p-4 shadow-[0_8px_30px_rgb(48_22_103_/_0.05)]">
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
               <span className="shrink-0 text-sm text-ink-3">À</span>
               {experts.map((e) => (
@@ -102,7 +107,7 @@ export function HomeView() {
                   onClick={() => setPicked(expertId(e))}
                   className={cn(
                     "flex h-9 shrink-0 items-center gap-2 rounded-full border pl-1 pr-3 text-[13px] font-semibold transition-colors",
-                    expertId(e) === expertId(to) ? "border-brand/40 bg-tint text-brand-ink" : "bg-card text-ink-2 hover:bg-soft"
+                    expertId(e) === expertId(to) ? "border-brand/40 bg-tint text-brand-ink" : "border-line bg-surface text-ink-2 hover:bg-soft"
                   )}
                 >
                   <ExpertAvatar expert={{ ...e, gateway: null }} size="xs" />
@@ -123,7 +128,7 @@ export function HomeView() {
                 type="button"
                 onClick={() => send(text)}
                 disabled={!text.trim()}
-                className="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-5 text-[15px] font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-40"
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand px-5 text-[15px] font-semibold text-on-brand hover:opacity-90 disabled:opacity-40"
               >
                 <Send className="h-4 w-4" /> Envoyer
               </button>
@@ -137,7 +142,7 @@ export function HomeView() {
                   key={s}
                   type="button"
                   onClick={() => send(s)}
-                  className="rounded-full border border-dashed bg-card px-3.5 py-2 text-[13px] font-semibold text-ink-2 hover:border-brand/30 hover:text-ink"
+                  className="rounded-full border border-dashed border-line bg-surface px-3.5 py-2 text-[13px] font-semibold text-ink-2 hover:border-brand/30 hover:text-ink"
                 >
                   {s}
                 </button>

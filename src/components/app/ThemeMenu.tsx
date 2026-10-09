@@ -41,12 +41,12 @@ export function ThemeMenu() {
       <DropdownMenuTrigger
         aria-label="Apparence"
         title="Apparence"
-        className="grid size-10 place-items-center rounded-full border bg-card text-ink-2 hover:text-ink"
+        className="ml-auto grid size-[38px] shrink-0 place-items-center rounded-full border border-line bg-surface text-ink hover:bg-soft"
       >
-        <Sun className="size-[18px] dark:hidden" />
-        <Moon className="hidden size-[18px] dark:block" />
+        <Sun className="size-4 dark:hidden" />
+        <Moon className="hidden size-4 dark:block" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48 rounded-2xl p-1.5">
+      <DropdownMenuContent align="end" className="w-48 p-1.5">
         {OPTIONS.map((o) => {
           const Icon = o.icon;
           return (

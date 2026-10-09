@@ -48,7 +48,7 @@ export function AcceptInvite({
         type="button"
         onClick={accept}
         disabled={busy}
-        className="mt-1 inline-flex h-[50px] items-center justify-center gap-2 rounded-[14px] bg-brand px-5 text-[15px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+        className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[15px] font-semibold text-on-brand hover:opacity-90 disabled:opacity-50"
       >
         {busy ? "Un instant…" : "Entrer dans mon espace"}
         <ArrowRight className="size-[18px]" />

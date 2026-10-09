@@ -157,7 +157,7 @@ export function ChatProvider({
       setSessions((prev) =>
         prev.some((s) => s.session_id === sessionId)
           ? prev
-          : [{ session_id: sessionId, title: title.trim().slice(0, 80) || null }, ...prev]
+          : [{ session_id: sessionId, title: title.trim().slice(0, 80) || null, last_active: Date.now() }, ...prev]
       );
     },
     [setOpenThread]
@@ -214,13 +214,16 @@ export function ChatProvider({
     [agentId, q, sessions]
   );
 
-  // Move a thread to the top of the rail on new activity. Upstream ordering (last_active) only
-  // refreshes on reload, so keep the most-recently-used thread first in the meantime.
+  // Move a thread to the top of the rail, under "Aujourd'hui", on new activity. Upstream ordering
+  // (last_active) only refreshes on reload, so keep the most-recently-used thread first meanwhile.
   const bumpSession = useCallback((sessionId: string) => {
     setSessions((prev) => {
       const idx = prev.findIndex((s) => s.session_id === sessionId);
-      if (idx <= 0) return prev; // not present, or already at the top
-      return [prev[idx], ...prev.slice(0, idx), ...prev.slice(idx + 1)];
+      if (idx < 0) return prev;
+      const now = Date.now();
+      // Already first and just stamped: nothing to move, and no re-render per streamed token.
+      if (idx === 0 && now - prev[0].last_active < 60_000) return prev;
+      return [{ ...prev[idx], last_active: now }, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
     });
   }, []);
 

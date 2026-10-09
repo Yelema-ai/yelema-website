@@ -1,10 +1,9 @@
 // Branding lives in code, not env — one Yelema brand for every client deployment.
-// `logoUrl` can be a path to a file in /public (e.g. "/logo.svg") or an absolute URL; "" hides
-// it. A deployment can override the logo at runtime with BRAND_LOGO_URL (see runtime-config.ts).
-//
-// PROVISOIRE : logo, favicon (src/app/icon.svg) et couleurs (globals.css) sont des valeurs
-// d'attente en attendant la charte Yelema définitive.
+// `logoUrl` (the wordmark) and `markUrl` (the square mark, also src/app/icon.svg) are files in
+// /public. A deployment can show its client's logo in the menu with BRAND_LOGO_URL (see
+// runtime-config.ts).
 export const branding = {
   appName: "Yelema",
-  logoUrl: "/logo.svg",
+  logoUrl: "/yelema-long.png",
+  markUrl: "/yelema_y.svg",
 } as const;
