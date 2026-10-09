@@ -34,7 +34,8 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const config = await requestPublicConfig();
   return (
-    <html lang="fr" className={`${funnelSans.variable} ${spaceGrotesk.variable}`}>
+    // THEME_BOOTSTRAP adds `dark` to this element before React hydrates it.
+    <html lang="fr" className={`${funnelSans.variable} ${spaceGrotesk.variable}`} suppressHydrationWarning>
       <head>
         {/* Pose la classe `dark` avant le premier rendu : sans ça, l'écran clignote en clair. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
