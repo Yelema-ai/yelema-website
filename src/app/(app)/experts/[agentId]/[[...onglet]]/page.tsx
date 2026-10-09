@@ -1,6 +1,6 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { agentAccessRole, getAgentRow, requireUser } from "@/lib/auth";
-import { parseAgentRoute } from "@/lib/expert-tabs";
+import { movedTabPath, parseAgentRoute } from "@/lib/expert-tabs";
 import { AgentWorkspace } from "@/components/AgentWorkspace";
 
 // L'espace d'un expert. L'instance et l'expert (son profil Hermes) sont portés par l'URL, puis
@@ -14,6 +14,9 @@ export default async function AgentWorkspacePage({
   params: Promise<{ agentId: string; onglet?: string[] }>;
 }) {
   const { agentId, onglet } = await params;
+
+  const moved = movedTabPath(onglet);
+  if (moved) redirect(moved);
 
   // One grammar, shared with the client SPA: an unknown tab or extra segments 404 here.
   const route = parseAgentRoute(onglet);
@@ -36,8 +39,6 @@ export default async function AgentWorkspacePage({
       agentId={agentId}
       profileId={route.profileId}
       workspaceId={row.workspace_id}
-      role={role}
-      isOwner={row.owner_user_id === user.id}
       initialTab={route.tab}
     />
   );

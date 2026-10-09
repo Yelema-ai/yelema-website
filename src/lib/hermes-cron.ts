@@ -1,6 +1,6 @@
 import "server-only";
 import { parse } from "yaml";
-import { instanceFetch, instancePortFetch } from "@/lib/agent37";
+import { agent37, instanceFetch, instancePortFetch } from "@/lib/agent37";
 import { ApiError } from "@/lib/http";
 import { composePrompt, splitPrompt, summarize, type Routine } from "@/lib/routines";
 
@@ -40,6 +40,28 @@ async function apiKey(agentId: string): Promise<string> {
   return key;
 }
 
+// Hermes accepts /p/<expert>/ only with the key written in THAT profile's .env, and the image
+// writes it into each profile when the instance starts. A profile installed afterwards (the back
+// office installs the experts once the instance is up) has none, and its routines answer 401 until
+// the next start. The image's own script puts the key where it is missing; it changes nothing else
+// and can be run any number of times. At most once every few minutes per instance, so a refusal
+// that it does not cure is not answered with a command on every page.
+const KEY_SCRIPT =
+  '"${HERMES_PYTHON:-/usr/local/lib/hermes/hermes-agent/venv/bin/python}" /usr/local/bin/yelema-api-server.py';
+const SPREAD_EVERY_MS = 5 * 60_000;
+const spreadAt = new Map<string, number>();
+
+async function spreadKey(agentId: string): Promise<void> {
+  if (Date.now() - (spreadAt.get(agentId) ?? 0) < SPREAD_EVERY_MS) return;
+  spreadAt.set(agentId, Date.now());
+  try {
+    const result = await agent37.exec(agentId, KEY_SCRIPT);
+    if (result.exit_code !== 0) console.error(`[routines] key script failed on ${agentId}`, result.stderr.slice(0, 500));
+  } catch (e) {
+    console.error(`[routines] key script unreachable on ${agentId}:`, e instanceof Error ? e.message : e);
+  }
+}
+
 // Hermes's reason for refusing a routine ({"error": "..."}), in the form's words.
 function rejection(text: string): string {
   let reason = "";
@@ -64,10 +86,12 @@ async function hermes<T>(agentId: string, method: string, path: string, body?: u
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(30_000),
     });
-    // The instance got a new key (a fresh home): read it again, once.
+    // The instance got a new key (a fresh home), or this expert's profile never got it: read the
+    // key again and have the instance hand it to every profile, once.
     if (res.status === 401 && attempt === 0) {
       keys.delete(agentId);
       await res.body?.cancel().catch(() => undefined);
+      await spreadKey(agentId);
       continue;
     }
     const text = await res.text();

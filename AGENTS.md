@@ -143,10 +143,12 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   (`client__expert`) installed on the member's instance. The shell (`src/components/app`) lists
   them; `/` is the home, `/recruter` the gallery of every expert Yelema offers, and
   `/experts/{agentId}/{profileId}/{tab}` the expert's workspace (Discussion / Livrables /
-  Routines / Canaux / Connecteurs). Without a profile segment the page is the
-  instance's default Hermes home. Administration (`/administration`) is two read-only lists: the workspace's
-  members, and for admins its instances by name and member (no id, no state, no way in). The app
-  creates neither members nor agents.
+  Routines). Without a profile segment the page is the instance's default Hermes home.
+  Administration (`/administration`) has four tabs. Two are read-only lists for admins: the
+  workspace's members, and its instances by name and member (no id, no state, no way in). Two are
+  for everyone and act on the signed-in user's OWN instance, for all of its experts: Connecteurs
+  and Canaux (`src/components/MyInstance.tsx`). A member sees only those two. The app creates
+  neither members nor agents.
 - **Two ways to know the user, one switch.** With `AUTH_VIA_BACKOFFICE=true` the Yelema back office
   signs users in and says what they see (`/api/v1/app/*`, `src/lib/backoffice.ts`): the session is
   one httpOnly cookie bound to its host (`__Host-`, `src/lib/session.ts`), renewed by the proxy, and the user's role, workspace,
@@ -189,14 +191,15 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 | `src/app/globals.css`, `src/components/ui/**` | The Yelema skin: tokens (light and `.dark`), radii, Onest and Bricolage Grotesque, and the primitives that follow them |
 | `src/lib/installed-experts.ts`, `src/app/api/experts/` | The profiles installed on the instances a user can see |
 | `src/lib/drive.ts`, `src/lib/drive-paths.ts` | The drive (`~/Livrables`) and the path guard every files route applies |
-| `src/lib/hermes-cron.ts`, `src/app/api/agents/[id]/routines/**` | Routines: Hermes's scheduler through its API server (port 8642, `yelema-hermes` image) |
+| `src/lib/hermes-cron.ts`, `src/app/api/agents/[id]/routines/**` | Routines: Hermes's scheduler through its API server (port 8642, `yelema-hermes` image). A profile installed after the instance's start has no key: on a `401` the module runs the image's own key script in the instance, then asks again |
 | `src/components/home`, `src/components/experts`, `src/components/integrations` | Home, gallery, sheet, routines, connectors |
 | `src/app/api/agents/[id]/computer/`, `src/components/experts/ComputerProvider.tsx`, `ExpertComputer.tsx` | "Son ordinateur": the instance's screen live beside the chat (noVNC, 60-second signed URL), and taking over mouse and keyboard |
 | `src/app/api/agents/[id]/channels/**` | Messaging channels BFF (list / write / disconnect, Telegram checks, WhatsApp pairing) |
 | `src/lib/hermes-messaging.ts` | The agent's own messaging API, reached over `exec`; the only module that speaks it |
 | `src/lib/telegram.ts` | Telegram Bot API calls made BEFORE anything is written into the agent (token check, owner lookup) |
 | `src/lib/channels.ts` | Channel types + the featured list, shared by the BFF and the Messaging tab |
-| `src/components/channels/**` | The Messaging tab: channel list, Telegram flow, WhatsApp QR, generic credentials form |
+| `src/components/channels/**` | Canaux: channel list, Telegram flow, WhatsApp QR, generic credentials form |
+| `src/app/(app)/administration/**`, `src/components/MyInstance.tsx`, `src/components/useMyAgents.ts` | The Administration tabs (Membres and Instances for admins; Connecteurs and Canaux for everyone), and the signed-in user's own instance those two act on |
 | `src/app/(app)/experts/[agentId]/[[...onglet]]/`, `src/lib/expert-tabs.ts` | The expert workspace route and its URL grammar (instance, profile, tab) |
 | `src/config/agents.ts` | `SHAPE_PRESETS`, `DEFAULT_AGENT`, the `AGENT_TYPES` catalog, `PORT_LABELS` (labels only), and `templateAppPorts` — the per-template openable app ports (the API no longer reports per-instance ports) |
 | `src/config/branding.ts` | `appName` / `logoUrl` code constants (branding lives here, not in env) |

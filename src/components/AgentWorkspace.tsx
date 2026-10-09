@@ -2,14 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Blocks, FolderOpen, MessageSquare, MessagesSquare, Repeat } from "lucide-react";
-import { toast } from "sonner";
-import { apiFetch } from "@/lib/api";
-import { cached, remember } from "@/lib/client-cache";
-import { isTransitional } from "@/lib/format";
+import { FolderOpen, MessageSquare, Repeat } from "lucide-react";
 import { agentTabPath, parseAgentRoute, type AgentTab } from "@/lib/expert-tabs";
-import type { MergedAgent, Role } from "@/lib/types";
 import { useWorkspace } from "@/components/WorkspaceProvider";
+import { useMyAgents } from "@/components/useMyAgents";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { ExpertImage } from "@/components/experts/ExpertImage";
 import { ExpertRoutines } from "@/components/experts/ExpertRoutines";
@@ -17,8 +13,6 @@ import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { useCatalogueExpert } from "@/components/experts/useCatalogue";
 import { expertDisplayName } from "@/lib/experts";
 import { DRIVE_ROOT } from "@/lib/drive-paths";
-import { ConnectorsView } from "@/components/integrations/ConnectorsView";
-import { ChannelsTab } from "@/components/channels/ChannelsTab";
 import { ChatProvider } from "@/components/chat/ChatProvider";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatView } from "@/components/chat/ChatView";
@@ -29,42 +23,34 @@ const TABS: { id: AgentTab; label: string; icon: typeof MessageSquare }[] = [
   { id: "chat", label: "Discussion", icon: MessageSquare },
   { id: "files", label: "Livrables", icon: FolderOpen },
   { id: "routines", label: "Routines", icon: Repeat },
-  { id: "messaging", label: "Canaux", icon: MessagesSquare },
-  { id: "integrations", label: "Connecteurs", icon: Blocks },
 ];
 
 // The per-expert tabbed SPA, laid out as a SINGLE left rail + the active tab's pane. The instance
 // (agentId) and the expert (profileId, a Hermes profile on that instance; null = its default home)
 // are bound to the URL; the open tab rides the URL as a path segment. Tabs switch via
 // history.pushState (no full navigation) so Chat's in-flight stream and Files' current directory
-// survive moving between tabs — those two mount lazily then stay MOUNTED-BUT-HIDDEN; the other tabs
-// mount lazily in the scroll area. There is no settings tab: the instance (its size, its own
+// survive moving between tabs — those two mount lazily then stay MOUNTED-BUT-HIDDEN; Routines
+// mount lazily in the scroll area. Connecteurs and Canaux are not here: they are set once for the
+// instance, in the Administration. There is no settings tab: the instance (its size, its own
 // dashboard and terminal, its budget) is run by Yelema from the back office, not by the member.
 //
 // ChatProvider wraps the WHOLE workspace (not just the Chat pane) so the "Chats" thread list can live
 // in this one sidebar — folded in under the nav on the Chat tab — instead of a second rail. The chat
-// thread also stays open (and streaming) while you visit Files/Integrations/Settings because the
+// thread also stays open (and streaming) while you visit Livrables or Routines because the
 // provider and ChatView never unmount.
 export function AgentWorkspace({
   agentId,
   profileId,
   workspaceId,
-  role,
-  isOwner,
   initialTab,
 }: {
   agentId: string;
   profileId: string | null;
   workspaceId: string;
-  role: Role;
-  isOwner: boolean;
   initialTab: AgentTab;
 }) {
-  // The page only renders for the agent's owner (see its server check); they
-  // operate the agent, only an admin deletes it.
-  const canManage = isOwner;
   const pathname = usePathname();
-  const { setCurrentId, userEmail } = useWorkspace();
+  const { setCurrentId } = useWorkspace();
 
   // Deep-linking to an agent scopes the WorkspaceProvider to its workspace, so the fleet/switcher
   // and any workspace-derived UI stay in sync after a refresh or shared link.
@@ -72,34 +58,9 @@ export function AgentWorkspace({
     setCurrentId(workspaceId);
   }, [workspaceId, setCurrentId]);
 
-  // Live data for every agent in the workspace: the switcher lists them, and `active` carries this
-  // agent's live ports / status / update flag. Poll while any agent is mid-transition (the old fleet view's
-  // approach), so a starting agent's ports light up without a manual refresh.
-  // Opening another expert starts from the last reading rather than from nothing; `load` renews it.
-  const agentsKey = `agents:${userEmail}:${workspaceId}`;
-  const [agents, setAgents] = useState<MergedAgent[]>(() => cached<MergedAgent[]>(agentsKey) ?? []);
-  const load = useCallback(async () => {
-    try {
-      const data = await apiFetch<{ agents: MergedAgent[]; role: Role }>(
-        `/api/agents?workspace=${workspaceId}`
-      );
-      setAgents(remember(agentsKey, data.agents));
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  }, [workspaceId, agentsKey]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    if (!agents.some((a) => isTransitional(a.live_status))) return;
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
-  }, [agents, load]);
-
-  const active = agents.find((a) => a.agent37_id === agentId) ?? null;
+  // The user's instances with their live state, which the chat needs (its model list, whether the
+  // image streams a screen).
+  const { agents } = useMyAgents(workspaceId);
 
   // The expert this page is about, dressed by the catalogue; its own folder is where Livrables opens.
   const { experts } = useExpertsContext();
@@ -256,34 +217,20 @@ export function AgentWorkspace({
               <FilesTab agentId={agentId} initialPath={driveFolder} />
             </div>
           )}
-          {/* Routines, Connecteurs and Canaux mount lazily in the padded scroll area. */}
-          {!isChat && !isFiles && (
+          {/* Routines mount lazily in the padded scroll area. */}
+          {currentTab === "routines" && profileId && (
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {currentTab === "routines" && profileId ? (
-                <div className="mx-auto w-full max-w-4xl p-6 md:px-10 md:py-8">
-                  <ExpertRoutines
-                    agentId={agentId}
-                    expert={{
-                      profileId,
-                      name: expertName,
-                      skills: sheet ? [...sheet.skills.map((s) => s.name), ...sheet.competencies] : [],
-                      driveFolder: expert?.driveFolder ?? expertName,
-                    }}
-                  />
-                </div>
-              ) : currentTab === "integrations" ? (
-                <div className="mx-auto w-full max-w-5xl p-6 md:px-10 md:py-8">
-                  <ConnectorsView agentId={agentId} />
-                </div>
-              ) : (
-                <div className="mx-auto w-full max-w-3xl p-6 md:px-10 md:py-8">
-                  {active ? (
-                    <ChannelsTab agentId={agentId} agent={active} canManage={canManage} />
-                  ) : (
-                    <p className="text-sm text-ink-3">Chargement…</p>
-                  )}
-                </div>
-              )}
+              <div className="mx-auto w-full max-w-4xl p-6 md:px-10 md:py-8">
+                <ExpertRoutines
+                  agentId={agentId}
+                  expert={{
+                    profileId,
+                    name: expertName,
+                    skills: sheet ? [...sheet.skills.map((s) => s.name), ...sheet.competencies] : [],
+                    driveFolder: expert?.driveFolder ?? expertName,
+                  }}
+                />
+              </div>
             </div>
           )}
         </main>

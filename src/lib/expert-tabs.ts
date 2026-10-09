@@ -7,10 +7,23 @@ import { isProfileId } from "@/lib/profile-id";
 // (/experts/{agentId}/{onglet}) the page is the instance's default home, no persona.
 //
 // Les identifiants d'onglet restent en anglais pour l'instant : les maquettes en
-// prévoient treize, aux noms différents (discussion, résumé, connecteurs, canaux…).
-// Ils seront repris en bloc au lot « espace expert », pas deux fois.
+// prévoient d'autres, aux noms différents (discussion, résumé…). Ils seront repris en bloc au
+// lot « espace expert », pas deux fois.
 
-export const AGENT_TAB_IDS = ["chat", "files", "routines", "messaging", "integrations"] as const;
+export const AGENT_TAB_IDS = ["chat", "files", "routines"] as const;
+
+// Connecteurs and Canaux used to be tabs of every expert. They are set once for the instance, so
+// they live in the Administration; an old address is sent there.
+const MOVED_TABS: Record<string, string> = {
+  integrations: "/administration/connecteurs",
+  messaging: "/administration/canaux",
+};
+
+// Where an expert address that ends on a moved tab now leads, or null.
+export function movedTabPath(segments?: string[]): string | null {
+  const last = segments?.at(-1);
+  return last !== undefined && segments!.length <= 2 ? (MOVED_TABS[last] ?? null) : null;
+}
 
 export type AgentTab = (typeof AGENT_TAB_IDS)[number];
 
