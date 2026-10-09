@@ -26,8 +26,22 @@ const INSTANCE_DOMAIN = "agent37.app";
 
 // Any other port of the instance has its own preview host, `https://{id}-{port}.agent37.app`,
 // behind the same key (https://www.agent37.com/docs/agents-api/urls).
+// Every id this module puts in a URL or a host name goes through here. The key sent with the call
+// is workspace-wide, so an id carrying "../" or a dot would aim it at another resource
+// (DELETE /v1/instances/<id>) or another host: only the plain form Agent37 and Composio hand out
+// is let through, anything else is refused before the request is made.
+const URL_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+
+function urlId(value: string): string {
+  if (typeof value !== "string" || !URL_ID.test(value)) {
+    throw new Agent37Error(400, "invalid_request", "Invalid identifier");
+  }
+  return value;
+}
+
 function instanceBaseUrl(id: string, port?: number): string {
-  return `https://${id}${port ? `-${port}` : ""}.${INSTANCE_DOMAIN}`;
+  const suffix = port === undefined ? "" : `-${Math.trunc(port)}`;
+  return `https://${urlId(id)}${suffix}.${INSTANCE_DOMAIN}`;
 }
 
 export class Agent37Error extends Error {
@@ -67,7 +81,8 @@ async function parseAgent37<T>(res: Response, augment402 = false): Promise<T> {
       typeof raw.error === "string" ? { code: raw.error, message: raw.error } : raw.error ?? raw;
     let message = err.message || res.statusText;
     if (augment402 && res.status === 402) {
-      // Almost always an unfunded wallet at create/start time — point the operator at billing.
+      // Almost always an unfunded wallet. For the operator reading the server log: the member is
+      // never shown an Agent37Error's message (see handleError in lib/http).
       message = `${message} (Agent37 payment required — fund your wallet under Cloud → Billing in the dashboard, then retry.)`;
     }
     throw new Agent37Error(res.status, err.code || "error", message);
@@ -152,19 +167,19 @@ async function instanceCall<T>(id: string, path: string, init?: RequestInit): Pr
 // and an app holding the workspace-wide key must not be able to do them for a signed-in user.
 export const agent37 = {
   listAgents: () => call<{ data: Agent[] }>("/instances"),
-  getAgent: (id: string) => call<Agent>(`/instances/${id}`),
+  getAgent: (id: string) => call<Agent>(`/instances/${urlId(id)}`),
   // Run a shell command inside the instance. The escape hatch for anything the API does not wrap as
   // its own call. Here it is how the Messaging tab reaches the harness's own messaging API, which
   // listens on a loopback port inside the sandbox. A command that exits nonzero is a normal 200 with
   // its exit_code, so read that rather than relying on a throw.
   exec: (id: string, command: string, user?: "root") =>
     call<{ exit_code: number; stdout: string; stderr: string; truncated: boolean }>(
-      `/instances/${id}/exec`,
+      `/instances/${urlId(id)}/exec`,
       { method: "POST", body: JSON.stringify({ command, ...(user ? { user } : {}) }) }
     ),
 
   signedUrl: (id: string, port: number, ttlSeconds?: number) =>
-    call<{ url: string; domain_urls?: string[]; port: number; expires_at: number }>(`/instances/${id}/signed-url`, {
+    call<{ url: string; domain_urls?: string[]; port: number; expires_at: number }>(`/instances/${urlId(id)}/signed-url`, {
       method: "POST",
       body: JSON.stringify({ port, ...(ttlSeconds ? { ttl_seconds: ttlSeconds } : {}) }),
     }),
@@ -223,18 +238,18 @@ export const agent37 = {
   // App integrations (managed Composio, per-instance entity). Management ops only — no billing here.
   listIntegrationToolkits: (id: string, opts: { search?: string } = {}) => {
     const q = opts.search ? `?search=${encodeURIComponent(opts.search)}` : "";
-    return call<IntegrationToolkitsResult>(`/instances/${id}/integrations/toolkits${q}`);
+    return call<IntegrationToolkitsResult>(`/instances/${urlId(id)}/integrations/toolkits${q}`);
   },
   connectIntegration: (id: string, body: { toolkit: string }) =>
-    call<IntegrationConnectResult>(`/instances/${id}/integrations/connect`, {
+    call<IntegrationConnectResult>(`/instances/${urlId(id)}/integrations/connect`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
   listIntegrationConnections: (id: string) =>
-    call<IntegrationConnectionsResult>(`/instances/${id}/integrations/connections`),
+    call<IntegrationConnectionsResult>(`/instances/${urlId(id)}/integrations/connections`),
   disconnectIntegration: (id: string, connectedAccountId: string) =>
     call<{ id: string; deleted: boolean }>(
-      `/instances/${id}/integrations/connections/${connectedAccountId}`,
+      `/instances/${urlId(id)}/integrations/connections/${urlId(connectedAccountId)}`,
       { method: "DELETE" }
     ),
 };

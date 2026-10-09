@@ -1,11 +1,14 @@
 import { instanceFetch } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
+import { assertInDrive } from "@/lib/drive";
 import { ApiError, handleError, readJson } from "@/lib/http";
 import { DEFAULT_PROFILE, resolveProfile } from "@/lib/profiles";
 import { FILES_ONLY_PROMPT } from "@/lib/types";
 import { upstreamErrorMessage } from "../../_helpers";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+const MAX_FILES = 20;
 
 interface ResponsesBody {
   input?: string;
@@ -30,9 +33,15 @@ export async function POST(request: Request, { params }: Ctx) {
     const body = await readJson<ResponsesBody>(request);
     const profile = await resolveProfile(row, body.profile);
     const input = (body.input ?? "").trim();
-    const files = Array.isArray(body.files) ? body.files.filter(Boolean) : [];
+    // The attachments of a turn are paths the expert will read: like every files route, only the
+    // drive is accepted, so a turn cannot hand ~/.hermes or ~/.yelema to the model.
+    const given = Array.isArray(body.files) ? body.files.filter(Boolean) : [];
+    if (given.length > MAX_FILES || given.some((f) => typeof f !== "string")) {
+      throw new ApiError(400, "invalid_request", "Pièces jointes invalides.");
+    }
+    const files = given.map((f) => assertInDrive(f));
     if (!input && files.length === 0) {
-      throw new ApiError(400, "invalid_request", "input is required");
+      throw new ApiError(400, "invalid_request", "Écrivez un message ou joignez un fichier.");
     }
     // The Agents API marks `input` required; for a files-only turn supply a sensible default
     // prompt so we always send a non-empty input rather than relying on "" being accepted.
@@ -62,10 +71,9 @@ export async function POST(request: Request, { params }: Ctx) {
         await upstream.body?.cancel().catch(() => undefined);
         throw new ApiError(404, "profile_not_found", "Cet expert n’est pas installé sur cet espace.");
       }
-      const message = await upstreamErrorMessage(upstream, "chat/responses", "Chat request failed");
+      const message = await upstreamErrorMessage(upstream, "chat/responses", "Votre expert n’a pas pu répondre. Réessayez dans un instant.");
       // An instance too old for profiles refuses the field instead of silently using the default home.
       if (profile !== DEFAULT_PROFILE && upstream.status === 400) {
-        console.error(`[chat/responses] profile refused on ${id}`, message);
         throw new ApiError(502, "profile_unsupported", "Cet espace doit être mis à jour pour parler à cet expert. Contactez Yelema.");
       }
       // The client softens the "busy" case by matching the message, not a code, and the 409 is

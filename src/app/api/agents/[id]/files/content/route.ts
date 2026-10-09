@@ -6,12 +6,21 @@ import { assertUpstreamOk, requireTrimmed } from "../../_helpers";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+// Content types a browser shows without running anything from the file. SVG is an image that
+// carries script, so it is not one of them.
+const DOWNLOAD_FAILED = "Le fichier n’a pas pu être téléchargé. Réessayez.";
+const INERT_TYPE = /^(image\/(png|jpeg|gif|webp|bmp|avif|x-icon|vnd\.microsoft\.icon)|application\/pdf|audio\/|video\/|text\/plain)\b/i;
+
 // Stream a file's bytes back to the browser (preview/download). This is the URL <img>/<iframe>/<a>
 // point at, so we pass the upstream Content-Type and Content-Disposition straight through —
 // `disposition=inline` lets the browser render, `attachment` (the Agents API default) downloads.
 // `nosniff` keeps the browser from second-guessing the extension-derived type. The byte stream is
-// piped without buffering so any size works. Note: HTML/SVG previews are rendered ONLY inside a
-// sandboxed <iframe> on the client — never navigated to directly on this origin.
+// piped without buffering so any size works.
+//
+// A file is whatever an expert or a member put in the drive, and this URL can be opened directly,
+// outside the preview's sandboxed <iframe>. So anything but a picture, a PDF, audio, video or plain
+// text is answered with `Content-Security-Policy: sandbox`: an HTML or SVG file opened by its link
+// then runs in an origin of its own, without the member's session.
 export async function GET(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
@@ -19,14 +28,14 @@ export async function GET(request: Request, { params }: Ctx) {
 
     const { searchParams } = new URL(request.url);
     const qs = new URLSearchParams();
-    const path = assertInDrive(requireTrimmed(searchParams.get("path"), "path is required"));
+    const path = assertInDrive(requireTrimmed(searchParams.get("path"), "Chemin manquant"));
     const disposition = searchParams.get("disposition");
     qs.set("path", path);
     if (disposition) qs.set("disposition", disposition);
 
     const upstream = await instanceFetch(id, `/v1/files/content?${qs.toString()}`);
-    await assertUpstreamOk(upstream, "files/content", "Download failed", "download_error");
-    if (!upstream.body) throw new ApiError(502, "download_error", "Download failed");
+    await assertUpstreamOk(upstream, "files/content", DOWNLOAD_FAILED, "download_error");
+    if (!upstream.body) throw new ApiError(502, "download_error", DOWNLOAD_FAILED);
 
     const headers = new Headers();
     const ct = upstream.headers.get("Content-Type");
@@ -37,6 +46,7 @@ export async function GET(request: Request, { params }: Ctx) {
     if (cl) headers.set("Content-Length", cl);
     headers.set("Cache-Control", "no-store");
     headers.set("X-Content-Type-Options", "nosniff");
+    if (!INERT_TYPE.test(ct ?? "")) headers.set("Content-Security-Policy", "sandbox");
 
     return new Response(upstream.body, { status: 200, headers });
   } catch (e) {
@@ -56,7 +66,7 @@ export async function PUT(request: Request, { params }: Ctx) {
     await requireAgentAccess(id);
 
     const { searchParams } = new URL(request.url);
-    const path = assertInDrive(requireTrimmed(searchParams.get("path"), "path is required"));
+    const path = assertInDrive(requireTrimmed(searchParams.get("path"), "Chemin manquant"));
     const qs = new URLSearchParams();
     qs.set("path", path);
     const overwrite = searchParams.get("overwrite");
@@ -74,7 +84,7 @@ export async function PUT(request: Request, { params }: Ctx) {
       body: request.body,
     });
 
-    await assertUpstreamOk(upstream, "files/content", "Save failed", "save_error");
+    await assertUpstreamOk(upstream, "files/content", "Le fichier n’a pas pu être enregistré. Réessayez.", "save_error");
     const text = await upstream.text().catch(() => "");
     return json(text ? JSON.parse(text) : {});
   } catch (e) {
