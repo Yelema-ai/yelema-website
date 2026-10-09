@@ -1,5 +1,6 @@
 // Shared client-side helpers for the Files tab. The wire shapes (FileEntry / FileListResponse)
 // live in lib/types.ts so the server (lib/agent37.ts) and the browser agree on one definition.
+import { DRIVE_ABS, DRIVE_ROOT } from "@/lib/drive-paths";
 import type { FileEntry } from "@/lib/types";
 
 export type { FileEntry, FileListResponse } from "@/lib/types";
@@ -16,30 +17,32 @@ export function joinPath(dir: string, name: string): string {
 // Human-readable size. Directories carry a null size and render blank.
 export function formatBytes(size: number | null): string {
   if (size == null) return "";
-  if (size < 1024) return `${size} B`;
-  const units = ["KB", "MB", "GB", "TB"];
+  if (size < 1024) return `${size} o`;
+  const units = ["Ko", "Mo", "Go", "To"];
   let n = size / 1024;
   let i = 0;
   while (n >= 1024 && i < units.length - 1) {
     n /= 1024;
     i += 1;
   }
-  return `${n < 10 ? n.toFixed(1) : Math.round(n)} ${units[i]}`;
+  return `${n < 10 ? n.toFixed(1).replace(".", ",") : Math.round(n)} ${units[i]}`;
 }
 
 // `modified` is epoch milliseconds (Agent API convention).
 export function formatMtime(ms: number): string {
   if (!ms) return "";
-  return new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  return new Date(ms).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" });
 }
 
-// One clickable breadcrumb: a label plus the absolute path it navigates to. Splits an absolute
-// path into its ancestors, with a leading root segment ("/").
+// One clickable breadcrumb: a label plus the path it navigates to. The trail starts at the drive
+// ("Livrables"), never above it: what lies above (/home/node) is refused by every files route, so
+// a crumb for it would only lead to an error.
 export function breadcrumbs(path: string): { label: string; path: string }[] {
-  const parts = path.split("/").filter(Boolean);
-  const crumbs: { label: string; path: string }[] = [{ label: "/", path: "/" }];
-  let acc = "";
-  for (const part of parts) {
+  const root = [DRIVE_ABS, DRIVE_ROOT].find((r) => path === r || path.startsWith(`${r}/`));
+  if (!root) return [];
+  const crumbs: { label: string; path: string }[] = [{ label: "Livrables", path: root }];
+  let acc = root;
+  for (const part of path.slice(root.length).split("/").filter(Boolean)) {
     acc += `/${part}`;
     crumbs.push({ label: part, path: acc });
   }

@@ -158,7 +158,7 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
 
   return (
     <div className="relative flex h-full min-h-0 flex-col" {...fb.dragHandlers}>
-      {fb.dragOver && <DropOverlay label="Drop files to upload here" />}
+      {fb.dragOver && <DropOverlay label="Déposez vos fichiers ici pour les envoyer" />}
 
       <header className="shrink-0 border-b bg-background px-4 py-3 md:px-6 lg:px-8">
         <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
@@ -168,19 +168,19 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
               variant="outline"
               size="sm"
               onClick={goUp}
-              disabled={!fb.parentPath}
-              aria-label="Up one folder"
-              title="Up one folder"
+              disabled={!fb.parentPath || fb.atRoot}
+              aria-label="Dossier parent"
+              title="Dossier parent"
               className="h-10 shrink-0"
             >
               <ArrowUp className="h-4 w-4" />
-              Up
+              Remonter
             </Button>
             <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-md border bg-card px-3 shadow-sm">
               <Folder className="h-4 w-4 shrink-0 text-primary" />
-              <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm" aria-label="Folder path">
+              <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm" aria-label="Chemin du dossier">
                 {crumbs.length === 0 ? (
-                  <span className="text-muted-foreground">Loading folder</span>
+                  <span className="text-muted-foreground">Chargement…</span>
                 ) : (
                   crumbs.map((c, i) => (
                     <span key={c.path} className="flex shrink-0 items-center">
@@ -215,11 +215,11 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
             <ViewToggle value={viewMode} onChange={setViewMode} />
             <ToolbarIconButton
               onClick={() => fb.setShowHidden((v) => !v)}
-              label={fb.showHidden ? "Hide hidden files" : "Show hidden files"}
+              label={fb.showHidden ? "Masquer les fichiers cachés" : "Afficher les fichiers cachés"}
             >
               {fb.showHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </ToolbarIconButton>
-            <ToolbarIconButton onClick={fb.refresh} label="Refresh">
+            <ToolbarIconButton onClick={fb.refresh} label="Actualiser">
               <RefreshCw className={cn("h-4 w-4", fb.loading && "animate-spin")} />
             </ToolbarIconButton>
             <span className="mx-1 hidden h-6 w-px bg-border sm:block" />
@@ -232,24 +232,24 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
               className="h-9"
             >
               <FolderPlus className="h-4 w-4" />
-              New folder
+              Nouveau dossier
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" disabled={!fb.path || fb.uploading} className="h-9">
                   {fb.uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                  Upload
+                  Envoyer
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => uploadRef.current?.click()}>
                   <Upload className="h-4 w-4" />
-                  Files
+                  Des fichiers
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => folderUploadRef.current?.click()}>
                   <FolderUp className="h-4 w-4" />
-                  Folder
+                  Un dossier
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -287,9 +287,9 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
                   </colgroup>
                   <thead className="bg-secondary/50 text-left text-xs text-muted-foreground">
                     <tr className="border-b">
-                      <th className="px-4 py-3 font-medium">Name</th>
-                      <th className="px-4 py-3 text-right font-medium">Size</th>
-                      <th className="px-4 py-3 font-medium">Last modified</th>
+                      <th className="px-4 py-3 font-medium">Nom</th>
+                      <th className="px-4 py-3 text-right font-medium">Taille</th>
+                      <th className="px-4 py-3 font-medium">Modifié le</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -362,8 +362,8 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
                         )}
                       </div>
                       <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                        <div className="truncate">{formatMtime(entry.modified) || "No modified date"}</div>
-                        <div>{isDir(entry) ? "Folder" : formatBytes(entry.size) || "Unknown size"}</div>
+                        <div className="truncate">{formatMtime(entry.modified) || "Date inconnue"}</div>
+                        <div>{isDir(entry) ? "Dossier" : formatBytes(entry.size) || "Taille inconnue"}</div>
                       </div>
                     </div>
                   );
@@ -373,12 +373,12 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
 
             {fb.truncated && (
               <p className="mt-3 px-3 text-xs text-muted-foreground">
-                Showing the first 1000 entries. Open a subfolder to narrow the listing.
+                Seuls les 1 000 premiers éléments sont affichés. Ouvrez un sous-dossier pour voir les autres.
               </p>
             )}
             {!fb.showHidden && fb.hiddenCount > 0 && (
               <p className="mt-3 px-3 text-xs text-muted-foreground">
-                {fb.hiddenCount} hidden {fb.hiddenCount === 1 ? "item" : "items"} not shown.
+                {fb.hiddenCount === 1 ? "1 fichier caché n’est pas affiché." : `${fb.hiddenCount} fichiers cachés ne sont pas affichés.`}
               </p>
             )}
           </div>
@@ -398,15 +398,15 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
       <ConfirmDialog
         open={!!pendingDelete}
         onOpenChange={(open) => !open && setPendingDelete(null)}
-        title="Delete this item?"
+        title="Supprimer cet élément ?"
         description={
           pendingDelete
-            ? `"${pendingDelete.name}" will be permanently deleted${
-                isDir(pendingDelete) ? ", along with everything inside it" : ""
-              }. This cannot be undone.`
+            ? `« ${pendingDelete.name} » sera supprimé définitivement${
+                isDir(pendingDelete) ? ", avec tout ce qu’il contient" : ""
+              }. Cette action est irréversible.`
             : undefined
         }
-        confirmText="Delete"
+        confirmText="Supprimer"
         destructive
         onConfirm={async () => {
           if (pendingDelete) await fb.remove(pendingDelete);
@@ -417,13 +417,13 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
 }
 
 const VIEW_MODES = [
-  { mode: "list" as const, Icon: List, label: "List view" },
-  { mode: "grid" as const, Icon: Grid2X2, label: "Grid view" },
+  { mode: "list" as const, Icon: List, label: "Vue en liste" },
+  { mode: "grid" as const, Icon: Grid2X2, label: "Vue en grille" },
 ];
 
 function ViewToggle({ value, onChange }: { value: ViewMode; onChange: (value: ViewMode) => void }) {
   return (
-    <div className="inline-flex h-9 rounded-md border bg-background p-0.5" role="group" aria-label="File view">
+    <div className="inline-flex h-9 rounded-md border bg-background p-0.5" role="group" aria-label="Affichage des fichiers">
       {VIEW_MODES.map(({ mode, Icon, label }) => (
         <button
           key={mode}
@@ -484,11 +484,11 @@ function SelectedActions({
 }) {
   return (
     <div className="mr-1 flex items-center gap-1 border-r pr-2">
-      <Button asChild variant="outline" size="icon" className="size-9" title="Download">
+      <Button asChild variant="outline" size="icon" className="size-9" title="Télécharger">
         <a
           href={isDir(entry) ? archiveUrl(agentId, entry.path) : contentUrl(agentId, entry.path, "attachment")}
           download={isDir(entry) ? `${entry.name}.tar.gz` : entry.name}
-          aria-label={isDir(entry) ? `Download ${entry.name} as a .tar.gz archive` : `Download ${entry.name}`}
+          aria-label={isDir(entry) ? `Télécharger ${entry.name} en archive .tar.gz` : `Télécharger ${entry.name}`}
         >
           <Download className="h-4 w-4" />
         </a>
@@ -499,8 +499,8 @@ function SelectedActions({
         size="icon"
         onClick={() => onRename(entry)}
         className="size-9"
-        aria-label={`Rename ${entry.name}`}
-        title="Rename"
+        aria-label={`Renommer ${entry.name}`}
+        title="Renommer"
       >
         <Pencil className="h-4 w-4" />
       </Button>
@@ -510,8 +510,8 @@ function SelectedActions({
         size="icon"
         onClick={() => onDelete(entry)}
         className="size-9 hover:bg-destructive/10 hover:text-destructive"
-        aria-label={`Delete ${entry.name}`}
-        title="Delete"
+        aria-label={`Supprimer ${entry.name}`}
+        title="Supprimer"
       >
         <Trash2 className="h-4 w-4" />
       </Button>
@@ -612,7 +612,7 @@ function RenameInput({
         }
         commitRename(entry);
       }}
-      aria-label="File name"
+      aria-label="Nom du fichier"
       className="w-full rounded-md bg-background px-2 py-1.5 text-sm text-foreground outline-none ring-1 ring-ring"
     />
   );
@@ -634,15 +634,15 @@ function EmptyFolder({
       <span className="mb-4 inline-flex size-12 items-center justify-center rounded-md bg-background text-primary shadow-sm">
         <Folder className="h-7 w-7" />
       </span>
-      <p className="text-sm font-medium text-foreground">This folder is empty.</p>
+      <p className="text-sm font-medium text-foreground">Ce dossier est vide.</p>
       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
         <Button size="sm" onClick={onUpload} disabled={!canCreate || uploading}>
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          Upload files
+          Envoyer des fichiers
         </Button>
         <Button variant="outline" size="sm" onClick={onNewFolder} disabled={!canCreate}>
           <FolderPlus className="h-4 w-4" />
-          New folder
+          Nouveau dossier
         </Button>
       </div>
     </div>
@@ -683,7 +683,7 @@ function NewFolderDialog({
     >
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>New folder</DialogTitle>
+          <DialogTitle>Nouveau dossier</DialogTitle>
         </DialogHeader>
         <Input
           autoFocus
@@ -695,15 +695,15 @@ function NewFolderDialog({
               submit();
             }
           }}
-          placeholder="Folder name"
-          aria-label="Folder name"
+          placeholder="Nom du dossier"
+          aria-label="Nom du dossier"
         />
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
+            Annuler
           </Button>
           <Button onClick={submit} disabled={busy || !name.trim()}>
-            {busy ? "Creating..." : "Create"}
+            {busy ? "Création…" : "Créer"}
           </Button>
         </DialogFooter>
       </DialogContent>

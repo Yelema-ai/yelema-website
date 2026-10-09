@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { apiFetch, readApiError } from "@/lib/api";
+import { isDriveRoot } from "@/lib/drive-paths";
+import { TOO_LARGE, tooLarge } from "@/lib/upload-limit";
 import { useDropZone } from "../useDropZone";
 import { joinPath, type FileEntry, type FileListResponse } from "./types";
 
@@ -31,7 +33,7 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
   const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showHidden, setShowHidden] = useState(true);
+  const [showHidden, setShowHidden] = useState(false);
   const [uploading, setUploading] = useState(0); // count of in-flight uploads
 
   // Guard against an older list response landing after a newer navigation.
@@ -61,7 +63,7 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
         setTruncated(res.truncated);
       } catch (e) {
         if (seq !== loadSeq.current) return;
-        setError((e as Error).message || "Couldn't open that folder.");
+        setError((e as Error).message || "Ce dossier n’a pas pu être ouvert.");
       } finally {
         if (seq === loadSeq.current) setLoading(false);
       }
@@ -93,9 +95,11 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
 
   const navigate = useCallback((target: string) => load(target), [load]);
   const refresh = useCallback(() => load(path ?? undefined), [load, path]);
+  // The drive's root has nothing above it that a member may open.
+  const atRoot = path === null || isDriveRoot(path);
   const goUp = useCallback(() => {
-    if (parentPath) load(parentPath);
-  }, [load, parentPath]);
+    if (parentPath && !atRoot) load(parentPath);
+  }, [load, parentPath, atRoot]);
 
   // Open an entry: directories (and dir symlinks) navigate; everything else is left to the caller
   // (preview/download), which knows the entry.
@@ -118,7 +122,7 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
         `/api/agents/${agentId}/files/content?path=${encodeURIComponent(target)}&overwrite=true`,
         { method: "PUT", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file }
       );
-      if (!res.ok) throw new Error(await readApiError(res, "Upload failed"));
+      if (!res.ok) throw new Error(await readApiError(res, "L’envoi a échoué"));
     },
     [agentId, path]
   );
@@ -127,7 +131,11 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
   // overwrite=true mirrors a normal desktop drop (replace in place); a failed file is toasted but
   // doesn't abort the batch. Concurrency is bounded so a deep folder can't open a socket per file.
   const uploadEntries = useCallback(
-    async (items: { file: File; relPath: string }[]) => {
+    async (all: { file: File; relPath: string }[]) => {
+      // A file over the limit would be refused by the host with a page of its own: say it here.
+      const items = all.filter(({ file }) => !tooLarge(file));
+      for (const { relPath } of all.filter(({ file }) => tooLarge(file)).slice(0, 3)) toast.error(`${relPath} : ${TOO_LARGE}`);
+      if (all.length - items.length > 3) toast.error(`${all.length - items.length - 3} autres fichiers dépassent 4 Mo.`);
       if (!items.length || !path) return;
       setUploading((n) => n + items.length);
       let failures = 0;
@@ -137,14 +145,14 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
             await putFile(file, relPath);
           } catch (e) {
             failures += 1;
-            toast.error(`${relPath}: ${(e as Error).message}`);
+            toast.error(`${relPath} : ${(e as Error).message}`);
           }
         });
       } finally {
         setUploading((n) => Math.max(0, n - items.length));
       }
       const ok = items.length - failures;
-      if (ok > 0) toast.success(ok === 1 ? "Uploaded 1 file" : `Uploaded ${ok} files`);
+      if (ok > 0) toast.success(ok === 1 ? "1 fichier envoyé" : `${ok} fichiers envoyés`);
       // Refresh only if the user is still in the directory we uploaded into. A folder upload can run
       // for many seconds; reloading the captured `path` would otherwise undo a navigation made while
       // it was in flight.
@@ -182,10 +190,10 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
         await apiFetch(`/api/agents/${agentId}/files/dir?path=${encodeURIComponent(joinPath(path, clean))}`, {
           method: "POST",
         });
-        toast.success("Folder created");
+        toast.success("Dossier créé");
         await load(path);
       } catch (e) {
-        toast.error((e as Error).message || "Couldn't create the folder.");
+        toast.error((e as Error).message || "Le dossier n’a pas pu être créé.");
       }
     },
     [agentId, path, load]
@@ -203,7 +211,7 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
         });
         await load(path);
       } catch (e) {
-        toast.error((e as Error).message || "Couldn't rename that.");
+        toast.error((e as Error).message || "Le renommage a échoué.");
       }
     },
     [agentId, path, load]
@@ -213,10 +221,10 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
     async (entry: FileEntry) => {
       try {
         await apiFetch(`/api/agents/${agentId}/files?path=${encodeURIComponent(entry.path)}`, { method: "DELETE" });
-        toast.success(`Deleted ${entry.name}`);
+        toast.success(`${entry.name} supprimé`);
         await load(path ?? undefined);
       } catch (e) {
-        toast.error((e as Error).message || "Couldn't delete that.");
+        toast.error((e as Error).message || "La suppression a échoué.");
       }
     },
     [agentId, path, load]
@@ -234,6 +242,7 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
   return {
     path,
     parentPath,
+    atRoot,
     entries,
     visibleEntries,
     hiddenCount,

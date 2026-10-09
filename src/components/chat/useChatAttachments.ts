@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent } from "react";
+import { toast } from "sonner";
 import { readApiError } from "@/lib/api";
+import { TOO_LARGE, tooLarge } from "@/lib/upload-limit";
 import { uid, type MessageAttachment } from "./types";
 import { useDropZone } from "../useDropZone";
 
@@ -41,7 +43,7 @@ export function useChatAttachments(agentId: string, onFocusRequest?: () => void)
           signal: ctrl.signal,
         });
         if (!res.ok) {
-          throw new Error(await readApiError(res, "Upload failed"));
+          throw new Error(await readApiError(res, "L’envoi a échoué"));
         }
         const data = (await res.json()) as { path?: string };
         patch(pf.id, { status: "uploaded", path: data.path });
@@ -65,12 +67,14 @@ export function useChatAttachments(agentId: string, onFocusRequest?: () => void)
         id: uid("f"),
         file,
         previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
-        status: "uploading" as const,
+        // A file over the limit is shown refused, with the reason, and never sent.
+        ...(tooLarge(file) ? { status: "error" as const, error: TOO_LARGE } : { status: "uploading" as const }),
       }));
       if (!pfs.length) return;
+      for (const pf of pfs.filter((x) => x.status === "error").slice(0, 3)) toast.error(`${pf.file.name} : ${TOO_LARGE}`);
       setFiles((prev) => [...prev, ...pfs]);
       onFocusRequest?.();
-      pfs.forEach(startUpload);
+      pfs.filter((pf) => pf.status === "uploading").forEach(startUpload);
     },
     [onFocusRequest, startUpload]
   );
@@ -87,7 +91,8 @@ export function useChatAttachments(agentId: string, onFocusRequest?: () => void)
   const retryFile = useCallback(
     (id: string) => {
       const f = filesRef.current.find((x) => x.id === id);
-      if (!f) return;
+      // Sending a file over the limit again would fail the same way.
+      if (!f || tooLarge(f.file)) return;
       patch(id, { status: "uploading", error: undefined });
       startUpload({ ...f, status: "uploading", error: undefined });
     },

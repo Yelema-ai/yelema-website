@@ -36,7 +36,7 @@ export function FilePreview({
               <Button asChild variant="outline" size="sm">
                 <a href={contentUrl(agentId, entry.path, "attachment")} download={entry.name}>
                   <Download className="h-4 w-4" />
-                  Download
+                  Télécharger
                 </a>
               </Button>
             </div>
@@ -76,8 +76,8 @@ function PreviewBody({ agentId, entry }: { agentId: string; entry: FileEntry }) 
 
   return (
     <div className="flex min-h-[12rem] flex-col items-center justify-center gap-2 rounded-md border bg-secondary/30 text-sm text-muted-foreground">
-      <p>No preview available for this file type.</p>
-      <p>Use Download to open it locally.</p>
+      <p>Pas d’aperçu pour ce type de fichier.</p>
+      <p>Téléchargez-le pour l’ouvrir.</p>
     </div>
   );
 }
@@ -92,10 +92,10 @@ function TextPreview({ url }: { url: string }) {
     setError(null);
     fetch(url)
       .then(async (res) => {
-        if (!res.ok) throw new Error(`Couldn't load file (${res.status})`);
+        if (!res.ok) throw new Error("Ce fichier n’a pas pu être chargé.");
         // Cap the rendered slice so a huge log can't lock the tab.
         const body = await res.text();
-        return body.length > 500_000 ? `${body.slice(0, 500_000)}\n\n… (truncated)` : body;
+        return body.length > 500_000 ? `${body.slice(0, 500_000)}\n\n… (aperçu tronqué)` : body;
       })
       .then((body) => !cancelled && setText(body))
       .catch((e) => !cancelled && setError((e as Error).message));

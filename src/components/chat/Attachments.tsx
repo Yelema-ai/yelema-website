@@ -3,6 +3,8 @@
 import { useRef } from "react";
 import { FileText, Loader2, Paperclip, RotateCw, X } from "lucide-react";
 import { HiddenFileInput } from "@/components/HiddenFileInput";
+import { tooLarge } from "@/lib/upload-limit";
+import { cn } from "@/lib/utils";
 import type { PendingFile } from "./useChatAttachments";
 
 export function AttachButton({ onFiles, disabled }: { onFiles: (files: FileList) => void; disabled?: boolean }) {
@@ -13,7 +15,8 @@ export function AttachButton({ onFiles, disabled }: { onFiles: (files: FileList)
         type="button"
         disabled={disabled}
         onClick={() => ref.current?.click()}
-        aria-label="Attach files"
+        aria-label="Joindre des fichiers"
+        title="Joindre des fichiers"
         className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
       >
         <Paperclip className="h-4 w-4" />
@@ -38,7 +41,11 @@ export function AttachmentTray({
       {files.map((f) => (
         <div
           key={f.id}
-          className="flex items-center gap-2 rounded-full border bg-secondary/50 px-2.5 py-1 text-xs text-foreground"
+          title={f.status === "error" ? f.error : undefined}
+          className={cn(
+            "flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs",
+            f.status === "error" ? "border-ko/40 bg-ko-pale text-ko" : "border-line bg-soft text-ink"
+          )}
         >
           {f.previewUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- object URL thumbnail, not a remote asset
@@ -48,11 +55,13 @@ export function AttachmentTray({
           )}
           <span className="max-w-[10rem] truncate">{f.file.name}</span>
           {f.status === "uploading" && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          {f.status === "error" && (
+          {f.status === "error" && tooLarge(f.file) && <span className="font-semibold">plus de 4 Mo</span>}
+          {f.status === "error" && !tooLarge(f.file) && (
             <button
               type="button"
               onClick={() => onRetry(f.id)}
-              aria-label="Retry upload"
+              aria-label="Réessayer l’envoi"
+              title="Réessayer l’envoi"
               className="text-destructive hover:text-destructive/80"
             >
               <RotateCw className="h-3.5 w-3.5" />
@@ -61,7 +70,7 @@ export function AttachmentTray({
           <button
             type="button"
             onClick={() => onRemove(f.id)}
-            aria-label="Remove attachment"
+            aria-label="Retirer la pièce jointe"
             className="text-muted-foreground hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
