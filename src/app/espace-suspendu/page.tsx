@@ -5,7 +5,8 @@ export default function EspaceSuspenduPage() {
   return (
     <AuthShell>
       <AuthHeading title="Espace suspendu">
-        L’accès à cet espace est suspendu. Contactez l’administrateur de votre entreprise ou l’équipe Yelema.
+        L’accès à cet espace est suspendu. Si une facture est en attente, réglez-la par le lien reçu par e-mail :
+        l’espace rouvre dès le paiement. Sinon, contactez l’administrateur de votre entreprise ou l’équipe Yelema.
       </AuthHeading>
     </AuthShell>
   );

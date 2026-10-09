@@ -67,6 +67,41 @@ export interface BoMember {
 
 export type BoOpenedSession = { session: BoSession } & BoMe;
 
+/** One invoice of the workspace. Amounts are in major units (XOF has no decimals); dates are ISO. */
+export interface BoInvoice {
+  /** Public id, the one the PDF and payment-link routes take. */
+  id: string;
+  reference: string;
+  /** The month invoiced, "YYYY-MM". */
+  period: string;
+  status: "issued" | "overdue" | "paid";
+  amountTTC: number;
+  currency: string;
+  issuedAt: string | null;
+  dueDate: string | null;
+  /** True while the invoice can be paid online (issued, overdue). */
+  payable: boolean;
+}
+
+export interface BoBilling {
+  plan: { key: string; name: string } | null;
+  status: "active" | "suspended" | null;
+  nextDueDate: string | null;
+  /** The subscription's monthly amount. */
+  amount: number | null;
+  currency: string;
+  /** The oldest invoice still to pay. */
+  openInvoice: BoInvoice | null;
+}
+
+// An invoice id goes into the back office's URL: only its plain form is let through.
+const INVOICE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+
+function invoicePath(id: string, rest: string): string {
+  if (!INVOICE_ID.test(id)) throw new BackofficeError(404, "not_found", "Facture introuvable.");
+  return `/app/billing/invoices/${id}${rest}`;
+}
+
 // `workspace` is given by the proxy, which runs before a request has a scope to read it from.
 async function call<T>(path: string, init: { method?: string; token?: string | null; body?: unknown; workspace?: string } = {}): Promise<T> {
   const base = backofficeUrl();
@@ -131,4 +166,41 @@ export const backoffice = {
   instances: async (token: string) =>
     (await call<{ items: { member: { name: string | null; email: string }; instance: BoInstanceView }[] }>("/app/instances", { token })).items,
   members: async (token: string) => (await call<{ items: BoMember[] }>("/app/members", { token })).items,
+
+  // Billing, for the workspace's admins (a member is refused, 403). The app reads and hands out the
+  // back office's own payment link; it never creates a payment.
+  billing: (token: string) => call<BoBilling>("/app/billing", { token }),
+  // Newest first, never a draft.
+  invoices: async (token: string) => (await call<{ items: BoInvoice[] }>("/app/billing/invoices", { token })).items,
+  // The page where the invoice is paid, the same as in the back office's e-mail.
+  paymentLink: (token: string, invoiceId: string) =>
+    call<{ url: string }>(invoicePath(invoiceId, "/payment-link"), { method: "POST", token }),
+  // The invoice's PDF, as a stream for the route to pipe.
+  invoicePdf: (token: string, invoiceId: string) => stream(invoicePath(invoiceId, "/pdf"), token),
 };
+
+// A file from the back office, handed back unread so the caller can pipe it.
+async function stream(path: string, token: string): Promise<Response> {
+  const base = backofficeUrl();
+  const workspace = await pinnedWorkspaceId();
+  if (!base || !workspace) throw new BackofficeError(500, "config_error", "BACKOFFICE_URL and a workspace are required");
+  const unavailable = () =>
+    new BackofficeError(503, "unavailable", "Le service est momentanément indisponible. Réessayez dans un instant.");
+  let res: Response;
+  try {
+    res = await fetch(`${base}/api/v1${path}`, {
+      headers: { "X-Workspace-Id": workspace, Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (e) {
+    console.error(`[backoffice] ${path} unreachable:`, e instanceof Error ? e.message : e);
+    throw unavailable();
+  }
+  if (res.ok && res.body) return res;
+  const text = await res.text().catch(() => "");
+  if (res.status === 401 || res.status === 403) throw new BackofficeError(res.status, "forbidden", "Cette action n’est pas autorisée.");
+  if (res.status === 404) throw new BackofficeError(404, "not_found", "Ce document n’est pas disponible.");
+  console.error(`[backoffice] ${path}: ${res.status}`, text.slice(0, 300));
+  throw unavailable();
+}

@@ -185,6 +185,7 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 | `src/lib/profile-id.ts`, `src/lib/profiles.ts` | The profile a chat targets: shape, `?profile=`, and the check against the instance's real profiles |
 | `src/lib/tenant-resolver.ts`, `src/lib/tenant.ts`, `src/app/espace-*` | The client a request is for when one deployment serves every client: host lookup at the back office, the workspace a request is confined to, and the pages for an unknown or suspended client |
 | `src/lib/backoffice.ts`, `src/lib/session.ts`, `src/app/api/auth/**` | Sign-in through the back office: its client, the cookie session, and the login / logout / forgot / accept routes |
+| `src/app/api/billing/**`, `src/components/BillingView.tsx`, `src/app/(app)/administration/facturation/` | Facturation, for admins, signed in through the back office: plan, next due date, invoices and their PDF, read from the back office (`/api/v1/app/billing/*`). "Payer" opens the back office's own payment link; the app creates no payment |
 | `src/lib/catalogue.ts`, `src/app/api/catalogue/**` | The back office's expert catalogue, cached, and its join with installed profiles |
 | `src/components/experts/ExpertImage.tsx`, `images` in `next.config.ts` | Expert pictures resized by the image optimizer (the catalogue serves them full size); only Yelema hosts are optimized |
 | `src/components/experts/ExpertMedia.tsx`, `public/experts/vid/` | A card's picture, swapped for the expert's looping video on hover. The video is the catalogue's when it lists one (`loopVideoUrl`), else the file named after the expert's first name in `public/experts/vid`: a stopgap to delete once the back office serves them |
@@ -256,7 +257,17 @@ Dockerfile goes away once every client is on Vercel.
 - **Check a channel credential before writing it** where the provider lets you (Telegram's
   `getMe`). The agent's messaging gateway refuses to start on a bad token, which takes
   every other channel on that agent down with it.
-- **A file path from the browser is checked before it reaches the instance** (`assertInDrive`).
+- **An id from the browser is checked before it goes into an Agent37 URL** (`urlId` in
+  `src/lib/agent37.ts`): the key sent with the call is workspace-wide, so `../` in an id would aim
+  it at another instance.
+- **A member never reads Agent37's, the instance's or the database's own error text.** It is
+  English and written for the operator. `handleError` (`src/lib/http.ts`) and `upstreamErrorMessage`
+  log it and answer a French sentence written here; a new route does the same.
+- **A file served from the drive cannot run script with the member's session.** Anything but a
+  picture, a PDF, audio, video or plain text is answered with `Content-Security-Policy: sandbox`.
+- **A file sent from the browser is at most 4 MB** (`src/lib/upload-limit.ts`): the host refuses a
+  larger request before any route sees it.
+- **A file path from the browser is checked before it reaches the instance** (`assertInDrive`). The attachments of a chat turn are such paths too.
   Server code that must read outside the drive (the routines key file) does so itself, never
   through a path the caller supplied.
 - **A member never reaches the instance's own dashboard, terminal or files UI.** There is no

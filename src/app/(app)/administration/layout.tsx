@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { cn } from "@/lib/utils";
 
@@ -10,15 +11,20 @@ const TABS = [
   { href: "/administration/instances", label: "Instances", exact: false, adminOnly: true },
   { href: "/administration/connecteurs", label: "Connecteurs", exact: false, adminOnly: false },
   { href: "/administration/canaux", label: "Canaux", exact: false, adminOnly: false },
+  // The back office's: only where the app signs in through it.
+  { href: "/administration/facturation", label: "Facturation", exact: false, adminOnly: true, backoffice: true },
 ];
 
 // Le cadre de l'administration. Membres et Instances, pour les admins, sont deux listes à lire :
 // tout s'y gère dans le back-office Yelema. Connecteurs et Canaux, pour chacun, règlent sa propre
-// instance.
+// instance. Facturation, pour les admins, lit le forfait et les factures au back-office.
 export default function AdministrationLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { current } = useWorkspace();
-  const tabs = TABS.filter((t) => !t.adminOnly || current?.role === "admin");
+  const { authVia } = usePublicConfig();
+  const tabs = TABS.filter(
+    (t) => (!t.adminOnly || current?.role === "admin") && (!("backoffice" in t) || authVia === "backoffice")
+  );
 
   return (
     <>
