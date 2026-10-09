@@ -54,7 +54,26 @@ Ce document récapitule l'ensemble des fonctionnalités, optimisations et correc
 
 ---
 
-## 🛡️ 3. Ergonomie, Sécurité & Clean Code
+## 🔌 3. Serveurs MCP Personnalisés & Connecteur Drive en 1 clic
+
+### Gestion des serveurs MCP (`/parametres/mcp`)
+* **Nouvel onglet et page dédiés** ([`McpView.tsx`](file:///Ubuntu-24.04/home/christyb/mstudio/agent37-yelema-version/src/components/integrations/McpView.tsx)) :
+  * Liste des serveurs MCP connectés (incluant le serveur par défaut `apps` Composio).
+  * Modal d'ajout épuré respectant l'UI/UX Yelema avec 3 champs essentiels : **Nom du serveur**, **URL**, **Type d'authentification** (`None`, `Bearer token`, `OAuth`).
+  * Affichage conditionnel fluide du champ Bearer Token avec sécurisation des identifiants.
+  * Suppression directe des serveurs personnalisés avec boîte de dialogue de confirmation.
+* **Architecture directe sans base de données** ([`mcp.ts`](file:///Ubuntu-24.04/home/christyb/mstudio/agent37-yelema-version/src/lib/mcp.ts) & [`route.ts`](file:///Ubuntu-24.04/home/christyb/mstudio/agent37-yelema-version/src/app/api/agents/[id]/mcp/route.ts)) :
+  * Les serveurs sont directement écrits et synchronisés dans `~/.hermes/config.yaml` sur l'instance via le binaire Python de l'environnement virtuel Hermes.
+  * Disponibilité instantanée des outils MCP pour tous les experts de l'instance.
+
+### Connecteur Google Drive / OneDrive en 1 clic dans Livrables
+* **Bouton d'accès rapide dans l'onglet Fichiers** ([`FilesView.tsx`](file:///Ubuntu-24.04/home/christyb/mstudio/agent37-yelema-version/src/components/files/FilesView.tsx)) :
+  * Intégration d'un bouton d'action directe dans la barre d'outils et le menu mobile pour connecter son Google Drive / OneDrive via Composio.
+  * Badge d'état visuel en temps réel (`Drive connecté`) dès que l'intégration est active.
+
+---
+
+## 🛡️ 4. Ergonomie, Sécurité & Clean Code
 
 ### Suppression des pages d'erreur 404 (UX fluide)
 * **Gestionnaire global [`not-found.tsx`](file:///Ubuntu-24.04/home/christyb/mstudio/agent37-yelema-version/src/app/not-found.tsx)** :
@@ -75,11 +94,9 @@ Ce document récapitule l'ensemble des fonctionnalités, optimisations et correc
 
 ---
 
-## 📊 Résumé des statistiques Git
+## 📊 Résumé des validations techniques
 
 ```text
-34 fichiers modifiés / créés
-+1462 ajouts / -105 suppressions
 Validation TypeScript : 0 erreur (tsc --noEmit)
 Validation Build Next.js : 100% succès (next build)
 ```

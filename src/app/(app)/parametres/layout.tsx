@@ -8,9 +8,10 @@ const TABS = [
   { href: "/parametres/equipe", label: "Équipe" },
   { href: "/parametres/connecteurs", label: "Connecteurs" },
   { href: "/parametres/canaux", label: "Canaux" },
+  { href: "/parametres/mcp", label: "MCP" },
 ];
 
-// The settings frame: the "Paramètres" title and the Équipe / Connecteurs / Canaux tabs.
+// The settings frame: the "Paramètres" title and the Équipe / Connecteurs / Canaux / MCP tabs.
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 

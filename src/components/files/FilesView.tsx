@@ -12,6 +12,7 @@ import {
 } from "react";
 import {
   ArrowUp,
+  Cloud,
   ChevronDown,
   ChevronRight,
   Download,
@@ -35,6 +36,8 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+import { toast } from "sonner";
+import { apiFetch } from "@/lib/api";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -98,6 +101,48 @@ export function FilesView({ agentId, root, rootLabel }: { agentId: string; root:
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [driveConnecting, setDriveConnecting] = useState(false);
+  const [driveConnected, setDriveConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    apiFetch<{ connections: Array<{ toolkitSlug?: string; status?: string }> }>(
+      `/api/agents/${agentId}/integrations/connections`
+    )
+      .then((res) => {
+        if (active) {
+          const isConn = (res.connections || []).some(
+            (c) => (c.toolkitSlug === "googledrive" || c.toolkitSlug === "one_drive") && c.status?.toUpperCase() === "ACTIVE"
+          );
+          setDriveConnected(isConn);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [agentId]);
+
+  const handleConnectDrive = async () => {
+    try {
+      setDriveConnecting(true);
+      const res = await apiFetch<{ redirectUrl: string }>(
+        `/api/agents/${agentId}/integrations/connect`,
+        {
+          method: "POST",
+          body: JSON.stringify({ toolkit: "googledrive" }),
+        }
+      );
+      if (res.redirectUrl) {
+        window.open(res.redirectUrl, "_blank");
+        toast.info("Autorisez l'accès à Google Drive dans la fenêtre ouverte.");
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Impossible d'initialiser la connexion à Google Drive.");
+    } finally {
+      setDriveConnecting(false);
+    }
+  };
   const uploadRef = useRef<HTMLInputElement>(null);
   const folderUploadRef = useRef<HTMLInputElement>(null);
   const crumbRef = useRef<HTMLElement>(null);
@@ -274,6 +319,37 @@ export function FilesView({ agentId, root, rootLabel }: { agentId: string; root:
           {selectedEntry && !editingPath && (
             <SelectedActions entry={selectedEntry} agentId={agentId} onRename={startRename} onDelete={askDelete} />
           )}
+
+          {driveConnected ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs text-ok border-ok/30 bg-ok/5 hover:bg-ok/10"
+              title="Google Drive connecté à votre espace"
+              onClick={() => toast.success("Google Drive est connecté et accessible par vos experts.")}
+            >
+              <span className="h-2 w-2 rounded-full bg-ok" />
+              <span className="hidden @3xl:inline">Drive connecté</span>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleConnectDrive}
+              disabled={driveConnecting}
+              className="gap-1.5 text-xs font-medium text-ink hover:text-brand"
+              title="Connecter Google Drive"
+            >
+              {driveConnecting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" />
+              ) : (
+                <Cloud className="h-3.5 w-3.5 text-brand" />
+              )}
+              <span className="hidden @3xl:inline">Connecter son Drive</span>
+            </Button>
+          )}
           <ViewToggle value={viewMode} onChange={setViewMode} />
           <Button
             type="button"
@@ -326,6 +402,11 @@ export function FilesView({ agentId, root, rootLabel }: { agentId: string; root:
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem onSelect={handleConnectDrive} disabled={driveConnecting}>
+              <Cloud className="text-brand" />
+              {driveConnected ? "Google Drive (Connecté)" : "Connecter Google Drive"}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={pickFiles} disabled={!canWrite || fb.uploading}>
               <Upload />
               Importer des fichiers
