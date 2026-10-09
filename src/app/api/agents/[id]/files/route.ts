@@ -14,7 +14,7 @@ export async function DELETE(request: Request, { params }: Ctx) {
     const { id } = await params;
     await requireAgentAccess(id);
 
-    const path = assertInDrive(requireTrimmed(new URL(request.url).searchParams.get("path"), "path is required"));
+    const path = assertInDrive(requireTrimmed(new URL(request.url).searchParams.get("path"), "Demande incomplète."));
     if (isDriveRoot(path)) throw new ApiError(400, "invalid_path", "Le dossier racine ne peut pas être supprimé");
     return json(await agent37.deleteFile(id, path));
   } catch (e) {
@@ -30,9 +30,9 @@ export async function PATCH(request: Request, { params }: Ctx) {
     await requireAgentAccess(id);
 
     const { from, to } = await readJson<{ from?: string; to?: string }>(request);
-    const source = assertInDrive(requireTrimmed(from, "from is required"));
+    const source = assertInDrive(requireTrimmed(from, "Demande incomplète."));
     if (isDriveRoot(source)) throw new ApiError(400, "invalid_path", "Le dossier racine ne peut pas être déplacé");
-    return json(await agent37.moveFile(id, source, assertInDrive(requireTrimmed(to, "to is required"))));
+    return json(await agent37.moveFile(id, source, assertInDrive(requireTrimmed(to, "Demande incomplète."))));
   } catch (e) {
     return handleError(e);
   }

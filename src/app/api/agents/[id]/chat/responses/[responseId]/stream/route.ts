@@ -20,7 +20,7 @@ export async function GET(_request: Request, { params }: Ctx) {
     });
 
     if (!upstream.ok || !upstream.body) {
-      const message = await upstreamErrorMessage(upstream, "chat/responses/stream", "Could not reattach to the response");
+      const message = await upstreamErrorMessage(upstream, "chat/responses/stream", "La réponse en cours n’a pas pu être reprise.");
       throw new ApiError(upstream.status || 502, "upstream_error", message);
     }
 

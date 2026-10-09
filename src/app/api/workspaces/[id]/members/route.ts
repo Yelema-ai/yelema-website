@@ -1,6 +1,6 @@
 import { requireMember, requireUser } from "@/lib/auth";
 import { backoffice, BackofficeError } from "@/lib/backoffice";
-import { ApiError, handleError, json } from "@/lib/http";
+import { ApiError, handleError, json, dbError } from "@/lib/http";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { currentPrincipal, readSession } from "@/lib/session";
 import type { Invitation, Role, WorkspaceMember } from "@/lib/types";
@@ -16,7 +16,7 @@ export async function GET(_request: Request, { params }: Ctx) {
     if (authViaBackoffice()) return json({ members: await backofficeMembers(role), invitations: [], role });
 
     const { data: members, error } = await db.rpc("get_workspace_members", { p_workspace: id });
-    if (error) throw new ApiError(500, "db_error", error.message);
+    if (error) throw dbError(error);
 
     let invitations: Invitation[] = [];
     if (role === "admin") {
@@ -61,7 +61,7 @@ async function backofficeMembers(role: Role): Promise<WorkspaceMember[]> {
 // Invitations are disabled: the Yelema back-office creates every member and their agent.
 export async function POST() {
   try {
-    throw new ApiError(403, "forbidden", "Members are managed by the Yelema back-office");
+    throw new ApiError(403, "forbidden", "Les membres sont gérés par Yelema.");
   } catch (e) {
     return handleError(e);
   }

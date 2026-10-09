@@ -2,7 +2,7 @@ import { requireUser } from "@/lib/auth";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 import { currentPrincipal } from "@/lib/session";
-import { handleError, json, ApiError } from "@/lib/http";
+import { handleError, json, ApiError, dbError } from "@/lib/http";
 import type { BoMe } from "@/lib/backoffice";
 import type { Role, Workspace, WorkspaceWithRole } from "@/lib/types";
 
@@ -18,7 +18,7 @@ export async function GET() {
     const pinned = await pinnedWorkspaceId();
     if (pinned) query = query.eq("workspace_id", pinned);
     const { data, error } = await query;
-    if (error) throw new ApiError(500, "db_error", error.message);
+    if (error) throw dbError(error);
 
     const workspaces: WorkspaceWithRole[] = (data ?? [])
       .map((row) => {
@@ -44,7 +44,7 @@ export async function POST() {
   try {
     await requireUser();
     // One client per deployment: the workspace is created and owned by the Yelema back-office.
-    throw new ApiError(403, "forbidden", "Workspaces are managed by the back-office");
+    throw new ApiError(403, "forbidden", "Les espaces sont gérés par Yelema.");
   } catch (e) {
     return handleError(e);
   }

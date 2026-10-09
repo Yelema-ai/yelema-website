@@ -1,6 +1,6 @@
 import { requireAdmin, requireUser } from "@/lib/auth";
 import { backoffice, BackofficeError } from "@/lib/backoffice";
-import { ApiError, handleError, json } from "@/lib/http";
+import { ApiError, handleError, json, dbError } from "@/lib/http";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { readSession } from "@/lib/session";
 import type { WorkspaceInstance } from "@/lib/types";
@@ -19,7 +19,7 @@ export async function GET(_request: Request, { params }: Ctx) {
     if (authViaBackoffice()) {
       // The back office lists them itself, already without any instance id.
       const session = await readSession();
-      if (!session) throw new ApiError(401, "unauthorized", "Sign in required");
+      if (!session) throw new ApiError(401, "unauthorized", "Connectez-vous pour continuer.");
       try {
         const items = await backoffice.instances(session.accessToken);
         return json({
@@ -48,7 +48,7 @@ export async function GET(_request: Request, { params }: Ctx) {
         .order("created_at", { ascending: true }),
       db.rpc("get_workspace_members", { p_workspace: id }),
     ]);
-    if (error) throw new ApiError(500, "db_error", error.message);
+    if (error) throw dbError(error);
 
     const emailById = new Map(((members ?? []) as { user_id: string; email: string }[]).map((m) => [m.user_id, m.email]));
     const email = (userId: string | null) => (userId && emailById.get(userId)) || null;

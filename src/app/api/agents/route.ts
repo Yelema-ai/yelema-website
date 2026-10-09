@@ -3,7 +3,7 @@ import { backofficeAgentRow, requireMember, requireUser } from "@/lib/auth";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { currentInstance } from "@/lib/session";
 import { templateAppPorts } from "@/config/agents";
-import { ApiError, handleError, json } from "@/lib/http";
+import { ApiError, handleError, json, dbError } from "@/lib/http";
 import type { Agent, AgentRow, MergedAgent, Template } from "@/lib/types";
 
 // The image catalog barely changes, but the dashboard polls this route every 5s while any agent is
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   try {
     const { db, user } = await requireUser();
     const workspaceId = new URL(request.url).searchParams.get("workspace");
-    if (!workspaceId) throw new ApiError(400, "invalid_request", "workspace query param is required");
+    if (!workspaceId) throw new ApiError(400, "invalid_request", "Demande incomplète.");
 
     const role = await requireMember(db, workspaceId, user.id);
 
@@ -63,7 +63,7 @@ export async function GET(request: Request) {
       .eq("workspace_id", workspaceId)
       .eq("owner_user_id", user.id)
       .order("created_at", { ascending: false });
-    if (error) throw new ApiError(500, "db_error", error.message);
+    if (error) throw dbError(error);
 
     // "Created by": the member each agent belongs to, by email (one RPC for the whole workspace).
     const { data: members } = await db.rpc("get_workspace_members", { p_workspace: workspaceId });
@@ -136,7 +136,7 @@ export async function GET(request: Request) {
 // Agents are created by the Yelema back-office only: one per member, provisioned with their account.
 export async function POST() {
   try {
-    throw new ApiError(403, "forbidden", "Agents are managed by the Yelema back-office");
+    throw new ApiError(403, "forbidden", "Les instances sont gérées par Yelema.");
   } catch (e) {
     return handleError(e);
   }

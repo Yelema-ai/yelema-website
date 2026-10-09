@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: Ctx) {
 
     const form = await request.formData();
     const file = form.get("file");
-    if (!(file instanceof File)) throw new ApiError(400, "invalid_request", "file is required");
+    if (!(file instanceof File)) throw new ApiError(400, "invalid_request", "Demande incomplète.");
 
     // Short random prefix keeps concurrent uploads of the same filename from clobbering each other;
     // strip path separators from the original name so it stays a single basename in that folder.
@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: Ctx) {
       headers: { "Content-Type": file.type || "application/octet-stream" },
       body: file,
     });
-    await assertUpstreamOk(upstream, "chat/files", "Upload failed", "upload_error");
+    await assertUpstreamOk(upstream, "chat/files", "Le fichier n’a pas pu être envoyé. Réessayez.", "upload_error");
     const text = await upstream.text().catch(() => "");
 
     // Return the gateway's resolved path so the composer can reference it in the turn's `files`.

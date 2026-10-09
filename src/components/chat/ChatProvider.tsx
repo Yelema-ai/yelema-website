@@ -189,7 +189,7 @@ export function ChatProvider({
         // concurrently) and restore the open thread.
         if (removed) setSessions((s) => (s.some((x) => x.session_id === sessionId) ? s : [removed, ...s]));
         if (wasActive) setOpenThread(sessionId);
-        toast.error((e as Error).message || "Couldn't delete that chat.");
+        toast.error((e as Error).message || "La conversation n’a pas pu être supprimée.");
       }
     },
     [agentId, q, activeSessionId, sessions, setOpenThread]
@@ -208,7 +208,7 @@ export function ChatProvider({
         });
       } catch (e) {
         setSessions((s) => s.map((x) => (x.session_id === sessionId ? { ...x, title: prev } : x))); // rollback
-        toast.error((e as Error).message || "Couldn't rename that chat.");
+        toast.error((e as Error).message || "La conversation n’a pas pu être renommée.");
       }
     },
     [agentId, q, sessions]

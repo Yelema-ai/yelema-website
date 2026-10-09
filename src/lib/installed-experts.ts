@@ -5,7 +5,7 @@ import { expertDisplayName } from "@/lib/experts";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { currentInstance } from "@/lib/session";
 import { listInstanceProfiles } from "@/lib/hermes-profiles";
-import { ApiError } from "@/lib/http";
+import { ApiError, dbError } from "@/lib/http";
 import type { AgentRow, Expert } from "@/lib/types";
 
 // The profiles installed on the instance a user owns (admins included: nobody sees a colleague's).
@@ -37,7 +37,7 @@ export async function visibleAgents(db: DB, workspaceId: string, userId: string)
     .eq("workspace_id", workspaceId)
     .eq("owner_user_id", userId)
     .order("created_at", { ascending: false });
-  if (error) throw new ApiError(500, "db_error", error.message);
+  if (error) throw dbError(error);
   return (data ?? []) as AgentRow[];
 }
 

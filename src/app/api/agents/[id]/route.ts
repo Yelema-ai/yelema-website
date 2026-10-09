@@ -9,7 +9,7 @@ export async function PATCH(_request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
     await requireAgentAccess(id);
-    throw new ApiError(403, "forbidden", "Agent names are managed by the Yelema back-office");
+    throw new ApiError(403, "forbidden", "Le nom des instances est géré par Yelema.");
   } catch (e) {
     return handleError(e);
   }
@@ -18,7 +18,7 @@ export async function PATCH(_request: Request, { params }: Ctx) {
 // Agents are created and deleted by the Yelema back-office only (it also stops their billing).
 export async function DELETE() {
   try {
-    throw new ApiError(403, "forbidden", "Agents are managed by the Yelema back-office");
+    throw new ApiError(403, "forbidden", "Les instances sont gérées par Yelema.");
   } catch (e) {
     return handleError(e);
   }

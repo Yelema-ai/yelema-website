@@ -35,13 +35,13 @@ export async function PATCH(request: Request, { params }: Ctx) {
 
     const { title } = await readJson<{ title?: string }>(request);
     const trimmed = (title ?? "").trim();
-    if (!trimmed) throw new ApiError(400, "invalid_request", "title is required");
+    if (!trimmed) throw new ApiError(400, "invalid_request", "Donnez un nom à la conversation.");
 
     try {
       return json(await agent37.renameSession(id, sessionId, trimmed.slice(0, 200), query));
     } catch (e) {
       if (e instanceof Agent37Error && (e.status === 404 || e.status === 405)) {
-        throw new ApiError(501, "rename_unsupported", "Renaming chats isn't supported on this agent build yet.");
+        throw new ApiError(501, "rename_unsupported", "Cet espace doit être mis à jour pour renommer une conversation. Contactez Yelema.");
       }
       throw e;
     }

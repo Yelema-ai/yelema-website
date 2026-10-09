@@ -109,6 +109,12 @@ export async function POST(request: Request, { params }: Ctx) {
 // got to, and `finish` saves a scan that has landed. Saving restarts the gateway, so the scan is
 // reported first and applied on the call that answers it, so the screen never keeps asking for a
 // code it already got.
+// What the instance says about a failed pairing (English, technical) is for the server log.
+function pairingFailed(detail: string | null | undefined, message: string): ApiError {
+  if (detail) console.error("[channels] pairing failed:", detail);
+  return new ApiError(502, "pairing_failed", message);
+}
+
 async function pairWhatsapp(agentId: string, pairingId: string | undefined, finish: boolean): Promise<WhatsappPairingState> {
   const session: WhatsappPairing = pairingId
     ? await readWhatsappPairing(agentId, pairingId)
@@ -119,12 +125,12 @@ async function pairWhatsapp(agentId: string, pairingId: string | undefined, fini
     if (!finish) return { pairing_id: id, status: "linking" };
     const applied = await applyWhatsappPairing(agentId, id);
     if (applied.ok !== true) {
-      throw new ApiError(502, "pairing_failed", applied.detail || "WhatsApp est relié mais n’a pas pu être enregistré. Réessayez.");
+      throw pairingFailed(applied.detail, "WhatsApp est relié mais n’a pas pu être enregistré. Réessayez.");
     }
     return { pairing_id: id, status: "connected", phone: session.account_phone ?? null };
   }
   if (session.status === "error") {
-    throw new ApiError(502, "pairing_failed", session.error || "La connexion à WhatsApp a échoué.");
+    throw pairingFailed(session.error, "La connexion à WhatsApp a échoué.");
   }
   if (session.status === "waiting" && session.qr_payload) {
     return { pairing_id: id, status: "waiting", qr_data_url: await QRCode.toDataURL(session.qr_payload, QR_OPTIONS) };
@@ -144,7 +150,7 @@ async function pairTelegram(agentId: string, pairingId: string | undefined, botN
     const name = (botName ?? "").trim().slice(0, BOT_NAME_MAX) || "Agent";
     const started = await startTelegramPairing(agentId, name);
     if (!started.pairing_id || !(started.qr_payload || started.deep_link)) {
-      throw new ApiError(502, "pairing_failed", started.detail || "La connexion à Telegram est indisponible pour le moment. Réessayez.");
+      throw pairingFailed(started.detail, "La connexion à Telegram est indisponible pour le moment. Réessayez.");
     }
     return {
       pairing_id: started.pairing_id,
@@ -159,13 +165,13 @@ async function pairTelegram(agentId: string, pairingId: string | undefined, botN
   if (session.status === "waiting") return { pairing_id: pairingId, status: "waiting" };
   if (session.status !== "ready") {
     if (/no longer available|expired|claimed|not found/i.test(session.detail ?? "")) return { pairing_id: pairingId, status: "expired" };
-    throw new ApiError(502, "pairing_failed", session.detail || "La connexion à Telegram a échoué. Réessayez.");
+    throw pairingFailed(session.detail, "La connexion à Telegram a échoué. Réessayez.");
   }
   const owner = session.owner_user_id == null ? "" : String(session.owner_user_id);
   if (!/^\d+$/.test(owner)) throw new ApiError(502, "pairing_failed", "Telegram n’a pas indiqué à qui appartient le nouveau bot. Recommencez.");
   const applied = await applyTelegramPairing(agentId, pairingId, [owner]);
   if (applied.ok !== true) {
-    throw new ApiError(502, "pairing_failed", applied.detail || "Le bot a été créé mais n’a pas pu être enregistré. Réessayez.");
+    throw pairingFailed(applied.detail, "Le bot a été créé mais n’a pas pu être enregistré. Réessayez.");
   }
   return { pairing_id: pairingId, status: "connected", bot_username: applied.bot_username ?? session.bot_username ?? null };
 }

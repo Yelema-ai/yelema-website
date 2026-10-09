@@ -6,7 +6,7 @@ import { ApiError, handleError } from "@/lib/http";
 export async function PATCH() {
   try {
     await requireUser();
-    throw new ApiError(403, "forbidden", "The workspace name is managed by the Yelema back-office");
+    throw new ApiError(403, "forbidden", "Le nom de l’espace est géré par Yelema.");
   } catch (e) {
     return handleError(e);
   }
@@ -16,7 +16,7 @@ export async function DELETE() {
   try {
     await requireUser();
     // One client per deployment: the workspace is created and owned by the Yelema back-office.
-    throw new ApiError(403, "forbidden", "Workspaces are managed by the back-office");
+    throw new ApiError(403, "forbidden", "Les espaces sont gérés par Yelema.");
   } catch (e) {
     return handleError(e);
   }

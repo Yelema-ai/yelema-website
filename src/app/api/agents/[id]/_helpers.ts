@@ -12,19 +12,14 @@ export function requireTrimmed(value: string | null | undefined, message: string
   return trimmed;
 }
 
-// Turn an Agent37 instance's error body into a member-safe message. The Agents API returns
-// `{ error: { message } }` or `{ message }`; a non-JSON body (e.g. a gateway HTML 502) is logged
-// server-side under `context` and collapsed to `fallback` so we never echo internals. Consumes the
-// Response body — call only on the failure path (the success path keeps `upstream.body` intact).
+// What the member is told when an instance refuses or fails: always `fallback`, a sentence written
+// here in French. What the instance answered (English, technical, sometimes an HTML page) goes to
+// the server log under `context`, never to the browser. Consumes the Response body — call only on
+// the failure path (the success path keeps `upstream.body` intact).
 export async function upstreamErrorMessage(upstream: Response, context: string, fallback: string): Promise<string> {
   const text = await upstream.text().catch(() => "");
-  try {
-    const j = JSON.parse(text) as { error?: { message?: string }; message?: string };
-    return j.error?.message || j.message || fallback;
-  } catch {
-    if (text) console.error(`[${context}] non-JSON upstream`, upstream.status, text.slice(0, 500));
-    return fallback;
-  }
+  console.error(`[${context}] upstream ${upstream.status}`, text.slice(0, 500));
+  return fallback;
 }
 
 // Throw a mapped ApiError when an Agent37 instance Response failed, reading its body once for the

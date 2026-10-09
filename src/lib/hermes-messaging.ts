@@ -37,13 +37,13 @@ async function dashboard<T>(agentId: string, method: string, path: string, body?
   const marked = result.stdout.indexOf(OUTPUT_MARKER);
   if (marked < 0) {
     console.error(`[channels] ${method} ${path} failed on ${agentId}`, result.stderr || result.stdout);
-    throw new ApiError(502, "channel_unavailable", "The agent's messaging setup is not reachable right now. Try again shortly.");
+    throw new ApiError(502, "channel_unavailable", "Les canaux de vos experts ne répondent pas pour le moment. Réessayez dans un instant.");
   }
   try {
     return JSON.parse(result.stdout.slice(marked + OUTPUT_MARKER.length).trim()) as T;
   } catch {
     console.error(`[channels] ${method} ${path} returned no JSON on ${agentId}`, result.stdout.slice(marked, marked + 500));
-    throw new ApiError(502, "channel_unavailable", "The agent's messaging setup returned an unexpected answer. Try again shortly.");
+    throw new ApiError(502, "channel_unavailable", "Les canaux de vos experts ne répondent pas pour le moment. Réessayez dans un instant.");
   }
 }
 
@@ -61,7 +61,7 @@ export async function listPlatforms(agentId: string): Promise<MessagingPlatform[
 
 export async function getPlatform(agentId: string, platformId: string): Promise<MessagingPlatform> {
   const platform = (await listPlatforms(agentId)).find((p) => p.id === platformId);
-  if (!platform) throw new ApiError(404, "not_found", "This agent does not support that channel");
+  if (!platform) throw new ApiError(404, "not_found", "Ce canal n’est pas disponible.");
   return platform;
 }
 
@@ -86,7 +86,8 @@ export async function writePlatform(
     update
   );
   if (result.ok !== true) {
-    throw new ApiError(502, "channel_write_failed", result.detail || "The agent refused that channel configuration.");
+    console.error(`[channels] ${platformId} refused on ${agentId}`, result.detail);
+    throw new ApiError(502, "channel_write_failed", "Ce canal n’a pas pu être enregistré. Vérifiez les informations saisies, puis réessayez.");
   }
   if (result.hot_served !== true) await dashboard(agentId, "POST", "/api/gateway/restart");
 }

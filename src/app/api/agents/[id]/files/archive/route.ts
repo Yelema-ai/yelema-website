@@ -20,8 +20,8 @@ export async function GET(request: Request, { params }: Ctx) {
     const qs = `?path=${encodeURIComponent(path)}`;
 
     const upstream = await instanceFetch(id, `/v1/files/archive${qs}`);
-    await assertUpstreamOk(upstream, "files/archive", "Download failed", "download_error");
-    if (!upstream.body) throw new ApiError(502, "download_error", "Download failed");
+    await assertUpstreamOk(upstream, "files/archive", "Le dossier n’a pas pu être téléchargé. Réessayez.", "download_error");
+    if (!upstream.body) throw new ApiError(502, "download_error", "Le dossier n’a pas pu être téléchargé. Réessayez.");
 
     const headers = new Headers();
     const ct = upstream.headers.get("Content-Type");

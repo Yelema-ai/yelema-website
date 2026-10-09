@@ -271,7 +271,9 @@ export function useChat({ agentId, profile, sessionId, onSessionCreated, onActiv
               case "response.failed": {
                 sawTerminal = true;
                 const err = data.error as { message?: string } | undefined;
-                streamError = err?.message || "The agent failed to respond.";
+                // The instance's own reason is technical and in English: it stays in the browser console.
+                if (err?.message) console.error("[chat] response.failed:", err.message);
+                streamError = "Votre expert n’a pas pu répondre. Réessayez dans un instant.";
                 break;
               }
             }
@@ -504,9 +506,9 @@ export function useChat({ agentId, profile, sessionId, onSessionCreated, onActiv
           // A 409 means the previous turn is still wrapping up (session busy) — soften it. The
           // status carries the semantics, so we don't have to match the error text.
           if (res.status === 409) {
-            throw new Error("Your agent is still finishing the previous message. Give it a moment and try again.");
+            throw new Error("Votre expert termine sa réponse précédente. Patientez un instant, puis réessayez.");
           }
-          throw new Error(await readApiError(res, "Chat failed"));
+          throw new Error(await readApiError(res, "Le message n’a pas pu être envoyé"));
         }
 
         await consume(run, res.body);
@@ -518,7 +520,7 @@ export function useChat({ agentId, profile, sessionId, onSessionCreated, onActiv
         forgetRun(run);
         if (viewed) {
           setIsStreaming(false);
-          if ((e as Error).name !== "AbortError") setError((e as Error).message || "Something went wrong.");
+          if ((e as Error).name !== "AbortError") setError((e as Error).message || "Une erreur est survenue. Réessayez dans un instant.");
         }
       }
     },

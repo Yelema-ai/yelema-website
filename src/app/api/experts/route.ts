@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   try {
     const { db, user } = await requireUser();
     const workspaceId = new URL(request.url).searchParams.get("workspace");
-    if (!workspaceId) throw new ApiError(400, "invalid_request", "workspace query param is required");
+    if (!workspaceId) throw new ApiError(400, "invalid_request", "Demande incomplète.");
 
     await requireMember(db, workspaceId, user.id);
     return json(await userExperts(await visibleAgents(db, workspaceId, user.id)));

@@ -13,7 +13,7 @@ export async function POST(request: Request, { params }: Ctx) {
     const { id } = await params;
     await requireAgentAccess(id);
 
-    const path = assertInDrive(requireTrimmed(new URL(request.url).searchParams.get("path"), "path is required"));
+    const path = assertInDrive(requireTrimmed(new URL(request.url).searchParams.get("path"), "Demande incomplète."));
     return json(await agent37.makeDir(id, path), 201);
   } catch (e) {
     return handleError(e);

@@ -43,7 +43,7 @@ async function callBot<T>(token: string, method: string, query = ""): Promise<Te
     });
     return (await res.json()) as TelegramResponse<T>;
   } catch {
-    throw new ApiError(502, "telegram_unreachable", "Telegram did not answer. Try again.");
+    throw new ApiError(502, "telegram_unreachable", "Telegram ne répond pas. Réessayez.");
   }
 }
 
@@ -58,7 +58,7 @@ interface TelegramUser {
 export async function checkBotToken(token: string): Promise<TelegramBotCheck> {
   const response = await callBot<TelegramUser>(token, "getMe");
   if (!response.ok || !response.result?.username) {
-    throw new ApiError(400, "invalid_bot_token", "Telegram rejected that token. Copy it again from @BotFather.");
+    throw new ApiError(400, "invalid_bot_token", "Telegram refuse ce jeton. Copiez-le de nouveau depuis @BotFather.");
   }
   return { username: response.result.username, name: response.result.first_name ?? null };
 }

@@ -39,7 +39,7 @@ export async function getSession(): Promise<{ user: SessionUser | null }> {
 
 export async function requireUser() {
   const { user } = await getSession();
-  if (!user) throw new ApiError(401, "unauthorized", "Sign in required");
+  if (!user) throw new ApiError(401, "unauthorized", "Connectez-vous pour continuer.");
   return { db: createAdminClient(), user };
 }
 
@@ -66,13 +66,13 @@ export async function getRole(db: DB, workspaceId: string, userId: string): Prom
 // 404 (not 403) so we don't leak whether the workspace exists.
 export async function requireMember(db: DB, workspaceId: string, userId: string): Promise<Role> {
   const role = await getRole(db, workspaceId, userId);
-  if (!role) throw new ApiError(404, "not_found", "Workspace not found");
+  if (!role) throw new ApiError(404, "not_found", "Espace introuvable.");
   return role;
 }
 
 export async function requireAdmin(db: DB, workspaceId: string, userId: string): Promise<void> {
   const role = await getRole(db, workspaceId, userId);
-  if (role !== "admin") throw new ApiError(403, "forbidden", "Admin role required");
+  if (role !== "admin") throw new ApiError(403, "forbidden", "Cette action est réservée aux administrateurs.");
 }
 
 // The signed-in user's own instance, in the shape of an `agents` row, when the back office is the
@@ -103,11 +103,11 @@ export async function getAgentRow(db: DB, agent37Id: string): Promise<AgentRow> 
   if (authViaBackoffice()) {
     // Any id other than the caller's own instance does not exist for them.
     const row = await backofficeAgentRow();
-    if (!row || row.agent37_id !== agent37Id) throw new ApiError(404, "not_found", "Agent not found");
+    if (!row || row.agent37_id !== agent37Id) throw new ApiError(404, "not_found", "Expert introuvable.");
     return row;
   }
   const { data } = await db.from("agents").select("*").eq("agent37_id", agent37Id).maybeSingle();
-  if (!data) throw new ApiError(404, "not_found", "Agent not found");
+  if (!data) throw new ApiError(404, "not_found", "Expert introuvable.");
   return data as AgentRow;
 }
 
@@ -130,9 +130,9 @@ export async function requireAgentAccess(agent37Id: string, access: "owner" | "a
   const { db, user } = await requireUser();
   const row = await getAgentRow(db, agent37Id);
   const role = await agentAccessRole(db, row, user.id);
-  if (!role) throw new ApiError(404, "not_found", "Agent not found");
+  if (!role) throw new ApiError(404, "not_found", "Expert introuvable.");
   if (access === "admin" && role !== "admin") {
-    throw new ApiError(403, "forbidden", "Admin role required");
+    throw new ApiError(403, "forbidden", "Cette action est réservée aux administrateurs.");
   }
   return { db, user, row, role };
 }
