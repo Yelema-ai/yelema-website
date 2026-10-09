@@ -271,7 +271,7 @@ export interface ModelsResponse {
 
 // The input the chat BFF substitutes for a files-only turn (the Agents API requires a non-empty
 // `input`).
-export const FILES_ONLY_PROMPT = "Please review the attached file(s).";
+export const FILES_ONLY_PROMPT = "Voici des fichiers en pièce jointe. Prenez-en connaissance.";
 
 // One message in a conversation's history (GET /v1/sessions/{id}).
 export interface ChatHistoryMessage {

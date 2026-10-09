@@ -202,11 +202,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-            <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 text-ink-2">
-                <input type="checkbox" name="remember" defaultChecked className="accent-brand" />
-                Restez connecté
-              </label>
+            <div className="flex justify-end text-sm">
               <button type="button" onClick={() => go("forgot")} className="font-semibold text-link">
                 Mot de passe oublié ?
               </button>

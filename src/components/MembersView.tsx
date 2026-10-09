@@ -17,8 +17,16 @@ function formatDate(iso: string | null) {
   return iso ? new Date(iso).toLocaleDateString("fr-FR") : "—";
 }
 
-// The back office's word for a member's state, in French; anything else is shown as it comes.
-const STATUS: Record<string, string> = { active: "Actif", suspended: "Suspendu", pending: "En attente", provisioning: "En installation" };
+// The back office's word for a member's state, in French; one it adds later reads « Inconnu »
+// rather than as a raw key.
+const STATUS: Record<string, string> = {
+  active: "Actif",
+  suspended: "Suspendu",
+  pending: "En attente",
+  provisioning: "En installation",
+  failed: "Installation en échec",
+  to_remove: "En cours de retrait",
+};
 
 export function MembersView() {
   const { current } = useWorkspace();
@@ -79,7 +87,7 @@ export function MembersView() {
                   <td className="px-4 py-3">
                     <Badge variant={m.role === "admin" ? "default" : "outline"}>{roleLabel(m.role)}</Badge>
                   </td>
-                  {detailed && <td className="px-4 py-3">{m.status ? (STATUS[m.status] ?? m.status) : "—"}</td>}
+                  {detailed && <td className="px-4 py-3">{m.status ? (STATUS[m.status] ?? "Inconnu") : "—"}</td>}
                   {detailed && <td className="px-4 py-3">{m.instance_name ?? "—"}</td>}
                   <td className="px-4 py-3 text-muted-foreground">{formatDate(m.created_at)}</td>
                 </tr>

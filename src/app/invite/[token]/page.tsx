@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { authViaBackoffice } from "@/lib/runtime-config";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 import { AcceptInvite } from "@/components/AcceptInvite";
 import { AuthShell, AuthHeading } from "@/components/auth/AuthShell";
@@ -9,6 +10,9 @@ type Ctx = { params: Promise<{ token: string }> };
 
 export default async function InvitePage({ params }: Ctx) {
   const { token } = await params;
+  // Invitations only exist with this app's own (Supabase) sign-in: through the back office, members
+  // are created there, and this address leads nowhere.
+  if (authViaBackoffice()) notFound();
   const { user } = await getSession();
   if (!user) redirect(`/login?next=${encodeURIComponent(`/invite/${token}`)}`);
 

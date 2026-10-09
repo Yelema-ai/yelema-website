@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { House, LayoutDashboard, PanelLeftClose, Settings2, UserPlus } from "lucide-react";
+import { House, PanelLeftClose, Settings2, UserPlus } from "lucide-react";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { AccountMenu } from "@/components/AccountMenu";
@@ -11,13 +11,11 @@ import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { ExpertItem } from "@/components/experts/ExpertItem";
 import { cn } from "@/lib/utils";
 
-// Le menu des maquettes. L'entrée sans écran reste visible mais inerte : on montre la forme du
-// produit sans promettre une page qui n'existe pas (décision du 2 octobre 2026). Pas de « Chat
-// entreprise » : chaque membre a sa propre instance, il n'y a pas de discussion commune.
+// Pas de « Chat entreprise » : chaque membre a sa propre instance, il n'y a pas de discussion
+// commune. Une entrée n'apparaît ici que lorsque son écran existe.
 const NAV = [
   { href: "/", label: "Accueil", icon: House, exact: true },
-  { href: null, label: "Tableau de bord", icon: LayoutDashboard },
-  { href: "/recruter", label: "Recruter", icon: UserPlus },
+  { href: "/recruter", label: "Recruter", icon: UserPlus, exact: false },
 ] as const;
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
@@ -63,22 +61,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
       {NAV.map((item) => {
         const Icon = item.icon;
-        const active = item.href ? ("exact" in item && item.exact ? pathname === item.href : pathname.startsWith(item.href)) : false;
+        const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
         const base =
           "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors";
-        if (!item.href) {
-          return (
-            <span
-              key={item.label}
-              aria-disabled="true"
-              title="Bientôt disponible"
-              className={cn(base, "cursor-default text-ink-3/55", collapsed && "justify-center px-0")}
-            >
-              <Icon className="size-5 shrink-0" strokeWidth={1.9} />
-              {!collapsed && item.label}
-            </span>
-          );
-        }
         return (
           <Link
             key={item.label}

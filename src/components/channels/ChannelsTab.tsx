@@ -39,8 +39,9 @@ export function ChannelsTab({
   canManage: boolean;
 }) {
   // Reaching the harness runs a command inside the instance, which wakes a sleeper but cannot start a
-  // stopped agent.
-  const reachable = agent.live_status === "running" || agent.live_status === "sleeping";
+  // stopped agent. Only a state that says the instance is down gives up without trying: an unknown
+  // one means it could not be read, not that it is stopped.
+  const reachable = !["stopped", "deleting", "deleted", "failed", "error"].includes(agent.live_status ?? "");
 
   const [channels, setChannels] = useState<MessagingPlatform[] | null>(null);
   const [loading, setLoading] = useState(false);

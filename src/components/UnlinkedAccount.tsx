@@ -19,14 +19,14 @@ export function UnlinkedAccount({ email }: { email: string }) {
       <div className="max-w-sm space-y-4">
         <h1 className="text-xl font-semibold tracking-tight">{branding.appName}</h1>
         <div className="rounded-lg border bg-card p-6">
-          <p className="font-medium">Account not linked</p>
+          <p className="font-medium">Compte non rattaché</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {email ? <span className="font-medium text-foreground">{email}</span> : "This account"} isn&apos;t
-            attached to this organization yet. Contact your administrator for an invitation.
+            {email ? <span className="font-medium text-foreground">{email}</span> : "Ce compte"} n’est rattaché à
+            aucun espace Yelema pour le moment. Contactez l’administrateur de votre entreprise.
           </p>
         </div>
         <Button variant="outline" onClick={signOut}>
-          Log out
+          Se déconnecter
         </Button>
       </div>
     </main>

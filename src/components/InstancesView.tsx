@@ -1,5 +1,6 @@
 "use client";
 
+import { expertDisplayName } from "@/lib/experts";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
@@ -85,8 +86,8 @@ export function InstancesView() {
                   <td className="px-4 py-3">{i.member_email ?? "Non attribuée"}</td>
                   {detailed ? (
                     <>
-                      <td className="px-4 py-3">{i.state ? (STATE[i.state] ?? i.state) : "—"}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{i.experts?.length ? i.experts.join(", ") : "—"}</td>
+                      <td className="px-4 py-3">{i.state ? (STATE[i.state] ?? "Inconnu") : "—"}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{i.experts?.length ? i.experts.map(expertDisplayName).join(", ") : "—"}</td>
                     </>
                   ) : (
                     <td className="px-4 py-3 text-muted-foreground">{i.created_by_email ?? "Yelema"}</td>

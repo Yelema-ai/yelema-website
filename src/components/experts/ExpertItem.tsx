@@ -7,8 +7,7 @@ import { cn } from "@/lib/utils";
 /**
  * Une ligne d'Expert. Unité partagée : barre latérale, accueil, et tout écran qui en liste.
  *
- * Le sous-titre suit ce qu'on sait : le métier dès qu'il sera servi, l'instance porteuse en
- * attendant — ce qui reste utile, puisque plusieurs Experts partagent une instance.
+ * Le sous-titre suit ce qu'on sait : le métier que donne le catalogue, sinon le nom de l'instance.
  *
  * `compact` n'affiche que le visage (menu replié).
  */
@@ -23,12 +22,13 @@ export function ExpertItem({
   compact?: boolean;
   className?: string;
 }) {
-  const subtitle = expert.title ?? expert.role ?? expert.agentName ?? expert.agentId;
+  // Never the profile or instance id: a member has no use for either.
+  const subtitle = expert.title ?? expert.role ?? expert.agentName ?? "";
 
   return (
     <Link
       href={agentTabPath(expert.agentId, "chat", expert.profileId)}
-      title={`${expert.displayName} · ${expert.profileId}${expert.distribution ? ` · ${expert.distribution}` : ""}`}
+      title={expert.displayName}
       className={cn(
         "flex min-h-12 items-center gap-2.5 rounded-[11px] px-2 text-sm font-semibold transition-colors",
         active ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
