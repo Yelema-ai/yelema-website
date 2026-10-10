@@ -6,8 +6,8 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // api/composio-mcp is the instances' tool traffic: no browser session, its own token.
+  // api/composio-mcp and api/memory-mcp are the instances' traffic: no browser session, their own token.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/composio-mcp|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/composio-mcp|api/memory-mcp|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4)$).*)",
   ],
 };

@@ -1,6 +1,7 @@
 import "server-only";
 import type { ComposioCall } from "@/lib/composio-usage";
 import { mailPath, type MailDetail, type MailDraft, type MailInbox, type MailRights, type MailRightsPatch, type MailSummary } from "@/lib/mail";
+import { isPublicId, type MemoryList, type MemoryNote, type MemoryPatch, type OrgChart, type OrgGrantDraft } from "@/lib/memory";
 import { backofficeUrl } from "@/lib/runtime-config";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 
@@ -16,6 +17,8 @@ import { pinnedWorkspaceId } from "@/lib/tenant";
 const TIMEOUT_MS = 15_000;
 // Sending an e-mail with attachments goes on to the provider before it answers.
 const MAIL_SEND_TIMEOUT_MS = 90_000;
+// A reasoned answer of the company memory runs a model on the provider's side.
+const MEMORY_ASK_TIMEOUT_MS = 75_000;
 
 export class BackofficeError extends Error {
   status: number;
@@ -125,7 +128,8 @@ function invoicePath(id: string, rest: string): string {
 }
 
 // `workspace` is given by the proxy, which runs before a request has a scope to read it from.
-async function call<T>(path: string, init: { method?: string; token?: string | null; body?: unknown; workspace?: string; timeoutMs?: number } = {}): Promise<T> {
+// `form` sends a multipart body instead of JSON (a document for the company memory).
+async function call<T>(path: string, init: { method?: string; token?: string | null; body?: unknown; form?: FormData; workspace?: string; timeoutMs?: number } = {}): Promise<T> {
   const base = backofficeUrl();
   const workspace = init.workspace ?? (await pinnedWorkspaceId());
   if (!base || !workspace) throw new BackofficeError(500, "config_error", "BACKOFFICE_URL and a workspace are required");
@@ -140,7 +144,7 @@ async function call<T>(path: string, init: { method?: string; token?: string | n
         ...(init.token ? { Authorization: `Bearer ${init.token}` } : {}),
         ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
       },
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      body: init.form ?? (init.body === undefined ? undefined : JSON.stringify(init.body)),
       cache: "no-store",
       signal: AbortSignal.timeout(init.timeoutMs ?? TIMEOUT_MS),
     });
@@ -312,7 +316,38 @@ export const backoffice = {
     if (!mailPath(expert)) throw new BackofficeError(404, "not_found", "Cette boîte est introuvable.");
     return call<MailRights>(`/app/mail/rights/${expert}`, { method: "PUT", token, body: patch });
   },
+
+  // The company memory. The two reads are made in an instance's name, like reportComposioCalls: the
+  // back office maps the token to its member and answers only from the compartments the org chart
+  // opens to that member. A reasoned answer goes through a model on the provider's side.
+  memoryAsk: (instanceToken: string, workspace: string, question: string) =>
+    call<{ answer: string | null }>("/app/memory/ask", { method: "POST", token: instanceToken, workspace, body: { question }, timeoutMs: MEMORY_ASK_TIMEOUT_MS }),
+  memorySearch: (instanceToken: string, workspace: string, query: string, limit?: number) =>
+    call<{ items: { title: string; excerpt: string }[] }>("/app/memory/search", { method: "POST", token: instanceToken, workspace, body: { query, limit }, timeoutMs: MEMORY_ASK_TIMEOUT_MS }),
+  // What the member reads, and where they may deposit. Deposits are sent to the memory in the
+  // background: `status` goes from pending to synced.
+  memoryItems: (token: string) => call<MemoryList>("/app/memory/items", { token }),
+  createMemoryNote: (token: string, note: MemoryNote) => call<{ id: string }>("/app/memory/items", { method: "POST", token, body: note }),
+  uploadMemoryDocument: (token: string, form: FormData) => call<{ id: string }>("/app/memory/items", { method: "POST", token, form, timeoutMs: MAIL_SEND_TIMEOUT_MS }),
+  updateMemoryItem: (token: string, id: string, patch: MemoryPatch) => call<{ ok: true }>(ownPath("/app/memory/items", id), { method: "PATCH", token, body: patch }),
+  deleteMemoryItem: (token: string, id: string) => call<{ ok: true }>(ownPath("/app/memory/items", id), { method: "DELETE", token }),
+
+  // The org chart that walls the memory, for the workspace's admins. The back office keeps it; the
+  // app holds no copy.
+  org: (token: string) => call<OrgChart>("/app/org", { token }),
+  createUnit: (token: string, unit: { name: string; parent?: string | null }) => call<{ id: string }>("/app/org/units", { method: "POST", token, body: unit }),
+  updateUnit: (token: string, id: string, patch: { name?: string; parent?: string | null }) => call<{ ok: true }>(ownPath("/app/org/units", id), { method: "PATCH", token, body: patch }),
+  deleteUnit: (token: string, id: string) => call<{ ok: true }>(ownPath("/app/org/units", id), { method: "DELETE", token }),
+  placeMember: (token: string, id: string, place: { unit?: string | null; unitRole?: "member" | "head" }) =>
+    call<{ ok: true }>(ownPath("/app/org/members", id), { method: "PATCH", token, body: place }),
+  createGrant: (token: string, grant: OrgGrantDraft) => call<{ id: string }>("/app/org/grants", { method: "POST", token, body: grant }),
+  deleteGrant: (token: string, id: string) => call<{ ok: true }>(ownPath("/app/org/grants", id), { method: "DELETE", token }),
 };
+
+function ownPath(base: string, id: string): string {
+  if (!isPublicId(id)) throw new BackofficeError(404, "not_found", "Cet élément est introuvable.");
+  return `${base}/${id}`;
+}
 
 // A file from the back office, handed back unread so the caller can pipe it.
 async function stream(path: string, token: string): Promise<Response> {
