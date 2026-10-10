@@ -144,7 +144,8 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   them; `/` is the home, `/recruter` the gallery of every expert Yelema offers, and
   `/experts/{agentId}/{profileId}/{tab}` the expert's workspace (Discussion / Livrables /
   Routines). Without a profile segment the page is the instance's default Hermes home.
-  Administration (`/administration`) has four tabs. Two are read-only lists for admins: the
+  Administration (`/administration`) has four tabs, plus Facturation and Consommation for admins
+  where the back office signs users in. Two are read-only lists for admins: the
   workspace's members, and its instances by name and member (no id, no state, no way in). Two are
   for everyone and act on the signed-in user's OWN instance, for all of its experts: Connecteurs
   and Canaux (`src/components/MyInstance.tsx`). A member sees only those two. The app creates
@@ -170,6 +171,11 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   (`agents.apps_token_hash`) uses Yelema's own Composio under its owner's identity, and its
   experts reach their tools through `/api/composio-mcp`; any other instance keeps Agent37's
   managed Composio (`src/lib/integrations.ts`).
+- **Every tool execution is declared to the back office, which prices and stores it.** Once
+  Composio has answered, the proxy sends the names of the tools the request executed
+  (`POST /api/v1/app/composio-calls`, signed with the instance's own token), without waiting and
+  never in the expert's way; a declaration that does not get through is lost. The app holds no
+  table, no price and no reading of that data. Plan: `docs/plans/composio-suivi-appels.md`.
 - **Naming:** the upstream API calls these resources **instances**; this app brands
   them **agents**. Paths stay `/instances`; the client methods read `agent…`.
 
@@ -182,10 +188,12 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 | `src/app/api/agents/[id]/{chat,files}/**` | Data-plane BFF: native Chat + Files proxied to the instance |
 | `src/app/api/agents/[id]/integrations/**` | Connecteurs BFF: Yelema's Composio or Agent37's managed one, per instance (`src/lib/integrations.ts`) |
 | `src/lib/composio.ts`, `src/app/api/composio-mcp/` | Yelema's Composio (server-only key) and the experts' tool proxy; identity = the instance's owner |
+| `src/lib/composio-usage.ts` (+ `.test.ts`) | The tool executions inside one request to Composio (a multi-execution counts once per tool), by name only: what the proxy declares to the back office |
 | `src/lib/profile-id.ts`, `src/lib/profiles.ts` | The profile a chat targets: shape, `?profile=`, and the check against the instance's real profiles |
 | `src/lib/tenant-resolver.ts`, `src/lib/tenant.ts`, `src/app/espace-*` | The client a request is for when one deployment serves every client: host lookup at the back office, the workspace a request is confined to, and the pages for an unknown or suspended client |
 | `src/lib/backoffice.ts`, `src/lib/session.ts`, `src/app/api/auth/**` | Sign-in through the back office: its client, the cookie session, and the login / logout / forgot / accept routes |
 | `src/app/api/billing/**`, `src/components/BillingView.tsx`, `src/app/(app)/administration/facturation/` | Facturation, for admins, signed in through the back office: plan, next due date, invoices and their PDF, read from the back office (`/api/v1/app/billing/*`). "Payer" opens the back office's own payment link; the app creates no payment |
+| `src/app/api/composio-usage/**`, `src/components/integrations/UsageView.tsx`, `src/app/(app)/administration/consommation/` | Consommation, for admins, signed in through the back office: what the experts' tools cost over a month, in all, by member, by application and call by call, read from the back office (`/api/v1/app/composio-usage`). Amounts come in thousandths of a CFA franc and are rounded to the franc on display only |
 | `src/lib/catalogue.ts`, `src/app/api/catalogue/**` | The back office's expert catalogue, cached, and its join with installed profiles |
 | `src/components/experts/ExpertImage.tsx`, `images` in `next.config.ts` | Expert pictures resized by the image optimizer (the catalogue serves them full size); only Yelema hosts are optimized |
 | `src/components/experts/ExpertMedia.tsx`, `public/experts/vid/` | A card's picture, swapped for the expert's looping video on hover. The video is the catalogue's when it lists one (`loopVideoUrl`), else the file named after the expert's first name in `public/experts/vid`: a stopgap to delete once the back office serves them |
@@ -209,6 +217,7 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 | `supabase/migrations/0001_init.sql` | Schema, RLS policies (dormant backstop), SECURITY DEFINER RPCs; grants tables to the service role only (clients have no direct DB access) |
 | `supabase/migrations/0003_agent_backoffice_columns.sql` | Columns the back office fills on `agents`: `profiles`, `ready`, `apps_token_hash` |
 | `docs/plans/experts-profils-vercel.md` | The current plan and the contract with the back office |
+| `docs/plans/composio-suivi-appels.md` | Composio usage: the declaration route and the back office's reading routes |
 | `docs/plans/app-unique-resolver.md` | One deployment for every client: the resolver and its contract with the back office |
 | `src/lib/supabase/admin.ts` | Service-role client (server-only, bypasses RLS) — the DB egress |
 | `scripts/setup.mjs` | One-command Supabase setup (`npm run setup`) |
@@ -221,9 +230,11 @@ npm run setup       # configure Supabase end-to-end (idempotent; needs SUPABASE_
 npm run dev         # http://localhost:3000
 npm run build
 npm run typecheck   # tsc --noEmit
+npm test            # node --test on src/**/*.test.ts (no dependency; needs a Node that runs TypeScript)
 ```
 
-There is no test suite; the gate before shipping is a clean `npm run typecheck`
+Tests are few and cover pure modules only (a tested file imports nothing from `@/` nor
+`server-only`); the gate before shipping is a clean `npm run typecheck`, `npm test`
 and `npm run build`. Setup is "paste two keys + `npm run setup`" — no manual
 dashboard steps.
 

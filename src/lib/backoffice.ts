@@ -1,4 +1,5 @@
 import "server-only";
+import type { ComposioCall } from "@/lib/composio-usage";
 import { backofficeUrl } from "@/lib/runtime-config";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 
@@ -166,6 +167,63 @@ async function call<T>(path: string, init: { method?: string; token?: string | n
   return data as T;
 }
 
+/** The tool executions of one request through the Composio proxy, as the back office records them. */
+export interface ComposioCallsDeclaration {
+  /** Drawn once per proxied request: the back office ignores one it has already seen. */
+  requestId: string;
+  /** When Composio answered. */
+  occurredAt: string;
+  httpStatus: number;
+  calls: ComposioCall[];
+}
+
+/** Tool executions and what they cost. Amounts are in thousandths of a CFA franc. */
+export interface BoUsageCount {
+  executions: number;
+  amountMilliXof: number;
+}
+
+/** What the workspace's experts spent on tools over a period (days are UTC, both ends included). */
+export interface BoComposioUsage extends BoUsageCount {
+  from: string;
+  to: string;
+  /** One point per day of the period, at zero when nothing was declared. */
+  byDay: ({ day: string } & BoUsageCount)[];
+  /** `toolkit` is null when the application is unknown. */
+  byToolkit: ({ toolkit: string | null } & BoUsageCount)[];
+  /** `email` is null for calls of an instance without a member. */
+  byMember: ({ email: string | null; name: string | null } & BoUsageCount)[];
+}
+
+export interface BoComposioCall {
+  occurredAt: string;
+  email: string | null;
+  name: string | null;
+  toolkit: string | null;
+  tool: string;
+  /** `meta`: a discovery tool, listed at price 0 and left out of `executions`. */
+  via: "direct" | "multi_execute" | "meta";
+  httpStatus: number;
+  priceMilliXof: number;
+}
+
+/** A period (`YYYY-MM-DD`, 92 days at most) and optionally one member, by e-mail. */
+export interface BoUsageFilter {
+  from?: string;
+  to?: string;
+  member?: string;
+}
+
+function usageQuery(filter: BoUsageFilter, page?: number): string {
+  const params = new URLSearchParams();
+  if (filter.from) params.set("from", filter.from);
+  if (filter.to) params.set("to", filter.to);
+  if (filter.member) params.set("member", filter.member);
+  if (page) params.set("page", String(page));
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
 export const backoffice = {
   login: (email: string, password: string) =>
     call<BoOpenedSession>("/app/auth/login", { method: "POST", body: { email, password } }),
@@ -195,6 +253,12 @@ export const backoffice = {
     if (!EXPERT_KEY.test(key)) throw new BackofficeError(404, "not_found", "Expert introuvable.");
     return call<{ ok: true }>(`/app/experts/${key}/request`, { method: "POST", token });
   },
+  // The one call made in an instance's name rather than a user's: the Bearer is the instance's own
+  // tool-proxy token, which the back office knows by its hash, and the workspace is the one of the
+  // instance's row, not of the address that was called. The back office prices and stores each
+  // execution; the app keeps nothing.
+  reportComposioCalls: (instanceToken: string, workspace: string, declaration: ComposioCallsDeclaration) =>
+    call<null>("/app/composio-calls", { method: "POST", token: instanceToken, workspace, body: declaration }),
   // Admins only, and without instance ids: lists to read, not ways in.
   instances: async (token: string) =>
     (await call<{ items: { member: { name: string | null; email: string }; instance: BoInstanceView }[] }>("/app/instances", { token })).items,
@@ -208,6 +272,12 @@ export const backoffice = {
   // The page where the invoice is paid, the same as in the back office's e-mail.
   paymentLink: (token: string, invoiceId: string) =>
     call<{ url: string }>(invoicePath(invoiceId, "/payment-link"), { method: "POST", token }),
+  // What the experts' tools cost, for the workspace's admins (403 for a member; 404 for an e-mail
+  // that is no member's). Calls come newest first, 100 a page.
+  composioUsage: (token: string, filter: BoUsageFilter) =>
+    call<BoComposioUsage>(`/app/composio-usage${usageQuery(filter)}`, { token }),
+  composioUsageCalls: (token: string, filter: BoUsageFilter, page: number) =>
+    call<{ page: number; hasMore: boolean; items: BoComposioCall[] }>(`/app/composio-usage/calls${usageQuery(filter, page)}`, { token }),
   // The invoice's PDF, as a stream for the route to pipe.
   invoicePdf: (token: string, invoiceId: string) => stream(invoicePath(invoiceId, "/pdf"), token),
 };
