@@ -10,7 +10,7 @@ import { isProfileId } from "@/lib/profile-id";
 // prévoient d'autres, aux noms différents (discussion, résumé…). Ils seront repris en bloc au
 // lot « espace expert », pas deux fois.
 
-export const AGENT_TAB_IDS = ["chat", "files", "routines"] as const;
+export const AGENT_TAB_IDS = ["chat", "files", "routines", "emails"] as const;
 
 // Connecteurs and Canaux used to be tabs of every expert. They are set once for the instance, so
 // they live in the Administration; an old address is sent there.

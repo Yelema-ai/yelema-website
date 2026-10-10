@@ -14,12 +14,13 @@ const TABS = [
   // The back office's: only where the app signs in through it.
   { href: "/administration/facturation", label: "Facturation", exact: false, adminOnly: true, backoffice: true },
   { href: "/administration/consommation", label: "Consommation", exact: false, adminOnly: true, backoffice: true },
+  { href: "/administration/emails", label: "E-mails", exact: false, adminOnly: true, backoffice: true },
 ];
 
 // Le cadre de l'administration. Membres et Instances, pour les admins, sont deux listes à lire :
 // tout s'y gère dans le back-office Yelema. Connecteurs et Canaux, pour chacun, règlent sa propre
 // instance. Facturation et Consommation, pour les admins, lisent au back-office le forfait et les
-// factures, et ce que les outils des experts ont coûté.
+// factures, ce que les outils des experts ont coûté, et qui peut faire écrire chaque expert.
 export default function AdministrationLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { current } = useWorkspace();
