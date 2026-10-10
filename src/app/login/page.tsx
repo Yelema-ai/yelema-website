@@ -35,6 +35,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signedOut, setSignedOut] = useState(false);
+  const [expired, setExpired] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const sentTo = useRef("");
 
@@ -42,14 +43,17 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search);
     // Retour de déconnexion : on le dit, plutôt que de rendre un formulaire muet.
     if (params.get("out") === "1" || window.location.hash.startsWith("#out")) setSignedOut(true);
+    // Sent here by a call refused in the middle of a page (see lib/api): say why.
+    if (params.get("expired") === "1") setExpired(true);
     // /auth/callback renvoie ici avec ?error=auth quand un lien a expiré, a déjà servi,
     // ou a été ouvert dans un autre navigateur.
     if (params.get("error") === "auth") {
       toast.error("Ce lien n’est plus valable. Connectez-vous, ou demandez-en un nouveau.");
     }
-    if (params.has("error") || params.has("out")) {
+    if (params.has("error") || params.has("out") || params.has("expired")) {
       params.delete("error");
       params.delete("out");
+      params.delete("expired");
       const qs = params.toString();
       window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
     }
@@ -161,6 +165,11 @@ export default function LoginPage() {
 
   return (
     <AuthShell>
+      {expired && !forgot ? (
+        <p className="rounded-xl bg-soft px-3.5 py-3 text-sm font-semibold text-ink-2">
+          Votre session a expiré. Reconnectez-vous pour reprendre où vous en étiez.
+        </p>
+      ) : null}
       {signedOut && !forgot ? (
         <p className="flex items-center gap-2 rounded-xl bg-ok-pale px-3.5 py-3 text-sm font-semibold text-ok">
           <CheckCircle2 className="size-4 shrink-0" />

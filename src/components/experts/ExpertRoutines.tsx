@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, History, Loader2, MoreHorizontal, Paperclip, Pencil, Play, Plus, Repeat, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { TOO_LARGE, tooLarge } from "@/lib/upload-limit";
 import { apiFetch, readApiError } from "@/lib/api";
 import { DRIVE_ROOT } from "@/lib/drive-paths";
 import {
@@ -125,6 +126,10 @@ function RoutineDialog({
   ];
 
   async function attach(file: File) {
+    if (tooLarge(file)) {
+      toast.error(TOO_LARGE);
+      return;
+    }
     setUploading(true);
     try {
       const path = `${DRIVE_ROOT}/${expert.driveFolder}/Routines/${file.name}`;
