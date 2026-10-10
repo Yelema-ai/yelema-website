@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { FolderOpen, MessageSquare, Repeat } from "lucide-react";
+import { FolderOpen, Mail, MessageSquare, Repeat } from "lucide-react";
 import { agentTabPath, parseAgentRoute, type AgentTab } from "@/lib/expert-tabs";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { useMyAgents } from "@/components/useMyAgents";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { ExpertImage } from "@/components/experts/ExpertImage";
+import { ExpertEmails } from "@/components/experts/ExpertEmails";
 import { ExpertRoutines } from "@/components/experts/ExpertRoutines";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { useCatalogueExpert } from "@/components/experts/useCatalogue";
+import { useMailInboxes } from "@/components/experts/useMailInboxes";
 import { expertDisplayName } from "@/lib/experts";
 import { DRIVE_ROOT } from "@/lib/drive-paths";
 import { ChatProvider } from "@/components/chat/ChatProvider";
@@ -23,6 +25,7 @@ const TABS: { id: AgentTab; label: string; icon: typeof MessageSquare }[] = [
   { id: "chat", label: "Discussion", icon: MessageSquare },
   { id: "files", label: "Livrables", icon: FolderOpen },
   { id: "routines", label: "Routines", icon: Repeat },
+  { id: "emails", label: "E-mails", icon: Mail },
 ];
 
 // The per-expert tabbed SPA, laid out as a SINGLE left rail + the active tab's pane. The instance
@@ -30,7 +33,7 @@ const TABS: { id: AgentTab; label: string; icon: typeof MessageSquare }[] = [
 // are bound to the URL; the open tab rides the URL as a path segment. Tabs switch via
 // history.pushState (no full navigation) so Chat's in-flight stream and Files' current directory
 // survive moving between tabs — those two mount lazily then stay MOUNTED-BUT-HIDDEN; Routines
-// mount lazily in the scroll area. Connecteurs and Canaux are not here: they are set once for the
+// and E-mails mount lazily in the scroll area. Connecteurs and Canaux are not here: they are set once for the
 // instance, in the Administration. There is no settings tab: the instance (its size, its own
 // dashboard and terminal, its budget) is run by Yelema from the back office, not by the member.
 //
@@ -66,8 +69,12 @@ export function AgentWorkspace({
   const { experts } = useExpertsContext();
   const expert = experts.find((e) => e.agentId === agentId && e.profileId === profileId) ?? null;
   const driveFolder = expert?.driveFolder ? `${DRIVE_ROOT}/${expert.driveFolder}` : undefined;
-  // Routines belong to an expert's profile: the instance's default home has none here.
-  const tabs = profileId ? TABS : TABS.filter((t) => t.id !== "routines");
+  // The expert's own inbox, when the back office gives this member one to read.
+  const mail = useMailInboxes();
+  const inbox = (expert?.catalogueKey && mail.inboxes.find((i) => i.expert === expert.catalogueKey)) || null;
+  // Routines belong to an expert's profile: the instance's default home has none here. E-mails show
+  // only for an expert that has an inbox.
+  const tabs = TABS.filter((t) => (t.id === "routines" ? profileId !== null : t.id !== "emails" || inbox !== null));
   const sheet = useCatalogueExpert(expert?.catalogueKey);
   const expertName = expert?.displayName ?? (profileId ? expertDisplayName(profileId) : "");
   // The rail's picture: the face, or the full-body portrait cropped to it.
@@ -230,6 +237,13 @@ export function AgentWorkspace({
                     driveFolder: expert?.driveFolder ?? expertName,
                   }}
                 />
+              </div>
+            </div>
+          )}
+          {currentTab === "emails" && profileId && (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="mx-auto w-full max-w-4xl p-6 md:px-10 md:py-8">
+                <ExpertEmails inbox={inbox} expertName={expertName} loaded={mail.loaded} />
               </div>
             </div>
           )}

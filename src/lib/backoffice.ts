@@ -1,5 +1,6 @@
 import "server-only";
 import type { ComposioCall } from "@/lib/composio-usage";
+import { mailPath, type MailDetail, type MailDraft, type MailInbox, type MailRights, type MailRightsPatch, type MailSummary } from "@/lib/mail";
 import { backofficeUrl } from "@/lib/runtime-config";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 
@@ -13,6 +14,8 @@ import { pinnedWorkspaceId } from "@/lib/tenant";
 // module is the only one that speaks that API.
 
 const TIMEOUT_MS = 15_000;
+// Sending an e-mail with attachments goes on to the provider before it answers.
+const MAIL_SEND_TIMEOUT_MS = 90_000;
 
 export class BackofficeError extends Error {
   status: number;
@@ -122,7 +125,7 @@ function invoicePath(id: string, rest: string): string {
 }
 
 // `workspace` is given by the proxy, which runs before a request has a scope to read it from.
-async function call<T>(path: string, init: { method?: string; token?: string | null; body?: unknown; workspace?: string } = {}): Promise<T> {
+async function call<T>(path: string, init: { method?: string; token?: string | null; body?: unknown; workspace?: string; timeoutMs?: number } = {}): Promise<T> {
   const base = backofficeUrl();
   const workspace = init.workspace ?? (await pinnedWorkspaceId());
   if (!base || !workspace) throw new BackofficeError(500, "config_error", "BACKOFFICE_URL and a workspace are required");
@@ -139,7 +142,7 @@ async function call<T>(path: string, init: { method?: string; token?: string | n
       },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
       cache: "no-store",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(init.timeoutMs ?? TIMEOUT_MS),
     });
   } catch (e) {
     console.error(`[backoffice] ${path} unreachable:`, e instanceof Error ? e.message : e);
@@ -214,6 +217,14 @@ export interface BoUsageFilter {
   member?: string;
 }
 
+// A path of the experts' e-mail, or a 404: an expert key or a message id that is not in its plain
+// form never reaches the back office's URL.
+function mailRoute(expert: string, messageId?: string, attachmentId?: string): string {
+  const path = mailPath(expert, messageId, attachmentId);
+  if (!path) throw new BackofficeError(404, "not_found", "Ce message est introuvable.");
+  return path;
+}
+
 function usageQuery(filter: BoUsageFilter, page?: number): string {
   const params = new URLSearchParams();
   if (filter.from) params.set("from", filter.from);
@@ -280,6 +291,27 @@ export const backoffice = {
     call<{ page: number; hasMore: boolean; items: BoComposioCall[] }>(`/app/composio-usage/calls${usageQuery(filter, page)}`, { token }),
   // The invoice's PDF, as a stream for the route to pipe.
   invoicePdf: (token: string, invoiceId: string) => stream(invoicePath(invoiceId, "/pdf"), token),
+
+  // The experts' e-mail. One inbox per expert for the whole workspace; the back office holds the
+  // provider's key and decides on every call who may read and who may send. A refusal to send is a
+  // 403 whose sentence is shown as it is; 404 everywhere when the feature is off.
+  mailInboxes: async (token: string) => (await call<{ items: MailInbox[] }>("/app/mail/inboxes", { token })).items,
+  // Newest first, 25 a page; `page` is the previous answer's `nextPageToken`.
+  mailMessages: (token: string, expert: string, page?: string) =>
+    call<{ items: MailSummary[]; nextPageToken: string | null }>(`${mailRoute(expert)}${page ? `?page=${encodeURIComponent(page)}` : ""}`, { token }),
+  mailMessage: (token: string, expert: string, messageId: string) => call<MailDetail>(mailRoute(expert, messageId), { token }),
+  mailSend: (token: string, expert: string, draft: MailDraft) =>
+    call<{ messageId: string; threadId: string; from: string }>(mailRoute(expert), { method: "POST", token, body: draft, timeoutMs: MAIL_SEND_TIMEOUT_MS }),
+  // Goes to the sender of the message, in its thread: no recipient and no subject to give.
+  mailReply: (token: string, expert: string, messageId: string, draft: Pick<MailDraft, "text" | "attachments">) =>
+    call<{ messageId: string; threadId: string; from: string }>(`${mailRoute(expert, messageId)}/reply`, { method: "POST", token, body: draft, timeoutMs: MAIL_SEND_TIMEOUT_MS }),
+  mailAttachment: (token: string, expert: string, messageId: string, attachmentId: string) => stream(mailRoute(expert, messageId, attachmentId), token),
+  // Admins only: every inbox of the workspace and its three settings.
+  mailRights: async (token: string) => (await call<{ items: MailRights[] }>("/app/mail/rights", { token })).items,
+  setMailRights: (token: string, expert: string, patch: MailRightsPatch) => {
+    if (!mailPath(expert)) throw new BackofficeError(404, "not_found", "Cette boîte est introuvable.");
+    return call<MailRights>(`/app/mail/rights/${expert}`, { method: "PUT", token, body: patch });
+  },
 };
 
 // A file from the back office, handed back unread so the caller can pipe it.
