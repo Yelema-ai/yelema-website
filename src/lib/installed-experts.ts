@@ -3,7 +3,7 @@ import { backofficeAgentRow, type DB } from "@/lib/auth";
 import { loadCatalogue, matchCatalogue } from "@/lib/catalogue";
 import { expertDisplayName } from "@/lib/experts";
 import { authViaBackoffice } from "@/lib/runtime-config";
-import { currentInstance } from "@/lib/session";
+import { currentInstallation } from "@/lib/session";
 import { listInstanceProfiles } from "@/lib/hermes-profiles";
 import { ApiError, dbError } from "@/lib/http";
 import type { AgentRow, Expert } from "@/lib/types";
@@ -72,15 +72,19 @@ export function profilesMirrored(agents: AgentRow[]): boolean {
 export interface UserExperts {
   experts: Expert[];
   unreadable: { agentId: string; agentName: string | null }[];
-  /** True while the back office is still installing profiles on the caller's instance. */
+  /** True while the back office is still creating the instance or installing experts on it. */
   installing: boolean;
+  /** True when nothing is under way any more and the instance, or an expert, failed to install. */
+  failed: boolean;
+  /** Names of the experts whose installation failed. */
+  failedExperts: string[];
 }
 
-// The back office says so itself (`ready`); without it nothing here can tell.
-async function isInstalling(): Promise<boolean> {
-  if (!authViaBackoffice()) return false;
-  const instance = await currentInstance().catch(() => null);
-  return instance?.ready === false;
+// The back office says so itself; without it nothing here can tell, and nothing is reported.
+async function installation(): Promise<{ installation: "running" | "ready" | "failed"; failedExperts: string[] }> {
+  const none = { installation: "ready" as const, failedExperts: [] };
+  if (!authViaBackoffice()) return none;
+  return (await currentInstallation().catch(() => null)) ?? none;
 }
 
 // The experts of these instances as the screens show them: each installed profile dressed by the
@@ -88,7 +92,8 @@ async function isInstalling(): Promise<boolean> {
 // instance that cannot be read does not take the others down: it is reported in `unreadable`.
 // Shared by the experts route and the shell's first render, so both say the same thing.
 export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
-  const installing = await isInstalling();
+  const state = await installation();
+  const installing = state.installation === "running";
   // An instance being set up is not asked for its profiles: the experts are the ones the back
   // office reports installed, and the rest arrive when it is done.
   const readable = installing ? agents.filter((a) => Array.isArray(a.profiles) && a.profiles.length > 0) : agents;
@@ -113,5 +118,12 @@ export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
   });
 
   experts.sort((a, b) => a.displayName.localeCompare(b.displayName, "fr"));
-  return { experts, unreadable: unreadable.map((a) => ({ agentId: a.agent37_id, agentName: a.name })), installing };
+  return {
+    experts,
+    unreadable: unreadable.map((a) => ({ agentId: a.agent37_id, agentName: a.name })),
+    installing,
+    failed: state.installation === "failed",
+    // Named as the catalogue names them; a key it does not know is shown as a first name.
+    failedExperts: state.failedExperts.map((key) => catalogue.experts.find((e) => e.key === key)?.name ?? expertDisplayName(key)),
+  };
 }

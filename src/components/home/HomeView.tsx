@@ -59,6 +59,37 @@ function ExpertCard({ expert, entry }: { expert: Expert; entry: CatalogueExpert 
   );
 }
 
+// The back office says the installation failed: said at once, with the experts concerned when it
+// names them. Why it failed is Yelema's to see; nothing technical is shown.
+function InstallFailed({ experts, partial }: { experts: string[]; partial: boolean }) {
+  const names = new Intl.ListFormat("fr", { type: "conjunction" }).format(experts);
+  return (
+    <section role="alert" className={cn("max-w-2xl rounded-[22px] border border-ko/30 bg-ko-pale p-5 sm:p-6", partial ? "mt-3" : "mt-4")}>
+      <h3 className="font-display text-lg font-bold text-ink">
+        {partial ? "Une partie de votre équipe n’a pas pu être installée" : "Votre équipe n’a pas pu être installée"}
+      </h3>
+      <p className="mt-1 text-sm text-ink-2">
+        {experts.length > 0 ? `L’installation de ${names} a échoué. ` : ""}
+        Contactez Yelema pour que nous la relancions.
+      </p>
+    </section>
+  );
+}
+
+// The installation has run for too long to still be waited for (useExperts gives up after a
+// while): most likely it failed, which only Yelema can see and fix.
+function InstallStalled() {
+  return (
+    <section role="status" className="mt-4 max-w-2xl rounded-[22px] border border-line bg-surface p-5 sm:p-6">
+      <h3 className="font-display text-lg font-bold text-ink">L’installation prend plus de temps que prévu</h3>
+      <p className="mt-1 text-sm text-ink-2">
+        Vos experts ne sont pas encore prêts. Contactez Yelema pour que nous regardions ce qui bloque ; vous pouvez
+        aussi recharger cette page plus tard.
+      </p>
+    </section>
+  );
+}
+
 // What the home shows while the back office installs the first experts. The list is read again on
 // its own (useExperts), so the team replaces this card without a reload.
 function Installing() {
@@ -86,7 +117,7 @@ function Installing() {
 export function HomeView() {
   const router = useRouter();
   const { current, userEmail } = useWorkspace();
-  const { experts, loading, unreadable, installing } = useExpertsContext();
+  const { experts, loading, unreadable, installing, stalled, failed, failedExperts } = useExpertsContext();
   const { catalogue } = useCatalogue(current?.id);
   const [picked, setPicked] = useState<string | null>(null);
   const [text, setText] = useState("");
@@ -178,11 +209,22 @@ export function HomeView() {
       </h2>
       {installing && experts.length > 0 && (
         <p role="status" className="mt-2 flex items-center gap-2 text-sm text-ink-3">
-          <Loader2 className="h-4 w-4 animate-spin" /> D’autres experts sont en cours d’installation.
+          {stalled ? (
+            "D’autres experts devaient arriver et tardent. Contactez Yelema s’ils n’apparaissent pas."
+          ) : (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> D’autres experts sont en cours d’installation.
+            </>
+          )}
         </p>
       )}
-      {installing && experts.length === 0 ? (
-        <Installing />
+      {failed && <InstallFailed experts={failedExperts} partial={experts.length > 0} />}
+      {failed && experts.length === 0 ? null : installing && experts.length === 0 ? (
+        stalled ? (
+          <InstallStalled />
+        ) : (
+          <Installing />
+        )
       ) : loading && experts.length === 0 ? (
         <p className="mt-4 text-sm text-ink-3">Chargement de votre équipe…</p>
       ) : experts.length === 0 ? (

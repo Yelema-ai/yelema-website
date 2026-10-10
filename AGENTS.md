@@ -190,7 +190,8 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 | `src/components/experts/ExpertImage.tsx`, `images` in `next.config.ts` | Expert pictures resized by the image optimizer (the catalogue serves them full size); only Yelema hosts are optimized |
 | `src/components/experts/ExpertMedia.tsx`, `public/experts/vid/` | A card's picture, swapped for the expert's looping video on hover. The video is the catalogue's when it lists one (`loopVideoUrl`), else the file named after the expert's first name in `public/experts/vid`: a stopgap to delete once the back office serves them |
 | `src/app/globals.css`, `src/components/ui/**` | The Yelema skin: tokens (light and `.dark`), radii, Onest and Bricolage Grotesque, and the primitives that follow them |
-| `src/lib/installed-experts.ts`, `src/app/api/experts/` | The profiles installed on the instances a user can see |
+| `src/lib/installed-experts.ts`, `src/app/api/experts/` | The profiles installed on the instances a user can see, and where their installation stands (`running`, `ready`, `failed`, as the back office says): the home waits, or names what failed |
+| `src/app/api/catalogue/[key]/request/` | A member asks for an expert they do not have: passed on to the back office, which tells Yelema's team. The app installs nothing |
 | `src/lib/drive.ts`, `src/lib/drive-paths.ts` | The drive (`~/Livrables`) and the path guard every files route applies |
 | `src/lib/hermes-cron.ts`, `src/app/api/agents/[id]/routines/**` | Routines: Hermes's scheduler through its API server (port 8642, `yelema-hermes` image). A profile installed after the instance's start has no key: on a `401` the module runs the image's own key script in the instance, then asks again |
 | `src/components/home`, `src/components/experts`, `src/components/integrations` | Home, gallery, sheet, routines, connectors |

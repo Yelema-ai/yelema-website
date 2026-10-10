@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { after } from "next/server";
 import { cache } from "react";
-import { backoffice, BackofficeError, type BoInstance, type BoMe, type BoSession } from "@/lib/backoffice";
+import { backoffice, BackofficeError, type BoInstance, type BoInstanceReading, type BoMe, type BoSession } from "@/lib/backoffice";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 
 // The signed-in user when the back office owns the sign-in (AUTH_VIA_BACKOFFICE): its session
@@ -159,14 +159,23 @@ export const currentPrincipal = cache(async (): Promise<BoMe | null> => {
   return me && me.workspace.id === workspace ? me : null;
 });
 
-/** The signed-in user's own instance with its installed experts; null when they have none yet. */
-export const currentInstance = cache(async (): Promise<BoInstance | null> => {
+// What the back office says of the signed-in user's instance; null when nobody is signed in.
+const currentReading = cache(async (): Promise<BoInstanceReading | null> => {
   const session = await readSession();
   if (!session) return null;
   const workspace = await pinnedWorkspaceId();
   if (!workspace) return null;
   // Asked alongside "who is this" rather than after it. The back office refuses the instance to a
   // session this client does not admit, and the answer is kept only for a user this request admits.
-  const [me, instance] = await Promise.all([currentPrincipal(), instanceOf(workspace, session.accessToken).catch(nobodyOn)]);
-  return me ? instance : null;
+  const [me, reading] = await Promise.all([currentPrincipal(), instanceOf(workspace, session.accessToken).catch(nobodyOn)]);
+  return me ? reading : null;
+});
+
+/** The signed-in user's own instance with its installed experts; null when they have none yet. */
+export const currentInstance = cache(async (): Promise<BoInstance | null> => (await currentReading())?.instance ?? null);
+
+/** Where the installation of the signed-in user's team stands; null when nobody is signed in. */
+export const currentInstallation = cache(async (): Promise<Pick<BoInstanceReading, "installation" | "failedExperts"> | null> => {
+  const reading = await currentReading();
+  return reading ? { installation: reading.installation, failedExperts: reading.failedExperts } : null;
 });

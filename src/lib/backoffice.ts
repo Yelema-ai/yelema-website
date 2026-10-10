@@ -57,6 +57,22 @@ export interface BoInstanceView {
 
 export type BoInstance = BoInstanceView & { id: string };
 
+/** Where the installation of a member's team stands. */
+export type BoInstallation = "running" | "ready" | "failed";
+
+/** What the back office says of the signed-in user's instance. */
+export interface BoInstanceReading {
+  /** Null while the instance itself is still being created. */
+  instance: BoInstance | null;
+  /**
+   * `running`: the instance is being created, or an expert is queued or being installed.
+   * `failed`: nothing is under way any more, and the instance or at least one expert failed.
+   */
+  installation: BoInstallation;
+  /** Catalogue keys of the experts whose installation failed. */
+  failedExperts: string[];
+}
+
 export interface BoMember {
   name: string | null;
   email: string;
@@ -94,7 +110,9 @@ export interface BoBilling {
   openInvoice: BoInvoice | null;
 }
 
-// An invoice id goes into the back office's URL: only its plain form is let through.
+// A catalogue key or an invoice id goes into the back office's URL: only its plain form is let
+// through.
+const EXPERT_KEY = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const INVOICE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 
 function invoicePath(id: string, rest: string): string {
@@ -161,7 +179,22 @@ export const backoffice = {
   logout: (token: string) => call<{ ok: true }>("/app/auth/logout", { method: "POST", token }),
 
   me: (token: string) => call<BoMe>("/app/me", { token }),
-  instance: async (token: string) => (await call<{ instance: BoInstance | null }>("/app/instance", { token })).instance,
+  instance: async (token: string): Promise<BoInstanceReading> => {
+    const d = await call<{ instance: BoInstance | null; installation?: string; failedExperts?: unknown }>("/app/instance", { token });
+    const known = d.installation === "running" || d.installation === "ready" || d.installation === "failed";
+    return {
+      instance: d.instance,
+      // A back office older than this field only says `ready`: not ready is "running" then.
+      installation: known ? (d.installation as BoInstallation) : d.instance?.ready === false ? "running" : "ready",
+      failedExperts: Array.isArray(d.failedExperts) ? d.failedExperts.filter((k): k is string => typeof k === "string") : [],
+    };
+  },
+  // A member asks for an expert they do not have. The back office records it and tells Yelema's
+  // team; nothing is installed or charged. Asking twice is the same as asking once.
+  requestExpert: (token: string, key: string) => {
+    if (!EXPERT_KEY.test(key)) throw new BackofficeError(404, "not_found", "Expert introuvable.");
+    return call<{ ok: true }>(`/app/experts/${key}/request`, { method: "POST", token });
+  },
   // Admins only, and without instance ids: lists to read, not ways in.
   instances: async (token: string) =>
     (await call<{ items: { member: { name: string | null; email: string }; instance: BoInstanceView }[] }>("/app/instances", { token })).items,

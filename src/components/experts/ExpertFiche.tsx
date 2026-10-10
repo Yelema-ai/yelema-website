@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { FileText, MapPin, MessageCircle, Play, Sparkles, type LucideIcon } from "lucide-react";
+import { toast } from "sonner";
+import { Check, FileText, Loader2, MapPin, MessageCircle, Play, Sparkles, UserPlus, type LucideIcon } from "lucide-react";
+import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { useWorkspace } from "@/components/WorkspaceProvider";
+import { apiFetch } from "@/lib/api";
 import { ExpertImage } from "@/components/experts/ExpertImage";
 import { useCatalogue, useCatalogueExpert } from "@/components/experts/useCatalogue";
 import { Button } from "@/components/ui/button";
@@ -38,7 +42,24 @@ function Box({ icon: Icon, title, children }: { icon: LucideIcon; title: string;
 // section whose content the back office has not filled is simply left out.
 export function ExpertFiche({ expertKey }: { expertKey: string }) {
   const { current } = useWorkspace();
+  // Asking for an expert goes to the back office: offered only where the app signs in through it.
+  const canRequest = usePublicConfig().authVia === "backoffice";
+  const [requesting, setRequesting] = useState(false);
+  const [requested, setRequested] = useState(false);
   const expert = useCatalogueExpert(expertKey);
+
+  async function request() {
+    setRequesting(true);
+    try {
+      await apiFetch(`/api/catalogue/${encodeURIComponent(expertKey)}/request`, { method: "POST" });
+      setRequested(true);
+      toast.success("Votre demande est transmise à Yelema.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRequesting(false);
+    }
+  }
   const { catalogue } = useCatalogue(current?.id);
 
   if (expert === null) return <p className="text-sm text-ink-3">Chargement…</p>;
@@ -181,6 +202,21 @@ export function ExpertFiche({ expertKey }: { expertKey: string }) {
                 <MessageCircle />
                 Écrire à {expert.name}
               </Link>
+            </Button>
+          </>
+        ) : canRequest ? (
+          <>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-ink">{expert.name} n’est pas encore dans votre équipe</p>
+              <p className="text-[13px] text-ink-3">
+                {requested
+                  ? "Votre demande est transmise à Yelema, qui revient vers vous."
+                  : "Demandez-le : Yelema reçoit votre demande et revient vers vous. Rien n’est installé ni facturé sans votre accord."}
+              </p>
+            </div>
+            <Button className="rounded-full" onClick={request} disabled={requesting || requested}>
+              {requesting ? <Loader2 className="animate-spin" /> : requested ? <Check /> : <UserPlus />}
+              {requested ? "Demande envoyée" : `Demander ${expert.name}`}
             </Button>
           </>
         ) : (
