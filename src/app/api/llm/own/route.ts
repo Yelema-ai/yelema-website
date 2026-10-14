@@ -1,7 +1,7 @@
 import { backoffice } from "@/lib/backoffice";
 import { keyDraft, noStore, settingsError, settingsToken } from "../_shared";
 
-// `PUT|DELETE /api/llm/own` — the signed-in user's own model key, when their admin allows it. The
+// `PUT|DELETE /api/llm/own` — the signed-in user's own model key, any provider, no admin needed. The
 // back office checks the key with its provider, keeps it and installs it; the app passes it on and
 // writes nothing on an instance.
 export async function PUT(request: Request) {

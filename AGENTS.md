@@ -146,8 +146,8 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
   Routines). Without a profile segment the page is the instance's default Hermes home.
   Administration (`/administration`) has four tabs, plus Facturation and Consommation for admins
   where the back office signs users in, and Modèles for everyone there (the account of model the
-  experts run on: an admin sets it for the company or for a member, a member for themself when
-  their admin allows it, and otherwise only reads where theirs comes from), and MCP beside it, at
+  experts run on: an admin sets it for the company or for a member, a member for themself, any
+  provider, without asking their admin), and MCP beside it, at
   the same scopes (the client's own tool servers, plugged on its experts). Two are read-only lists for admins: the
   workspace's members, and its instances by name and member (no id, no state, no way in). Two are
   for everyone and act on the signed-in user's OWN instance, for all of its experts: Connecteurs
