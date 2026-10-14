@@ -6,7 +6,7 @@ import { scopePath, type LlmKeyDraft, type LlmModelChoice, type LlmLoginView, ty
 import { mailPath, type MailDetail, type MailDraft, type MailInbox, type MailRights, type MailRightsPatch, type MailSummary } from "@/lib/mail";
 import { isPublicId, type MemoryList, type MemoryNote, type MemoryPatch, type OrgChart, type OrgGrantDraft } from "@/lib/memory";
 import { backofficeUrl } from "@/lib/runtime-config";
-import { SIGNALING_METHOD, type SignalingStep, type VoiceOption } from "@/lib/voice";
+import { SIGNALING_METHOD, type CallRecord, type SignalingStep, type VoiceOption } from "@/lib/voice";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 
 // The Yelema back office's API for this app (`/api/v1/app/*`, guide: yelema-platform
@@ -315,6 +315,8 @@ export const backoffice = {
   // provider's key and decides on every call who may read and who may send. A refusal to send is a
   // 403 whose sentence is shown as it is; 404 everywhere when the feature is off.
   // Voice calls: the back office answers with Aethex's own bodies, which the browser's SDK reads.
+  voiceCalls: async (token: string, expert: string | null) =>
+    (await call<{ items: CallRecord[] }>(`/app/voice/calls${expert ? `?expert=${encodeURIComponent(expert)}` : ""}`, { token })).items,
   voiceVoices: async (token: string) => (await call<{ items: VoiceOption[] }>("/app/voice/voices", { token })).items,
   // A dictation of the chat (WAV/FLAC/Ogg), transcribed by the back office's speech service.
   voiceTranscribe: (token: string, form: FormData) => call<{ text: string }>("/app/voice/transcribe", { method: "POST", token, form, timeoutMs: DICTATION_TIMEOUT_MS }),

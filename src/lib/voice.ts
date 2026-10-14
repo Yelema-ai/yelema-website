@@ -85,3 +85,28 @@ export function chosenVoice(voices: VoiceOption[], prefs: VoicePrefs): VoiceOpti
   const ofLanguage = voices.filter((v) => v.language === prefs.language);
   return ofLanguage.find((v) => v.key === prefs.voices[prefs.language]) ?? ofLanguage.find((v) => v.default) ?? ofLanguage[0] ?? null;
 }
+
+// ---- Call history -----------------------------------------------------------------------------------
+
+export interface CallRecord {
+  /** The call's session id. */
+  id: string;
+  expert: string;
+  language: VoiceLanguage;
+  status: "open" | "ended" | "failed";
+  startedAt: string;
+  endedAt: string | null;
+  durationSeconds: number | null;
+  /** Written by the expert once the call is over. */
+  subject: string | null;
+  /** Just ended: the expert is probably still writing its subject. */
+  subjectPending: boolean;
+}
+
+/** "3 min 16 s", "45 s". */
+export function callDuration(seconds: number | null): string {
+  if (seconds == null) return "";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m ? `${m} min${s ? ` ${s} s` : ""}` : `${s} s`;
+}

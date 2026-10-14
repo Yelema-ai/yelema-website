@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
-import { FolderOpen, Mail, MessageSquare, Repeat } from "lucide-react";
+import { FolderOpen, Mail, MessageSquare, Repeat, Phone } from "lucide-react";
 import { agentTabPath, parseAgentRoute, type AgentTab } from "@/lib/expert-tabs";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { useMyAgents } from "@/components/useMyAgents";
@@ -23,12 +23,15 @@ import { FilesTab } from "@/components/files/FilesTab";
 import { cn } from "@/lib/utils";
 import { CallButton } from "@/components/voice/CallButton";
 import { VoiceButton } from "@/components/voice/VoiceButton";
+import { ExpertCalls } from "@/components/voice/ExpertCalls";
+import { useVoices } from "@/components/voice/useVoices";
 
 const TABS: { id: AgentTab; label: string; icon: typeof MessageSquare }[] = [
   { id: "chat", label: "Discussion", icon: MessageSquare },
   { id: "files", label: "Livrables", icon: FolderOpen },
   { id: "routines", label: "Routines", icon: Repeat },
   { id: "emails", label: "E-mails", icon: Mail },
+  { id: "calls", label: "Appels", icon: Phone },
 ];
 
 // The per-expert tabbed SPA, laid out as a SINGLE left rail + the active tab's pane. The instance
@@ -84,7 +87,9 @@ export function AgentWorkspace({
   };
   // Routines belong to an expert's profile: the instance's default home has none here. E-mails show
   // only for an expert that has an inbox.
-  const tabs = TABS.filter((t) => (t.id === "routines" ? profileId !== null : t.id !== "emails" || inbox !== null));
+  // Calls are offered where voice is on, for an expert of the catalogue.
+  const voiceOn = useVoices().length > 0;
+  const tabs = TABS.filter((t) => (t.id === "routines" ? profileId !== null : t.id === "emails" ? inbox !== null : t.id === "calls" ? voiceOn && Boolean(expert?.catalogueKey) : true));
   const sheet = useCatalogueExpert(expert?.catalogueKey);
   const expertName = expert?.displayName ?? (profileId ? expertDisplayName(profileId) : "");
   // The rail's picture: the face, or the full-body portrait cropped to it.
@@ -270,6 +275,13 @@ export function AgentWorkspace({
                     driveFolder: expert?.driveFolder ?? expertName,
                   }}
                 />
+              </div>
+            </div>
+          )}
+          {currentTab === "calls" && callee && (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="mx-auto w-full max-w-4xl p-6 md:px-10 md:py-8">
+                <ExpertCalls expert={callee} />
               </div>
             </div>
           )}
