@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { House, PanelLeftClose, Settings2, UserPlus } from "lucide-react";
+import { Blocks, House, PanelLeftClose, Settings2, UserPlus } from "lucide-react";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { AccountMenu } from "@/components/AccountMenu";
@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { href: "/", label: "Accueil", icon: House, exact: true },
   { href: "/recruter", label: "Recruter", icon: UserPlus, exact: false },
+  { href: "/integrations", label: "Intégrations", icon: Blocks, exact: false },
 ] as const;
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {

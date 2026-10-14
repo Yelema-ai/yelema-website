@@ -15,7 +15,7 @@ export default function Page() {
   const admin = current?.role === "admin";
 
   useEffect(() => {
-    if (current && !admin) router.replace("/administration/connecteurs");
+    if (current && !admin) router.replace("/integrations/connecteurs");
   }, [current, admin, router]);
 
   if (!admin) return null;

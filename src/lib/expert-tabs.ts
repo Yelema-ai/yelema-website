@@ -15,8 +15,8 @@ export const AGENT_TAB_IDS = ["chat", "files", "routines", "emails", "calls"] as
 // Connecteurs and Canaux used to be tabs of every expert. They are set once for the instance, so
 // they live in the Administration; an old address is sent there.
 const MOVED_TABS: Record<string, string> = {
-  integrations: "/administration/connecteurs",
-  messaging: "/administration/canaux",
+  integrations: "/integrations/connecteurs",
+  messaging: "/integrations/canaux",
 };
 
 // Where an expert address that ends on a moved tab now leads, or null.

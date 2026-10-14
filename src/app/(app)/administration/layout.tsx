@@ -9,17 +9,12 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { href: "/administration", label: "Membres", exact: true, adminOnly: true },
   { href: "/administration/instances", label: "Instances", exact: false, adminOnly: true },
-  { href: "/administration/connecteurs", label: "Connecteurs", exact: false, adminOnly: false },
-  { href: "/administration/canaux", label: "Canaux", exact: false, adminOnly: false },
   // The back office's: only where the app signs in through it.
   { href: "/administration/facturation", label: "Facturation", exact: false, adminOnly: true, backoffice: true },
   { href: "/administration/consommation", label: "Consommation", exact: false, adminOnly: true, backoffice: true },
-  { href: "/administration/emails", label: "E-mails", exact: false, adminOnly: true, backoffice: true },
   { href: "/administration/entreprise", label: "Entreprise", exact: false, adminOnly: true, backoffice: true },
   { href: "/administration/memoire", label: "Mémoire", exact: false, adminOnly: false, backoffice: true },
   { href: "/administration/organigramme", label: "Organigramme", exact: false, adminOnly: true, backoffice: true },
-  { href: "/administration/modeles", label: "Modèles", exact: false, adminOnly: false, backoffice: true },
-  { href: "/administration/mcp", label: "MCP", exact: false, adminOnly: false, backoffice: true },
 ];
 
 // Le cadre de l'administration. Membres et Instances, pour les admins, sont deux listes à lire :
