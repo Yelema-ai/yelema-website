@@ -11,7 +11,10 @@ export async function GET(request: Request) {
   const type = url.searchParams.get("type") as EmailOtpType | null;
   const next = safeNextPath(url.searchParams.get("next"));
   // Behind a reverse proxy request.url carries the listen address (0.0.0.0:3000), not the public host.
-  const origin = publicSiteOrigin(siteUrl(), url.origin);
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  const proto = request.headers.get("x-forwarded-proto") || (host && host.includes("localhost") ? "http" : "https");
+  const requestOrigin = host && !host.startsWith("0.0.0.0") ? `${proto}://${host}` : url.origin;
+  const origin = publicSiteOrigin(siteUrl(), requestOrigin);
 
   if (authViaBackoffice()) {
     // The back office consumes the link together with the new password (POST /api/auth/accept), so

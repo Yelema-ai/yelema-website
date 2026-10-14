@@ -1,4 +1,4 @@
-const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"]);
+const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
 const PROTOCOL_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
 
 function withDefaultProtocol(value: string): string {
@@ -41,7 +41,12 @@ export function safeNextPath(raw?: string | null): string {
 // src/lib/runtime-config.ts, client code `usePublicConfig().siteUrl`.
 export function publicSiteOrigin(siteUrl: string | null | undefined, fallbackOrigin?: string | null): string {
   const configured = normalizeOrigin(siteUrl);
-  const fallback = normalizeOrigin(fallbackOrigin);
+  let fallback = normalizeOrigin(fallbackOrigin);
+  if (fallback) {
+    try {
+      if (new URL(fallback).hostname === "0.0.0.0") fallback = null;
+    } catch {}
+  }
 
   if (configured && !(isLocalOrigin(configured) && fallback && !isLocalOrigin(fallback))) {
     return configured;
