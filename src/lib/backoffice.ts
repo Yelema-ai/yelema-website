@@ -18,7 +18,7 @@ import { pinnedWorkspaceId } from "@/lib/tenant";
 // one its host belongs to (src/lib/tenant.ts). The user's session rides as a Bearer token. This
 // module is the only one that speaks that API.
 
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_MS = process.env.NODE_ENV === "development" ? 60_000 : 15_000;
 // Sending an e-mail with attachments goes on to the provider before it answers.
 const MAIL_SEND_TIMEOUT_MS = 90_000;
 // Saving a model key waits for the provider to say whether it accepts it.
