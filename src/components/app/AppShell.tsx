@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/app/Sidebar";
 import { TopBar } from "@/components/app/TopBar";
 import { ComputerProvider } from "@/components/experts/ComputerProvider";
 import { ExpertsProvider } from "@/components/experts/ExpertsProvider";
+import { YeleBubble } from "@/components/yele/YeleBubble";
 import type { InitialExperts } from "@/components/experts/useExperts";
 import { cn } from "@/lib/utils";
 
@@ -94,6 +95,7 @@ export function AppShell({ children, initialExperts }: { children: React.ReactNo
           <ComputerProvider key={computerAgentId ?? "none"} agentId={computerAgentId}>
             {children}
           </ComputerProvider>
+          <YeleBubble />
         </main>
       </div>
     </ExpertsProvider>
