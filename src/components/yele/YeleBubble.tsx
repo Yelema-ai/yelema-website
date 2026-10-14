@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Sparkles,
   X,
@@ -73,12 +73,19 @@ const YELE_SHORTCUTS = [
 export function YeleBubble() {
   const { experts } = useExpertsContext();
   const agentId = experts[0]?.agentId;
+
+  // Détection dynamique du profil compagnon s'il est déployé, sinon accueil par défaut de l'instance
+  const companionProfile = useMemo(() => {
+    const found = experts.find((e) => e.profileId === "yele" || e.catalogueKey === "yele");
+    return found ? found.profileId : null;
+  }, [experts]);
+
   const [open, setOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Restore saved session if any
+  // Restauration de session sauvegardée
   useEffect(() => {
     if (typeof window !== "undefined") {
       const saved = window.sessionStorage.getItem("yele_session_id");
@@ -95,12 +102,12 @@ export function YeleBubble() {
 
   const { messages, isStreaming, error, send } = useChat({
     agentId: agentId ?? "",
-    profile: "yele",
+    profile: companionProfile,
     sessionId,
     onSessionCreated: handleSessionCreated,
   });
 
-  // Auto-scroll to bottom of messages
+  // Défilement automatique vers les derniers messages
   useEffect(() => {
     if (open && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -130,7 +137,7 @@ export function YeleBubble() {
 
   return (
     <>
-      {/* Floating Action Button */}
+      {/* Bouton Flottant Yélé */}
       <div className="fixed bottom-6 right-6 z-50">
         <button
           type="button"
@@ -162,7 +169,7 @@ export function YeleBubble() {
         </button>
       </div>
 
-      {/* Floating Modal / Drawer */}
+      {/* Volet Flottant / Drawer */}
       {open && (
         <div
           className="fixed bottom-20 right-4 sm:right-6 z-50 flex h-[580px] max-h-[85vh] w-[calc(100vw-32px)] max-w-[420px] flex-col overflow-hidden rounded-[26px] border border-line bg-surface/98 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.22)] animate-in fade-in zoom-in-95 duration-200"
