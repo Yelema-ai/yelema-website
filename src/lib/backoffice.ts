@@ -6,6 +6,7 @@ import { scopePath, type LlmKeyDraft, type LlmModelChoice, type LlmLoginView, ty
 import { mailPath, type MailDetail, type MailDraft, type MailInbox, type MailRights, type MailRightsPatch, type MailSummary } from "@/lib/mail";
 import { isPublicId, type MemoryList, type MemoryNote, type MemoryPatch, type OrgChart, type OrgGrantDraft } from "@/lib/memory";
 import { backofficeUrl } from "@/lib/runtime-config";
+import { SIGNALING_METHOD, type SignalingStep, type VoiceOption } from "@/lib/voice";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 
 // The Yelema back office's API for this app (`/api/v1/app/*`, guide: yelema-platform
@@ -24,6 +25,8 @@ const MAIL_SEND_TIMEOUT_MS = 90_000;
 const SETTING_WRITE_TIMEOUT_MS = 30_000;
 // A reasoned answer of the company memory runs a model on the provider's side.
 const MEMORY_ASK_TIMEOUT_MS = 75_000;
+// A dictation is transcribed in about the time it was spoken (4 minutes at most).
+const DICTATION_TIMEOUT_MS = 95_000;
 
 export class BackofficeError extends Error {
   status: number;
@@ -51,7 +54,8 @@ export interface BoSession {
 
 export interface BoMe {
   /** `id` is the account's stable id: the user's connected apps (Composio) hang off it. */
-  user: { id: string; email: string; name: string | null; role: "admin" | "member" };
+  /** `name` is « Prénom Nom », computed by the back office from the two. */
+  user: { id: string; email: string; firstName: string | null; lastName: string | null; name: string | null; jobTitle: string | null; role: "admin" | "member" };
   workspace: { id: string; name: string; logoUrl: string | null };
   instance: { id: string } | null;
 }
@@ -137,7 +141,7 @@ function invoicePath(id: string, rest: string): string {
 
 // `workspace` is given by the proxy, which runs before a request has a scope to read it from.
 // `form` sends a multipart body instead of JSON (a document for the company memory).
-async function call<T>(path: string, init: { method?: string; token?: string | null; body?: unknown; form?: FormData; workspace?: string; timeoutMs?: number } = {}): Promise<T> {
+async function call<T>(path: string, init: { method?: string; token?: string | null; body?: unknown; form?: FormData; workspace?: string; timeoutMs?: number; headers?: Record<string, string> } = {}): Promise<T> {
   const base = backofficeUrl();
   const workspace = init.workspace ?? (await pinnedWorkspaceId());
   if (!base || !workspace) throw new BackofficeError(500, "config_error", "BACKOFFICE_URL and a workspace are required");
@@ -151,6 +155,7 @@ async function call<T>(path: string, init: { method?: string; token?: string | n
         "X-Workspace-Id": workspace,
         ...(init.token ? { Authorization: `Bearer ${init.token}` } : {}),
         ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...init.headers,
       },
       body: init.form ?? (init.body === undefined ? undefined : JSON.stringify(init.body)),
       cache: "no-store",
@@ -261,6 +266,7 @@ export const backoffice = {
   logout: (token: string) => call<{ ok: true }>("/app/auth/logout", { method: "POST", token }),
 
   me: (token: string) => call<BoMe>("/app/me", { token }),
+  updateMe: (token: string, patch: { firstName?: string; lastName?: string; jobTitle?: string }) => call<BoMe>("/app/me", { method: "PATCH", token, body: patch }),
   instance: async (token: string): Promise<BoInstanceReading> => {
     const d = await call<{ instance: BoInstance | null; installation?: string; failedExperts?: unknown }>("/app/instance", { token });
     const known = d.installation === "running" || d.installation === "ready" || d.installation === "failed";
@@ -308,6 +314,14 @@ export const backoffice = {
   // The experts' e-mail. One inbox per expert for the whole workspace; the back office holds the
   // provider's key and decides on every call who may read and who may send. A refusal to send is a
   // 403 whose sentence is shown as it is; 404 everywhere when the feature is off.
+  // Voice calls: the back office answers with Aethex's own bodies, which the browser's SDK reads.
+  voiceVoices: async (token: string) => (await call<{ items: VoiceOption[] }>("/app/voice/voices", { token })).items,
+  // A dictation of the chat (WAV/FLAC/Ogg), transcribed by the back office's speech service.
+  voiceTranscribe: (token: string, form: FormData) => call<{ text: string }>("/app/voice/transcribe", { method: "POST", token, form, timeoutMs: DICTATION_TIMEOUT_MS }),
+  voiceStart: (token: string, headers: Record<string, string>, body: unknown) =>
+    call<Record<string, unknown>>("/app/voice/calls", { method: "POST", token, body, headers }),
+  voiceSignal: (token: string, conversationId: string, step: SignalingStep, body: unknown) =>
+    call<Record<string, unknown>>(`/app/voice/calls/${conversationId}/${step}`, { method: SIGNALING_METHOD[step], token, body }),
   mailInboxes: async (token: string) => (await call<{ items: MailInbox[] }>("/app/mail/inboxes", { token })).items,
   // Newest first, 25 a page; `page` is the previous answer's `nextPageToken`.
   mailMessages: (token: string, expert: string, page?: string) =>

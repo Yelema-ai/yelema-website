@@ -18,6 +18,7 @@ export interface SessionUser {
   id: string;
   email: string | null;
   name: string | null;
+  firstName: string | null;
 }
 
 // Two ways to know who is signed in, chosen per deployment (authViaBackoffice in runtime-config):
@@ -27,14 +28,14 @@ export interface SessionUser {
 export async function getSession(): Promise<{ user: SessionUser | null }> {
   if (authViaBackoffice()) {
     const me = await currentPrincipal();
-    return { user: me ? { id: me.user.id, email: me.user.email, name: me.user.name } : null };
+    return { user: me ? { id: me.user.id, email: me.user.email, name: me.user.name, firstName: me.user.firstName ?? null } : null };
   }
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const name = (user?.user_metadata?.name as string | undefined)?.trim() || null;
-  return { user: user ? { id: user.id, email: user.email ?? null, name } : null };
+  return { user: user ? { id: user.id, email: user.email ?? null, name, firstName: name?.split(" ")[0] ?? null } : null };
 }
 
 export async function requireUser() {

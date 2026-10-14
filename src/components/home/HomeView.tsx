@@ -117,7 +117,7 @@ function Installing() {
 // this user; the catalogue only dresses it.
 export function HomeView() {
   const router = useRouter();
-  const { current, userEmail } = useWorkspace();
+  const { current, userEmail, userFirstName } = useWorkspace();
   const { experts, loading, unreadable, installing, stalled, failed, failedExperts } = useExpertsContext();
   const { catalogue } = useCatalogue(current?.id);
   const [picked, setPicked] = useState<string | null>(null);
@@ -128,7 +128,7 @@ export function HomeView() {
   const fallback = experts.find((e) => e.catalogueKey && e.catalogueKey === catalogue.defaultExpertKey) ?? experts[0];
   const to = experts.find((e) => expertId(e) === picked) ?? fallback ?? null;
   const suggestions = (to?.catalogueKey && entries.get(to.catalogueKey)?.suggestions) || [];
-  const hello = userEmail.split("@")[0];
+  const hello = userFirstName || userEmail.split("@")[0];
 
   function send(message: string) {
     const m = message.trim();

@@ -79,7 +79,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const initialExperts = await loadInitialExperts(workspaces[0].id, user.id);
 
   return (
-    <WorkspaceProvider initialWorkspaces={workspaces} userEmail={user.email ?? ""}>
+    <WorkspaceProvider initialWorkspaces={workspaces} userEmail={user.email ?? ""} userName={user.name} userFirstName={user.firstName}>
       <AppShell initialExperts={initialExperts}>{children}</AppShell>
     </WorkspaceProvider>
   );

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Check, Loader2, Mic, Send, Square, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { AttachButton, AttachmentTray } from "./Attachments";
 import { EffortMenu } from "./EffortMenu";
@@ -9,27 +10,51 @@ import { ModelMenu } from "./ModelMenu";
 import type { ChatAttachments } from "./useChatAttachments";
 import { useChatModels } from "./useChatModels";
 import { useChatContext } from "./ChatProvider";
-import { useAudioRecorder } from "./useAudioRecorder";
 import { findModel, prettyModelLabel, type ChatSettings } from "./types";
 import type { SendSettings } from "./useChat";
+import { useDictation } from "./useDictation";
+import { useVoices } from "@/components/voice/useVoices";
+import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 
 interface Props {
   agentId: string;
   isStreaming: boolean;
+  // Attachment state is owned by ChatView (so the whole pane is a drop zone) and passed in.
   att: ChatAttachments;
   onSend: (text: string, settings: SendSettings) => void;
   onStop: () => void;
+  // Prominent welcome-state composer (vs the compact docked composer).
   large?: boolean;
   focusToken?: number;
 }
 
 export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large = false, focusToken = 0 }: Props) {
   const [text, setText] = useState("");
+  // model + provider are always chosen together (one selection); effort is independent. Group
+  // them as the composer's outgoing ChatSettings so send is just `{ ...settings, files }`.
   const [settings, setSettings] = useState<ChatSettings>({ model: null, provider: null, reasoningEffort: null });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Each expert's profile has its own model configuration.
   const { profile } = useChatContext();
   const { groups, defaultModel, loading } = useChatModels(agentId, profile);
+
+  useEffect(() => {
+    if (focusToken === 0) return;
+    const frame = requestAnimationFrame(() => textareaRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [focusToken]);
+
+  // The model switcher is a persistent control, shown once the instance reports at least one model
+  // (the older metered gateway exposes a single "default"; current builds expose the full catalog).
+  // It stays hidden until the list resolves and hides if the call returns nothing (e.g. fetch
+  // failed) — the agent default still runs, and there's no appear-then-vanish flicker. Every group
+  // carries at least one model (useChatModels only creates a group when it has one), so a non-empty
+  // `groups` is exactly "has models".
+  const defaultLabel = useMemo(() => {
+    const def = findModel(groups, defaultModel);
+    return def ? prettyModelLabel(def.label) : loading ? "Loading…" : "Default";
+  }, [groups, defaultModel, loading]);
 
   const grow = (el: HTMLTextAreaElement) => {
     const minHeight = large ? 76 : 44;
@@ -38,45 +63,25 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
     el.style.height = `${Math.max(minHeight, Math.min(el.scrollHeight, maxHeight))}px`;
   };
 
-  const {
-    isRecording,
-    isTranscribing,
-    duration,
-    audioLevel,
-    recordError,
-    startRecording,
-    stopRecording,
-    cancelRecording,
-  } = useAudioRecorder({
-    agentId,
-    onTranscribed: (transcribedText) => {
-      setText((prev) => {
-        const separator = prev.trim().length > 0 ? " " : "";
-        return `${prev}${separator}${transcribedText}`;
+  // Dictation goes through the speech service: offered only where voice is on (voices are offered).
+  const canDictate = useVoices().length > 0;
+  const { experts } = useExpertsContext();
+  const expertKey = experts.find((e) => e.agentId === agentId && e.profileId === profile)?.catalogueKey ?? null;
+  const dictation = useDictation({
+    expert: expertKey,
+    onText: (said) => {
+      setText((prev) => (prev.trim() ? `${prev.trim()} ${said}` : said));
+      requestAnimationFrame(() => {
+        if (!textareaRef.current) return;
+        grow(textareaRef.current);
+        textareaRef.current.focus();
       });
-      if (textareaRef.current) {
-        requestAnimationFrame(() => {
-          if (textareaRef.current) {
-            grow(textareaRef.current);
-            textareaRef.current.focus();
-          }
-        });
-      }
     },
+    onError: (message) => toast.error(message),
   });
+  const dictating = dictation.state !== "idle";
 
-  useEffect(() => {
-    if (focusToken === 0) return;
-    const frame = requestAnimationFrame(() => textareaRef.current?.focus());
-    return () => cancelAnimationFrame(frame);
-  }, [focusToken]);
-
-  const defaultLabel = useMemo(() => {
-    const def = findModel(groups, defaultModel);
-    return def ? prettyModelLabel(def.label) : loading ? "Loading…" : "Default";
-  }, [groups, defaultModel, loading]);
-
-  const canSend = (text.trim().length > 0 || att.hasFiles) && !att.blocksSend && !isStreaming;
+  const canSend = (text.trim().length > 0 || att.hasFiles) && !att.blocksSend && !isStreaming && !dictating;
 
   const submit = () => {
     if (isStreaming) return;
@@ -95,142 +100,115 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
     }
   };
 
-  const formatDuration = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m}:${s < 10 ? "0" : ""}${s}`;
-  };
-
   return (
     <div
       className={cn(
         "mx-auto w-full rounded-[22px] border border-line bg-surface shadow-[0_8px_30px_rgb(48_22_103_/_0.06)] transition-[border-color,box-shadow] focus-within:border-brand/30",
-        large ? "max-w-2xl" : "max-w-3xl",
-        isRecording && "border-red-400/50 shadow-[0_8px_30px_rgb(239_68_68_/_0.08)]"
+        large ? "max-w-2xl" : "max-w-3xl"
       )}
     >
-      {isRecording ? (
-        <div className="flex items-center gap-3 px-5 py-4 animate-in fade-in duration-200">
-          <span className="relative flex h-3.5 w-3.5 items-center justify-center">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-600" />
-          </span>
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-sm font-semibold text-ink">{formatDuration(duration)}</span>
-            <span className="text-xs text-ink-3">Enregistrement vocal... Parlez maintenant</span>
-          </div>
-
-          <div className="ml-auto mr-2 flex h-5 items-center gap-1">
-            {[40, 70, 100, 60, 85].map((h, i) => (
-              <span
-                key={i}
-                className="w-1 rounded-full bg-red-500/80 transition-all duration-75"
-                style={{
-                  height: `${Math.max(4, Math.min(20, Math.round((audioLevel / 100) * h * 0.25)))}px`,
-                }}
-              />
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
+      <textarea
+        ref={textareaRef}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          grow(e.target);
+        }}
+        onKeyDown={onKeyDown}
+        onPaste={att.handlePaste}
+        rows={1}
+        placeholder="Écrivez votre message…"
+        className={cn(
+          "w-full resize-none bg-transparent px-5 pb-2 pt-4 text-ink placeholder:text-ink-3 focus:outline-none",
+          large ? "min-h-[76px] max-h-[180px] text-[15px] leading-6" : "min-h-[44px] max-h-[180px] text-[15px] leading-relaxed"
+        )}
+      />
+      <AttachmentTray files={att.files} onRemove={att.removeFile} onRetry={att.retryFile} />
+      {dictating ? (
+        <DictationBar dictation={dictation} />
+      ) : (
+      <div className="flex items-center gap-2 px-3 pb-3">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <AttachButton onFiles={att.addFiles} disabled={isStreaming} />
+          {canDictate && (
             <button
               type="button"
-              onClick={cancelRecording}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-surface px-3 text-xs font-semibold text-ink-2 transition-colors hover:bg-soft hover:text-ink"
-              title="Annuler l'enregistrement"
+              onClick={() => void dictation.start()}
+              disabled={isStreaming}
+              aria-label="Dicter un message"
+              title="Dicter un message"
+              className="inline-flex size-9 items-center justify-center rounded-xl text-ink-2 transition-colors hover:bg-soft hover:text-ink disabled:opacity-40"
             >
-              <Trash2 className="h-3.5 w-3.5 text-ko" />
-              Annuler
+              <Mic className="h-[18px] w-[18px]" />
             </button>
+          )}
+          {groups.length > 0 && (
+            <ModelMenu
+              groups={groups}
+              model={settings.model}
+              defaultModel={defaultModel}
+              defaultLabel={defaultLabel}
+              disabled={isStreaming}
+              onChange={(model, provider) => setSettings((s) => ({ ...s, model, provider }))}
+            />
+          )}
+          <EffortMenu
+            value={settings.reasoningEffort}
+            disabled={isStreaming}
+            onChange={(reasoningEffort) => setSettings((s) => ({ ...s, reasoningEffort }))}
+          />
+        </div>
+        <div className="ml-auto flex shrink-0 items-center">
+          {isStreaming ? (
             <button
               type="button"
-              onClick={stopRecording}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand px-3.5 text-xs font-semibold text-on-brand transition-opacity hover:opacity-90"
-              title="Terminer et transcrire"
+              onClick={onStop}
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-bg hover:opacity-90"
             >
-              <Check className="h-3.5 w-3.5" />
-              Terminer
+              <Square className="h-3 w-3" fill="currentColor" strokeWidth={0} /> Arrêter
             </button>
-          </div>
+          ) : (
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!canSend}
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-on-brand transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              {att.uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Envoyer
+            </button>
+          )}
         </div>
-      ) : isTranscribing ? (
-        <div className="flex items-center gap-3 px-5 py-4 animate-in fade-in duration-200">
-          <Loader2 className="h-4 w-4 animate-spin text-brand" />
-          <span className="text-sm font-medium text-ink-2">Transcription en cours...</span>
-        </div>
+      </div>
+      )}
+    </div>
+  );
+}
+
+const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+/** While dictating: duration and level, then cancel or keep (which transcribes into the message). */
+function DictationBar({ dictation }: { dictation: ReturnType<typeof useDictation> }) {
+  const transcribing = dictation.state === "transcribing";
+  return (
+    <div className="flex items-center gap-3 px-3 pb-3">
+      <span className={cn("size-2.5 shrink-0 rounded-full", transcribing ? "bg-ink-3" : "animate-pulse bg-ko")} />
+      <span className="w-10 shrink-0 text-sm tabular-nums text-ink-2">{clock(dictation.seconds)}</span>
+      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-soft">
+        <div className="h-full rounded-full bg-brand transition-[width] duration-100" style={{ width: `${Math.round(dictation.level * 100)}%` }} />
+      </div>
+      {transcribing ? (
+        <span className="inline-flex shrink-0 items-center gap-2 text-sm text-ink-2">
+          <Loader2 className="h-4 w-4 animate-spin" /> Transcription…
+        </span>
       ) : (
         <>
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value);
-              grow(e.target);
-            }}
-            onKeyDown={onKeyDown}
-            onPaste={att.handlePaste}
-            rows={1}
-            placeholder="Écrivez votre message…"
-            className={cn(
-              "w-full resize-none bg-transparent px-5 pb-2 pt-4 text-ink placeholder:text-ink-3 focus:outline-none",
-              large ? "min-h-[76px] max-h-[180px] text-[15px] leading-6" : "min-h-[44px] max-h-[180px] text-[15px] leading-relaxed"
-            )}
-          />
-          <AttachmentTray files={att.files} onRemove={att.removeFile} onRetry={att.retryFile} />
-          {recordError && (
-            <div className="px-5 pb-1 text-xs font-medium text-ko">{recordError}</div>
-          )}
-          <div className="flex items-center gap-2 px-3 pb-3">
-            <div className="flex min-w-0 items-center gap-1.5">
-              <AttachButton onFiles={att.addFiles} disabled={isStreaming} />
-              <button
-                type="button"
-                onClick={startRecording}
-                disabled={isStreaming}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-ink-3 transition-colors hover:bg-soft hover:text-ink disabled:opacity-40"
-                title="Dicter un message vocal (Speech-to-Text)"
-                aria-label="Dicter un message vocal"
-              >
-                <Mic className="h-4 w-4" />
-              </button>
-              {groups.length > 0 && (
-                <ModelMenu
-                  groups={groups}
-                  model={settings.model}
-                  defaultModel={defaultModel}
-                  defaultLabel={defaultLabel}
-                  disabled={isStreaming}
-                  onChange={(model, provider) => setSettings((s) => ({ ...s, model, provider }))}
-                />
-              )}
-              <EffortMenu
-                value={settings.reasoningEffort}
-                disabled={isStreaming}
-                onChange={(reasoningEffort) => setSettings((s) => ({ ...s, reasoningEffort }))}
-              />
-            </div>
-            <div className="ml-auto flex shrink-0 items-center">
-              {isStreaming ? (
-                <button
-                  type="button"
-                  onClick={onStop}
-                  className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-ink px-4 text-sm font-semibold text-bg hover:opacity-90"
-                >
-                  <Square className="h-3 w-3" fill="currentColor" strokeWidth={0} /> Arrêter
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={submit}
-                  disabled={!canSend}
-                  className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-on-brand transition-opacity hover:opacity-90 disabled:opacity-40"
-                >
-                  {att.uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Envoyer
-                </button>
-              )}
-            </div>
-          </div>
+          <button type="button" onClick={dictation.cancel} aria-label="Annuler la dictée" className="inline-flex size-9 items-center justify-center rounded-xl text-ink-2 hover:bg-soft">
+            <Trash2 className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={dictation.finish} className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-on-brand hover:opacity-90">
+            <Check className="h-4 w-4" /> Terminer
+          </button>
         </>
       )}
     </div>

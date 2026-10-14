@@ -114,7 +114,7 @@ function memo<T>(load: (token: string) => Promise<T>) {
     return pending;
   }
 
-  return async (workspace: string, token: string): Promise<T> => {
+  const read = async (workspace: string, token: string): Promise<T> => {
     const key = `${workspace}:${fingerprint(token)}`;
     const hit = store.get(key);
     const age = hit ? Date.now() - hit.at : Infinity;
@@ -131,11 +131,21 @@ function memo<T>(load: (token: string) => Promise<T>) {
     }
     return hit.value;
   };
+  // An answer the caller already holds (the back office's reply to a change) replaces the kept one.
+  const put = (workspace: string, token: string, value: T): void => {
+    store.set(`${workspace}:${fingerprint(token)}`, { at: Date.now(), value });
+  };
+  return Object.assign(read, { put });
 }
 
 function noop(): void {}
 
 const meOf = memo((token) => backoffice.me(token));
+
+/** After the user changed their own profile: the next page shows it at once, not the kept answer. */
+export function rememberPrincipal(workspace: string, token: string, me: BoMe): void {
+  meOf.put(workspace, token, me);
+}
 const instanceOf = memo((token) => backoffice.instance(token));
 
 // A refused session (expired, suspended, no longer a member) reads as "nobody signed in"; an

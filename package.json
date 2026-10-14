@@ -12,6 +12,7 @@
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
+    "@aethexai/react": "1.0.0",
     "@composio/core": "^0.13.1",
     "@novnc/novnc": "^1.7.0",
     "@radix-ui/react-dialog": "^1.1.6",
