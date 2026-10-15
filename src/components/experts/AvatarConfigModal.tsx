@@ -35,7 +35,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ExpertImage } from '@/components/experts/ExpertImage';
 import { cn } from '@/lib/utils';
 import {
   type AgentAvatarConfig,
@@ -173,9 +172,14 @@ export function AvatarConfigModal({
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
-        throw new Error(data.error || 'Erreur lors de la génération de l’avatar.');
+        const errorMsg =
+          (typeof data?.error === 'string' && data.error) ||
+          data?.error?.message ||
+          data?.message ||
+          'Erreur lors de la génération de l’avatar.';
+        throw new Error(errorMsg);
       }
 
       setGeneratedUrl(data.avatarUrl);
@@ -255,14 +259,22 @@ export function AvatarConfigModal({
               className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-line shadow-inner flex items-center justify-center"
               style={{ backgroundColor: frameBackground }}
             >
-              <ExpertImage
-                src={shownAvatarSrc}
-                size={240}
-                className={cn(
-                  'h-full w-full object-cover object-[50%_15%] transition-opacity duration-300',
-                  phase === 'generating' ? 'opacity-30 blur-[1px]' : 'opacity-100'
-                )}
-              />
+              {shownAvatarSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={shownAvatarSrc}
+                  alt={expertName}
+                  crossOrigin="anonymous"
+                  className={cn(
+                    'h-full w-full object-cover object-[50%_15%] transition-opacity duration-300',
+                    phase === 'generating' ? 'opacity-30 blur-[1px]' : 'opacity-100'
+                  )}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-4 text-center text-xs text-ink-3">
+                  Aucun portrait disponible
+                </div>
+              )}
 
               {phase === 'generating' && (
                 <div className="absolute inset-0 grid place-items-center bg-black/10">
