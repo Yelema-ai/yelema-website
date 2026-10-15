@@ -32,3 +32,7 @@ yarn-error.log*
 .vercel
 .gstack/
 .claude
+
+# local supabase
+supabase/.branches/
+supabase/.temp/

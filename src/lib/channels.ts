@@ -77,10 +77,10 @@ export function isConnectableChannel(channel: MessagingPlatform): boolean {
 
 // The four channels the Messaging tab leads with, in this order. Everything else the harness
 // supports is still offered, folded under "More channels".
-export const FEATURED_CHANNELS = ["telegram", "whatsapp", "slack", "discord"] as const;
+export const FEATURED_CHANNELS = ["telegram", "whatsapp", "teams", "slack", "discord"] as const;
 
-// Telegram and WhatsApp connect through their own panel; the rest take a credentials form.
-export const GUIDED_CHANNELS = ["telegram", "whatsapp"] as const;
+// Telegram, WhatsApp and Microsoft Teams connect through their own panel; the rest take a credentials form.
+export const GUIDED_CHANNELS = ["telegram", "whatsapp", "teams"] as const;
 
 export function isGuidedChannel(id: string): boolean {
   return (GUIDED_CHANNELS as readonly string[]).includes(id);

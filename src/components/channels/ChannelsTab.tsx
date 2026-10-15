@@ -19,6 +19,7 @@ import { channelBrand } from "@/components/channels/BrandIcons";
 import { ChannelCredentialsForm } from "@/components/channels/ChannelCredentialsForm";
 import { TelegramConnect } from "@/components/channels/TelegramConnect";
 import { TelegramTopics } from "@/components/channels/TelegramTopics";
+import { MicrosoftTeamsConnect } from "@/components/channels/MicrosoftTeamsConnect";
 import { WhatsAppConnect } from "@/components/channels/WhatsAppConnect";
 
 // The Messaging tab: connect this agent to the apps its owner already uses, so they can talk to it
@@ -90,6 +91,8 @@ export function ChannelsTab({
           <TelegramConnect agentId={agentId} agentName={agent.name} channel={open} onBack={back} />
         ) : open.id === "whatsapp" ? (
           <WhatsAppConnect agentId={agentId} channel={open} onBack={back} />
+        ) : open.id === "teams" ? (
+          <MicrosoftTeamsConnect agentId={agentId} channel={open} onBack={back} />
         ) : (
           <ChannelCredentialsForm agentId={agentId} channel={open} onBack={back} />
         )}

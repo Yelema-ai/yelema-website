@@ -25,7 +25,10 @@ export async function GET(_request: Request, { params }: Ctx) {
 function rebrand(channel: MessagingPlatform): MessagingPlatform {
   return {
     ...channel,
-    description: neutralizeHarnessName(channel.description),
+    description:
+      channel.id === "teams"
+        ? "Connectez vos experts à vos conversations et canaux Microsoft Teams via Azure Bot Framework."
+        : neutralizeHarnessName(channel.description),
     env_vars: channel.env_vars.map((field) => ({
       ...field,
       description: neutralizeHarnessName(field.description),
