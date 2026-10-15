@@ -209,13 +209,14 @@ export function AvatarConfigModal({
     options: Option<T>[],
     current: T,
     labels: Record<T, string>,
-    apply: (key: T) => void
+    apply: (key: T) => void,
+    gridClass: string = 'grid-cols-4'
   ) => (
     <div className="flex flex-col gap-1.5">
       <span className="font-mono text-[10.5px] font-semibold uppercase tracking-wider text-ink-3">
         {label}
       </span>
-      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8" role="radiogroup" aria-label={label}>
+      <div className={cn("grid gap-1.5", gridClass)} role="radiogroup" aria-label={label}>
         {options.map((opt) => {
           const selected = current === opt.key;
           return (
@@ -226,14 +227,16 @@ export function AvatarConfigModal({
               aria-checked={selected}
               onClick={() => apply(opt.key)}
               className={cn(
-                'flex flex-col items-center justify-center gap-1 rounded-lg border p-1.5 text-center transition-all min-h-[46px]',
+                'flex flex-col items-center justify-center gap-1 rounded-xl border px-1.5 py-1.5 text-center transition-all min-h-[48px] w-full overflow-hidden',
                 selected
                   ? 'border-brand bg-brand/10 font-semibold text-brand shadow-xs'
                   : 'border-line bg-surface text-ink-2 hover:border-brand/40 hover:bg-soft'
               )}
             >
               <div className={cn(selected ? 'text-brand' : 'text-ink-3')}>{opt.icon}</div>
-              <span className="text-[10.5px] leading-tight">{labels[opt.key]}</span>
+              <span className="w-full text-center text-[10.5px] leading-tight truncate px-0.5" title={labels[opt.key]}>
+                {labels[opt.key]}
+              </span>
             </button>
           );
         })}
@@ -243,7 +246,7 @@ export function AvatarConfigModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl overflow-hidden p-0 sm:rounded-2xl">
+      <DialogContent className="max-w-4xl overflow-hidden p-0 sm:rounded-2xl">
         <DialogHeader className="border-b border-line px-5 py-4">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-base font-bold text-ink">
@@ -333,16 +336,16 @@ export function AvatarConfigModal({
 
           {/* Colonne droite : Les 4 axes de personnalisation */}
           <div className="flex flex-col gap-4">
-            {renderAxis('Position', POSITIONS, draft.position, AVATAR_POSITION_LABELS, (k) => patch({ position: k }))}
-            {renderAxis('Tenue', STYLES, draft.style, AVATAR_STYLE_LABELS, (k) => patch({ style: k }))}
-            {renderAxis('Accessoire', ACCESSORIES, draft.accessory, AVATAR_ACCESSORY_LABELS, (k) => patch({ accessory: k }))}
+            {renderAxis('Position', POSITIONS, draft.position, AVATAR_POSITION_LABELS, (k) => patch({ position: k }), 'grid-cols-4')}
+            {renderAxis('Tenue', STYLES, draft.style, AVATAR_STYLE_LABELS, (k) => patch({ style: k }), 'grid-cols-4')}
+            {renderAxis('Accessoire', ACCESSORIES, draft.accessory, AVATAR_ACCESSORY_LABELS, (k) => patch({ accessory: k }), 'grid-cols-3 sm:grid-cols-5')}
 
             {/* Axe Fond avec nuancier */}
             <div className="flex flex-col gap-1.5">
               <span className="font-mono text-[10.5px] font-semibold uppercase tracking-wider text-ink-3">
                 Fond
               </span>
-              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8" role="radiogroup" aria-label="Fond">
+              <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Fond">
                 {BACKGROUNDS.map((bg) => {
                   const selected = draft.background === bg;
                   return (
@@ -353,17 +356,19 @@ export function AvatarConfigModal({
                       aria-checked={selected}
                       onClick={() => patch({ background: bg })}
                       className={cn(
-                        'flex flex-col items-center justify-center gap-1 rounded-lg border p-1.5 text-center transition-all min-h-[46px]',
+                        'flex flex-col items-center justify-center gap-1 rounded-xl border px-1.5 py-1.5 text-center transition-all min-h-[48px] w-full overflow-hidden',
                         selected
                           ? 'border-brand bg-brand/10 font-semibold text-brand shadow-xs'
                           : 'border-line bg-surface text-ink-2 hover:border-brand/40 hover:bg-soft'
                       )}
                     >
                       <span
-                        className="size-3.5 rounded-full border border-black/15 shadow-2xs"
+                        className="size-3.5 rounded-full border border-black/15 shadow-2xs shrink-0"
                         style={{ backgroundColor: AVATAR_BACKGROUND_COLORS[bg] }}
                       />
-                      <span className="text-[10.5px] leading-tight">{AVATAR_BACKGROUND_LABELS[bg]}</span>
+                      <span className="w-full text-center text-[10.5px] leading-tight truncate px-0.5" title={AVATAR_BACKGROUND_LABELS[bg]}>
+                        {AVATAR_BACKGROUND_LABELS[bg]}
+                      </span>
                     </button>
                   );
                 })}
