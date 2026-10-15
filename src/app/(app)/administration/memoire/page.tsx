@@ -1,12 +1,6 @@
-import { PageBody } from "@/components/app/PageBody";
-import { MemoryView } from "@/components/memory/MemoryView";
+import { redirect } from "next/navigation";
 
-// Administration · Mémoire : ce que les experts savent de l'entreprise. Chacun y voit les dépôts de
-// ses compartiments ; l'administrateur et les responsables d'unité y déposent notes et documents.
+// La mémoire vit désormais dans l'onglet Entreprise.
 export default function Page() {
-  return (
-    <PageBody>
-      <MemoryView />
-    </PageBody>
-  );
+  redirect("/administration/entreprise");
 }

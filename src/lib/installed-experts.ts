@@ -2,6 +2,7 @@ import "server-only";
 import { backofficeAgentRow, type DB } from "@/lib/auth";
 import { loadCatalogue, matchCatalogue } from "@/lib/catalogue";
 import { expertDisplayName } from "@/lib/experts";
+import { orderExperts } from "@/lib/expert-order";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { currentInstallation, currentInstance } from "@/lib/session";
 import { listInstanceProfiles } from "@/lib/hermes-profiles";
@@ -136,9 +137,8 @@ export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
     };
   });
 
-  experts.sort((a, b) => a.displayName.localeCompare(b.displayName, "fr"));
   return {
-    experts,
+    experts: orderExperts(experts, catalogue.defaultExpertKey),
     unreadable: unreadable.map((a) => ({ agentId: a.agent37_id, agentName: a.name })),
     installing,
     failed: state.installation === "failed",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch, readApiError } from "@/lib/api";
 import type { MemoryItem, MemoryList, MemoryStatus } from "@/lib/memory";
@@ -25,7 +25,8 @@ const ALL = "";
 const FIELD = "w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm font-normal text-ink focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15";
 const SELECT = "w-full flex h-11 max-w-full rounded-xl border border-line bg-surface px-3 text-[15px] font-normal text-ink focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15";
 
-export function MemoryView() {
+// `embedded`: shown under the company's logo and presentation, on the Entreprise tab.
+export function MemoryView({ embedded = false, onDeposit }: { embedded?: boolean; onDeposit?: () => void }) {
   const [list, setList] = useState<MemoryList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -33,7 +34,7 @@ export function MemoryView() {
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [unit, setUnit] = useState(ALL);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const picker = useRef<HTMLInputElement>(null);
 
   const load = useCallback(
@@ -58,27 +59,35 @@ export function MemoryView() {
   // The first compartment the member may deposit in, while none is chosen.
   const target = targets.some((t) => t.id === unit) ? unit : (targets[0]?.id ?? ALL);
 
+  // The note, then each document on its own: a document takes the title only when it is alone.
   async function deposit() {
     setBusy(true);
+    const failed: File[] = [];
     try {
-      if (file) {
+      if (note.trim()) {
+        await apiFetch("/api/memory/items", { method: "POST", body: JSON.stringify({ title, note, unit: target === ALL ? null : target }) });
+        setTitle("");
+        setNote("");
+      }
+      for (const file of files) {
         const form = new FormData();
-        form.set("title", title);
+        form.set("title", (files.length === 1 && !note.trim() && title.trim()) || file.name);
         if (target !== ALL) form.set("unit", target);
         form.set("file", file);
         const res = await fetch("/api/memory/items", { method: "POST", body: form });
-        if (!res.ok) throw new Error(await readApiError(res, "Le document n’a pas pu être déposé."));
-      } else {
-        await apiFetch("/api/memory/items", { method: "POST", body: JSON.stringify({ title, note, unit: target === ALL ? null : target }) });
+        if (!res.ok) {
+          failed.push(file);
+          toast.error(`${file.name} : ${await readApiError(res, "le document n’a pas pu être déposé.")}`);
+        }
       }
-      setTitle("");
-      setNote("");
-      setFile(null);
-      await load();
+      if (files.length > 0 && failed.length < files.length) setTitle("");
+      setFiles(failed);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setBusy(false);
+      await load();
+      onDeposit?.();
     }
   }
 
@@ -93,7 +102,11 @@ export function MemoryView() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className="font-display text-[28px] font-bold tracking-tight text-ink">Mémoire de l’entreprise</h1>
+      {embedded ? (
+        <h2 className="mt-10 font-display text-[22px] font-bold tracking-tight text-ink">Mémoire de l’entreprise</h2>
+      ) : (
+        <h1 className="font-display text-[28px] font-bold tracking-tight text-ink">Mémoire de l’entreprise</h1>
+      )}
       <p className="mt-1 max-w-2xl text-sm text-ink-2">
         Ce que vos experts savent de l’entreprise : règles, procédures, documents de référence. Chaque expert ne lit que les compartiments ouverts à son utilisateur par l’organigramme.
       </p>
@@ -125,23 +138,25 @@ export function MemoryView() {
             <textarea className={`mt-1 min-h-28 ${FIELD}`} value={note} onChange={(e) => setNote(e.target.value)} />
           </label>
           <div className="mt-3">
-            <p className="text-[13px] font-semibold text-ink-3">Ou un document (PDF, texte ou JSON, 5 Mo au plus)</p>
-            <div className="mt-1 flex flex-wrap items-center gap-3">
-              <Button type="button" variant="outline" size="sm" onClick={() => picker.current?.click()}>
-                {file ? "Changer de document" : "Choisir un document"}
-              </Button>
-              {file && (
-                <span className="flex min-w-0 items-center gap-2 text-sm text-ink-2">
-                  <span className="truncate">{file.name}</span>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setFile(null)}>
-                    Retirer
-                  </Button>
-                </span>
-              )}
-            </div>
-            <HiddenFileInput inputRef={picker} onFiles={(files) => setFile(files[0] ?? null)} />
+            <p className="text-[13px] font-semibold text-ink-3">Documents de référence (PDF, texte ou JSON, 5 Mo au plus chacun)</p>
+            {files.length > 0 && (
+              <ul className="mt-1 space-y-1">
+                {files.map((f, i) => (
+                  <li key={`${f.name}:${i}`} className="flex min-w-0 items-center gap-2 text-sm text-ink-2">
+                    <span className="truncate">{f.name}</span>
+                    <Button type="button" variant="ghost" size="sm" aria-label={`Retirer ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== i))}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => picker.current?.click()}>
+              <Plus className="h-4 w-4" /> {files.length > 0 ? "Ajouter d’autres documents" : "Ajouter des documents"}
+            </Button>
+            <HiddenFileInput inputRef={picker} onFiles={(picked) => setFiles([...files, ...Array.from(picked)])} />
           </div>
-          <Button className="mt-4" disabled={busy || !title.trim() || (!file && !note.trim())} onClick={() => void deposit()}>
+          <Button className="mt-4" disabled={busy || (note.trim() ? !title.trim() : files.length === 0)} onClick={() => void deposit()}>
             {busy ? "Dépôt en cours…" : "Déposer dans la mémoire"}
           </Button>
         </section>

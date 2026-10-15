@@ -1,19 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch, readApiError } from "@/lib/api";
 import { LOGO_ACCEPT, LOGO_MAX_BYTES, PRESENTATION_TITLE, type CompanyProfile } from "@/lib/company";
 import { HiddenFileInput } from "@/components/HiddenFileInput";
+import { MemoryView } from "@/components/memory/MemoryView";
+import { useWorkspace } from "@/components/WorkspaceProvider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-// "Votre entreprise", in three steps, each one optional: the logo, a presentation, reference
-// documents. The presentation and the documents are deposits of the company memory, open to the
-// whole company; the Mémoire tab lists and manages them afterwards.
+// "Votre entreprise": for an admin, the logo and a presentation; for everyone, the company memory
+// beneath (reference documents, notes, who reads them). The presentation is a deposit of that memory.
 
 const FIELD = "w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm font-normal text-ink focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15";
 
@@ -40,12 +40,12 @@ export function CompanyProfileView() {
   const router = useRouter();
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"logo" | "note" | "document" | null>(null);
+  const [busy, setBusy] = useState<"logo" | "note" | null>(null);
   const [note, setNote] = useState("");
-  const [title, setTitle] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  // Remounted after a presentation is deposited, so the memory below lists it.
+  const [memoryKey, setMemoryKey] = useState(0);
   const logoPicker = useRef<HTMLInputElement>(null);
-  const documentPicker = useRef<HTMLInputElement>(null);
+  const admin = useWorkspace().current?.role === "admin";
 
   const load = useCallback(
     () =>
@@ -54,7 +54,9 @@ export function CompanyProfileView() {
         .catch((e: Error) => setError(e.message)),
     []
   );
-  useEffect(() => void load(), [load]);
+  useEffect(() => {
+    if (admin) void load();
+  }, [admin, load]);
 
   async function run(step: NonNullable<typeof busy>, action: () => Promise<void>) {
     setBusy(step);
@@ -91,35 +93,22 @@ export function CompanyProfileView() {
       await apiFetch("/api/memory/items", { method: "POST", body: JSON.stringify({ title: PRESENTATION_TITLE, note, unit: null }) });
       setNote("");
       await load();
+      setMemoryKey((k) => k + 1);
       toast.success("Présentation déposée dans la mémoire de l’entreprise.");
     });
 
-  const sendDocument = () =>
-    run("document", async () => {
-      if (!file) return;
-      const form = new FormData();
-      form.set("title", title.trim() || file.name);
-      form.set("file", file);
-      const res = await fetch("/api/memory/items", { method: "POST", body: form });
-      if (!res.ok) throw new Error(await readApiError(res, "Le document n’a pas pu être déposé."));
-      setTitle("");
-      setFile(null);
-      await load();
-      toast.success("Document déposé dans la mémoire de l’entreprise.");
-    });
-
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-4xl">
       <h1 className="font-display text-[28px] font-bold tracking-tight text-ink">Votre entreprise</h1>
       <p className="mt-1 max-w-2xl text-sm text-ink-2">
-        Trois étapes pour que l’espace soit à votre image et que vos experts connaissent votre entreprise. Aucune n’est obligatoire.
-        {profile && ` ${profile.done} sur ${profile.total} ${profile.done > 1 ? "faites" : "faite"}.`}
+        Ce que vos experts savent de votre entreprise, et ce qui met l’espace à son image.
+        {admin && profile && ` ${profile.done} sur ${profile.total} ${profile.done > 1 ? "étapes faites" : "étape faite"}.`}
       </p>
 
-      {error && <p className="mt-4 max-w-xl rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{error}</p>}
-      {!profile && !error && <Loader2 className="mt-6 h-5 w-5 animate-spin text-ink-3" aria-label="Chargement" />}
+      {admin && error && <p className="mt-4 max-w-xl rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{error}</p>}
+      {admin && !profile && !error && <Loader2 className="mt-6 h-5 w-5 animate-spin text-ink-3" aria-label="Chargement" />}
 
-      {profile && (
+      {admin && profile && (
         <>
           <Step index={1} title="Votre logo" done={profile.logo} hint="Affiché dans votre espace et sur la page de connexion. PNG, JPEG ou WebP, 5 Mo au plus.">
             <div className="flex flex-wrap items-center gap-4">
@@ -145,37 +134,10 @@ export function CompanyProfileView() {
               {busy === "note" ? "Dépôt en cours…" : profile.note ? "Ajouter une autre note" : "Déposer la présentation"}
             </Button>
           </Step>
-
-          <Step index={3} title="Vos documents de référence" done={profile.document} hint="Plaquette, règlement, grille tarifaire, procédures. PDF, texte ou JSON, 5 Mo au plus par document.">
-            <div className="flex flex-wrap items-center gap-3">
-              <Button type="button" variant="outline" onClick={() => documentPicker.current?.click()}>
-                {file ? "Changer de document" : "Choisir un document"}
-              </Button>
-              {file && <span className="min-w-0 truncate text-sm text-ink-2">{file.name}</span>}
-            </div>
-            <HiddenFileInput inputRef={documentPicker} onFiles={(files) => setFile(files[0] ?? null)} />
-            {file && (
-              <>
-                <label className="mt-3 block text-[13px] font-semibold text-ink-3">
-                  Titre
-                  <input className={`mt-1 ${FIELD}`} value={title} maxLength={200} placeholder={file.name} onChange={(e) => setTitle(e.target.value)} />
-                </label>
-                <Button className="mt-3" disabled={busy === "document"} onClick={() => void sendDocument()}>
-                  {busy === "document" ? "Dépôt en cours…" : "Déposer le document"}
-                </Button>
-              </>
-            )}
-          </Step>
-
-          <p className="mt-5 text-sm text-ink-3">
-            Notes et documents se retrouvent, se désactivent et se suppriment dans l’onglet{" "}
-            <Link href="/administration/memoire" className="font-semibold text-brand-ink underline-offset-2 hover:underline">
-              Mémoire
-            </Link>
-            .
-          </p>
         </>
       )}
+
+      <MemoryView key={memoryKey} embedded onDeposit={admin ? () => void load() : undefined} />
     </div>
   );
 }

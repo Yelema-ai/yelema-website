@@ -35,7 +35,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       <div className={cn("flex items-center gap-1", collapsed && "flex-col")}>
         <Link href="/" className="flex min-w-0 items-center gap-2.5 px-2 pt-1.5 pb-3.5">
           {logoUrl ? (
-            // Le logo du client. Yelema reste en pied, en « Propulsé par ».
+            // Le logo du client. Yelema reste en pied, en « Powered by ».
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logoUrl} alt="" className="size-[38px] shrink-0 rounded-xl object-contain" />
           ) : (
@@ -128,7 +128,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             collapsed && "px-0"
           )}
         >
-          {!collapsed && "Propulsé par"}
+          {!collapsed && "Powered by"}
           <Image src="/yelema-long.png" alt="Yelema" width={55} height={16} className="h-4 w-auto" />
         </a>
       </div>

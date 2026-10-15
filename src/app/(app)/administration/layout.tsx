@@ -12,8 +12,7 @@ const TABS = [
   // The back office's: only where the app signs in through it.
   { href: "/administration/facturation", label: "Facturation", exact: false, adminOnly: true, backoffice: true },
   { href: "/administration/consommation", label: "Consommation", exact: false, adminOnly: true, backoffice: true },
-  { href: "/administration/entreprise", label: "Entreprise", exact: false, adminOnly: true, backoffice: true },
-  { href: "/administration/memoire", label: "Mémoire", exact: false, adminOnly: false, backoffice: true },
+  { href: "/administration/entreprise", label: "Entreprise", exact: false, adminOnly: false, backoffice: true },
   { href: "/administration/organigramme", label: "Organigramme", exact: false, adminOnly: true, backoffice: true },
 ];
 
@@ -21,9 +20,8 @@ const TABS = [
 // tout s'y gère dans le back-office Yelema. Connecteurs et Canaux, pour chacun, règlent sa propre
 // instance. Facturation et Consommation, pour les admins, lisent au back-office le forfait et les
 // factures, ce que les outils des experts ont coûté, et qui peut faire écrire chaque expert.
-// Entreprise, pour les admins, porte le logo, la présentation et les documents de référence.
-// Mémoire, pour chacun, montre ce que ses experts savent de l'entreprise ; Organigramme, pour les
-// admins, décide de qui lit quoi. Modèles dit sur quel compte de modèle tournent les experts : un
+// Entreprise, pour chacun, montre ce que ses experts savent de l'entreprise (sa mémoire) ; l'admin y
+// pose aussi le logo et la présentation. Organigramme, pour les admins, décide de qui lit quoi. Modèles dit sur quel compte de modèle tournent les experts : un
 // admin le règle pour l'entreprise ou pour un membre, un membre pour lui-même si son admin l'a permis.
 // MCP, aux mêmes portées, branche sur les experts les serveurs d'outils du client.
 export default function AdministrationLayout({ children }: { children: React.ReactNode }) {
