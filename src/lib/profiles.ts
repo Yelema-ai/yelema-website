@@ -37,6 +37,11 @@ export async function resolveProfile(row: AgentRow, raw: unknown): Promise<strin
   }
   const installed = await installedProfiles(row);
   if (installed && !installed.has(raw)) {
+    // Si c'est l'agent d'accompagnement Yelé et qu'il n'est pas encore déployé sous un profil nommé,
+    // on bascule gracieusement sur l'agent par défaut de l'instance pour assurer l'assistance sans erreur.
+    if (raw === "yele" || raw.endsWith("__yele")) {
+      return DEFAULT_PROFILE;
+    }
     throw new ApiError(404, "profile_not_found", "Cet expert n’est pas installé sur cet espace.");
   }
   return raw;

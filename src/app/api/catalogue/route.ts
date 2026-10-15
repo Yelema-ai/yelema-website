@@ -1,5 +1,5 @@
 import { requireMember, requireUser } from "@/lib/auth";
-import { loadCatalogue, matchCatalogue } from "@/lib/catalogue";
+import { isYele, loadCatalogue, matchCatalogue } from "@/lib/catalogue";
 import { ApiError, handleError, json } from "@/lib/http";
 import { installedProfiles, visibleAgents } from "@/lib/installed-experts";
 import type { CatalogueResponse, InstalledExpert } from "@/lib/types";
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
       available: catalogue.available,
       defaultExpertKey: catalogue.defaultExpertKey,
       categories: catalogue.categories,
-      experts: catalogue.experts.map((e) => ({ ...e, installed: installed.get(e.key) ?? [] })),
+      experts: catalogue.experts.filter((e) => !isYele(e.key) && !isYele(e.name)).map((e) => ({ ...e, installed: installed.get(e.key) ?? [] })), 
     });
   } catch (e) {
     return handleError(e);

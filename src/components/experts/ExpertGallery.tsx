@@ -133,9 +133,13 @@ export function ExpertGallery() {
   const { catalogue, loading } = useCatalogue(current?.id);
   const [category, setCategory] = useState<string | null>(null);
 
-  const shown = category ? catalogue.experts.filter((e) => e.category?.key === category) : catalogue.experts;
+  // Yelé est l'assistante d'accompagnement par défaut (dans son widget dédié),
+  // elle ne doit pas figurer dans la vitrine des experts du catalogue à recruter.
+  const catalogExperts = catalogue.experts.filter((e) => e.key !== "yele" && !e.key.includes("yele"));
+
+  const shown = category ? catalogExperts.filter((e) => e.category?.key === category) : catalogExperts;
   const categories = catalogue.categories
-    .map((c) => ({ ...c, count: catalogue.experts.filter((e) => e.category?.key === c.key).length }))
+    .map((c) => ({ ...c, count: catalogExperts.filter((e) => e.category?.key === c.key).length }))
     .filter((c) => c.count > 0);
 
   return (
@@ -161,7 +165,7 @@ export function ExpertGallery() {
             >
               <FilterChip
                 label="Tous"
-                count={catalogue.experts.length}
+                count={catalogExperts.length}
                 icon={Sparkles}
                 active={category === null}
                 onClick={() => setCategory(null)}

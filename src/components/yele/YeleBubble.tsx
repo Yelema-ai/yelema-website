@@ -71,14 +71,15 @@ const YELE_SHORTCUTS = [
 ];
 
 export function YeleBubble() {
-  const { experts } = useExpertsContext();
-  const agentId = experts[0]?.agentId;
+  const { experts, agentId: contextAgentId, companionProfile: contextCompanionProfile } = useExpertsContext();
+  const agentId = contextAgentId ?? experts[0]?.agentId;
 
   // Détection dynamique du profil compagnon s'il est déployé, sinon accueil par défaut de l'instance
   const companionProfile = useMemo(() => {
+    if (contextCompanionProfile) return contextCompanionProfile;
     const found = experts.find((e) => e.profileId === "yele" || e.catalogueKey === "yele");
     return found ? found.profileId : null;
-  }, [experts]);
+  }, [contextCompanionProfile, experts]);
 
   const [open, setOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);

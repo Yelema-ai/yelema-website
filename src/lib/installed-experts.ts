@@ -1,6 +1,6 @@
 import "server-only";
 import { backofficeAgentRow, type DB } from "@/lib/auth";
-import { loadCatalogue, matchCatalogue } from "@/lib/catalogue";
+import { catalogueKeyOf, isYele, loadCatalogue, matchCatalogue } from "@/lib/catalogue";
 import { expertDisplayName } from "@/lib/experts";
 import { orderExperts } from "@/lib/expert-order";
 import { authViaBackoffice } from "@/lib/runtime-config";
@@ -72,6 +72,10 @@ export function profilesMirrored(agents: AgentRow[]): boolean {
 
 export interface UserExperts {
   experts: Expert[];
+  /** Instance de l'utilisateur pour brancher le compagnon Yelé même si aucun expert n'est recruté */
+  agentId: string | null;
+  /** Profil dédié à Yelé s'il est déployé sur l'instance, sinon null (repli sur l'agent par défaut) */
+  companionProfile: string | null;
   unreadable: { agentId: string; agentName: string | null }[];
   /** True while the back office is still creating the instance or installing experts on it. */
   installing: boolean;
@@ -118,7 +122,17 @@ export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
     authViaBackoffice() ? currentInstance().catch(() => null) : Promise.resolve(null),
   ]);
 
-  const experts: Expert[] = profiles.map((p) => {
+  const instanceAgentId = agents[0]?.agent37_id ?? null;
+
+  // Détection du profil compagnon Yelé sur l'instance s'il est déployé
+  const companionInstalled = profiles.find((p) => isYele(p.profileId) || isYele(catalogueKeyOf(p.profileId)));
+  const companionProfile = companionInstalled?.profileId ?? null;
+
+  // Yelé est l'employée d'accompagnement (dans son widget dédié) :
+  // elle ne doit JAMAIS être listée parmi les experts métiers de « Mon équipe ».
+  const teamProfiles = profiles.filter((p) => !isYele(p.profileId) && !isYele(catalogueKeyOf(p.profileId)));
+
+  const experts: Expert[] = teamProfiles.map((p) => {
     const entry = matchCatalogue(catalogue.experts, p.profileId);
     const instExpert = instance?.experts.find((e) => e.profile === p.profileId || (entry?.key && e.key === entry.key));
     return {
@@ -139,6 +153,8 @@ export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
 
   return {
     experts: orderExperts(experts, catalogue.defaultExpertKey),
+    agentId: instanceAgentId,
+    companionProfile,
     unreadable: unreadable.map((a) => ({ agentId: a.agent37_id, agentName: a.name })),
     installing,
     failed: state.installation === "failed",

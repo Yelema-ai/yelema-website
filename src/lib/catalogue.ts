@@ -40,9 +40,20 @@ function category(v: unknown): { key: string; label: string } | null {
 
 // One catalogue row in this app's words. Fields the back office does not send yet (pronoun, short
 // title, suggestions, drive folder, the cards' looping video) come back empty rather than guessed.
+export function isYele(val: string | null | undefined): boolean {
+  if (!val) return false;
+  const s = val
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+  return s === "yele" || s === "yele-companion" || s === "accompagnement-yele";
+}
+
 function toExpert(raw: Raw): CatalogueExpert | null {
   const key = str(raw.key);
   if (!key) return null;
+  if (isYele(key) || isYele(str(raw.personaName)) || isYele(str(raw.name))) return null;
   const pronoun = str(raw.pronoun);
   return {
     key,
@@ -148,6 +159,7 @@ async function fetchCatalogue(): Promise<Catalogue> {
 }
 
 export async function loadCatalogueExpert(key: string): Promise<CatalogueExpertDetail | null> {
+  if (isYele(key)) return null;
   const hit = detailCache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
   const body = await getJson(`/api/v1/public/experts/${encodeURIComponent(key)}`);
