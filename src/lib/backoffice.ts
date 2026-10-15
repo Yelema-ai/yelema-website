@@ -71,7 +71,22 @@ export interface BoInstanceView {
   /** Which Composio the instance's experts use. */
   tools: "yelema" | "agent37";
   /** `profile` is the name to send to the instance; `key` joins the public catalogue. */
-  experts: { profile: string; key: string; version: string | null }[];
+  experts: { profile: string; key: string; version: string | null; displayName?: string | null; avatarUrl?: string | null }[];
+}
+
+export interface BoExpertCustomization {
+  key: string;
+  displayName: string;
+  defaultName: string;
+  role: string;
+  avatarUrl: string | null;
+  branding: {
+    companyName: string;
+    sector: string;
+    primaryColor: string;
+    secondaryColor: string;
+    logoUrl: string | null;
+  };
 }
 
 export type BoInstance = BoInstanceView & { id: string };
@@ -282,6 +297,27 @@ export const backoffice = {
   requestExpert: (token: string, key: string) => {
     if (!EXPERT_KEY.test(key)) throw new BackofficeError(404, "not_found", "Expert introuvable.");
     return call<{ ok: true }>(`/app/experts/${key}/request`, { method: "POST", token });
+  },
+  getExpert: (token: string, key: string) => {
+    if (!EXPERT_KEY.test(key)) throw new BackofficeError(404, "not_found", "Expert introuvable.");
+    return call<BoExpertCustomization>(`/app/experts/${key}`, { token });
+  },
+  updateExpert: (token: string, key: string, patch: { displayName?: string; avatarBase64?: string; avatarUrl?: string }) => {
+    if (!EXPERT_KEY.test(key)) throw new BackofficeError(404, "not_found", "Expert introuvable.");
+    return call<{ ok: true; displayName: string; avatarUrl: string | null }>(`/app/experts/${key}`, {
+      method: "PATCH",
+      token,
+      body: patch,
+    });
+  },
+  generateExpertAvatar: (token: string, key: string, options: { position?: string; style?: string; accessory?: string; background?: string; referenceBase64?: string; customPrompt?: string }) => {
+    if (!EXPERT_KEY.test(key)) throw new BackofficeError(404, "not_found", "Expert introuvable.");
+    return call<{ ok: true; avatarUrl: string; promptUsed: string }>(`/app/experts/${key}/avatar/generate`, {
+      method: "POST",
+      token,
+      body: options,
+      timeoutMs: 60_000,
+    });
   },
   // The one call made in an instance's name rather than a user's: the Bearer is the instance's own
   // tool-proxy token, which the back office knows by its hash, and the workspace is the one of the
