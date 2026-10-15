@@ -80,7 +80,9 @@ export function ExpertEditModal({
         if (expert && (expert.key || expert.defaultName)) {
           setData(expert);
           setName(expert.displayName || expert.defaultName || "");
-          setCurrentAvatar(expert.avatarUrl || "");
+          let av = expert.avatarUrl || "";
+          if (av.includes('/api/media/file/')) av = av.replace('/api/media/file/', '/api/public/media/');
+          setCurrentAvatar(av);
         } else {
           throw new Error("Format de réponse inattendu lors de la lecture du profil.");
         }

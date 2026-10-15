@@ -3,7 +3,7 @@ import { backofficeAgentRow, type DB } from "@/lib/auth";
 import { loadCatalogue, matchCatalogue } from "@/lib/catalogue";
 import { expertDisplayName } from "@/lib/experts";
 import { authViaBackoffice } from "@/lib/runtime-config";
-import { currentInstallation } from "@/lib/session";
+import { currentInstallation, currentInstance } from "@/lib/session";
 import { listInstanceProfiles } from "@/lib/hermes-profiles";
 import { ApiError, dbError } from "@/lib/http";
 import type { AgentRow, Expert } from "@/lib/types";
@@ -91,19 +91,38 @@ async function installation(): Promise<{ installation: "running" | "ready" | "fa
 // back office's catalogue (name, role, portrait), or named after its profile id without one. An
 // instance that cannot be read does not take the others down: it is reported in `unreadable`.
 // Shared by the experts route and the shell's first render, so both say the same thing.
+function resolveExpertPhoto(avatarUrl: string | null | undefined, catalogueUrl: string | null | undefined): string | null {
+  const chosen = (avatarUrl && avatarUrl.trim()) || (catalogueUrl && catalogueUrl.trim()) || null;
+  if (!chosen) return null;
+  let normalized = chosen;
+  if (normalized.includes('/api/media/file/')) {
+    normalized = normalized.replace('/api/media/file/', '/api/public/media/');
+  }
+  if (normalized.startsWith('/')) {
+    const boUrl = process.env.BACKOFFICE_URL || 'http://localhost:3000';
+    normalized = `${boUrl.replace(/\/+$/, '')}${normalized}`;
+  }
+  return normalized;
+}
+
 export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
   const state = await installation();
   const installing = state.installation === "running";
   // An instance being set up is not asked for its profiles: the experts are the ones the back
   // office reports installed, and the rest arrive when it is done.
   const readable = installing ? agents.filter((a) => Array.isArray(a.profiles) && a.profiles.length > 0) : agents;
-  const [{ profiles, unreadable }, catalogue] = await Promise.all([installedProfiles(readable), loadCatalogue()]);
+  const [{ profiles, unreadable }, catalogue, instance] = await Promise.all([
+    installedProfiles(readable),
+    loadCatalogue(),
+    authViaBackoffice() ? currentInstance().catch(() => null) : Promise.resolve(null),
+  ]);
 
   const experts: Expert[] = profiles.map((p) => {
     const entry = matchCatalogue(catalogue.experts, p.profileId);
+    const instExpert = instance?.experts.find((e) => e.profile === p.profileId || (entry?.key && e.key === entry.key));
     return {
       profileId: p.profileId,
-      displayName: entry?.name ?? expertDisplayName(p.profileId),
+      displayName: instExpert?.displayName || entry?.name || expertDisplayName(p.profileId),
       agentId: p.agent.agent37_id,
       agentName: p.agent.name,
       gateway: p.gateway,
@@ -112,7 +131,7 @@ export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
       role: entry?.role ?? null,
       title: entry?.title ?? null,
       tagline: entry?.tagline ?? null,
-      photoUrl: entry?.avatarUrl ?? null,
+      photoUrl: resolveExpertPhoto(instExpert?.avatarUrl, entry?.avatarUrl),
       driveFolder: entry?.driveFolder ?? entry?.name ?? null,
     };
   });

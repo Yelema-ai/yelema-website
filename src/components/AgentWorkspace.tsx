@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
-import { FolderOpen, Mail, MessageSquare, Repeat, Phone } from "lucide-react";
+import { FolderOpen, Mail, MessageSquare, Repeat, Phone, Pencil } from "lucide-react";
 import { agentTabPath, parseAgentRoute, type AgentTab } from "@/lib/expert-tabs";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { useMyAgents } from "@/components/useMyAgents";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { ExpertImage } from "@/components/experts/ExpertImage";
+import { ExpertEditModal } from "@/components/experts/ExpertEditModal";
 import { ExpertEmails } from "@/components/experts/ExpertEmails";
 import { ExpertRoutines } from "@/components/experts/ExpertRoutines";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
@@ -145,6 +146,7 @@ export function AgentWorkspace({
 
   // Latch Chat/Files mounted on first open, then keep them mounted (hidden) across tab switches.
   // Latched during render (not in an effect) so the mount lands in the same pass as the switch.
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [chatOpened, setChatOpened] = useState(isChat);
   if (isChat && !chatOpened) setChatOpened(true);
   const [filesOpened, setFilesOpened] = useState(isFiles);
@@ -164,9 +166,19 @@ export function AgentWorkspace({
           {expert && (
             <>
               {/* Fixed colors on purpose: a picture with white text over it, in both themes. */}
-              <div className="relative isolate aspect-[1/1.02] shrink-0 overflow-hidden rounded-[22px] bg-[#8E6FB0] text-white">
+              <div className="group relative isolate aspect-[1/1.02] shrink-0 overflow-hidden rounded-[22px] bg-[#8E6FB0] text-white">
                 {portrait && <ExpertImage src={portrait} sizes="238px" className="-z-20 object-cover object-[50%_15%]" />}
                 <div className="absolute inset-0 -z-10 bg-gradient-to-b from-transparent from-45% to-[rgba(8,5,16,.82)]" />
+                {expert?.catalogueKey && (
+                  <button
+                    type="button"
+                    onClick={() => setEditModalOpen(true)}
+                    title="Personnaliser l'agent (nom, avatar IA)"
+                    className="absolute top-2.5 right-2.5 z-10 flex size-8 items-center justify-center rounded-full bg-black/40 text-white/90 shadow-sm backdrop-blur-md transition-all hover:bg-black/70 hover:text-white hover:scale-105"
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                )}
                 <div className="absolute inset-x-3 bottom-3">
                   <p className="text-[17px] font-bold">{expert.displayName}</p>
                   {expert.role && <p className="text-[11px] font-semibold uppercase tracking-[0.06em] opacity-85">{expert.role}</p>}
@@ -227,8 +239,18 @@ export function AgentWorkspace({
             {expert && (
               <>
                 <ExpertAvatar expert={{ ...expert, gateway: null }} size="sm" />
-                <span className="ml-2 mr-2 min-w-0 shrink-0">
+                <span className="ml-2 mr-2 flex min-w-0 shrink-0 items-center gap-1.5">
                   <span className="block text-sm font-bold leading-tight text-ink">{expert.displayName}</span>
+                  {expert.catalogueKey && (
+                    <button
+                      type="button"
+                      onClick={() => setEditModalOpen(true)}
+                      title="Personnaliser l'agent"
+                      className="inline-flex size-6 items-center justify-center rounded-full bg-soft text-ink-2 hover:bg-soft-2"
+                    >
+                      <Pencil className="size-3" />
+                    </button>
+                  )}
                   {inbox && <span className="block max-w-[150px] truncate text-[10px] text-ink-3">{inbox.address}</span>}
                 </span>
                 {callee && <CallButton expert={callee} className="mr-1 shrink-0" />}
@@ -294,6 +316,13 @@ export function AgentWorkspace({
           )}
         </main>
       </div>
+      {expert?.catalogueKey && (
+        <ExpertEditModal
+          expertKey={expert.catalogueKey}
+          open={editModalOpen}
+          onOpenChange={setEditModalOpen}
+        />
+      )}
     </ChatProvider>
   );
 }

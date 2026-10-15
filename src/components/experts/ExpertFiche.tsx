@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Check, FileText, Loader2, MapPin, MessageCircle, Play, Sparkles, UserPlus, type LucideIcon } from "lucide-react";
+import { Check, FileText, Loader2, MapPin, MessageCircle, Play, Sparkles, UserPlus, Pencil, type LucideIcon } from "lucide-react";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { apiFetch } from "@/lib/api";
 import { ExpertImage } from "@/components/experts/ExpertImage";
+import { ExpertEditModal } from "@/components/experts/ExpertEditModal";
 import { useCatalogue, useCatalogueExpert } from "@/components/experts/useCatalogue";
 import { Button } from "@/components/ui/button";
 import { agentTabPath } from "@/lib/expert-tabs";
@@ -46,6 +47,7 @@ export function ExpertFiche({ expertKey }: { expertKey: string }) {
   const canRequest = usePublicConfig().authVia === "backoffice";
   const [requesting, setRequesting] = useState(false);
   const [requested, setRequested] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const expert = useCatalogueExpert(expertKey);
 
   async function request() {
@@ -195,14 +197,25 @@ export function ExpertFiche({ expertKey }: { expertKey: string }) {
           <>
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-ink">{expert.name} est dans votre équipe</p>
-              <p className="text-[13px] text-ink-3">Posez-lui une question ou confiez-lui une tâche dans sa discussion.</p>
+              <p className="text-[13px] text-ink-3">Posez-lui une question ou personnalisez son profil (nom et avatar IA).</p>
             </div>
-            <Button asChild className="rounded-full">
-              <Link href={agentTabPath(mine.agentId, "chat", mine.profileId)}>
-                <MessageCircle />
-                Écrire à {expert.name}
-              </Link>
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full gap-2 border-line hover:bg-soft"
+                onClick={() => setEditOpen(true)}
+              >
+                <Pencil className="size-3.5" />
+                Personnaliser
+              </Button>
+              <Button asChild className="rounded-full">
+                <Link href={agentTabPath(mine.agentId, "chat", mine.profileId)}>
+                  <MessageCircle />
+                  Écrire à {expert.name}
+                </Link>
+              </Button>
+            </div>
           </>
         ) : canRequest ? (
           <>
@@ -226,6 +239,13 @@ export function ExpertFiche({ expertKey }: { expertKey: string }) {
           </div>
         )}
       </div>
+      {mine && (
+        <ExpertEditModal
+          expertKey={expertKey}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+        />
+      )}
     </div>
   );
 }
