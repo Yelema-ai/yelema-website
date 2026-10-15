@@ -11,7 +11,7 @@ const TABS = [
   { href: "/integrations/canaux", label: "Canaux", exact: false, adminOnly: false },
   { href: "/integrations/emails", label: "E-mails", exact: false, adminOnly: true, backoffice: true },
   { href: "/integrations/modeles", label: "Modèles", exact: false, adminOnly: false, backoffice: true },
-  { href: "/integrations/mcp", label: "MCP", exact: false, adminOnly: false, backoffice: true },
+  { href: "/integrations/mcp", label: "MCP", exact: false, adminOnly: false },
 ];
 
 export default function IntegrationsLayout({ children }: { children: React.ReactNode }) {
