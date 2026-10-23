@@ -58,7 +58,7 @@ const duration = (s: number) => (s < 60 ? `${s} s` : `${Math.floor(s / 60)} min$
 
 const PHASE_SHORT: Record<string, string> = {
   connecting: "Appel en cours…",
-  listening: "Vous écoute",
+  listening: "À vous",
   thinking: "Réfléchit…",
   speaking: "Parle",
   reconnecting: "Reconnexion…",
@@ -106,10 +106,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   );
 
   // The call's page, newest call first in the expert's « Appels ».
-  const callsPath = useMemo(() => {
-    const e = expert && experts.find((x) => x.catalogueKey === expert.key);
-    return e ? `${agentTabPath(e.agentId, "calls", e.profileId)}?appel=dernier` : null;
-  }, [expert, experts]);
+  const known = useMemo(() => (expert ? (experts.find((x) => x.catalogueKey === expert.key) ?? null) : null), [expert, experts]);
+  const callsPath = known ? `${agentTabPath(known.agentId, "calls", known.profileId)}?appel=dernier` : null;
+  const role = known?.role ?? null;
 
   // Hung up by either side: the window goes by itself, a toast keeps the way to the summary.
   const answeredFor = useRef(0);
@@ -149,6 +148,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
             expert={expert}
             phase={live.phase}
             muted={live.muted}
+            tool={live.tool}
             elapsed={live.elapsed}
             onMute={() => live.setMuted(!live.muted)}
             onHangUp={live.hangUp}
@@ -165,21 +165,23 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       {children}
       {expert && (
         <Dialog open={view === "full"} onOpenChange={closeFull}>
-          <DialogContent className="max-w-md" onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={(e) => inCall && e.preventDefault()}>
+          <DialogContent
+            className="gap-0 overflow-hidden p-0 max-sm:inset-0 max-sm:h-[100dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 sm:max-w-[920px]"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+            onInteractOutside={(e) => inCall && e.preventDefault()}
+          >
             <CallView
               name={expert.name}
+              role={role}
               photoUrl={expert.photoUrl}
               phase={live.phase}
               reason={live.reason}
               muted={live.muted}
-              longer={live.longer}
-              holding={live.holding}
+              tool={live.tool}
+              captions={live.captions}
               elapsed={live.elapsed}
-              voiceLabel={voice.current?.label ?? null}
               onMute={() => live.setMuted(!live.muted)}
               onHangUp={live.hangUp}
-              onLonger={live.toggleLonger}
-              onHold={live.toggleHold}
               onMinimize={inCall ? () => setView("mini") : undefined}
               onClose={() => setView(null)}
               onRedial={() => void dial(expert)}
@@ -208,16 +210,17 @@ function MiniCall(p: {
   expert: Callee;
   phase: Parameters<typeof haloOf>[0];
   muted: boolean;
+  tool: boolean;
   elapsed: number;
   onMute: () => void;
   onHangUp: () => void;
   onExpand: () => void;
 }) {
-  const halo = haloOf(p.phase, p.muted);
+  const halo = haloOf(p.phase, p.muted, p.tool);
   const rgb = halo ? HALO_RGB[halo] : null;
   const face = p.expert.photoUrl ? faceProps(p.expert.photoUrl) : null;
   const ended = !inCallPhase(p.phase);
-  const status = ended ? "Appel terminé" : p.muted && (p.phase === "listening" || p.phase === "speaking") ? "Micro coupé" : (PHASE_SHORT[p.phase] ?? "");
+  const status = ended ? "Appel terminé" : halo === "muet" ? "Micro coupé" : halo === "cherche" ? "Cherche…" : (PHASE_SHORT[p.phase] ?? "");
   const timed = p.phase === "listening" || p.phase === "speaking" || p.phase === "thinking" || p.phase === "reconnecting" || (ended && p.elapsed > 0);
 
   // Dragged on a computer: an offset from the bottom-right corner, kept inside the window.

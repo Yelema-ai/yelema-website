@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { apiFetch, readApiError } from "@/lib/api";
 import { runPool } from "@/lib/bulk";
 import { isDriveRoot } from "@/lib/drive-paths";
-import { sortDriveEntries } from "@/lib/drive-order";
+import { isDriveClutter, matchesDriveQuery, sortDriveEntries, type DriveSort } from "@/lib/drive-order";
 import { TOO_LARGE, tooLarge } from "@/lib/upload-limit";
 import { useDropZone } from "../useDropZone";
 import { joinPath, type FileEntry, type FileListResponse } from "./types";
@@ -23,6 +23,8 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const [sortBy, setSortBy] = useState<DriveSort>("recent");
+  const [query, setQuery] = useState("");
   const [uploading, setUploading] = useState(0); // count of in-flight uploads
 
   // Guard against an older list response landing after a newer navigation.
@@ -82,7 +84,14 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
     };
   }, [agentId, load]);
 
-  const navigate = useCallback((target: string) => load(target), [load]);
+  // The search is the folder's: opening another one starts it again.
+  const navigate = useCallback(
+    (target: string) => {
+      setQuery("");
+      return load(target);
+    },
+    [load]
+  );
   const refresh = useCallback(() => load(path ?? undefined), [load, path]);
   // The drive's root has nothing above it that a member may open.
   const atRoot = path === null || isDriveRoot(path);
@@ -222,12 +231,14 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
   // Whole-pane drag-drop overlay.
   const { dragOver, dragHandlers } = useDropZone(uploadFiles);
 
+  // Hidden files, the expert's working files and the chat's preview pictures stay out unless asked
+  // for; the memory folder first, then the newest change first or A to Z (src/lib/drive-order.ts).
+  const masked = useCallback((e: FileEntry) => e.hidden || isDriveClutter(e), []);
   const visibleEntries = useMemo(
-    // The memory folder first, then the newest change first (src/lib/drive-order.ts).
-    () => sortDriveEntries(showHidden ? entries : entries.filter((e) => !e.hidden)),
-    [entries, showHidden]
+    () => sortDriveEntries((showHidden ? entries : entries.filter((e) => !masked(e))).filter((e) => matchesDriveQuery(e.name, query)), sortBy),
+    [entries, showHidden, masked, query, sortBy]
   );
-  const hiddenCount = useMemo(() => entries.reduce((n, e) => n + (e.hidden ? 1 : 0), 0), [entries]);
+  const hiddenCount = useMemo(() => entries.reduce((n, e) => n + (masked(e) ? 1 : 0), 0), [entries, masked]);
 
   return {
     path,
@@ -241,6 +252,10 @@ export function useFileBrowser(agentId: string, initialPath?: string) {
     error,
     showHidden,
     setShowHidden,
+    sortBy,
+    setSortBy,
+    query,
+    setQuery,
     uploading: uploading > 0,
     dragOver,
     dragHandlers,
