@@ -2,12 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import {
-  ArrowUp,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Download,
-  Eye,
-  EyeOff,
   File as FileIcon,
   Folder,
   FolderPlus,
@@ -18,7 +16,9 @@ import {
   Loader2,
   Pencil,
   RefreshCw,
+  Search,
   Trash2,
+  X,
   Upload,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -162,45 +162,44 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
 
       <header className="shrink-0 border-b bg-background px-4 py-3 md:px-6 lg:px-8">
         <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={goUp}
-              disabled={!fb.parentPath || fb.atRoot}
-              aria-label="Dossier parent"
-              title="Dossier parent"
-              className="h-10 shrink-0"
-            >
-              <ArrowUp className="h-4 w-4" />
-              Retour
-            </Button>
-            <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-md border bg-card px-3 shadow-sm">
-              <Folder className="h-4 w-4 shrink-0 text-primary" />
-              <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-sm" aria-label="Chemin du dossier">
-                {crumbs.length === 0 ? (
-                  <span className="text-muted-foreground">Chargement…</span>
-                ) : (
-                  crumbs.map((c, i) => (
+          {/* Where one is, as a path to click (Leslie, 23/10: the « Retour » button was not clear):
+              « ‹ Livrables » goes back up one folder and says where to; each step of the path opens it. */}
+          <div className="flex min-w-0 flex-1 items-center gap-1">
+            {!fb.atRoot && fb.parentPath && crumbs.length > 1 && (
+              <button
+                type="button"
+                onClick={goUp}
+                aria-label={`Revenir à ${crumbs[crumbs.length - 2].label}`}
+                className="mr-1 grid size-10 shrink-0 place-items-center rounded-full border bg-card text-foreground transition-colors hover:bg-secondary"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+            )}
+            <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" aria-label="Chemin du dossier">
+              {crumbs.length === 0 ? (
+                <span className="text-sm text-muted-foreground">Chargement…</span>
+              ) : (
+                crumbs.map((c, i) => {
+                  const last = i === crumbs.length - 1;
+                  return (
                     <span key={c.path} className="flex shrink-0 items-center">
-                      {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                      {i > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                       <button
                         type="button"
-                        onClick={() => navigate(c.path)}
-                        aria-current={i === crumbs.length - 1 ? "page" : undefined}
+                        onClick={() => !last && navigate(c.path)}
+                        aria-current={last ? "page" : undefined}
                         className={cn(
-                          "max-w-[11rem] truncate rounded px-1.5 py-0.5 transition-colors hover:bg-secondary",
-                          i === crumbs.length - 1 ? "font-medium text-foreground" : "text-muted-foreground"
+                          "max-w-[14rem] truncate rounded-md px-2 py-1 transition-colors",
+                          last ? "cursor-default text-[17px] font-semibold text-foreground" : "text-[15px] text-muted-foreground underline-offset-4 hover:bg-secondary hover:text-foreground hover:underline"
                         )}
                       >
                         {c.label}
                       </button>
                     </span>
-                  ))
-                )}
-              </nav>
-            </div>
+                  );
+                })
+              )}
+            </nav>
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-1 xl:ml-auto">
@@ -213,12 +212,6 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
               />
             )}
             <ViewToggle value={viewMode} onChange={setViewMode} />
-            <ToolbarIconButton
-              onClick={() => fb.setShowHidden((v) => !v)}
-              label={fb.showHidden ? "Masquer les fichiers cachés" : "Afficher les fichiers cachés"}
-            >
-              {fb.showHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </ToolbarIconButton>
             <ToolbarIconButton onClick={fb.refresh} label="Actualiser">
               <RefreshCw className={cn("h-4 w-4", fb.loading && "animate-spin")} />
             </ToolbarIconButton>
@@ -257,6 +250,43 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
             <HiddenFileInput inputRef={folderUploadRef} onFiles={fb.uploadFolder} />
           </div>
         </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-md border bg-card px-3 shadow-sm sm:max-w-md">
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <input
+              type="search"
+              value={fb.query}
+              onChange={(e) => fb.setQuery(e.target.value)}
+              placeholder="Rechercher dans ce dossier"
+              aria-label="Rechercher dans ce dossier"
+              className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
+            />
+            {fb.query && (
+              <button type="button" onClick={() => fb.setQuery("")} aria-label="Effacer la recherche" className="grid size-7 place-items-center rounded text-muted-foreground hover:bg-secondary">
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </label>
+          <div role="radiogroup" aria-label="Trier" className="flex h-10 shrink-0 items-center rounded-md border bg-card p-1 text-sm">
+            {(
+              [
+                ["recent", "Plus récent"],
+                ["name", "A à Z"],
+              ] as const
+            ).map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={fb.sortBy === v}
+                onClick={() => fb.setSortBy(v)}
+                className={cn("h-full rounded px-3 font-medium transition-colors", fb.sortBy === v ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -270,7 +300,9 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
           </div>
         ) : (
           <div className="w-full p-4 md:p-6 lg:p-8" onClick={clearSelection}>
-            {fb.visibleEntries.length === 0 ? (
+            {fb.visibleEntries.length === 0 && fb.query.trim() ? (
+              <p className="px-3 py-10 text-center text-sm text-muted-foreground">Aucun fichier ne correspond à « {fb.query.trim()} ».</p>
+            ) : fb.visibleEntries.length === 0 ? (
               <EmptyFolder
                 canCreate={!!fb.path}
                 uploading={fb.uploading}
@@ -374,11 +406,6 @@ export function FilesView({ agentId, initialPath }: { agentId: string; initialPa
             {fb.truncated && (
               <p className="mt-3 px-3 text-xs text-muted-foreground">
                 Seuls les 1 000 premiers éléments sont affichés. Ouvrez un sous-dossier pour voir les autres.
-              </p>
-            )}
-            {!fb.showHidden && fb.hiddenCount > 0 && (
-              <p className="mt-3 px-3 text-xs text-muted-foreground">
-                {fb.hiddenCount === 1 ? "1 fichier caché n’est pas affiché." : `${fb.hiddenCount} fichiers cachés ne sont pas affichés.`}
               </p>
             )}
           </div>

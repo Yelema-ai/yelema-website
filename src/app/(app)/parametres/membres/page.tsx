@@ -17,7 +17,7 @@ export default function Page() {
   const admin = current?.role === "admin";
 
   useEffect(() => {
-    if (current && !admin) router.replace(authVia === "backoffice" ? "/administration/entreprise" : "/integrations/connecteurs");
+    if (current && !admin) router.replace(authVia === "backoffice" ? "/parametres/entreprise" : "/integrations/connecteurs");
   }, [current, admin, authVia, router]);
 
   if (!admin) return null;

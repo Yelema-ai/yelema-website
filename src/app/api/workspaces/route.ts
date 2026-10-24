@@ -37,7 +37,7 @@ export async function GET() {
 
 // The one workspace of a user signed in through the back office, in this app's shape.
 function workspaceOf(me: BoMe): WorkspaceWithRole {
-  return { id: me.workspace.id, name: me.workspace.name, owner_id: "", created_at: "", role: me.user.role, logo_url: me.workspace.logoUrl };
+  return { id: me.workspace.id, name: me.workspace.name, owner_id: "", created_at: "", role: me.user.role, logo_url: me.workspace.logoUrl, brand_color: me.workspace.brandColor ?? null };
 }
 
 export async function POST() {

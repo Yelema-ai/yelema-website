@@ -203,7 +203,7 @@ export function TelegramConnect({
         <div className="space-y-4">
           <p className="text-sm">
             Ouvrez <span className="font-medium">@{bot.username}</span> et envoyez-lui un message. La première personne
-            qui lui écrit est la seule à qui vos experts répondront en privé ; dans le groupe des experts, tous ses
+            qui lui écrit est la seule à qui vos Experts répondront en privé ; dans le groupe des Experts, tous ses
             membres pourront leur écrire.
           </p>
           <div className="flex items-center gap-2">
@@ -216,7 +216,7 @@ export function TelegramConnect({
           </div>
           {ownerUnavailable ? (
             <p className="text-xs text-muted-foreground">
-              Ce bot est déjà relié à un autre service : Telegram ne nous indique pas à qui il appartient, et vos experts
+              Ce bot est déjà relié à un autre service : Telegram ne nous indique pas à qui il appartient, et vos Experts
               ne répondent qu’à une personne connue. Détachez-le de cet autre service, ou créez un nouveau bot.
             </p>
           ) : (
@@ -237,7 +237,7 @@ export function TelegramConnect({
                 {bot ? `@${bot.username} est connecté.` : qrBot ? `@${qrBot} est connecté.` : "Telegram est connecté."}
               </p>
               <p className="text-xs text-muted-foreground">
-                Écrivez au bot depuis Telegram : vos experts vous répondent au même endroit.
+                Écrivez au bot depuis Telegram : vos Experts vous répondent au même endroit.
               </p>
             </div>
           </div>

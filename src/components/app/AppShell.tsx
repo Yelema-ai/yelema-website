@@ -1,5 +1,8 @@
 "use client";
 
+import { DeliverableWatcher } from "@/components/activity/DeliverableWatcher";
+import { CompanyColors } from "@/components/app/CompanyColors";
+import { SearchDialog } from "@/components/conversations/SearchDialog";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ActivityProvider } from "@/components/activity/ActivityProvider";
@@ -51,6 +54,14 @@ export function AppShell({ children, initialExperts }: { children: React.ReactNo
     setDrawerOpen(false);
   }, [pathname]);
 
+  // Échap referme le tiroir, comme toute fenêtre posée par-dessus la page.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawerOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
+
   function toggle() {
     // Dans le tiroir, le bouton du menu le referme au lieu de le replier.
     if (drawerOpen) {
@@ -73,6 +84,9 @@ export function AppShell({ children, initialExperts }: { children: React.ReactNo
       <ActivityProvider>
         {/* The call lives above the pages: it goes on, folded or not, while the member navigates. */}
         <CallProvider>
+        <CompanyColors />
+        <DeliverableWatcher />
+        <SearchDialog />
         <div
           className="min-h-screen md:grid"
           // --shell-nav: where the working area starts, for what covers it (an enlarged dashboard).

@@ -145,7 +145,7 @@ export function ExpertGallery() {
   return (
     <div>
       <h1 className="font-display text-[28px] font-semibold tracking-[-0.02em] text-ink md:text-[34px]">
-        Les experts Yelema
+        Les Experts Yelema
       </h1>
       <p className="mt-1.5 text-base text-ink-2">Ceux de votre équipe, et ceux qui peuvent la rejoindre.</p>
 
@@ -153,7 +153,7 @@ export function ExpertGallery() {
         <p className="mt-6 text-sm text-ink-3">Chargement…</p>
       ) : !catalogue.available || catalogue.experts.length === 0 ? (
         <p className="mt-6 max-w-xl text-sm text-ink-2">
-          Le catalogue des experts n’est pas disponible pour le moment. Vos experts restent accessibles depuis le menu.
+          Le catalogue des Experts n’est pas disponible pour le moment. Vos Experts restent accessibles depuis le menu.
         </p>
       ) : (
         <>

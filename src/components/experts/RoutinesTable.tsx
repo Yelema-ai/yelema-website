@@ -17,7 +17,7 @@ import {
 // Rows shown before « Voir plus ».
 const FIRST = 5;
 
-function Switch({ on, label, disabled, onChange }: { on: boolean; label: string; disabled?: boolean; onChange: () => void }) {
+export function Switch({ on, label, disabled, onChange }: { on: boolean; label: string; disabled?: boolean; onChange: () => void }) {
   return (
     <button
       type="button"
@@ -230,7 +230,7 @@ export function RoutinesTable({ routines, ...act }: { routines: Routine[] } & Ro
   );
 }
 
-function RowMenu({ routine: r, busy, onRunNow, onHistory, onEdit, onRemove }: { routine: Routine; busy: boolean } & RoutineActions) {
+export function RowMenu({ routine: r, busy, onRunNow, onHistory, onEdit, onRemove }: { routine: Routine; busy: boolean } & RoutineActions) {
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>

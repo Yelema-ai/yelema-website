@@ -73,7 +73,7 @@ export function ComputerPanel(props: ComputerProps) {
           <p className="flex items-center gap-2 text-sm font-semibold text-ink">
             {live && <LiveDot />} Son ordinateur
           </p>
-          <p className="truncate text-xs text-ink-3">Tous vos experts travaillent sur cet ordinateur.</p>
+          <p className="truncate text-xs text-ink-3">Tous vos Experts travaillent sur cet ordinateur.</p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setDialogOpen(true)} aria-label="Agrandir" title="Agrandir">
@@ -115,7 +115,7 @@ export function ComputerDialog({ onWrite, ...props }: ComputerProps & { onWrite:
           </DialogTitle>
           <DialogDescription className="flex items-center gap-2 text-[13px] text-ink-3">
             {live && <LiveDot />}
-            {live ? "En direct. " : ""}Tous vos experts travaillent sur cet ordinateur.
+            {live ? "En direct. " : ""}Tous vos Experts travaillent sur cet ordinateur.
           </DialogDescription>
         </DialogHeader>
 

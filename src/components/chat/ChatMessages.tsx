@@ -157,7 +157,7 @@ export function ChatMessages({
         if (m.role === "user" && isCallTranscript(m.content)) {
           return (
             <p key={m.id} className="flex items-center justify-center gap-2 text-xs text-ink-3">
-              <PhoneCall className="h-3.5 w-3.5" /> Transcription de l’appel transmise à l’expert
+              <PhoneCall className="h-3.5 w-3.5" /> Transcription de l’appel transmise à l’Expert
             </p>
           );
         }

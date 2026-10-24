@@ -61,7 +61,7 @@ export function AccountRow({ account, rank, kind, isLogin, onChanged }: { accoun
         open={removing}
         onOpenChange={setRemoving}
         title={`Retirer « ${name} » ?`}
-        description="Ce compte sera retiré de cette instance. Les experts passeront au compte suivant. La conversation en cours sera interrompue."
+        description="Ce compte sera retiré de cette instance. Les Experts passeront au compte suivant. La conversation en cours sera interrompue."
         confirmText="Retirer"
         destructive
         onConfirm={async () => {

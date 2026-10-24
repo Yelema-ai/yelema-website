@@ -108,7 +108,7 @@ export function TeamsConnect({
         <>
           {!endpoint ? (
             <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              L’adresse Teams de vos experts n’est pas encore prête. Réessayez dans quelques minutes ; si cela dure, écrivez au support Yelema.
+              L’adresse Teams de vos Experts n’est pas encore prête. Réessayez dans quelques minutes ; si cela dure, écrivez au support Yelema.
             </p>
           ) : (
             <ol className="list-decimal space-y-2 rounded-lg border bg-muted/20 p-4 pl-8 text-xs text-muted-foreground">
@@ -138,7 +138,7 @@ export function TeamsConnect({
               </li>
               <li>Renseignez ci-dessous les identifiants et les personnes autorisées, puis connectez.</li>
               <li>
-                Enfin, dans <em>Canaux</em>, cliquez sur <strong>Ouvrir dans Teams</strong> et écrivez à votre expert.
+                Enfin, dans <em>Canaux</em>, cliquez sur <strong>Ouvrir dans Teams</strong> et écrivez à votre Expert.
               </li>
             </ol>
           )}

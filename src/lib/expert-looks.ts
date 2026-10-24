@@ -20,7 +20,7 @@ export const EXPERT_NAME_RULE = `Un prénom de ${EXPERT_NAME_MAX} caractères au
 
 const REFUSALS: Record<string, string> = {
   bad_request: `Ce nom ne convient pas. ${EXPERT_NAME_RULE}`,
-  not_found: "Cet expert ne fait pas partie de votre équipe.",
+  not_found: "Cet Expert ne fait pas partie de votre équipe.",
   unprocessable: "Cette image n’est pas lisible : envoyez un PNG, un JPEG ou un WebP de 4 Mo au plus.",
   too_many_attempts: "Trop de modifications en peu de temps. Réessayez dans une heure.",
   rate_limited: "Vous avez créé beaucoup de portraits aujourd’hui. Réessayez demain.",

@@ -46,7 +46,7 @@ export function TelegramTopics({
         <div className="min-w-0">
           <h3 className="font-display text-lg font-bold text-ink">Un sujet par expert</h3>
           <p className="mt-1 text-sm text-ink-3">
-            Dans un groupe Telegram, chaque expert a son propre sujet : vous lui écrivez là, il vous répond au même
+            Dans un groupe Telegram, chaque Expert a son propre sujet : vous lui écrivez là, il vous répond au même
             endroit.
           </p>
         </div>
@@ -88,7 +88,7 @@ export function TelegramTopics({
       <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
         <Button onClick={create} disabled={busy || telegramConnected !== true}>
           {busy && <Loader2 className="animate-spin" />}
-          {busy ? "Création des sujets…" : "Créer les sujets des experts"}
+          {busy ? "Création des sujets…" : "Créer les sujets des Experts"}
         </Button>
         <span className="text-[13px] text-ink-3">
           {telegramConnected === false

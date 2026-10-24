@@ -38,10 +38,10 @@ export function CompanyProfileCard() {
         <h2 className="font-display text-lg font-bold text-ink">
           Complétez votre entreprise ({profile.done}/{profile.total})
         </h2>
-        <p className="mt-1 text-sm text-ink-2">Ajoutez votre logo, une présentation et vos documents : vos experts répondront avec le contexte de votre entreprise.</p>
+        <p className="mt-1 text-sm text-ink-2">Ajoutez votre logo, une présentation et vos documents : vos Experts répondront avec le contexte de votre entreprise.</p>
       </div>
       <Link
-        href="/administration/entreprise"
+        href="/parametres/entreprise"
         className="inline-flex h-11 shrink-0 items-center justify-center self-start rounded-xl bg-brand px-5 text-sm font-semibold text-on-brand hover:bg-brand/90 sm:self-center"
       >
         Compléter

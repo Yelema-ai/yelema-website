@@ -129,7 +129,7 @@ function unavailable(agentId: string, detail: string): ApiError {
   return new ApiError(
     502,
     "profiles_unavailable",
-    "Les profils de cet expert ne sont pas lisibles pour le moment. Réessayez dans un instant."
+    "Les profils de cet Expert ne sont pas lisibles pour le moment. Réessayez dans un instant."
   );
 }
 

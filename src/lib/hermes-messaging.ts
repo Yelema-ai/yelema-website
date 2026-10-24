@@ -37,13 +37,13 @@ async function dashboard<T>(agentId: string, method: string, path: string, body?
   const marked = result.stdout.indexOf(OUTPUT_MARKER);
   if (marked < 0) {
     console.error(`[channels] ${method} ${path} failed on ${agentId}`, result.stderr || result.stdout);
-    throw new ApiError(502, "channel_unavailable", "Les canaux de vos experts ne répondent pas pour le moment. Réessayez dans un instant.");
+    throw new ApiError(502, "channel_unavailable", "Les canaux de vos Experts ne répondent pas pour le moment. Réessayez dans un instant.");
   }
   try {
     return JSON.parse(result.stdout.slice(marked + OUTPUT_MARKER.length).trim()) as T;
   } catch {
     console.error(`[channels] ${method} ${path} returned no JSON on ${agentId}`, result.stdout.slice(marked, marked + 500));
-    throw new ApiError(502, "channel_unavailable", "Les canaux de vos experts ne répondent pas pour le moment. Réessayez dans un instant.");
+    throw new ApiError(502, "channel_unavailable", "Les canaux de vos Experts ne répondent pas pour le moment. Réessayez dans un instant.");
   }
 }
 

@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { RoutineDialog, type RoutineExpert } from "./RoutineDialog";
 import { RoutineHistoryDialog } from "./RoutineHistoryDialog";
-import { RoutinesTable } from "./RoutinesTable";
+import { RoutinesList } from "./RoutinesList";
 
 export function ExpertRoutines({ agentId, expert }: { agentId: string; expert: RoutineExpert }) {
   const expertKey = expert.profileId;
@@ -115,8 +115,8 @@ export function ExpertRoutines({ agentId, expert }: { agentId: string; expert: R
     <div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="font-display text-[26px] font-bold tracking-tight text-ink">Routines de {expert.name}</h1>
-          <p className="mt-1 max-w-xl text-sm text-ink-3">
+          <h1 className="sr-only">Routines de {expert.name}</h1>
+          <p className="max-w-xl text-sm text-ink-3">
             Ce que {expert.name} fait sans qu’on le demande. Le résultat arrive dans tous ses canaux.
           </p>
         </div>
@@ -140,23 +140,11 @@ export function ExpertRoutines({ agentId, expert }: { agentId: string; expert: R
             </p>
           )}
         </div>
+      ) : routines.length > 0 ? (
+        <RoutinesList routines={[...active, ...suggested]} expertName={expert.name} {...actions} />
       ) : (
         <section className={panel}>
-          {suggested.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm text-ink-3">
-                {suggested.length > 1 ? `${suggested.length} routines proposées par ${expert.name}` : `1 routine proposée par ${expert.name}`}
-              </p>
-              <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => void bulk(suggested, true)}>
-                {bulkBusy && <Loader2 className="animate-spin" />} Tout activer ({suggested.length})
-              </Button>
-            </div>
-          )}
-          {routines.length === 0 ? (
-            <p className="text-sm text-ink-3">Aucune routine pour l’instant. Créez la première.</p>
-          ) : (
-            <RoutinesTable routines={[...active, ...suggested]} {...actions} />
-          )}
+          <p className="text-sm text-ink-3">Aucune routine pour l’instant. Créez la première.</p>
         </section>
       )}
 

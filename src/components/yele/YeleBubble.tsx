@@ -38,7 +38,7 @@ function pageShortcuts(path: string): Shortcut[] {
     return [{ label: "Brancher ma clé d’IA", desc: "OpenAI, Anthropic, Gemini…", prompt: "Comment je branche la clé d'IA de mon entreprise sur mes Experts ?", icon: KeyRound }];
   if (path.startsWith("/integrations"))
     return [{ label: "Brancher Gmail", desc: "Pour que vos Experts lisent vos e-mails", prompt: "Comment je branche Gmail à mes Experts ?", icon: Plug }];
-  if (path.startsWith("/administration/facturation"))
+  if (path.startsWith("/parametres/facturation"))
     return [{ label: "Ma dernière facture", desc: "Ce qu’elle contient", prompt: "Explique-moi ma dernière facture.", icon: Receipt }];
   if (path.startsWith("/recruter"))
     return [{ label: "Quel Expert pour moi ?", desc: "Selon votre besoin", prompt: "Aide-moi à choisir l'Expert qu'il me faut.", icon: Users }];
@@ -57,7 +57,7 @@ const PAGES: { word: RegExp; label: string; href: string }[] = [
   { word: /\bmod[eè]les\b/i, label: "Modèles", href: "/integrations/modeles" },
   { word: /\bMCP\b/, label: "MCP", href: "/integrations/mcp" },
   { word: /\bint[eé]grations\b/i, label: "Intégrations", href: "/integrations" },
-  { word: /\bfacturation\b/i, label: "Facturation", href: "/administration/facturation" },
+  { word: /\bfacturation\b/i, label: "Facturation", href: "/parametres/facturation" },
   { word: /\brecruter\b/i, label: "Recruter", href: "/recruter" },
 ];
 function pagesIn(text: string, here: string) {
@@ -402,8 +402,9 @@ const OPEN_EVENT = "yelema:open-yele";
 
 export function YeleTopButton() {
   const { companion } = useExpertsContext();
-  const onExpert = usePathname()?.startsWith("/experts/") ?? false;
-  if (!companion || !onExpert) return null;
+  // On a phone Yélé always lives in the top bar: a round fixed in the corner would sit on the buttons
+  // of whatever row scrolls under it.
+  if (!companion) return null;
   return (
     <button
       type="button"
@@ -421,13 +422,20 @@ export function YeleBubble() {
   const [open, setOpen] = useState(false);
   // An expert's workspace keeps its chat composer at the bottom: there the bubble is a round in the
   // corner, beside the composer (which leaves it the room), never on its Envoyer button. On a phone it
-  // moves to the top bar.
+  // is in the top bar on every page (YeleTopButton).
   const raised = usePathname()?.startsWith("/experts/") ?? false;
   useEffect(() => {
     const show = () => setOpen(true);
     window.addEventListener(OPEN_EVENT, show);
     return () => window.removeEventListener(OPEN_EVENT, show);
   }, []);
+  // Escape closes the panel, as it closes any window laid over the page.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
   // A folded call floats in the same corner on a computer (on a phone it is a strip at the top).
   const { folded } = useCallState();
   if (!companion) return null;
@@ -438,7 +446,7 @@ export function YeleBubble() {
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Fermer Yélé" : "Ouvrir Yélé, accompagnement"}
         aria-expanded={open}
-        className={cn("fixed right-6 z-50 flex items-center gap-2.5 rounded-full border border-line bg-surface p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.16)] transition-transform hover:scale-105", raised && "max-sm:hidden", "bottom-6", folded && "sm:bottom-32", open && "hidden")}
+        className={cn("fixed right-6 z-50 flex items-center gap-2.5 rounded-full border border-line bg-surface p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.16)] transition-transform hover:scale-105", "max-sm:hidden", "bottom-6", folded && "sm:bottom-32", open && "hidden")}
       >
         <Portrait animated={open} />
         {!open && !raised && <span className="hidden pr-3 text-xs font-semibold text-ink sm:inline">Yélé</span>}

@@ -12,7 +12,7 @@ import { ModelPicker } from "./ModelPicker";
 
 /** The Yelema engine's provider id when the server list is out of reach. */
 const YELEMA_PROVIDER = "custom:Yelema";
-const SAME = "Comme tous les experts";
+const SAME = "Comme tous les Experts";
 
 // Bloc 2 : le modèle de tous les experts, et au besoin un autre pour un expert. Avec des comptes, la
 // liste = leurs fournisseurs + le moteur Yelema, enregistrée dans l'ordre des comptes ; sans compte,
@@ -44,7 +44,7 @@ export function ExpertModels({ scope, setup, yelema, models, groupName, onChange
   if (!withAccounts && !yelemaOnly) {
     return (
       <Shell>
-        <p className="text-xs text-ink-3">Les experts de cette instance utilisent le modèle par défaut du moteur Yelema.</p>
+        <p className="text-xs text-ink-3">Les Experts de cette instance utilisent le modèle par défaut du moteur Yelema.</p>
       </Shell>
     );
   }
@@ -80,8 +80,8 @@ export function ExpertModels({ scope, setup, yelema, models, groupName, onChange
 
   return (
     <Shell>
-      <Row label="Tous les experts">
-        <ModelPicker label="Modèle de tous les experts" groups={withAccounts ? accountOptions : yelemaOptions} value={allValue} nullLabel={withAccounts ? undefined : defaultLabel} disabled={busy} onChange={pickAll} />
+      <Row label="Tous les Experts">
+        <ModelPicker label="Modèle de tous les Experts" groups={withAccounts ? accountOptions : yelemaOptions} value={allValue} nullLabel={withAccounts ? undefined : defaultLabel} disabled={busy} onChange={pickAll} />
       </Row>
       {withAccounts && <p className="text-[11px] max-sm:text-[12px] text-ink-3">Un modèle d’un autre fournisseur fait passer ce fournisseur en compte principal.</p>}
 
@@ -109,7 +109,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <section className="space-y-3 rounded-[22px] border border-line bg-surface p-4 sm:p-5">
       <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-ink-3">
-        <Cpu className="h-3.5 w-3.5 text-brand" /> Modèle des experts
+        <Cpu className="h-3.5 w-3.5 text-brand" /> Modèle des Experts
       </h2>
       {children}
     </section>

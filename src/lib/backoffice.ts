@@ -69,7 +69,7 @@ export interface BoMe {
   /** `name` is « Prénom Nom », computed by the back office from the two. */
   /** `avatarUrl`: the member's own photo, once the back office keeps one (`PUT /app/me/avatar`). */
   user: { id: string; email: string; firstName: string | null; lastName: string | null; name: string | null; jobTitle: string | null; role: "admin" | "member"; avatarUrl?: string | null; /** Call voice per expert (`*` = all) and language, shared with the mobile app. */ voices?: Record<string, Partial<Record<"fr" | "en", string>>> };
-  workspace: { id: string; name: string; logoUrl: string | null };
+  workspace: { id: string; name: string; logoUrl: string | null; brandColor?: string | null };
   instance: { id: string } | null;
 }
 
@@ -85,9 +85,17 @@ export interface BoInstanceView {
   tools: "yelema" | "agent37";
   /**
    * `profile` is the name to send to the instance; `key` joins the public catalogue. `displayName`
-   * and `avatarUrl` are what the member chose for it, null when they kept the catalogue's.
+   * and `avatarUrl` are what the member chose for it, null when they kept the catalogue's. `cycle`
+   * is the cycle the company subscribed that brought it, when it came with one (back office, to come).
    */
-  experts: { profile: string; key: string; version: string | null; displayName?: string | null; avatarUrl?: string | null }[];
+  experts: {
+    profile: string;
+    key: string;
+    version: string | null;
+    displayName?: string | null;
+    avatarUrl?: string | null;
+    cycle?: { key: string; label: string } | null;
+  }[];
   /** Where a channel that receives by webhook is reached: the address to give Microsoft for Teams. */
   channels?: { teams?: { endpoint: string | null } };
 }

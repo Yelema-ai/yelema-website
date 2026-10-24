@@ -71,7 +71,7 @@ export function routingFailure(output: string): string {
   return "Certains sujets n’ont pas pu être créés. Réessayez dans un instant.";
 }
 
-export const TOPICS_CREATED = "Les sujets des experts sont créés : tous les membres du groupe peuvent écrire à chacun dans son sujet.";
+export const TOPICS_CREATED = "Les sujets des Experts sont créés : tous les membres du groupe peuvent écrire à chacun dans son sujet.";
 export const RESTART_FAILED = "Les sujets sont créés, mais la messagerie n’a pas redémarré. Réessayez dans un instant.";
 
 // hermes-experts/scripts/add_profile_route.py, verbatim except punctuation in comments and messages.

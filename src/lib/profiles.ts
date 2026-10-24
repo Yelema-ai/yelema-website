@@ -37,7 +37,7 @@ export async function resolveProfile(row: AgentRow, raw: unknown): Promise<strin
   }
   const installed = await installedProfiles(row);
   if (installed && !installed.has(raw)) {
-    throw new ApiError(404, "profile_not_found", "Cet expert n’est pas installé sur cet espace.");
+    throw new ApiError(404, "profile_not_found", "Cet Expert n’est pas installé sur cet espace.");
   }
   return raw;
 }

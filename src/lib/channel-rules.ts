@@ -56,7 +56,7 @@ export function prepareChannelWrite(platform: MessagingPlatform, sent: Record<st
   if (allowlist) {
     const value = allowlist.key in env ? env[allowlist.key] : null;
     if (value === "" || (value === null && !allowlist.is_set)) {
-      return { env, problem: "Indiquez au moins une personne autorisée : sans cette liste, quiconque trouve le bot parlerait à vos experts." };
+      return { env, problem: "Indiquez au moins une personne autorisée : sans cette liste, quiconque trouve le bot parlerait à vos Experts." };
     }
     const format = ALLOWED_ID[platform.id];
     const bad = value?.split(",").filter((id) => format && !format.re.test(id)) ?? [];

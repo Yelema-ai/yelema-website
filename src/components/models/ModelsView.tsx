@@ -12,7 +12,7 @@ import { MemberSources } from "./MemberSources";
 import { useModelGroups } from "./useModelGroups";
 import { YelemaEngine } from "./YelemaEngine";
 
-const REFUSED = "Le fournisseur n’accepte plus cette clé. Vos experts ne répondent plus tant qu’elle n’est pas remplacée ou retirée.";
+const REFUSED = "Le fournisseur n’accepte plus cette clé. Vos Experts ne répondent plus tant qu’elle n’est pas remplacée ou retirée.";
 // Une pose prend d'ordinaire moins d'une minute par instance ; au-delà, on cesse de relire seul.
 const POLL_MS = 4_000;
 const POLL_TRIES = 45;
@@ -78,11 +78,11 @@ export function ModelsView() {
   const title = scope.kind === "member" ? `Comptes de l’instance de ${who}` : "Comptes de l’instance";
   const scopeLabel = scope.kind === "member" ? `l’instance de ${who}` : "votre instance";
   const refused = (scope.kind === "member" ? member?.state : data.mine?.state) === "refused";
-  const catalogues = { catalogue: data.catalogue, logins: data.logins ?? [] };
+  const catalogues = { catalogue: data.catalogue ?? [], logins: data.logins ?? [] };
 
   return (
     <div className="space-y-6">
-      <p className="text-[15px] text-ink-2">Branchez vos comptes de modèles d’intelligence artificielle (BYOK) et choisissez le modèle de vos experts.</p>
+      <p className="text-[15px] text-ink-2">Branchez vos comptes de modèles d’intelligence artificielle (BYOK) et choisissez le modèle de vos Experts.</p>
 
       {refused && (
         <div role="alert" className="flex gap-2.5 rounded-[22px] border border-ko/30 bg-ko-pale p-4 text-sm text-ko">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { PRESENTATION_TITLE, type CompanyProfile } from "@/lib/company";
@@ -40,6 +40,7 @@ export function CompanyProfileView() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"note" | null>(null);
   const [note, setNote] = useState("");
+  const [writing, setWriting] = useState(false);
   // Remounted after a presentation is deposited, so the memory below lists it.
   const [memoryKey, setMemoryKey] = useState(0);
   const { current, setCurrentLogoUrl } = useWorkspace();
@@ -75,6 +76,7 @@ export function CompanyProfileView() {
     run("note", async () => {
       await apiFetch("/api/memory/items", { method: "POST", body: JSON.stringify({ title: PRESENTATION_TITLE, note, unit: null }) });
       setNote("");
+      setWriting(false);
       await load();
       setMemoryKey((k) => k + 1);
       toast.success("Présentation déposée dans la mémoire de l’entreprise.");
@@ -82,10 +84,9 @@ export function CompanyProfileView() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className="font-display text-[28px] font-bold tracking-tight text-ink">Votre entreprise</h1>
+      <h1 className="sr-only">Votre entreprise</h1>
       <p className="mt-1 max-w-2xl text-sm text-ink-2">
-        Ce que vos experts savent de votre entreprise, et ce qui met l’espace à son image.
-        {admin && profile && ` ${profile.done} sur ${profile.total} ${profile.done > 1 ? "étapes faites" : "étape faite"}.`}
+        Ce que vos Experts savent de votre entreprise, et ce qui met l’espace à son image.
       </p>
 
       {admin && error && <p className="mt-4 max-w-xl rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{error}</p>}
@@ -102,11 +103,31 @@ export function CompanyProfileView() {
             <CompanyLogos profile={profile} onProfile={setProfile} />
           </Step>
 
-          <Step index={2} title="Présentez votre activité" done={profile.note} hint="Quelques lignes : ce que fait l’entreprise, pour qui, ses produits, son vocabulaire. Vos experts s’en servent à chaque réponse.">
-            <textarea className={`min-h-32 ${FIELD}`} value={note} aria-label="Présentation de l’entreprise" onChange={(e) => setNote(e.target.value)} />
-            <Button className="mt-3" disabled={busy === "note" || !note.trim()} onClick={() => void savePresentation()}>
-              {busy === "note" ? "Dépôt en cours…" : profile.note ? "Ajouter une autre note" : "Déposer la présentation"}
-            </Button>
+          <Step index={2} title="Présentez votre activité" done={profile.note} hint="Quelques lignes : ce que fait l’entreprise, pour qui, ses produits, son vocabulaire. Vos Experts s’en servent à chaque réponse.">
+            {/* Once deposited, the presentation lives in the memory below: an empty box here would read as lost. */}
+            {profile.note && !writing ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm text-ink-2">Présentation déposée. Elle est dans la mémoire, plus bas.</p>
+                <Button variant="outline" size="sm" onClick={() => setWriting(true)}>
+                  <Plus /> Ajouter une note
+                </Button>
+              </div>
+            ) : (
+              <>
+                <textarea
+                  className={`min-h-32 ${FIELD}`}
+                  value={note}
+                  placeholder="Unifood fabrique et distribue des produits alimentaires…"
+                  aria-label="Présentation de l’entreprise"
+                  onChange={(e) => setNote(e.target.value)}
+                />
+                {note.trim() && (
+                  <Button className="mt-3" disabled={busy === "note"} onClick={() => void savePresentation()}>
+                    {busy === "note" ? "Dépôt en cours…" : profile.note ? "Ajouter la note" : "Déposer la présentation"}
+                  </Button>
+                )}
+              </>
+            )}
           </Step>
         </>
       )}

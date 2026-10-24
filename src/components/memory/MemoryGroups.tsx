@@ -1,17 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { groupByUnit, type MemoryItem, type MemoryList, type MemoryStatus } from "@/lib/memory";
 import { paginate } from "@/lib/paginate";
 import { cn } from "@/lib/utils";
 import { Pager } from "@/components/Pager";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const STATUS: Record<MemoryStatus, { label: string; variant: "success" | "warning" | "muted" | "destructive" }> = {
   pending: { label: "Envoi en cours", variant: "warning" },
-  synced: { label: "Lisible par les experts", variant: "success" },
+  synced: { label: "Lisible par les Experts", variant: "success" },
   skipped: { label: "Non envoyé", variant: "muted" },
   error: { label: "Envoi impossible", variant: "destructive" },
 };
@@ -77,20 +82,32 @@ function Item({ item, onToggle, onRemove }: { item: MemoryItem } & ItemActions) 
             )}
           </p>
         </div>
-        <Badge variant={item.active ? STATUS[item.status].variant : "muted"}>{item.active ? STATUS[item.status].label : "Désactivé"}</Badge>
+        <div className="flex items-center gap-1">
+          <Badge variant={item.active ? STATUS[item.status].variant : "muted"}>{item.active ? STATUS[item.status].label : "Désactivé"}</Badge>
+          {/* Its two actions in a « … » menu, as on the other lists: not two buttons on every row. */}
+          {item.canEdit && (
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Actions sur ${item.title}`}
+                  className="grid size-8 place-items-center rounded-lg text-ink-3 hover:bg-soft hover:text-ink"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => onToggle(item)}>{item.active ? "Désactiver" : "Réactiver"}</DropdownMenuItem>
+                <DropdownMenuItem className="text-ko" onSelect={() => onRemove(item)}>
+                  Supprimer
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </div>
       {item.error && item.active && <p className="mt-2 text-sm text-ink-3">{item.error}</p>}
       {item.note && <p className="mt-2 line-clamp-3 whitespace-pre-line text-sm text-ink-2">{item.note}</p>}
-      {item.canEdit && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => onToggle(item)}>
-            {item.active ? "Désactiver" : "Réactiver"}
-          </Button>
-          <Button variant="ghost" size="sm" className="text-ko" onClick={() => onRemove(item)}>
-            Supprimer
-          </Button>
-        </div>
-      )}
     </li>
   );
 }

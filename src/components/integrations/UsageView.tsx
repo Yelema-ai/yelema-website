@@ -189,11 +189,11 @@ export function UsageView() {
 
   return (
     <div className="max-w-5xl">
-      <h1 className="font-display text-[28px] font-bold tracking-tight text-ink">Consommation d’outils hors tokens</h1>
-      <p className="mt-1 text-sm text-ink-2">Les appels de vos experts aux outils connectés (Gmail, Sheets, HubSpot…).</p>
+      <h1 className="sr-only">Consommation d’outils hors tokens</h1>
+      <p className="mt-1 text-sm text-ink-2">Les appels de vos Experts aux outils connectés (Gmail, Sheets, HubSpot…).</p>
       {ownKey && (
         <p className="mt-3 max-w-2xl rounded-xl border border-line bg-soft px-4 py-3 text-[13px] text-ink-2">
-          Des experts tournent sur votre propre clé de modèle : la dépense de modèle n’est pas mesurée par Yelema, elle se lit chez votre fournisseur.
+          Des Experts tournent sur votre propre clé de modèle : la dépense de modèle n’est pas mesurée par Yelema, elle se lit chez votre fournisseur.
         </p>
       )}
 

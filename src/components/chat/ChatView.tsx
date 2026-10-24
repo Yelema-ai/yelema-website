@@ -140,12 +140,12 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
       {att.dragOver && <DropOverlay label="Déposez vos fichiers pour les joindre" />}
       <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          {profile && <ChatSessionsPanel />}
-          {/* On a phone the expert's photo and name already head the page: shown once. */}
-          {face && <ExpertAvatar expert={face} size="sm" className="max-sm:hidden" />}
+          <ChatSessionsPanel />
+          {/* On an expert's page its photo and name already head the page: shown once. */}
+          {face && !profile && <ExpertAvatar expert={face} size="sm" />}
           <div className="min-w-0">
             <h1 className="truncate text-sm font-semibold leading-tight text-ink">{headerTitle}</h1>
-            <p className={cn("truncate text-xs text-ink-3", profile && "max-sm:hidden")}>{agentName}</p>
+            {!profile && <p className="truncate text-xs text-ink-3">{agentName}</p>}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -180,7 +180,7 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
           <ChatMessages messages={messages} isStreaming={isStreaming} face={face} driveFolder={driveFolder} />
         ) : (
           <>
-            {face && <ExpertAvatar expert={face} size="lg" className="mb-4 max-sm:hidden" />}
+            {face && !profile && <ExpertAvatar expert={face} size="lg" className="mb-4 max-sm:hidden" />}
           <h1 className="text-center font-display text-[26px] font-bold tracking-tight text-ink sm:text-[30px]">
             {profile ? `Que voulez-vous confier à ${agentName} ?` : "Que puis-je faire pour vous ?"}
           </h1>
@@ -213,7 +213,7 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
       {/* Bottom: balances the vertical centering and carries the welcome subtitle. */}
       {showWelcome && (
         <div className="flex flex-1 flex-col items-center px-4 pt-3">
-          <p className="text-sm text-ink-3">
+          <p className="text-center text-sm text-ink-3">
             Plus vous donnez de contexte, meilleure sera la réponse.
           </p>
         </div>

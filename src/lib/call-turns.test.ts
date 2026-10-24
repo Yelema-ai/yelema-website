@@ -12,7 +12,10 @@ function run(s: TurnState, t0: number, ms: number, levels: Partial<TurnReading>)
 test("halo: same order as the mobile app", () => {
   assert.equal(haloOf("connecting", true), "connexion");
   assert.equal(haloOf("reconnecting", false), "reco");
-  assert.equal(haloOf("thinking", true), "reflechit");
+  assert.equal(haloOf("thinking", true), "muet");
+  assert.equal(haloOf("thinking", false), "reflechit");
+  assert.equal(haloOf("thinking", false, true), "cherche");
+  assert.equal(haloOf("speaking", false, true), "parle");
   assert.equal(haloOf("speaking", true), "muet");
   assert.equal(haloOf("speaking", false), "parle");
   assert.equal(haloOf("listening", false), "ecoute");

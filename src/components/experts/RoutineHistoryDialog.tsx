@@ -43,7 +43,7 @@ export function RoutineHistoryDialog({
       <DialogContent className="max-h-[calc(100vh-2rem)] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Historique : {routine.name}</DialogTitle>
-          <DialogDescription>Ses dernières exécutions. Chacune ouvre la conversation où l’expert a travaillé.</DialogDescription>
+          <DialogDescription>Ses dernières exécutions. Chacune ouvre la conversation où l’Expert a travaillé.</DialogDescription>
         </DialogHeader>
         {error ? (
           <p className="text-sm text-ko">{error}</p>

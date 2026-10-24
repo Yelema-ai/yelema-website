@@ -300,7 +300,7 @@ export function McpView() {
   const servers = (scope.kind === "client" ? data?.client : scope.kind === "member" ? member?.servers : data?.own) ?? [];
   // Sur l'instance d'un membre, les serveurs de l'entreprise s'ajoutent aux siens ; à nom égal, le sien l'emporte.
   const inherited = scope.kind === "member" ? (data?.client ?? []).filter((c) => !servers.some((s) => s.name === c.name)) : [];
-  const scopeLabel = scope.kind === "client" ? "tous les experts de l’entreprise" : scope.kind === "member" ? `les experts de ${member?.name ?? member?.email ?? "ce membre"}` : "vos experts";
+  const scopeLabel = scope.kind === "client" ? "tous les Experts de l’entreprise" : scope.kind === "member" ? `les Experts de ${member?.name ?? member?.email ?? "ce membre"}` : "vos Experts";
 
   async function written(call: Promise<McpWritten>, done: string): Promise<McpWritten> {
     const out = await call;
@@ -337,8 +337,8 @@ export function McpView() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h2 className="font-display text-[24px] font-bold tracking-tight text-ink">Serveurs MCP</h2>
-          <p className="mt-1 max-w-xl text-sm text-ink-3">Connectez vos serveurs Model Context Protocol (MCP) pour étendre les capacités de vos experts.</p>
+          <h2 className="sr-only">Serveurs MCP</h2>
+          <p className="mt-1 max-w-xl text-sm text-ink-3">Connectez vos serveurs Model Context Protocol (MCP) pour étendre les capacités de vos Experts.</p>
         </div>
         <div className="flex gap-2 self-start sm:self-auto">
           {scope.kind !== "member" && (
@@ -363,7 +363,7 @@ export function McpView() {
         <div className="space-y-0.5">
           <p className="font-semibold text-ink">Vos outils, sous votre responsabilité</p>
           <p className="text-xs leading-relaxed text-ink-3">
-            Les outils d’un serveur sont offerts à tous les experts concernés, routines et messages reçus par Telegram ou WhatsApp compris. Yelema ne les vérifie pas : ne branchez qu’un serveur en qui vous avez confiance.
+            Les outils d’un serveur sont offerts à tous les Experts concernés, routines et messages reçus par Telegram ou WhatsApp compris. Yelema ne les vérifie pas : ne branchez qu’un serveur en qui vous avez confiance.
           </p>
         </div>
       </div>
@@ -389,7 +389,7 @@ export function McpView() {
               <Layers className="h-6 w-6" />
             </div>
             <p className="text-sm font-semibold text-ink">Aucun serveur MCP personnalisé</p>
-            <p className="mt-1 max-w-sm text-xs text-ink-3">Ajoutez vos serveurs MCP pour connecter vos sources de données et vos outils à vos experts.</p>
+            <p className="mt-1 max-w-sm text-xs text-ink-3">Ajoutez vos serveurs MCP pour connecter vos sources de données et vos outils à vos Experts.</p>
             <Button onClick={() => setAdding(true)} variant="outline" size="sm" className="mt-4">
               <Plus />
               Ajouter un serveur MCP
@@ -422,7 +422,7 @@ export function McpView() {
         open={Boolean(removing)}
         onOpenChange={(open) => !open && setRemoving(null)}
         title="Supprimer le serveur MCP"
-        description={`Supprimer le serveur « ${removing?.name ?? ""} » ? Les experts concernés ne pourront plus utiliser ses outils, et la conversation en cours sera interrompue.`}
+        description={`Supprimer le serveur « ${removing?.name ?? ""} » ? Les Experts concernés ne pourront plus utiliser ses outils, et la conversation en cours sera interrompue.`}
         confirmText="Supprimer"
         destructive
         onConfirm={remove}

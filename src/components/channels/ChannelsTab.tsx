@@ -76,7 +76,7 @@ export function ChannelsTab({
       <div className="space-y-6">
         <Header />
         <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
-          Vos experts ne sont pas joignables pour le moment. Réessayez dans un instant.
+          Vos Experts ne sont pas joignables pour le moment. Réessayez dans un instant.
         </p>
       </div>
     );
@@ -187,7 +187,7 @@ function Header() {
   return (
     <header className="space-y-1">
       <h2 className="text-lg font-semibold">Messageries</h2>
-      <p className="text-sm text-muted-foreground">Écrivez à vos experts depuis les messageries que vous utilisez déjà.</p>
+      <p className="text-sm text-muted-foreground">Écrivez à vos Experts depuis les messageries que vous utilisez déjà.</p>
     </header>
   );
 }
@@ -219,7 +219,7 @@ function ChannelRow({
           {error || channel.description || channelStateLabel(channel)}
         </p>
       </div>
-      <Button variant="outline" size="sm" disabled={!canManage} onClick={onOpen} className="max-sm:h-10">
+      <Button variant="outline" size="sm" disabled={!canManage} onClick={onOpen} className="rounded-full max-sm:h-10">
         {connected ? "Gérer" : isFeaturedChannel(channel.id) ? `Connecter ${channel.name}` : "Connecter"}
       </Button>
     </div>

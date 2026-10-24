@@ -41,7 +41,7 @@ export function AcceptInvite({
 
       <AuthHeading title="Bienvenue">
         Vous rejoignez l’espace de <b className="text-ink">{workspaceName}</b> en tant que {role}.
-        Vos experts vous y attendent.
+        Vos Experts vous y attendent.
       </AuthHeading>
 
       <button

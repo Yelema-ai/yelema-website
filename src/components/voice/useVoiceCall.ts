@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { VoiceCall, webPlatform, type AethexError } from "@aethexai/react/core";
+import { VoiceCall, webPlatform, type AethexError, type WebRTCPlatform } from "@aethexai/react/core";
 import type { VoiceLanguage } from "@/lib/voice";
 import { firstTurn, stepTurn, type CallPhase, type TurnState } from "@/lib/call-turns";
 import { micMeter, withMicTap, type MicMeter } from "@/lib/mic-tap";
@@ -17,8 +17,21 @@ import { playHangupTone } from "./useRingback";
 // think harder; « Laisse-moi finir » is `{ type: 'hold-floor', on }` on the call's data channel, handled by
 // Aethex. Both are sent again once the call is up. Locally they also lengthen the thinking wait and keep
 // the member's pauses from ending their turn.
+//
+// What was said, and the expert's tools at work, come from Aethex's RTVI messages on the call's data
+// channel (`bot-output`, the member's final `user-transcription`, `llm-function-call-in-progress` and
+// `-stopped`), read as the mobile app does: the peer connection's data channels are listened to.
 
 export type { CallPhase };
+
+/** One line of the live transcript. */
+export interface Caption {
+  who: "expert" | "member";
+  text: string;
+  at: number;
+}
+
+const MAX_CAPTIONS = 60;
 
 const VOICE_BASE = "/api/voice";
 const LEVEL_MS = 80;
@@ -40,6 +53,10 @@ export interface UseVoiceCall {
   holding: boolean;
   /** Seconds since the expert picked up. */
   elapsed: number;
+  /** What was said so far, oldest first. */
+  captions: Caption[];
+  /** One of the expert's tools is at work (it searches). */
+  tool: boolean;
   start(input: { expert: string; language: VoiceLanguage; voice: string | null }): void;
   hangUp(): void;
   setMuted(muted: boolean): void;
@@ -56,6 +73,9 @@ export function useVoiceCall(): UseVoiceCall {
   const [elapsed, setElapsed] = useState(0);
   const [longer, setLonger] = useState(false);
   const [holding, setHolding] = useState(false);
+  const [captions, setCaptions] = useState<Caption[]>([]);
+  const [tool, setTool] = useState(false);
+  const tools = useRef(new Set<string>());
   const call = useRef<VoiceCall | null>(null);
   const mic = useRef<MicMeter | null>(null);
   const timers = useRef<ReturnType<typeof setInterval>[]>([]);
@@ -72,6 +92,8 @@ export function useVoiceCall(): UseVoiceCall {
   }, []);
 
   const release = useCallback(() => {
+    tools.current.clear();
+    setTool(false);
     timers.current.forEach(clearInterval);
     timers.current = [];
     call.current?.stop();
@@ -99,6 +121,36 @@ export function useVoiceCall(): UseVoiceCall {
     },
     [go, release]
   );
+
+  const onServerMessage = useCallback((raw: unknown) => {
+    if (typeof raw !== "string" || phaseRef.current === "ended" || phaseRef.current === "unreachable") return;
+    let m: { label?: unknown; type?: unknown; data?: { text?: unknown; final?: unknown; tool_call_id?: unknown } } | null;
+    try {
+      m = JSON.parse(raw);
+    } catch {
+      return; // not JSON
+    }
+    if (m?.label !== "rtvi-ai") return;
+    const d = m.data;
+    if (m.type === "bot-output" || (m.type === "user-transcription" && d?.final === true)) {
+      const text = typeof d?.text === "string" ? d.text.trim() : "";
+      if (!text) return;
+      const who: Caption["who"] = m.type === "bot-output" ? "expert" : "member";
+      setCaptions((c) => {
+        const last = c[c.length - 1];
+        // The expert's sentences arrive one by one: they join its current line.
+        const next = last && last.who === who && who === "expert" && Date.now() - last.at < 4000 ? [...c.slice(0, -1), { ...last, text: `${last.text} ${text}`, at: Date.now() }] : [...c, { who, text, at: Date.now() }];
+        return next.slice(-MAX_CAPTIONS);
+      });
+      return;
+    }
+    const id = d?.tool_call_id;
+    if (typeof id !== "string") return;
+    if (m.type === "llm-function-call-in-progress") tools.current.add(id);
+    else if (m.type === "llm-function-call-stopped") tools.current.delete(id);
+    else return;
+    setTool(tools.current.size > 0);
+  }, []);
 
   // Turns from the two levels; a reconnection starts them again.
   const meter = useCallback(() => {
@@ -133,11 +185,18 @@ export function useVoiceCall(): UseVoiceCall {
       setMutedState(false);
       setLonger(false);
       setHolding(false);
-      // The SDK's own browser adapter, every field kept, with the microphone stream also measured.
-      const platform = withMicTap(webPlatform, (stream) => {
-        mic.current?.close();
-        mic.current = micMeter(stream);
-      });
+      setCaptions([]);
+      tools.current.clear();
+      setTool(false);
+      // The SDK's own browser adapter, every field kept, with the microphone stream also measured and
+      // the data channels listened to.
+      const platform = listening(
+        withMicTap(webPlatform, (stream) => {
+          mic.current?.close();
+          mic.current = micMeter(stream);
+        }),
+        onServerMessage
+      );
       let refusal: string | null = null;
       // The back office's refusal ("Cet expert n'est pas encore disponible.") is in the body, which the SDK does not read.
       const fetchImpl: typeof fetch = async (input, init) => {
@@ -198,7 +257,7 @@ export function useVoiceCall(): UseVoiceCall {
         fail(refusal);
       }
     },
-    [fail, go, meter, release, sendLonger]
+    [fail, go, meter, onServerMessage, release, sendLonger]
   );
 
   const hangUp = useCallback(() => {
@@ -244,5 +303,24 @@ export function useVoiceCall(): UseVoiceCall {
   // Leaving the page hangs up: the SDK sends `end`, and the back office closes the call at Aethex.
   useEffect(() => release, [release]);
 
-  return { phase, reason, muted, longer, holding, elapsed, start, hangUp, setMuted, toggleLonger, toggleHold };
+  return { phase, reason, muted, longer, holding, elapsed, captions, tool, start, hangUp, setMuted, toggleLonger, toggleHold };
+}
+
+/** The adapter with every data channel the SDK opens also heard by `onMessage`. */
+function listening(base: WebRTCPlatform, onMessage: (data: unknown) => void): WebRTCPlatform {
+  return {
+    ...base,
+    createPeerConnection: (config) => {
+      const pc = base.createPeerConnection(config);
+      const open = pc.createDataChannel.bind(pc);
+      pc.createDataChannel = (label, init) => {
+        const channel = open(label, init);
+        channel.addEventListener("message", (ev) => onMessage(ev.data));
+        return channel;
+      };
+      // A channel the server opens itself.
+      pc.addEventListener("datachannel", (ev) => ev.channel.addEventListener("message", (e) => onMessage(e.data)));
+      return pc;
+    },
+  };
 }

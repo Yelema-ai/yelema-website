@@ -14,7 +14,7 @@ import { ModelPicker } from "./ModelPicker";
 import { ProviderLogo } from "./ProviderLogo";
 import { useModelGroups } from "./useModelGroups";
 
-const SAVE_WARNING = "Tous vos experts passeront par ce compte, routines et messages reçus par Telegram ou WhatsApp compris, de jour comme de nuit. La conversation en cours sera interrompue.";
+const SAVE_WARNING = "Tous vos Experts passeront par ce compte, routines et messages reçus par Telegram ou WhatsApp compris, de jour comme de nuit. La conversation en cours sera interrompue.";
 
 type Choice = { kind: "key"; provider: LlmProvider } | { kind: "login"; provider: LlmLogin } | { kind: "custom" };
 

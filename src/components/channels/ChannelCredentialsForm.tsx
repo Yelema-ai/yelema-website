@@ -108,7 +108,7 @@ export function ChannelCredentialsForm({
 // How to find the people to allow, for the channels on this form; unknown ones keep the harness's line.
 const ALLOWLIST_HINTS: Record<string, string> = {
   discord: "Identifiants Discord, séparés par des virgules. Pour les voir : Paramètres › Avancés › Mode développeur, puis clic droit sur une personne › Copier l’identifiant.",
-  google_chat: "Adresses e-mail Google des personnes qui pourront écrire à vos experts, séparées par des virgules.",
+  google_chat: "Adresses e-mail Google des personnes qui pourront écrire à vos Experts, séparées par des virgules.",
 };
 
 // Shared by every channel panel: the way back to the list, the channel's own description, its

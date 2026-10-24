@@ -78,7 +78,7 @@ export function McpServerDialog({ open, onOpenChange, scopeLabel, onSave, oauth 
                 Nom du serveur <span className="text-ko">*</span>
               </Label>
               <Input id="mcp-name" type="text" placeholder="ex. mon_crm" value={name} onChange={(e) => setName(e.target.value)} disabled={busy} required autoFocus autoComplete="off" spellCheck={false} />
-              <p className="text-xs text-ink-3">Des minuscules, des chiffres ou « _ », sans espace ni tiret. Vos experts retrouvent ses outils sous ce nom.</p>
+              <p className="text-xs text-ink-3">Des minuscules, des chiffres ou « _ », sans espace ni tiret. Vos Experts retrouvent ses outils sous ce nom.</p>
             </div>
 
             <div className="space-y-1.5">
@@ -86,7 +86,7 @@ export function McpServerDialog({ open, onOpenChange, scopeLabel, onSave, oauth 
                   Adresse du serveur <span className="text-ko">*</span>
                 </Label>
                 <Input id="mcp-url" type="url" placeholder="https://exemple.com/mcp" value={url} onChange={(e) => setUrl(e.target.value)} disabled={busy} required autoComplete="off" spellCheck={false} className="font-mono text-[13px]" />
-                <p className="text-xs text-ink-3">En https, joignable depuis Internet : vos experts tournent dans le cloud, pas sur votre réseau.</p>
+                <p className="text-xs text-ink-3">En https, joignable depuis Internet : vos Experts tournent dans le cloud, pas sur votre réseau.</p>
               </div>
 
             <fieldset className="space-y-1.5" disabled={busy}>
@@ -141,7 +141,7 @@ export function McpServerDialog({ open, onOpenChange, scopeLabel, onSave, oauth 
             )}
 
             <p className="rounded-xl bg-soft px-3 py-2.5 text-xs leading-relaxed text-ink-2">
-              Les outils de ce serveur seront offerts à tous les experts concernés ; Yelema ne les vérifie pas. La conversation en cours sera interrompue le temps de l’installation.
+              Les outils de ce serveur seront offerts à tous les Experts concernés ; Yelema ne les vérifie pas. La conversation en cours sera interrompue le temps de l’installation.
             </p>
           </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, CornerDownRight, FileText, MoreHorizontal, Pencil, Plus, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Check, ChevronDown, CornerDownRight, MoreHorizontal, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import type { OrgMember, OrgPlacement, OrgRole, OrgUnit } from "@/lib/memory";
 import {
   DropdownMenu,
@@ -22,26 +22,25 @@ type Row = { member: OrgMember; place: OrgPlacement };
 
 const ROLE_LABEL: Record<OrgRole, string> = { head: "Responsable", member: "Membre" };
 
-/** A role as a pill that opens a small menu (never the browser's own list): Responsable stands out. */
-function RolePill({ role, label, onChange }: { role: OrgRole; label: string; onChange: ((role: OrgRole) => void) | null }) {
-  const pill = cn(
-    "inline-flex h-8 max-sm:h-10 shrink-0 items-center gap-1 rounded-full px-2.5 text-[12.5px] font-semibold",
-    role === "head" ? "bg-tint text-brand-ink" : "bg-soft text-ink-2"
-  );
-  if (!onChange) return role === "head" ? <span className={pill}>{ROLE_LABEL.head}</span> : null;
+/** A person's or an expert's actions in a department, in one « … »: their role, then Retirer. */
+function RowMenu({ role, label, onRole, onRemove }: { role: OrgRole; label: string; onRole: (role: OrgRole) => void; onRemove: () => void }) {
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
-        <button type="button" aria-label={`Rôle de ${label} : ${ROLE_LABEL[role]}`} className={cn(pill, "hover:ring-2 hover:ring-brand/15")}>
-          {ROLE_LABEL[role]} <ChevronDown className="size-3.5" />
+        <button type="button" aria-label={`Actions pour ${label}`} className="grid size-9 shrink-0 place-items-center rounded-full text-ink-3 opacity-70 hover:bg-soft hover:text-ink group-hover:opacity-100">
+          <MoreHorizontal className="size-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
+      <DropdownMenuContent align="end" className="w-48">
         {(["head", "member"] as const).map((r) => (
-          <DropdownMenuItem key={r} onSelect={() => r !== role && onChange(r)}>
+          <DropdownMenuItem key={r} onSelect={() => r !== role && onRole(r)}>
             {r === role ? <Check className="size-4 text-brand" /> : <span className="size-4" />} {ROLE_LABEL[r]}
           </DropdownMenuItem>
         ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={onRemove}>
+          <Trash2 /> Retirer du département
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -67,14 +66,12 @@ export function DepartmentCard({
   org,
   unit,
   parent,
-  documents,
   onEdit,
   onDelete,
 }: {
   org: Org;
   unit: OrgUnit;
   parent: string | null;
-  documents: number;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -88,15 +85,8 @@ export function DepartmentCard({
   const expertOf = (r: Row) => r.member.experts.find((x) => x.profile === r.place.profile);
   const expertLabel = (r: Row) => expertOf(r)?.label ?? r.place.profile ?? "";
   const remove = (r: Row) => void org.change(`/api/org/assignments/${r.place.id}`, "DELETE", undefined, "Retiré du département.");
-  const setRole = (r: Row) => (editable ? (role: OrgRole) => void org.setRole(r.place.id, role) : null);
-
-  const facts = [
-    { icon: Users, text: count(people.length, "personne") },
-    experts.length ? { icon: Sparkles, text: count(experts.length, "Expert") } : null,
-    documents ? { icon: FileText, text: count(documents, "document") } : null,
-  ].filter(Boolean) as { icon: typeof Users; text: string }[];
-
-  const row = (r: Row, name: string, sub: string | null, photo: string | null, expert: boolean, drag: DragItem) => (
+  // A photo, a name and the role in the department under it; changing it or removing is in the row's « … ».
+  const row = (r: Row, name: string, photo: string | null, expert: boolean, drag: DragItem) => (
     <li
       key={r.place.id}
       draggable={editable}
@@ -104,16 +94,13 @@ export function DepartmentCard({
       className={cn("group flex min-h-12 items-center gap-2.5 rounded-xl px-2 py-1.5", editable && "cursor-grab hover:bg-soft")}
     >
       <Face name={name} photo={photo} expert={expert} />
-      <span className="min-w-0 grow">
+      <span className="min-w-0 grow leading-tight">
         <span className="block truncate text-[14px] font-semibold text-ink">{name}</span>
-        {sub && <span className="block truncate text-[12px] text-ink-3">{sub}</span>}
+        <span className={cn("block truncate text-[12px]", r.place.role === "head" ? "font-semibold text-brand-ink" : "text-ink-3")}>
+          {expert ? (r.place.role === "head" ? "Expert, responsable" : "Expert") : ROLE_LABEL[r.place.role]}
+        </span>
       </span>
-      <RolePill role={r.place.role} label={name} onChange={setRole(r)} />
-      {editable && (
-        <button type="button" aria-label={`Retirer ${name}`} title="Retirer du département" onClick={() => remove(r)} className="grid size-9 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-ko-pale hover:text-ko">
-          <X className="size-4" />
-        </button>
-      )}
+      {editable && <RowMenu role={r.place.role} label={name} onRole={(role) => void org.setRole(r.place.id, role)} onRemove={() => remove(r)} />}
     </li>
   );
 
@@ -133,13 +120,6 @@ export function DepartmentCard({
             </p>
           )}
           <h2 className="font-display text-[19px] font-bold leading-snug text-ink [overflow-wrap:anywhere]">{unit.name}</h2>
-          <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[12.5px] text-ink-3">
-            {facts.map(({ icon: Icon, text }) => (
-              <span key={text} className="inline-flex items-center gap-1">
-                <Icon className="size-3.5" /> {text}
-              </span>
-            ))}
-          </p>
         </div>
         {editable && (
           <DropdownMenu modal={false}>
@@ -161,33 +141,21 @@ export function DepartmentCard({
         )}
       </header>
 
-      <div className="mt-3 grid grid-cols-[minmax(0,1fr)]">
-        <div>
-          <p className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wide text-ink-3">Personnes</p>
-          {people.length === 0 ? (
-            <p className="rounded-xl bg-soft px-3 py-2.5 text-[13px] text-ink-3">Personne pour l’instant.</p>
-          ) : (
-            <ul className="flex flex-col gap-0.5">
-              {people.map((r) => row(r, memberName(r.member), r.member.email, null, false, { kind: "member", member: r.member.id, from: { id: r.place.id, unit: unit.id } }))}
-            </ul>
+      {people.length + experts.length === 0 ? (
+        <p className="mt-3 rounded-xl bg-soft px-3 py-2.5 text-[13px] text-ink-3">Personne pour l’instant.</p>
+      ) : (
+        <ul className="mt-3 flex flex-col gap-0.5">
+          {people.map((r) => row(r, memberName(r.member), null, false, { kind: "member", member: r.member.id, from: { id: r.place.id, unit: unit.id } }))}
+          {experts.map((r) =>
+            row(r, expertLabel(r), photoOf(expertOf(r)?.key ?? ""), true, {
+              kind: "expert",
+              member: r.member.id,
+              profile: r.place.profile ?? "",
+              from: { id: r.place.id, unit: unit.id },
+            })
           )}
-        </div>
-        {experts.length > 0 && (
-          <div className="mt-3">
-            <p className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wide text-ink-3">Experts</p>
-            <ul className="flex flex-col gap-0.5">
-              {experts.map((r) =>
-                row(r, expertLabel(r), `Expert de ${memberName(r.member)}`, photoOf(expertOf(r)?.key ?? ""), true, {
-                  kind: "expert",
-                  member: r.member.id,
-                  profile: r.place.profile ?? "",
-                  from: { id: r.place.id, unit: unit.id },
-                })
-              )}
-            </ul>
-          </div>
-        )}
-      </div>
+        </ul>
+      )}
 
       {editable && (
         <div className="mt-auto pt-3">

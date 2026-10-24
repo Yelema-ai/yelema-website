@@ -109,7 +109,7 @@ export function parseModelChoice(body: unknown): LlmModelChoice | null {
 /** The sentence for a refused pick: the list is Yelema's, not an account's, and its names are not shown back. */
 export function modelChoiceRefusal(code: string): string | null {
   if (code === "unknown_model") return "Ce modèle n’est plus proposé. Rechargez la page pour voir la liste à jour.";
-  if (code === "unknown_profile") return "Cet expert n’est pas installé sur votre instance.";
+  if (code === "unknown_profile") return "Cet Expert n’est pas installé sur votre instance.";
   if (code === "unavailable") return "Les modèles de Yelema sont momentanément indisponibles. Réessayez plus tard.";
   return llmRefusalMessage(code);
 }
@@ -157,7 +157,7 @@ const REFUSALS: Record<string, string> = {
   bad_name: "Ce nom n’est pas valide : une lettre, puis des lettres, des chiffres ou des tirets, 40 caractères au plus, sans espace.",
   reserved_name: "Ce nom est réservé. Choisissez-en un autre.",
   bad_url: "Cette adresse n’est pas acceptée : elle doit commencer par https:// et être joignable depuis Internet.",
-  no_instance: "L’instance de ce membre n’est pas encore en service. Réessayez une fois ses experts installés.",
+  no_instance: "L’instance de ce membre n’est pas encore en service. Réessayez une fois ses Experts installés.",
   login_unavailable: "La connexion à ce fournisseur n’a pas pu démarrer. Réessayez dans un instant.",
   bad_request: "Cette demande n’a pas pu être traitée.",
   forbidden: "Ce réglage est réservé aux administrateurs de votre espace.",

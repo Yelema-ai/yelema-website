@@ -19,6 +19,17 @@ const nextConfig: NextConfig = {
   // seen it; a type is never guessed; another site learns only that a visitor came from here.
   // No Content-Security-Policy yet: one that fits the chat, the screen and the previews needs
   // trying in a browser first.
+  // Administration became the company part of Paramètres (Leslie, 24/10): its old addresses, and
+  // those of the tabs that moved to Intégrations before, still lead somewhere.
+  async redirects() {
+    return [
+      { source: "/administration", destination: "/parametres/membres", permanent: false },
+      { source: "/administration/membres", destination: "/parametres/membres", permanent: false },
+      { source: "/administration/memoire", destination: "/parametres/entreprise", permanent: false },
+      { source: "/administration/:tab(instances|facturation|consommation|entreprise|organigramme)", destination: "/parametres/:tab", permanent: false },
+      { source: "/administration/:tab(canaux|connecteurs|emails|modeles|mcp)", destination: "/integrations/:tab", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

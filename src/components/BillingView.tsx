@@ -103,7 +103,7 @@ export function BillingView() {
     }
   }
 
-  const title = <h1 className="font-display text-[28px] font-bold tracking-tight text-ink">Facturation</h1>;
+  const title = <h1 className="sr-only">Facturation</h1>;
 
   if (!data) {
     return (

@@ -1,5 +1,6 @@
 "use client";
 
+import { Picker } from "@/components/ui/picker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -17,7 +18,6 @@ import { MemoryGroups } from "./MemoryGroups";
 
 const ALL = "";
 const FIELD = "w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm font-normal text-ink focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15";
-const SELECT = "w-full flex h-11 max-w-full rounded-xl border border-line bg-surface px-3 text-[15px] font-normal text-ink focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15";
 
 // `embedded`: shown under the company's logo and presentation, on the Entreprise tab.
 export function MemoryView({ embedded = false, onDeposit }: { embedded?: boolean; onDeposit?: () => void }) {
@@ -101,7 +101,7 @@ export function MemoryView({ embedded = false, onDeposit }: { embedded?: boolean
         <h1 className="font-display text-[28px] font-bold tracking-tight text-ink">Mémoire de l’entreprise</h1>
       )}
       <p className="mt-1 max-w-2xl text-sm text-ink-2">
-        Ce que vos experts savent de l’entreprise : règles, procédures, documents de référence. Chaque expert ne lit que les compartiments ouverts à son utilisateur par l’organigramme.
+        Ce que vos Experts savent de l’entreprise : règles, procédures, documents de référence. Chaque Expert ne lit que les compartiments ouverts à son utilisateur par l’organigramme.
       </p>
 
       {error && <p className="mt-4 max-w-xl rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{error}</p>}
@@ -115,16 +115,17 @@ export function MemoryView({ embedded = false, onDeposit }: { embedded?: boolean
               Titre
               <Input className="mt-1" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
             </label>
-            <label className="text-[13px] font-semibold text-ink-3">
+            <div className="text-[13px] font-semibold text-ink-3">
               Lisible par
-              <select className={`mt-1 ${SELECT}`} value={target} onChange={(e) => setUnit(e.target.value)}>
-                {targets.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <Picker
+                label="Lisible par"
+                placeholder="Toute l’entreprise"
+                value={target}
+                onChange={setUnit}
+                groups={[{ options: targets.map((t) => ({ value: t.id, label: t.name })) }]}
+                className="mt-1 w-full sm:h-10"
+              />
+            </div>
           </div>
           <label className="mt-3 block text-[13px] font-semibold text-ink-3">
             Texte de la note
@@ -149,7 +150,13 @@ export function MemoryView({ embedded = false, onDeposit }: { embedded?: boolean
             </Button>
             <HiddenFileInput inputRef={picker} onFiles={(picked) => setFiles([...files, ...Array.from(picked)])} />
           </div>
-          <Button className="mt-4" disabled={busy || (note.trim() ? !title.trim() : files.length === 0)} onClick={() => void deposit()}>
+          {/* Greyed out until there is something to deposit, rather than a faded colour that reads as broken. */}
+          <Button
+            className="mt-4"
+            variant={note.trim() || files.length > 0 ? "default" : "outline"}
+            disabled={busy || (note.trim() ? !title.trim() : files.length === 0)}
+            onClick={() => void deposit()}
+          >
             {busy ? "Dépôt en cours…" : "Déposer dans la mémoire"}
           </Button>
         </section>
@@ -165,7 +172,7 @@ export function MemoryView({ embedded = false, onDeposit }: { embedded?: boolean
         open={removing !== null}
         onOpenChange={(open) => !open && setRemoving(null)}
         title={`Supprimer « ${removing?.title ?? ""} » ?`}
-        description="Il est effacé de la mémoire des experts. Cette action est définitive."
+        description="Il est effacé de la mémoire des Experts. Cette action est définitive."
         confirmText="Supprimer"
         destructive
         onConfirm={async () => {

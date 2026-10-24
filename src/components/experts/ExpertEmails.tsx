@@ -349,7 +349,7 @@ function ComposeDialog({ inbox, expertName, replyTo, onClose, onSent }: { inbox:
           <DialogTitle className="font-display text-xl font-bold text-ink">{replyTo ? "Répondre" : `Écrire au nom de ${expertName}`}</DialogTitle>
           <DialogDescription>
             {replyTo ? `À ${bareAddress(replyTo.from)}, depuis ${inbox.address}.` : `Depuis ${inbox.address}.`}
-            {!inbox.externalAllowed && " Cet expert ne peut écrire qu’aux membres de votre entreprise."}
+            {!inbox.externalAllowed && " Cet Expert ne peut écrire qu’aux membres de votre entreprise."}
           </DialogDescription>
         </DialogHeader>
 

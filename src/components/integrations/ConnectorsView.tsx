@@ -206,7 +206,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1.5">
-        <p className="text-[15px] text-ink-2">Connectez les outils de l’entreprise : tous vos experts peuvent s’en servir.</p>
+        <p className="text-[15px] text-ink-2">Connectez les outils de l’entreprise : tous vos Experts peuvent s’en servir.</p>
         <span className="inline-flex items-center gap-1.5 text-[13px] text-ink-3">
           <Plug className="h-4 w-4" />
           Plus de 1 000 applications disponibles
@@ -289,7 +289,7 @@ function ToolTile({
       <ToolLogo logo={toolkit.logo} name={toolkit.name} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[15px] font-semibold text-ink">{toolkit.name}</p>
-        {toolkit.description && <p className="truncate text-[13px] text-ink-3">{toolkit.description}</p>}
+        {toolkit.description && <p className="line-clamp-2 text-[13px] leading-snug text-ink-3">{toolkit.description}</p>}
       </div>
 
       {connected === null ? (
@@ -331,9 +331,16 @@ function ToolTile({
           En attente
         </Button>
       ) : (
-        <Button size="sm" className="shrink-0" onClick={onConnect}>
-          Connecter
-        </Button>
+        // A grey « + » rather than thirty identical « Connecter » buttons; the green check says connected.
+        <button
+          type="button"
+          onClick={onConnect}
+          aria-label={`Connecter ${toolkit.name}`}
+          title={`Connecter ${toolkit.name}`}
+          className="grid size-9 shrink-0 place-items-center rounded-full bg-soft text-ink-2 transition-colors hover:bg-brand hover:text-on-brand max-sm:size-10"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
       )}
     </div>
   );

@@ -180,7 +180,7 @@ export default function LoginPage() {
       <AuthHeading title={forgot ? "Mot de passe oublié" : "Connexion à votre espace"}>
         {forgot
           ? "Indiquez votre adresse email. Nous vous envoyons un lien pour en choisir un nouveau."
-          : "Entrez vos identifiants pour retrouver vos experts."}
+          : "Entrez vos identifiants pour retrouver vos Experts."}
       </AuthHeading>
 
       {error ? (

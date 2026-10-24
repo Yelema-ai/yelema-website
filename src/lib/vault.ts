@@ -100,7 +100,7 @@ const REFUSALS: Record<string, string> = {
   bad_password: "Saisissez le mot de passe.",
   bad_purpose: "La description fait 300 caractères au plus.",
   bad_request: "Cette demande n’a pas pu être traitée.",
-  not_found: "Cet expert ou cette connexion est introuvable.",
+  not_found: "Cet Expert ou cette connexion est introuvable.",
   conflict: "Cette instance n’est pas encore prête. Réessayez dans quelques minutes.",
   too_many_attempts: "Trop d’essais en peu de temps. Réessayez dans une heure.",
   instance_error: "L’instance n’a pas pu traiter la demande. Réessayez dans un instant.",

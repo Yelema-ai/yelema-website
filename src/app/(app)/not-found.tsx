@@ -10,7 +10,7 @@ export default function NotFound() {
       <div className="max-w-xl">
         <h1 className="font-display text-[28px] font-bold tracking-tight text-ink">Page introuvable</h1>
         <p className="mt-2 text-[15px] text-ink-2">
-          Cette page n’existe pas, ou cet expert ne fait pas partie de votre équipe. Vos experts restent accessibles
+          Cette page n’existe pas, ou cet Expert ne fait pas partie de votre équipe. Vos Experts restent accessibles
           depuis le menu.
         </p>
         <Button asChild className="mt-5">

@@ -1,6 +1,7 @@
 "use client";
 
 import { expertDisplayName } from "@/lib/experts";
+import { useCatalogue } from "@/components/experts/useCatalogue";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
@@ -23,6 +24,13 @@ const STATE: Record<string, string> = {
 // office.
 export function InstancesView() {
   const { current } = useWorkspace();
+  // Experts by the catalogue's name (Djénéba, not « Djeneba »); Yélé is the helper, not in it.
+  const { catalogue } = useCatalogue(current?.id);
+  const nameOf = (profile: string) => {
+    const key = profile.includes("__") ? profile.slice(profile.lastIndexOf("__") + 2) : profile;
+    if (key === "yele") return "Yélé";
+    return catalogue.experts.find((e) => e.key === key)?.name ?? expertDisplayName(profile);
+  };
   const [instances, setInstances] = useState<WorkspaceInstance[] | null>(null);
 
   useEffect(() => {
@@ -51,7 +59,7 @@ export function InstancesView() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Instances</h1>
+        <h1 className="sr-only">Instances</h1>
         <p className="text-sm text-muted-foreground">
           {current.name} · une instance par membre, créée et gérée par votre administrateur Yelema.
         </p>
@@ -87,7 +95,7 @@ export function InstancesView() {
                   {detailed ? (
                     <>
                       <td className="px-4 py-3">{i.state ? (STATE[i.state] ?? "Inconnu") : "—"}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{i.experts?.length ? i.experts.map(expertDisplayName).join(", ") : "—"}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{i.experts?.length ? i.experts.map(nameOf).join(", ") : "—"}</td>
                     </>
                   ) : (
                     <td className="px-4 py-3 text-muted-foreground">{i.created_by_email ?? "Yelema"}</td>

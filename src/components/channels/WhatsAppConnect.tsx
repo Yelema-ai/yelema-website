@@ -119,7 +119,7 @@ export function WhatsAppConnect({
                 {session.phone ? `+${session.phone} est connecté.` : "WhatsApp est connecté."}
               </p>
               <p className="text-xs text-muted-foreground">
-                Dans WhatsApp, ouvrez la conversation avec vous-même et écrivez-y à vos experts. Personne d’autre ne
+                Dans WhatsApp, ouvrez la conversation avec vous-même et écrivez-y à vos Experts. Personne d’autre ne
                 peut les joindre.
               </p>
             </div>

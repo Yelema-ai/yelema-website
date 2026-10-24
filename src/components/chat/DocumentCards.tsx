@@ -92,7 +92,8 @@ function FormatThumb({ doc }: { doc: TurnDoc }) {
   );
 }
 
-function Preview({ agentId, doc }: { agentId: string; doc: TurnDoc }) {
+/** A document drawn as in the chat (first page, first rows, start of the text); its format otherwise. */
+export function Preview({ agentId, doc }: { agentId: string; doc: TurnDoc }) {
   const url = contentUrl(agentId, doc.path, "inline");
   const e = ext(doc.name);
   if ((doc.size ?? 0) > MAX_PREVIEW_BYTES) return <FormatThumb doc={doc} />;

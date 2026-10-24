@@ -74,11 +74,12 @@ export function ExpertCalls({ expert }: { expert: Expert }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="mr-auto text-lg font-bold text-ink">Appels avec {expert.name}</h2>
+        {/* « Appeler » heads the page already: one button, not two. */}
+        <h2 className="sr-only">Appels avec {expert.name}</h2>
+        <p className="mr-auto text-sm text-ink-3">Le résumé et la transcription de chaque appel avec {expert.name}.</p>
         <Button variant="ghost" size="sm" onClick={() => void load()} aria-label="Actualiser">
           <RefreshCw />
         </Button>
-        <CallButton expert={expert} />
       </div>
 
       {error && <p className="text-sm text-ko">{error}</p>}

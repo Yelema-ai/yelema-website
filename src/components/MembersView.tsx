@@ -57,7 +57,7 @@ export function MembersView() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Membres</h1>
+        <h1 className="sr-only">Membres</h1>
         <p className="text-sm text-muted-foreground">
           {current.name} · les membres sont ajoutés et retirés par votre administrateur Yelema.
         </p>

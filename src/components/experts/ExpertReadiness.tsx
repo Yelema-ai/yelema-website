@@ -83,7 +83,7 @@ export function ExpertReadiness({
                         }}
                         className="mt-0.5 text-xs font-semibold text-brand-ink hover:underline"
                       >
-                        Ouvrir l’onglet Outils
+                        Ouvrir les connecteurs
                       </button>
                     )}
                   </div>

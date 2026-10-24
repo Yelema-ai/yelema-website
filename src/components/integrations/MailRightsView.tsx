@@ -45,9 +45,9 @@ export function MailRightsView() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className="font-display text-[28px] font-bold tracking-tight text-ink">E-mails des experts</h1>
+      <h1 className="sr-only">E-mails des Experts</h1>
       <p className="mt-1 max-w-2xl text-sm text-ink-2">
-        Chaque expert a une adresse e-mail pour toute l’entreprise. Vous décidez ici s’il peut écrire, à la demande de qui, et à qui. Ces règles s’appliquent à chaque envoi, que la demande vienne d’un membre ou de l’expert lui-même.
+        Chaque Expert a une adresse e-mail pour toute l’entreprise. Vous décidez ici s’il peut écrire, à la demande de qui, et à qui. Ces règles s’appliquent à chaque envoi, que la demande vienne d’un membre ou de l’Expert lui-même.
       </p>
 
       {error && <p className="mt-4 max-w-xl rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{error}</p>}
@@ -70,7 +70,7 @@ export function MailRightsView() {
 
               <div className="mt-4 grid gap-3">
                 <Toggle
-                  label="Cet expert peut envoyer des e-mails"
+                  label="Cet Expert peut envoyer des e-mails"
                   hint="Décoché, il reçoit du courrier mais n’envoie rien."
                   checked={inbox.sendEnabled}
                   disabled={locked}
@@ -110,7 +110,7 @@ function MemberAccess({ inbox, name, locked, onSave }: { inbox: MailRights; name
     return (
       <div className="mt-5">
         <p className="text-[13px] font-semibold text-ink-3">Qui peut le faire écrire et lire sa boîte</p>
-        <p className="mt-2 text-sm text-ink-3">Aucun membre n’a cet expert dans son équipe.</p>
+        <p className="mt-2 text-sm text-ink-3">Aucun membre n’a cet Expert dans son équipe.</p>
       </div>
     );
   const choice = (on: boolean, label: string, hint: string, pick: () => void) => (

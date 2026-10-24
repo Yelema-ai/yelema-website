@@ -55,7 +55,7 @@ export function ExpertFiche({ expertKey }: { expertKey: string }) {
         <h1 className="font-display text-2xl font-semibold text-ink">Fiche indisponible</h1>
         <p className="mt-2 text-sm text-ink-2">Cette fiche n’existe pas, ou le catalogue n’est pas joignable pour le moment.</p>
         <Button asChild variant="outline" className="mt-4 rounded-full">
-          <Link href="/recruter">Voir tous les experts</Link>
+          <Link href="/recruter">Voir tous les Experts</Link>
         </Button>
       </div>
     );

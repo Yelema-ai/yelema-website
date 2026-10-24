@@ -91,12 +91,23 @@ async function installation(): Promise<{ installation: "running" | "ready" | "fa
   return (await currentInstallation().catch(() => null)) ?? none;
 }
 
-// The name and picture the member chose for each of their experts, by profile, as the back office
-// keeps them. None where it does not sign users in.
-async function memberLooks(): Promise<Map<string, { displayName: string | null; avatarUrl: string | null }>> {
+// The name and picture the member chose for each of their experts, and the cycle that brought it, by
+// profile, as the back office keeps them. None where it does not sign users in.
+async function memberLooks(): Promise<
+  Map<string, { displayName: string | null; avatarUrl: string | null; cycle: { key: string; label: string } | null }>
+> {
   if (!authViaBackoffice()) return new Map();
   const instance = await currentInstance().catch(() => null);
-  return new Map((instance?.experts ?? []).map((e) => [e.profile, { displayName: e.displayName ?? null, avatarUrl: e.avatarUrl ?? null }]));
+  return new Map(
+    (instance?.experts ?? []).map((e) => [
+      e.profile,
+      {
+        displayName: e.displayName ?? null,
+        avatarUrl: e.avatarUrl ?? null,
+        cycle: e.cycle?.key && e.cycle.label ? { key: e.cycle.key, label: e.cycle.label } : null,
+      },
+    ])
+  );
 }
 
 // The experts of these instances as the screens show them: each installed profile dressed by the
@@ -129,6 +140,7 @@ export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
       tagline: entry?.tagline ?? null,
       photoUrl: look?.avatarUrl || entry?.avatarUrl || null,
       driveFolder: entry?.driveFolder ?? entry?.name ?? null,
+      cycle: look?.cycle ?? null,
     };
   });
 

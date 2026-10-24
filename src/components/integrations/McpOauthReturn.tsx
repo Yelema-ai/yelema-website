@@ -31,7 +31,7 @@ export function McpOauthReturn({ query }: { query: Query }) {
         {outcome.kind === "relaying" && (
           <>
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand" />
-            <p className="mt-3 text-sm font-semibold text-ink">Connexion du serveur à vos experts…</p>
+            <p className="mt-3 text-sm font-semibold text-ink">Connexion du serveur à vos Experts…</p>
             <p className="mt-1 text-xs text-ink-3">Gardez cette fenêtre ouverte quelques secondes.</p>
           </>
         )}
@@ -39,7 +39,7 @@ export function McpOauthReturn({ query }: { query: Query }) {
           <>
             <CheckCircle2 className="mx-auto h-8 w-8 text-ok" />
             <p className="mt-3 text-sm font-semibold text-ink">Serveur {outcome.name} autorisé</p>
-            <p className="mt-1 text-xs text-ink-3">Vos experts peuvent utiliser ses outils. Cette fenêtre va se fermer.</p>
+            <p className="mt-1 text-xs text-ink-3">Vos Experts peuvent utiliser ses outils. Cette fenêtre va se fermer.</p>
           </>
         )}
         {outcome.kind === "failed" && (

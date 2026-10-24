@@ -2,11 +2,13 @@
 
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useConversationStatus } from "@/components/activity/hooks";
-import { CheckCheck, ChevronRight, Copy, Loader2, MoreHorizontal, Pencil, Plus, Repeat, RotateCw, Search, Trash2, X } from "lucide-react";
+import { Archive, CheckCheck, ChevronRight, Copy, Loader2, MoreHorizontal, Pencil, Pin, PinOff, Plus, Repeat, RotateCw, Search, Trash2, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNotifications } from "@/components/activity/ActivityProvider";
 import { convKey } from "@/lib/activity";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useChatMarks } from "@/components/conversations/useChatMarks";
+import { arrange } from "@/lib/chat-marks";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
@@ -96,13 +98,28 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const unreadIds = sessions.filter((s) => statusOf(s.session_id) === "unread").map((s) => s.session_id);
   const unreadCount = unreadIds.length;
   const { markRead } = useNotifications();
+  const { marks, mark } = useChatMarks();
+  const keyOf = (s: ChatSession) => convKey(agentId, profile, s.session_id);
+  const pinnedIds = new Set(marks.pinned);
+  // Archived conversations leave the rail (« Toutes les conversations » keeps them); pinned ones
+  // head it, above the dates.
   const groups = useMemo(() => {
     const q = fold(query.trim());
     let found = q ? sessions.filter((s) => fold(s.routine ?? s.title ?? "Nouvelle conversation").includes(q)) : sessions;
     if (filter === "unread") found = found.filter((s) => statusOf(s.session_id) === "unread");
     if (filter === "routines") found = found.filter((s) => s.routine);
-    return groupSessions(found);
-  }, [sessions, query, filter, statusOf]);
+    const { pinned, rest } = arrange(found, (s) => convKey(agentId, profile, s.session_id), marks);
+    return [...(pinned.length ? [{ label: "Épinglées", items: pinned }] : []), ...groupSessions(rest)];
+  }, [sessions, query, filter, statusOf, marks, agentId, profile]);
+
+  function archive(s: ChatSession) {
+    const key = keyOf(s);
+    mark(key, "archived", true);
+    toast("Conversation archivée", {
+      description: "Elle reste dans Toutes les conversations.",
+      action: { label: "Annuler", onClick: () => mark(key, "archived", false) },
+    });
+  }
   // A search or a filter shows everything it finds, and the open thread is never hidden in a folded group.
   const isFolded = (g: { label: string; items: ChatSession[] }) =>
     !query.trim() && filter === "all" && !!folded[g.label] && !g.items.some((s) => s.session_id === highlightedSessionId);
@@ -195,11 +212,11 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           {/* The date gives way to the row's actions on hover. */}
           <span className="shrink-0 text-[11.5px] font-normal tabular-nums text-ink-3 group-hover:invisible group-has-[[data-state=open]]:invisible pointer-coarse:mr-7 pointer-coarse:group-hover:visible pointer-coarse:group-has-[[data-state=open]]:visible">{shortWhen(activeAt(s))}</span>
         </button>
-        {/* Renommer, Copier la conversation and Supprimer behind « … »: on hover with a mouse, always shown on a touch screen. */}
+        {/* Renommer, Épingler, Copier, Archiver and Supprimer behind « … »: on hover with a mouse, always shown on a touch screen. */}
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label={`Actions pour ${label}`}
-            title="Renommer, copier ou supprimer"
+            title="Renommer, épingler, archiver ou supprimer"
             className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-ink-3 opacity-0 transition-opacity hover:bg-soft-2 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
           >
             <MoreHorizontal className="h-4 w-4" />
@@ -208,8 +225,22 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             <DropdownMenuItem onSelect={() => startRename(s.session_id, s.title)} className="gap-2.5 rounded-[10px] px-2.5 py-2 text-sm">
               <Pencil className="size-4" /> Renommer
             </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => mark(keyOf(s), "pinned", !pinnedIds.has(keyOf(s)))} className="gap-2.5 rounded-[10px] px-2.5 py-2 text-sm">
+              {pinnedIds.has(keyOf(s)) ? (
+                <>
+                  <PinOff className="size-4" /> Désépingler
+                </>
+              ) : (
+                <>
+                  <Pin className="size-4" /> Épingler
+                </>
+              )}
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => void copyConversation(s)} className="gap-2.5 rounded-[10px] px-2.5 py-2 text-sm">
               <Copy className="size-4" /> Copier la conversation
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => archive(s)} className="gap-2.5 rounded-[10px] px-2.5 py-2 text-sm">
+              <Archive className="size-4" /> Archiver
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setPendingDeleteId(s.session_id)} className="gap-2.5 rounded-[10px] px-2.5 py-2 text-sm text-ko">
               <Trash2 className="size-4" /> Supprimer
@@ -238,18 +269,6 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
             className="grid h-8 w-8 place-items-center rounded-lg text-ink-3 hover:bg-soft hover:text-ink disabled:opacity-60"
           >
             <RotateCw className={`h-4 w-4${refreshingSessions ? " animate-spin" : ""}`} />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              startNewChat();
-              onNavigate?.();
-            }}
-            aria-label="Nouvelle conversation"
-            title="Nouvelle conversation"
-            className="grid h-8 w-8 place-items-center rounded-lg bg-brand text-on-brand hover:opacity-90"
-          >
-            <Plus className="h-4 w-4" />
           </button>
           </span>
         </div>
