@@ -254,3 +254,42 @@ export async function mintMcpSession(userId: string, pins: Record<string, string
   if (Object.keys(headers).length === 0) headers["x-api-key"] = apiKey();
   return { url, headers };
 }
+
+// ---- Files for the tools (the Livrables bridge, src/lib/livrables-bridge.ts) ----------------
+
+export interface StagedFile {
+  name: string;
+  mimetype: string;
+  s3key: string;
+}
+
+// Puts a file in Composio's storage for one tool, as its SDK does (files.upload): ask a presigned
+// address for that tool, then PUT the bytes there. The answer is what the tool's file input takes.
+export async function stageFile(bytes: Uint8Array<ArrayBuffer>, name: string, mimetype: string, toolSlug: string, toolkitSlug: string): Promise<StagedFile> {
+  const res = await fetch(`${COMPOSIO_API_BASE}/api/v3.1/files/upload/request`, {
+    method: "POST",
+    headers: { "x-api-key": apiKey(), "content-type": "application/json" },
+    body: JSON.stringify({
+      filename: name,
+      mimetype,
+      md5: createHash("md5").update(bytes).digest("hex"),
+      tool_slug: toolSlug,
+      toolkit_slug: toolkitSlug,
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) throw new Error(`upload request ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+  const data = (await res.json()) as { key?: unknown; new_presigned_url?: unknown };
+  if (typeof data.key !== "string" || typeof data.new_presigned_url !== "string") throw new Error("upload request: no key or address");
+  // The storage address is signed: no key of ours goes with the bytes.
+  const put = await fetch(data.new_presigned_url, {
+    method: "PUT",
+    headers: { "content-type": mimetype },
+    body: bytes,
+    cache: "no-store",
+    signal: AbortSignal.timeout(120_000),
+  });
+  if (!put.ok) throw new Error(`upload ${put.status}`);
+  return { name, mimetype, s3key: data.key };
+}
