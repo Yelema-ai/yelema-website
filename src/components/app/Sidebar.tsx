@@ -195,7 +195,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
                       <ExpertAvatar
                         key={`${e.agentId}:${e.profileId}`}
                         expert={{ ...e, gateway: null }}
-                        size="xs"
+                        size="xxs"
                         className="-ml-2 rounded-full ring-2 ring-surface first:ml-0"
                       />
                     ))}
@@ -279,7 +279,8 @@ const RAIL_SQUARE = "size-11 min-h-0 shrink-0 justify-center px-0";
 // Past this many Experts, the cycles start folded (Leslie, 01/11).
 // A cycle starts folded when the member has more Experts than this, except the cycle of the Expert on screen.
 const FOLD_FROM = 4;
-const FACES = 3;
+// A cycle holds four Experts at most (Leslie, 02/11): all their faces fit.
+const FACES = 4;
 const CYCLES_KEY = "yelema.cycles-fold";
 
 

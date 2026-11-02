@@ -26,7 +26,8 @@ const CYCLES: { re: RegExp; name: string; icon: LucideIcon }[] = [
   { re: /financ|compta/, name: "Finance", icon: Calculator },
   { re: /op[eé]ration|logistique|achat|stock/, name: "Opérations", icon: Package },
 ];
-const ORDER = ["Commercial", "Marketing", "RH", "Finance", "Service client", "Opérations", "Investissement"];
+// The order of the offer as Leslie reads it (02/11): selling, then serving the client, then running the house.
+const ORDER = ["Commercial", "Marketing", "Service client", "RH", "Finance", "Opérations", "Investissement"];
 
 // The catalogue as Yelema sells it (catalogue des Experts IA, 31/10/26): each Expert's cycle and place in
 // it. It wins over the back office's own labels (« Ventes & Relation client », « Légal », « Direction »),
@@ -89,7 +90,10 @@ export function catalogueCycle(
 ): { key: string; label: string } | null {
   if (isDjeneba(e)) return null;
   const hit = catalogueEntry(e);
-  return hit ? { key: plain(hit[0]).replace(/\s+/g, "-"), label: LABELS[hit[0]] ?? hit[0] } : fallback;
+  // An Expert the catalogue does not list goes under the cycle its back-office label names (« Ventes & Relation
+  // client » is « Service client »), so that one cycle never shows twice under two names.
+  const name = hit?.[0] ?? (fallback && CYCLES.find((c) => c.re.test(fallback.label.toLowerCase()))?.name);
+  return name ? { key: plain(name).replace(/\s+/g, "-"), label: LABELS[name] ?? name } : fallback;
 }
 
 /** Where an Expert sits in the menu: Djénéba first, then by cycle and place in the catalogue. */

@@ -10,7 +10,6 @@ test("the catalogue's cycle wins over the back office's label, Djénéba has non
   assert.deepEqual(catalogueCycle({ profileId: "unifood__awa" }, BO("Ventes & Relation client")), { key: "service-client", label: "Service client" });
   assert.deepEqual(catalogueCycle({ profileId: "unifood__alioune" }, null), { key: "investissement", label: "Investissement" });
   assert.equal(catalogueCycle({ profileId: "unifood__djeneba" }, BO("Direction")), null);
-  assert.deepEqual(catalogueCycle({ profileId: "unifood__nadia" }, BO("Opérations & Données")), BO("Opérations & Données"));
 });
 
 test("Djénéba first, then the catalogue's cycles and places", () => {
@@ -18,7 +17,7 @@ test("Djénéba first, then the catalogue's cycles and places", () => {
   const sorted = ids.map((n) => ex(`unifood__${n}`, null)).sort((a, b) => expertRank(a) - expertRank(b));
   assert.deepEqual(
     sorted.map((e) => e.profileId.split("__")[1]),
-    ["djeneba", "kouassi", "fatima", "koffi", "fatou", "adjoua", "mamadou", "awa", "salif", "alioune", "ibrahim"]
+    ["djeneba", "kouassi", "fatima", "koffi", "awa", "fatou", "adjoua", "mamadou", "salif", "alioune", "ibrahim"]
   );
 });
 
@@ -34,4 +33,15 @@ test("an Expert's job comes from the catalogue, short", () => {
   assert.equal(catalogueJob({ catalogueKey: "mamadou", profileId: "unifood__mamadou" }, "Comptabilité & Finance générale"), "Comptable général");
   assert.equal(catalogueJob({ catalogueKey: null, profileId: "unifood__djeneba" }, null), "Chief of Staff & Direction");
   assert.equal(catalogueJob({ catalogueKey: "nadia", profileId: "unifood__nadia" }, "Données & Analyse"), "Données & Analyse");
+});
+
+test("an Expert out of the catalogue goes under the cycle its back-office label names", () => {
+  assert.deepEqual(catalogueCycle({ profileId: "unifood__nadia" }, BO("Opérations & Données")), { key: "operations", label: "Opérations" });
+  assert.deepEqual(catalogueCycle({ profileId: "unifood__zoe" }, BO("Légal")), BO("Légal"));
+});
+
+test("the cycles follow the order of the offer", () => {
+  const rank = (k: string) => expertRank({ profileId: `unifood__${k}`, catalogueKey: k, cycle: null });
+  const order = ["kouassi", "fatima", "awa", "fatou", "mamadou", "salif", "alioune"].map(rank);
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
 });
