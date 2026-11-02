@@ -22,11 +22,12 @@ test("Djénéba first, then the catalogue's cycles and places", () => {
   );
 });
 
-test("the operations cycle is named « Opérations et Logistique », whatever the back office sends", () => {
+test("the catalogue names the cycle, whatever the back office sends", () => {
   assert.deepEqual(catalogueCycle({ catalogueKey: "salif", profileId: "unifood__salif" }, { key: "ops", label: "Opérations & Données" }), {
     key: "operations",
-    label: "Opérations et Logistique",
+    label: "Opérations",
   });
+  assert.equal(catalogueCycle({ catalogueKey: "fatou", profileId: "unifood__fatou" }, null)?.label, "Ressources Humaines");
 });
 
 test("an Expert's job comes from the catalogue, short", () => {

@@ -22,6 +22,7 @@ import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { AccountMenu } from "@/components/AccountMenu";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { ExpertItem } from "@/components/experts/ExpertItem";
+import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { READ_AHEAD, useReadAhead } from "@/components/experts/expert-preload";
 import { useOwnAgentId } from "@/components/conversations/useAllConversations";
 import { useChatMarks } from "@/components/conversations/useChatMarks";
@@ -172,6 +173,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
       {groupByCycle(experts).map((g) => {
         const folded =
           !collapsed && g.cycle !== null && (cycleChoice[g.cycle.key] ?? (experts.length > FOLD_FROM && !g.experts.some(isActive)));
+        // Folded, a cycle shows the faces of its Experts instead of a count (Leslie, 02/11, option C).
         return (
           <div key={g.cycle?.key ?? (g.experts.some(isDjeneba) ? "_lead" : "_rest")} className="flex flex-col gap-0.5">
             {/* The cycle a group of Experts came with: one quiet line, folding the group. */}
@@ -187,8 +189,21 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
                   return <Icon className="size-3.5 shrink-0" />;
                 })()}
                 <span className="min-w-0 flex-1 truncate">{g.cycle.label}</span>
-                <span className="font-medium">{g.experts.length}</span>
-                <ChevronDown className={cn("size-3.5 shrink-0 transition-transform", folded && "-rotate-90")} />
+                {folded ? (
+                  <span className="flex shrink-0 items-center" aria-label={`${g.experts.length} Expert${g.experts.length > 1 ? "s" : ""}`}>
+                    {g.experts.slice(0, FACES).map((e) => (
+                      <ExpertAvatar
+                        key={`${e.agentId}:${e.profileId}`}
+                        expert={{ ...e, gateway: null }}
+                        size="xs"
+                        className="-ml-2 rounded-full ring-2 ring-surface first:ml-0"
+                      />
+                    ))}
+                    {g.experts.length > FACES && <span className="ml-1 text-[11px] font-semibold">+{g.experts.length - FACES}</span>}
+                  </span>
+                ) : (
+                  <ChevronDown className="size-3.5 shrink-0" />
+                )}
               </button>
             )}
             {!folded &&
@@ -262,7 +277,9 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
 // Menu folded: every entry is the same square, centred in the rail, so icons and faces line up.
 const RAIL_SQUARE = "size-11 min-h-0 shrink-0 justify-center px-0";
 // Past this many Experts, the cycles start folded (Leslie, 01/11).
-const FOLD_FROM = 8;
+// A cycle starts folded when the member has more Experts than this, except the cycle of the Expert on screen.
+const FOLD_FROM = 4;
+const FACES = 3;
 const CYCLES_KEY = "yelema.cycles-fold";
 
 

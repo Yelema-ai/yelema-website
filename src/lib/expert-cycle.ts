@@ -45,9 +45,9 @@ const CATALOGUE: Record<string, [cycle: string, place: number]> = Object.fromEnt
   ).flatMap(([cycle, names]) => names.map((n, i) => [n, [cycle, i]] as const))
 );
 
-// A cycle's name in the menu when it is not the one word above: « Opérations et Logistique », never the back
-// office's « Opérations & Données » (Leslie, 02/11).
-const LABELS: Record<string, string> = { RH: "Ressources Humaines", Opérations: "Opérations et Logistique" };
+// A cycle's name in the menu when it is not the one word above: « Ressources Humaines », never the back
+// office's own labels (« Opérations & Données »…) (Leslie, 02/11).
+const LABELS: Record<string, string> = { RH: "Ressources Humaines" };
 
 // Each Expert's job in a few words, as the catalogue says it (dépôt hermes-experts, Leslie 02/11): it wins over
 // the back office's longer titles under the name in the menu.
