@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { citedFolder, docKind, drivePathsIn, FOLDER_BARE, FOLDER_CODE, isHiddenInChat, normDrivePath, noteFolder, turnDocs } from "./drive-links.ts";
+import { citedFolder, docKind, drivePathsIn, FOLDER_BARE, FOLDER_CODE, isHiddenInChat, normDrivePath, noteFolder, openTarget, turnDocs } from "./drive-links.ts";
 
 test("the paths a reply names, in order, once each, in one spelling", () => {
   const text = [
@@ -86,4 +86,17 @@ test("a file, or a memory folder, is not a folder link", () => {
   assert.equal(citedFolder("~/Livrables/Fatima/post.docx"), null);
   assert.equal(citedFolder("/home/node/Livrables/Fatima/_memoire/"), null);
   assert.equal(citedFolder("/home/node/Livrables/Fatima/"), "~/Livrables/Fatima");
+});
+
+test("openTarget: an address of /livrables/ouvrir names a drive file or folder, nothing else", () => {
+  assert.deepEqual(openTarget("https://unifood.app.yelema.ai/livrables/ouvrir?p=Livrables%2FFatima%2Fplan.pdf"), { path: "~/Livrables/Fatima/plan.pdf", file: true });
+  assert.deepEqual(openTarget("/livrables/ouvrir?p=~/Livrables/Fatima/campagne"), { path: "~/Livrables/Fatima/campagne", file: false });
+  assert.equal(openTarget("https://x.app.yelema.ai/livrables/ouvrir?p=Livrables/../.hermes/a.txt"), null);
+  assert.equal(openTarget("https://x.app.yelema.ai/livrables/ouvrir?p=/home/node/.hermes/a.txt"), null);
+  assert.equal(openTarget("https://example.com/autre?p=Livrables/a.pdf"), null);
+});
+
+test("drivePathsIn: a deliverable given as an app address is a cited file", () => {
+  const text = "Voici le devis : https://unifood.app.yelema.ai/livrables/ouvrir?p=Livrables%2FKouassi%2Fdevis_v2.xlsx et le dossier https://unifood.app.yelema.ai/livrables/ouvrir?p=Livrables%2FKouassi";
+  assert.deepEqual(drivePathsIn(text), ["~/Livrables/Kouassi/devis_v2.xlsx"]);
 });

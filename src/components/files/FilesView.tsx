@@ -49,7 +49,19 @@ type ViewMode = "list" | "grid";
 const MOVE_TYPE = "application/x-yelema-path";
 const HOVER_INTENT_MS = 150;
 
-export function FilesView({ agentId, initialPath, openPath, inbox }: { agentId: string; initialPath?: string; openPath?: string | null; inbox?: string }) {
+export function FilesView({
+  agentId,
+  initialPath,
+  openPath,
+  openFile,
+  inbox,
+}: {
+  agentId: string;
+  initialPath?: string;
+  openPath?: string | null;
+  openFile?: string | null;
+  inbox?: string;
+}) {
   const fb = useFileBrowser(agentId, initialPath, inbox);
   // A folder named in the address (« ?dossier= », from a path cited in the chat) opens here.
   // The first one is already the browser's starting folder; a cited folder gone opens the root.
@@ -61,6 +73,13 @@ export function FilesView({ agentId, initialPath, openPath, inbox }: { agentId: 
     void fbNavigate(openPath, true);
   }, [openPath, fbNavigate]);
   const [preview, setPreview] = useState<FileEntry | null>(null);
+  // A file named in the address opens once, checked like every path by the files routes.
+  const shownFile = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openFile || openFile === shownFile.current || !/^(~|\/home\/node)\/Livrables\//.test(openFile)) return;
+    shownFile.current = openFile;
+    setPreview({ name: openFile.split("/").pop() ?? openFile, path: openFile, type: "file", size: null, modified: 0 } as FileEntry);
+  }, [openFile]);
   const [pendingDelete, setPendingDelete] = useState<FileEntry | null>(null);
   const [moving, setMoving] = useState<FileEntry | null>(null);
   // The folder a dragged file of the list is over (Leslie, 30/10: déplacer un livrable dans un dossier).
