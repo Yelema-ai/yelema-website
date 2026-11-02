@@ -3,7 +3,7 @@
 import { PageBody } from "@/components/app/PageBody";
 import { Messaging } from "@/components/messaging/Messaging";
 
-// Messagerie entre membres : salons des équipes et conversations directes avec les personnes et leurs experts.
+// Échanges entre membres : salons des équipes et conversations directes avec les personnes et leurs experts.
 export default function Page() {
   return (
     <PageBody>

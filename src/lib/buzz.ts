@@ -1,4 +1,4 @@
-// The members' messaging, as the back office describes it (`GET /api/v1/app/buzz`): the client's relay,
+// The members' « Échanges » (internal messaging), as the back office describes it (`GET /api/v1/app/buzz`): the client's relay,
 // the member's own devices, the directory (people and their experts) and the team salons. Messages
 // themselves never pass through the back office: the browser reads and writes them on the relay.
 

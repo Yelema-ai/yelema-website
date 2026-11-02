@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-// Messagerie entre membres : les salons des équipes et les conversations directes, lus et écrits par
+// Échanges entre membres : les salons des équipes et les conversations directes, lus et écrits par
 // ce navigateur sur le relais du client. Le back-office ne fait qu'admettre la clé de l'appareil.
 
 type State = { kind: "loading" } | { kind: "closed"; reason: string } | { kind: "ready" };
@@ -59,9 +59,9 @@ export function Messaging() {
             await new Promise((r) => setTimeout(r, 3000 + attempt * 2000));
           }
         }
-        if (!stop) setState({ kind: "closed", reason: "Votre accès à la messagerie est en cours d’activation. Réessayez dans une minute." });
+        if (!stop) setState({ kind: "closed", reason: "Votre accès aux Échanges est en cours d’activation. Réessayez dans une minute." });
       } catch (e) {
-        if (!stop) setState({ kind: "closed", reason: e instanceof Error ? e.message : "La messagerie n’est pas disponible." });
+        if (!stop) setState({ kind: "closed", reason: e instanceof Error ? e.message : "Les Échanges ne sont pas disponibles." });
       }
     })();
     return () => {
@@ -111,7 +111,7 @@ export function Messaging() {
     void apiFetch("/api/buzz/sent", { method: "POST", body: JSON.stringify({ kind: "dm", recipients: keys }) }).catch(() => undefined);
   }
 
-  if (state.kind === "loading") return <p className="text-sm text-ink-3">Ouverture de la messagerie…</p>;
+  if (state.kind === "loading") return <p className="text-sm text-ink-3">Ouverture des Échanges…</p>;
   if (state.kind === "closed") return <p className="rounded-[18px] border border-line bg-surface p-5 text-sm text-ink-2">{state.reason}</p>;
 
   const current = list.find((c) => c.id === open) ?? null;
