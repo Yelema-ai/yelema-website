@@ -13,6 +13,7 @@ import { isPublicId, type MemoryList, type MemoryNote, type MemoryPatch, type Or
 import { backofficeUrl, resolverToken } from "@/lib/runtime-config";
 import { SIGNALING_METHOD, type CallRecord, type SignalingStep, type VoiceOption } from "@/lib/voice";
 import { pinnedWorkspaceId } from "@/lib/tenant";
+import type { BuzzOverview } from "@/lib/buzz";
 import type { ClaudeAuth, ClaudeAuthStatus, ClaudeLogin, ClaudeUsage } from "@/lib/claude-code-auth";
 
 // The Yelema back office's API for this app (`/api/v1/app/*`, guide: yelema-platform
@@ -647,6 +648,11 @@ export const backoffice = {
   removeLogoImage: (token: string, id: string) => call<CompanyProfile>(ownPath("/app/workspace/logos", id), { method: "DELETE", token }),
   // What the member reads, and where they may deposit. Deposits are sent to the memory in the
   // background: `status` goes from pending to synced.
+  // Members' messaging: where the client's relay is, who is reachable, which devices are admitted.
+  buzz: (token: string) => call<BuzzOverview>("/app/buzz", { token }),
+  buzzAddDevice: (token: string, device: { pubkey: string; label: string }) => call<{ ok: true }>("/app/buzz/devices", { method: "POST", token, body: device }),
+  buzzRemoveDevice: (token: string, pubkey: string) => call<{ ok: true }>("/app/buzz/devices", { method: "DELETE", token, body: { pubkey } }),
+  buzzSent: (token: string, sent: { kind: string; recipients: string[] }) => call<{ ok: true }>("/app/buzz/outbox", { method: "POST", token, body: sent }),
   memoryItems: (token: string) => call<MemoryList>("/app/memory/items", { token }),
   createMemoryNote: (token: string, note: MemoryNote) => call<{ id: string }>("/app/memory/items", { method: "POST", token, body: note }),
   uploadMemoryDocument: (token: string, form: FormData) => call<{ id: string }>("/app/memory/items", { method: "POST", token, form, timeoutMs: MAIL_SEND_TIMEOUT_MS }),

@@ -10,6 +10,7 @@ import {
   Blocks,
   ChevronDown,
   Lock,
+  MessagesSquare,
   PanelLeftClose,
   Search,
   SquarePen,
@@ -159,6 +160,18 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
       >
         <Blocks className="size-5 shrink-0" strokeWidth={1.9} />
         {!collapsed && "Intégrations"}
+      </Link>
+      <Link
+        href="/messagerie"
+        onClick={onNavigate}
+        className={cn(
+          "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors",
+          here.startsWith("/messagerie") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
+          collapsed && RAIL_SQUARE
+        )}
+      >
+        <MessagesSquare className="size-5 shrink-0" strokeWidth={1.9} />
+        {!collapsed && "Messagerie"}
       </Link>
 
       {/* The Experts and the conversations scroll between the top of the menu and its foot, which stay put. */}
