@@ -21,3 +21,10 @@ test("Djénéba first, then the catalogue's cycles and places", () => {
     ["djeneba", "kouassi", "fatima", "koffi", "fatou", "adjoua", "mamadou", "awa", "salif", "alioune", "ibrahim"]
   );
 });
+
+test("the operations cycle is named « Opérations et Logistique », whatever the back office sends", () => {
+  assert.deepEqual(catalogueCycle({ catalogueKey: "salif", profileId: "unifood__salif" }, { key: "ops", label: "Opérations & Données" }), {
+    key: "operations",
+    label: "Opérations et Logistique",
+  });
+});

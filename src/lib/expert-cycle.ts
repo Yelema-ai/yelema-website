@@ -45,6 +45,10 @@ const CATALOGUE: Record<string, [cycle: string, place: number]> = Object.fromEnt
   ).flatMap(([cycle, names]) => names.map((n, i) => [n, [cycle, i]] as const))
 );
 
+// A cycle's name in the menu when it is not the one word above: « Opérations et Logistique », never the back
+// office's « Opérations & Données » (Leslie, 02/11).
+const LABELS: Record<string, string> = { Opérations: "Opérations et Logistique" };
+
 const plain = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 /** The catalogue's entry for an Expert (« unifood__adjoua », « adjoua-v72 »…), or null. */
@@ -63,7 +67,7 @@ export function catalogueCycle(
 ): { key: string; label: string } | null {
   if (isDjeneba(e)) return null;
   const hit = catalogueEntry(e);
-  return hit ? { key: plain(hit[0]).replace(/\s+/g, "-"), label: hit[0] } : fallback;
+  return hit ? { key: plain(hit[0]).replace(/\s+/g, "-"), label: LABELS[hit[0]] ?? hit[0] } : fallback;
 }
 
 /** Where an Expert sits in the menu: Djénéba first, then by cycle and place in the catalogue. */
