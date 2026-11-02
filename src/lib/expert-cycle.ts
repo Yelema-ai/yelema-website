@@ -47,7 +47,20 @@ const CATALOGUE: Record<string, [cycle: string, place: number]> = Object.fromEnt
 
 // A cycle's name in the menu when it is not the one word above: « Opérations et Logistique », never the back
 // office's « Opérations & Données » (Leslie, 02/11).
-const LABELS: Record<string, string> = { Opérations: "Opérations et Logistique" };
+const LABELS: Record<string, string> = { RH: "Ressources Humaines", Opérations: "Opérations et Logistique" };
+
+// Each Expert's job in a few words, as the catalogue says it (dépôt hermes-experts, Leslie 02/11): it wins over
+// the back office's longer titles under the name in the menu.
+const JOBS: Record<string, string> = {
+  djeneba: "Chief of Staff & Direction",
+  kouassi: "Commercial et ventes", sena: "Offres et signature", aminata: "Pilotage commercial", seydou: "Veille commerciale",
+  fatima: "Marketing et contenu", koffi: "Design de marque", aya: "Influence et créateurs", yao: "Veille et rapports marketing",
+  fatou: "Ressources humaines et paie", adjoua: "Recrutement", lamine: "Développement des personnes", cheikh: "Climat social et lieux de travail",
+  mamadou: "Comptable général", kadiatou: "Comptable fournisseurs", daouda: "Comptable clients", rokia: "Contrôleuse de gestion",
+  awa: "Support et relation client", akissi: "Satisfaction et fidélisation", ousmane: "Qualité du service client", malick: "Après-vente",
+  salif: "Opérations", yacouba: "Achats et import", sidiki: "Livraisons et flotte", assita: "Production, qualité et sécurité",
+  alioune: "Investissement", fifame: "Sourcing d’investissement", ibrahim: "Juridique", aicha: "Portefeuille",
+};
 
 const plain = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -58,6 +71,15 @@ function catalogueEntry(e: { catalogueKey?: string | null; profileId: string }):
     if (hit) return CATALOGUE[hit];
   }
   return null;
+}
+
+/** The Expert's job under its name: the catalogue's, else the back office's title. */
+export function catalogueJob(e: { catalogueKey?: string | null; profileId: string }, fallback: string | null): string | null {
+  for (const id of [e.catalogueKey, e.profileId]) {
+    const hit = id && plain(id).split(/[^a-z]+/).find((w) => w in JOBS);
+    if (hit) return JOBS[hit];
+  }
+  return fallback;
 }
 
 /** The cycle shown for an Expert: the catalogue's first, then the back office's; none for Djénéba. */

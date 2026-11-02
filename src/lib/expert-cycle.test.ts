@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { catalogueCycle, expertRank } from "./expert-cycle.ts";
+import { catalogueCycle, catalogueJob, expertRank } from "./expert-cycle.ts";
 
 const BO = (label: string) => ({ key: label.toLowerCase(), label });
 const ex = (profileId: string, label: string | null) => ({ profileId, catalogueKey: null, cycle: label ? BO(label) : null });
@@ -27,4 +27,10 @@ test("the operations cycle is named « Opérations et Logistique », whatever th
     key: "operations",
     label: "Opérations et Logistique",
   });
+});
+
+test("an Expert's job comes from the catalogue, short", () => {
+  assert.equal(catalogueJob({ catalogueKey: "mamadou", profileId: "unifood__mamadou" }, "Comptabilité & Finance générale"), "Comptable général");
+  assert.equal(catalogueJob({ catalogueKey: null, profileId: "unifood__djeneba" }, null), "Chief of Staff & Direction");
+  assert.equal(catalogueJob({ catalogueKey: "nadia", profileId: "unifood__nadia" }, "Données & Analyse"), "Données & Analyse");
 });
