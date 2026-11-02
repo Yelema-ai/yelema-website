@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { citedFolder, type TurnDoc } from "@/lib/drive-links";
 import { ConversationDocs } from "./ConversationDocs";
+import { PreviewSiblings } from "@/components/files/preview-siblings";
 import { GooglePin } from "./GoogleDocs";
 import type { GoogleDoc } from "@/lib/google-docs";
 import { DropOverlay } from "@/components/DropOverlay";
@@ -242,6 +243,7 @@ export function ChatView({
       isStreaming={isStreaming}
       messages={messages}
     >
+    <PreviewSiblings.Provider value={docs}>
     <SidePanelSync hasComputer={hasComputer} />
     {openDashboard && onDashboardOpened && <OpenDashboardOnMount onDone={onDashboardOpened} />}
     <div className="flex h-full min-h-0">
@@ -416,6 +418,7 @@ export function ChatView({
         </>
       )}
     </div>
+    </PreviewSiblings.Provider>
     </DashboardProvider>
   );
 }

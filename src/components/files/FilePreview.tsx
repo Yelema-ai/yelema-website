@@ -10,7 +10,9 @@ import type { Expert } from "@/lib/types";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CharteAdopt, isCharteDoc, Preview as DocPreview } from "@/components/chat/DocumentCards";
-import { docKind } from "@/lib/drive-links";
+import { docKind, normDrivePath } from "@/lib/drive-links";
+import { DOC_TONE, usePreviewSiblings } from "./preview-siblings";
+import { cn } from "@/lib/utils";
 import { contentUrl, formatBytes, previewKind, thumbUrl, type FileEntry } from "./types";
 import { Markdown } from "@/components/chat/Markdown";
 import { GoogleTile } from "@/components/chat/GoogleDocs";
@@ -34,6 +36,14 @@ export function FilePreview({
   entry: FileEntry | null;
   onClose: () => void;
 }) {
+  // A pill picked at the top of the preview shows that file instead, until another file is opened.
+  const siblings = usePreviewSiblings();
+  const [pick, setPick] = useState<{ from: string; entry: FileEntry } | null>(null);
+  if (pick && pick.from !== entry?.path) setPick(null);
+  const asked = entry;
+  entry = entry && pick?.from === entry.path ? pick.entry : entry;
+  const current = entry ? normDrivePath(entry.path) : "";
+  const pills = asked && siblings.length > 1 && siblings.some((d) => normDrivePath(d.path) === normDrivePath(asked.path)) ? siblings : [];
   const open = !!entry;
   const router = useRouter();
   const { experts } = useExpertsContext();
@@ -62,8 +72,33 @@ export function FilePreview({
                 </DialogDescription>
               </span>
             </DialogHeader>
+            {pills.length > 0 && (
+              <div role="tablist" aria-label="Livrables de cette discussion" className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-line px-5 py-2.5 [scrollbar-width:none]">
+                {pills.map((d) => {
+                  const on = normDrivePath(d.path) === current;
+                  const ext = d.name.includes(".") ? d.name.split(".").pop()!.slice(0, 4).toUpperCase() : "FICH";
+                  return (
+                    <button
+                      key={d.path}
+                      type="button"
+                      role="tab"
+                      aria-selected={on}
+                      title={d.name}
+                      onClick={() => asked && setPick({ from: asked.path, entry: { name: d.name, path: d.path, type: "file", size: d.size, modified: d.modified ?? 0, hidden: false } })}
+                      className={cn(
+                        "inline-flex h-11 max-w-[14rem] shrink-0 items-center gap-2 rounded-full border pl-1.5 pr-3.5 text-[13px] font-medium transition-colors",
+                        on ? "border-brand bg-tint text-brand-ink" : "border-line bg-surface text-ink hover:bg-soft",
+                      )}
+                    >
+                      <span className={cn("grid size-8 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white", DOC_TONE[d.kind])}>{ext}</span>
+                      <span className="truncate">{d.name.replace(/\.[^.]+$/, "")}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
-              <PreviewBody agentId={agentId} entry={entry} />
+              <PreviewBody key={entry.path} agentId={agentId} entry={entry} />
             </div>
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-5 py-4">
               {/* A Google shortcut has nothing to download: its document opens in Google. */}
