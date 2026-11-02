@@ -20,7 +20,7 @@ import { EffortMenu } from "@/components/chat/EffortMenu";
 import { useChatModels } from "@/components/chat/useChatModels";
 import { findModel, prettyModelLabel, type ChatSettings } from "@/components/chat/types";
 import { rememberSettings, rememberedSettings } from "@/components/chat/rememberedSettings";
-import { expertCycle, cycleKind, isDjeneba } from "@/lib/expert-cycle";
+import { expertCycle, expertRank, isDjeneba } from "@/lib/expert-cycle";
 import { agentTabPath } from "@/lib/expert-tabs";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -138,7 +138,7 @@ function Installing() {
 // chat with the message on its way), then the team. Everything shown is what is installed for
 // this user; the catalogue only dresses it.
 const keyOf = (e: Expert) => `${e.agentId}:${e.profileId}`;
-const rankOf = (e: Expert) => (isDjeneba(e) ? -1 : e.cycle ? cycleKind(e.cycle.label).rank : 99);
+const rankOf = expertRank;
 
 // The four openers follow whoever gets the message: Djénéba's day (mail, agenda), an Expert's own
 // first requests from the catalogue, the chat d'entreprise's files.

@@ -30,7 +30,7 @@ import { convKey, toMs } from "@/lib/activity";
 import { openSearch, warmSearch } from "@/components/conversations/SearchDialog";
 import { useCompanySessions } from "@/components/conversations/useCompanySessions";
 import type { Expert } from "@/lib/types";
-import { cycleKind, isDjeneba } from "@/lib/expert-cycle";
+import { cycleKind, expertRank, isDjeneba } from "@/lib/expert-cycle";
 import { cn } from "@/lib/utils";
 
 // Le haut du menu : « Nouvelle conversation » (l'accueil et sa barre de chat), en couleur, puis
@@ -55,8 +55,8 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   const deploymentLogo = usePublicConfig().logoUrl;
   const logoUrl = current?.logo_url ?? deploymentLogo;
   const { experts: installed, unreadable } = useExpertsContext();
-  // Djénéba heads « Mes Experts », the others follow in their order.
-  const experts = [...installed].sort((a, b) => Number(isDjeneba(b)) - Number(isDjeneba(a)));
+  // Djénéba heads « Mes Experts », always in sight; the others follow the catalogue, cycle by cycle.
+  const experts = [...installed].sort((a, b) => expertRank(a) - expertRank(b));
   const ownAgentId = useOwnAgentId();
   // The first Experts as the menu shows them are read ahead: page, conversations and models.
   const shown = groupByCycle(experts).flatMap((g) => g.experts);
@@ -173,7 +173,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         const folded =
           !collapsed && g.cycle !== null && (cycleChoice[g.cycle.key] ?? (experts.length > FOLD_FROM && !g.experts.some(isActive)));
         return (
-          <div key={g.cycle?.key ?? "_"} className="flex flex-col gap-0.5">
+          <div key={g.cycle?.key ?? (g.experts.some(isDjeneba) ? "_lead" : "_rest")} className="flex flex-col gap-0.5">
             {/* The cycle a group of Experts came with: one quiet line, folding the group. */}
             {g.cycle && !collapsed && (
               <button
@@ -349,15 +349,21 @@ function byDay<S extends { session_id: string; last_active: number }>(rows: S[],
   return out;
 }
 
-// Experts without a cycle first (Djénéba heads them), then one group per cycle, in the offer's order.
+// Djénéba alone first, never folded; then one group per cycle in the catalogue's order (the experts
+// arrive sorted by expertRank); an Expert the catalogue and the back office both leave without a cycle last.
 function groupByCycle(experts: Expert[]): { cycle: { key: string; label: string } | null; experts: Expert[] }[] {
-  const groups: { cycle: { key: string; label: string } | null; experts: Expert[] }[] = [{ cycle: null, experts: [] }];
+  const lead = experts.filter(isDjeneba);
+  const groups: { cycle: { key: string; label: string } | null; experts: Expert[] }[] = [];
+  const loose: Expert[] = [];
   for (const e of experts) {
-    const g = e.cycle ? groups.find((x) => x.cycle?.key === e.cycle!.key) : groups[0];
+    if (isDjeneba(e)) continue;
+    if (!e.cycle) {
+      loose.push(e);
+      continue;
+    }
+    const g = groups.find((x) => x.cycle?.key === e.cycle!.key);
     if (g) g.experts.push(e);
-    else groups.push({ cycle: e.cycle!, experts: [e] });
+    else groups.push({ cycle: e.cycle, experts: [e] });
   }
-  const rank = (g: (typeof groups)[number]) => (g.cycle ? cycleKind(g.cycle.label).rank + 1 : 0);
-  groups.sort((x, y) => rank(x) - rank(y));
-  return groups.filter((g) => g.experts.length > 0);
+  return [{ cycle: null, experts: lead }, ...groups, { cycle: null, experts: loose }].filter((g) => g.experts.length > 0);
 }
