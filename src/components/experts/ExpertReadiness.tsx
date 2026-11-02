@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BookOpen, Check, CircleDashed, Plug, Sparkles, X } from "lucide-react";
+import { BookOpen, Check, CircleDashed, Plug, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { FIX, pointsLeft, readiness, stage, type JourZero, type Stage } from "@/lib/jour-zero";
 import { cn } from "@/lib/utils";
@@ -71,7 +71,8 @@ export function ExpertReadiness({
 
   // During an update the chip says so: the expert answers slower, and it is not a fault of its own.
   // The banner above the chat bar has nothing to say then, nor once the expert is ready.
-  if (variant === "banner" && (updating || !jz || jz.working || stage(jz) === "ready")) return null;
+  // Before « Faire connaissance » the banner says nothing either: that is the first request under the chat bar.
+  if (variant === "banner" && (updating || !jz || jz.working || stage(jz) !== "left")) return null;
   // « Prêt » stays beside the name once the expert is ready (Leslie, 01/11, back on her 31/10 choice).
   if (updating)
     return (
@@ -85,30 +86,10 @@ export function ExpertReadiness({
   return (
     <>
       {variant === "banner" ? (
-        // The empty conversation (Leslie, 31/10): « Faire connaissance » first, alone; once done, only the
+        // The empty conversation, once « Faire connaissance » is done (Leslie, 31/10 then 02/11): only the
         // points left, in one line. The three key commands run behind plain words.
         <div className={cn("mx-auto flex w-full max-w-3xl flex-col items-center gap-2.5", className)}>
-          {stage(jz) === "intro" ? (
-            <div className="flex w-full flex-wrap items-center gap-3.5 rounded-2xl border border-line bg-surface p-4 shadow-sm sm:flex-nowrap">
-              <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-tint text-brand-ink">
-                <Sparkles className="size-5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <b className="block text-[15px] text-ink">Faire connaissance avec {expertName}</b>
-                <span className="block text-[13px] text-ink-3">
-                  {pronoun === "il" ? "Il" : "Elle"} se présente, découvre votre entreprise et note votre charte.
-                </span>
-              </span>
-              <button
-                type="button"
-                onClick={() => onCommand?.("/onboarding")}
-                className="inline-flex h-11 w-full shrink-0 items-center justify-center rounded-xl bg-brand px-5 text-sm font-semibold text-on-brand hover:opacity-90 sm:w-auto"
-              >
-                Commencer
-              </button>
-            </div>
-          ) : (
-            (() => {
+          {(() => {
               const left = pointsLeft(jz);
               const first = left[0] ? FIX[left[0].id] : null;
               const ready = pronoun === "il" ? "prêt" : "prête";
@@ -138,8 +119,7 @@ export function ExpertReadiness({
                   ) : null}
                 </div>
               );
-            })()
-          )}
+            })()}
           <div className="flex flex-wrap justify-center gap-2">
             <button
               type="button"
