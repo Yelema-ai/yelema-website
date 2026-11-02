@@ -1,43 +1,65 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CornerDownRight, MessageSquarePlus, Send, Users, X } from "lucide-react";
+import { CornerDownRight, Loader2, MessagesSquare, Plus, RefreshCw, Send, User, Users, X } from "lucide-react";
+import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { conversationName, labelsOf, MAX_RECIPIENTS, type BuzzEntry, type BuzzOverview } from "@/lib/buzz";
 import { deviceKey } from "@/lib/buzz-keys";
 import { BuzzConnection, conversations, messages, MESSAGE_KINDS, openDirect, sendMessage, toMessage, type Conversation, type Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
-// Échanges entre membres : les salons des équipes et les conversations directes, lus et écrits par
-// ce navigateur sur le relais du client. Le back-office ne fait qu'admettre la clé de l'appareil.
+// Échanges entre membres : les salons des équipes et les conversations directes, lus et écrits par ce
+// navigateur sur le relais du client. Le back-office ne fait qu'admettre la clé de l'appareil.
 
 type State = { kind: "loading" } | { kind: "closed"; reason: string } | { kind: "ready" };
+type Filter = "all" | "salons" | "direct";
+
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: "all", label: "Tous" },
+  { id: "salons", label: "Salons d’équipe" },
+  { id: "direct", label: "Conversations" },
+];
+
+const moment = (seconds: number) => new Date(seconds * 1000).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export function Messaging() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [overview, setOverview] = useState<BuzzOverview | null>(null);
   const [me, setMe] = useState<string | null>(null);
-  const [list, setList] = useState<Conversation[]>([]);
+  const [list, setList] = useState<Conversation[] | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
   const [open, setOpen] = useState<string | null>(null);
-  const [thread, setThread] = useState<Message[]>([]);
+  const [thread, setThread] = useState<Message[] | null>(null);
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [sending, setSending] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [composing, setComposing] = useState(false);
   const relay = useRef<BuzzConnection | null>(null);
 
   const labels = useMemo(() => labelsOf(overview?.annuaire ?? []), [overview]);
   const mine = useMemo(() => [...(overview?.appareils.map((d) => d.cle) ?? []), ...(me ? [me] : [])], [overview, me]);
   const salonIds = useMemo(() => new Set(overview?.salons.map((s) => s.id) ?? []), [overview]);
-  const nameOf = useCallback((c: Conversation) => overview?.salons.find((s) => s.id === c.id)?.nom ?? conversationName(c.members, mine, labels, c.name), [overview, mine, labels]);
+  const nameOf = useCallback((c: Conversation) => overview?.salons.find((s) => s.id === c.id)?.nom ?? conversationName(c.members, mine, labels, "Conversation"), [overview, mine, labels]);
 
   const refresh = useCallback(async () => {
-    if (relay.current && me) setList(await conversations(relay.current, me));
+    if (!relay.current || !me) return;
+    setRefreshing(true);
+    try {
+      setList(await conversations(relay.current, me));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRefreshing(false);
+    }
   }, [me]);
 
-  // Ouverture : la vue du back-office, la clé de ce navigateur, puis le relais (la clé vient peut-être
-  // d'être admise : quelques essais le temps que la synchronisation passe).
+  // Ouverture : la vue du back-office, la clé de ce navigateur, puis le relais (une clé qui vient
+  // d'être admise attend la synchronisation suivante : quelques essais).
   useEffect(() => {
     let stop = false;
     (async () => {
@@ -80,25 +102,35 @@ export function Messaging() {
     const c = relay.current;
     if (!c || !open) return;
     let live: { close: () => void } | null = null;
-    void messages(c, open).then((m) => {
-      setThread(m);
-      live = c.subscribe({ kinds: MESSAGE_KINDS, "#h": [open], since: Math.floor(Date.now() / 1000) }, (e) =>
-        setThread((t) => (t.some((x) => x.id === e.id) ? t : [...t, toMessage(e)])),
-      );
-    });
+    setThread(null);
+    messages(c, open).then(
+      (m) => {
+        setThread(m);
+        live = c.subscribe({ kinds: MESSAGE_KINDS, "#h": [open], since: Math.floor(Date.now() / 1000) }, (e) => setThread((t) => (t?.some((x) => x.id === e.id) ? t : [...(t ?? []), toMessage(e)])));
+      },
+      (e: unknown) => toast.error((e as Error).message),
+    );
     return () => live?.close();
   }, [open, me]);
 
-  async function send() {
+  async function send(event: React.FormEvent) {
+    event.preventDefault();
     const c = relay.current;
     const text = draft.trim();
     if (!c || !open || !text) return;
-    const r = await sendMessage(c, open, text, replyTo?.id ?? null);
-    if (!r.ok) return setState({ kind: "closed", reason: r.message || "Message refusé par le relais." });
-    setDraft("");
-    setReplyTo(null);
-    const recipients = (list.find((c) => c.id === open)?.members ?? []).filter((k) => !mine.includes(k));
-    void apiFetch("/api/buzz/sent", { method: "POST", body: JSON.stringify({ kind: replyTo ? "reply" : salonIds.has(open) ? "salon" : "dm", recipients }) }).catch(() => undefined);
+    setSending(true);
+    try {
+      const r = await sendMessage(c, open, text, replyTo?.id ?? null);
+      if (!r.ok) throw new Error(r.message.replace(/^[a-z-]+: /, "") || "Message refusé.");
+      const recipients = (list?.find((x) => x.id === open)?.members ?? []).filter((k) => !mine.includes(k));
+      void apiFetch("/api/buzz/sent", { method: "POST", body: JSON.stringify({ kind: replyTo ? "reply" : salonIds.has(open) ? "salon" : "dm", recipients }) }).catch(() => undefined);
+      setDraft("");
+      setReplyTo(null);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSending(false);
+    }
   }
 
   async function start(keys: string[]) {
@@ -111,127 +143,220 @@ export function Messaging() {
     void apiFetch("/api/buzz/sent", { method: "POST", body: JSON.stringify({ kind: "dm", recipients: keys }) }).catch(() => undefined);
   }
 
-  if (state.kind === "loading") return <p className="text-sm text-ink-3">Ouverture des Échanges…</p>;
-  if (state.kind === "closed") return <p className="rounded-[18px] border border-line bg-surface p-5 text-sm text-ink-2">{state.reason}</p>;
+  const shown = (list ?? []).filter((c) => filter === "all" || (filter === "salons") === salonIds.has(c.id));
+  const current = list?.find((c) => c.id === open) ?? null;
 
-  const current = list.find((c) => c.id === open) ?? null;
   return (
-    <div className="grid min-h-[70vh] grid-cols-1 gap-4 md:grid-cols-[280px_1fr]">
-      <aside className="flex flex-col gap-1 rounded-[22px] border border-line bg-surface p-3">
-        <Button variant="secondary" className="mb-2 justify-start gap-2" onClick={() => setComposing(true)}>
-          <MessageSquarePlus className="size-4" /> Nouveau message
-        </Button>
-        {list.length === 0 && <p className="px-2 py-3 text-sm text-ink-3">Aucune conversation pour l’instant.</p>}
-        {list.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => setOpen(c.id)}
-            className={cn("flex items-center gap-2 rounded-[12px] px-3 py-2 text-left text-sm", open === c.id ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft")}
-          >
-            {salonIds.has(c.id) ? <Users className="size-4 shrink-0" /> : <span className="size-4 shrink-0" />}
-            <span className="min-w-0 truncate">{nameOf(c)}</span>
-          </button>
-        ))}
-      </aside>
+    <div className="space-y-5">
+      <header className="flex flex-col items-start justify-between gap-4 rounded-[22px] border border-line bg-surface p-5 sm:flex-row sm:items-center sm:p-6">
+        <div className="flex min-w-0 items-start gap-4">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-tint text-brand">
+            <MessagesSquare className="h-6 w-6" />
+          </span>
+          <div className="min-w-0">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-ink">Échanges</h1>
+            <p className="mt-1 max-w-xl text-sm text-ink-3">Écrivez à vos collègues et à leurs Experts, et suivez les salons de vos équipes. Votre Expert peut aussi le faire pour vous, à votre demande.</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button variant="outline" size="icon" onClick={() => void refresh()} disabled={state.kind !== "ready" || refreshing} aria-label="Actualiser">
+            <RefreshCw className={cn(refreshing && "animate-spin")} />
+          </Button>
+          <Button onClick={() => setComposing(true)} disabled={state.kind !== "ready"}>
+            <Plus />
+            Nouveau message
+          </Button>
+        </div>
+      </header>
 
-      <section className="flex flex-col rounded-[22px] border border-line bg-surface">
-        {!current ? (
-          <p className="m-auto p-8 text-sm text-ink-3">Choisissez une conversation, ou écrivez à quelqu’un de l’entreprise.</p>
-        ) : (
-          <>
-            <header className="border-b border-line px-5 py-3 text-sm font-semibold">{nameOf(current)}</header>
-            <ol className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
-              {thread.map((m) => (
-                <li key={m.id} className={cn("group text-sm", m.replyTo && "ml-6")}>
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-semibold">{mine.includes(m.author) ? "Vous" : (labels.get(m.author) ?? "Inconnu")}</span>
-                    <time className="text-xs text-ink-3">{new Date(m.at * 1000).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</time>
-                    <button type="button" onClick={() => setReplyTo(m)} className="ml-auto hidden text-xs text-link group-hover:inline">
-                      Répondre
-                    </button>
-                  </div>
-                  <p className="whitespace-pre-wrap text-ink-2">
-                    {m.replyTo && <CornerDownRight className="mr-1 inline size-3.5 text-ink-3" />}
-                    {m.text}
-                  </p>
-                </li>
-              ))}
-            </ol>
-            <footer className="border-t border-line p-3">
-              {replyTo && (
-                <div className="mb-2 flex items-center gap-2 text-xs text-ink-3">
-                  Réponse à {labels.get(replyTo.author) ?? "ce message"} : « {replyTo.text.slice(0, 60)} »
-                  <button type="button" aria-label="Annuler la réponse" onClick={() => setReplyTo(null)}>
-                    <X className="size-3.5" />
-                  </button>
-                </div>
-              )}
-              <form
-                className="flex gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void send();
-                }}
+      {state.kind === "closed" && <p className="max-w-xl rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{state.reason}</p>}
+
+      {state.kind !== "closed" && (
+        <>
+          <div className="flex w-fit items-center gap-1.5 rounded-full border border-line bg-surface p-1">
+            {FILTERS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilter(f.id)}
+                aria-pressed={filter === f.id}
+                className={cn("rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors max-sm:py-2.5", filter === f.id ? "bg-brand text-on-brand" : "text-ink-2 hover:bg-soft")}
               >
-                <textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  rows={2}
-                  maxLength={8000}
-                  placeholder="Écrire un message"
-                  className="min-w-0 flex-1 resize-none rounded-[12px] border border-line bg-surface px-3 py-2 text-sm"
-                />
-                <Button type="submit" disabled={!draft.trim()} aria-label="Envoyer">
-                  <Send className="size-4" />
-                </Button>
-              </form>
-            </footer>
-          </>
-        )}
-      </section>
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[320px_1fr]">
+            {!list ? (
+              <div className="space-y-2.5" aria-busy="true">
+                {[1, 2, 3].map((n) => <div key={n} className="h-[62px] animate-pulse rounded-[18px] border border-line bg-surface" />)}
+              </div>
+            ) : shown.length === 0 ? (
+              <Empty title="Aucun échange ici" text="Vos salons d’équipe et les conversations avec vos collègues apparaissent ici." />
+            ) : (
+              <ul className="space-y-2.5">
+                {shown.map((c) => {
+                  const salon = salonIds.has(c.id);
+                  return (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => setOpen(c.id)}
+                        aria-current={open === c.id}
+                        className={cn("flex w-full items-center gap-3 rounded-[18px] border bg-surface p-3.5 text-left transition-colors", open === c.id ? "border-brand/40 bg-tint" : "border-line hover:border-brand/40")}
+                      >
+                        <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl", salon ? "bg-tint text-brand" : "bg-soft-2 text-ink-2")}>
+                          {salon ? <Users className="h-4 w-4" /> : <User className="h-4 w-4" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-ink">{nameOf(c)}</span>
+                          <span className="mt-0.5 block truncate text-xs text-ink-3">{salon ? "Salon d’équipe" : "Conversation"} · {c.members.length} participant{c.members.length > 1 ? "s" : ""}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            <section className="flex min-h-[460px] flex-col rounded-[22px] border border-line bg-surface">
+              {!current ? (
+                <div className="m-auto p-10 text-center">
+                  <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-soft text-ink-3"><MessagesSquare className="h-6 w-6" /></span>
+                  <h2 className="mt-3 text-base font-semibold text-ink">Choisissez un échange</h2>
+                  <p className="mx-auto mt-1 max-w-sm text-sm text-ink-3">Ou écrivez à quelqu’un de l’entreprise avec « Nouveau message ».</p>
+                </div>
+              ) : (
+                <>
+                  <header className="border-b border-line px-5 py-4">
+                    <h2 className="font-display text-lg font-bold text-ink">{nameOf(current)}</h2>
+                    <p className="mt-0.5 text-xs text-ink-3">{salonIds.has(current.id) ? "Salon d’équipe" : "Conversation"} · {[...new Set(current.members.map((k) => (mine.includes(k) ? "vous" : labels.get(k))).filter((v): v is string => Boolean(v)))].join(", ")}</p>
+                  </header>
+                  <ol className="flex-1 space-y-3 overflow-y-auto px-5 py-4" aria-busy={thread === null}>
+                    {thread === null && <li className="flex items-center gap-2 text-sm text-ink-3"><Loader2 className="h-4 w-4 animate-spin" />Chargement…</li>}
+                    {thread?.length === 0 && <li className="text-sm text-ink-3">Aucun message pour l’instant.</li>}
+                    {thread?.map((m) => {
+                      const own = mine.includes(m.author);
+                      return (
+                        <li key={m.id} className={cn("group", m.replyTo && "ml-8")}>
+                          <div className="flex items-baseline gap-2">
+                            {m.replyTo && <CornerDownRight className="h-3.5 w-3.5 shrink-0 self-center text-ink-3" />}
+                            <span className="text-sm font-semibold text-ink">{own ? "Vous" : (labels.get(m.author) ?? "Membre inconnu")}</span>
+                            <time className="text-xs text-ink-3">{moment(m.at)}</time>
+                            <button type="button" onClick={() => setReplyTo(m)} className="ml-auto rounded-md px-2 py-0.5 text-xs font-semibold text-ink-2 opacity-0 hover:bg-soft focus-visible:opacity-100 group-hover:opacity-100">
+                              Répondre
+                            </button>
+                          </div>
+                          <div className={cn("mt-1 whitespace-pre-wrap rounded-xl border p-3 text-sm leading-relaxed text-ink", own ? "border-brand/20 bg-tint" : "border-line bg-soft/30")}>{m.text}</div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  <form onSubmit={(e) => void send(e)} className="space-y-2 border-t border-line p-4">
+                    {replyTo && (
+                      <div className="flex items-center gap-2 rounded-lg bg-soft px-2.5 py-1.5 text-xs text-ink-2">
+                        <CornerDownRight className="h-3.5 w-3.5 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">Réponse à {mine.includes(replyTo.author) ? "vous" : (labels.get(replyTo.author) ?? "ce message")} : « {replyTo.text} »</span>
+                        <button type="button" aria-label="Annuler la réponse" onClick={() => setReplyTo(null)}><X className="h-3 w-3" /></button>
+                      </div>
+                    )}
+                    <div className="flex items-end gap-2">
+                      <Label htmlFor="echange-message" className="sr-only">Message</Label>
+                      <textarea
+                        id="echange-message"
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            e.currentTarget.form?.requestSubmit();
+                          }
+                        }}
+                        rows={2}
+                        maxLength={8000}
+                        placeholder="Écrire un message"
+                        className="min-w-0 flex-1 resize-none rounded-xl border border-line bg-surface p-3 text-[15px] text-ink placeholder:text-ink-3 focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15"
+                      />
+                      <Button type="submit" disabled={!draft.trim() || sending}>
+                        {sending ? <Loader2 className="animate-spin" /> : <Send />}
+                        Envoyer
+                      </Button>
+                    </div>
+                  </form>
+                </>
+              )}
+            </section>
+          </div>
+        </>
+      )}
 
       <NewConversation open={composing} onClose={() => setComposing(false)} directory={overview?.annuaire ?? []} mine={mine} onStart={start} />
     </div>
   );
 }
 
+function Empty({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="rounded-[22px] border border-line bg-surface p-10 text-center">
+      <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-soft text-ink-3"><MessagesSquare className="h-6 w-6" /></span>
+      <h2 className="mt-3 text-base font-semibold text-ink">{title}</h2>
+      <p className="mx-auto mt-1 max-w-md text-sm text-ink-3">{text}</p>
+    </div>
+  );
+}
+
 function NewConversation({ open, onClose, directory, mine, onStart }: { open: boolean; onClose: () => void; directory: BuzzEntry[]; mine: string[]; onStart: (keys: string[]) => Promise<void> }) {
   const [picked, setPicked] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
   const reachable = directory.filter((e) => e.cles.length && !e.cles.every((k) => mine.includes(k)));
   const keys = [...new Set(reachable.filter((e) => picked.includes(e.nom)).flatMap((e) => e.cles))];
   const tooMany = keys.length + mine.length > MAX_RECIPIENTS + 1;
+
+  async function go() {
+    setRefusal(null);
+    setOpening(true);
+    try {
+      await onStart(keys);
+      setPicked([]);
+    } catch (e) {
+      setRefusal(e instanceof Error ? e.message : "Conversation non ouverte.");
+    } finally {
+      setOpening(false);
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Nouveau message</DialogTitle>
+      <DialogContent className="max-w-lg">
+        <DialogHeader className="text-left">
+          <DialogTitle className="font-display text-xl font-bold text-ink">Nouveau message</DialogTitle>
+          <DialogDescription>Choisissez les personnes ou les Experts de l’entreprise à qui écrire. 9 participants au plus, vous compris.</DialogDescription>
         </DialogHeader>
-        <ul className="max-h-80 space-y-1 overflow-y-auto">
-          {reachable.map((e) => (
-            <li key={`${e.type}:${e.nom}`}>
-              <label className="flex items-center gap-2 rounded-[10px] px-2 py-1.5 text-sm hover:bg-soft">
-                <input type="checkbox" checked={picked.includes(e.nom)} onChange={(ev) => setPicked((p) => (ev.target.checked ? [...p, e.nom] : p.filter((n) => n !== e.nom)))} />
-                <span>{e.nom}</span>
-                <span className="ml-auto text-xs text-ink-3">{e.type === "expert" ? "Expert" : "Personne"}</span>
-              </label>
-            </li>
-          ))}
+        <ul className="max-h-80 space-y-1.5 overflow-y-auto pt-1">
+          {reachable.map((e) => {
+            const checked = picked.includes(e.nom);
+            return (
+              <li key={`${e.type}:${e.nom}`}>
+                <label className={cn("flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors", checked ? "border-brand/40 bg-tint" : "border-line hover:bg-soft")}>
+                  <input type="checkbox" className="accent-brand" checked={checked} onChange={(ev) => setPicked((p) => (ev.target.checked ? [...p, e.nom] : p.filter((n) => n !== e.nom)))} />
+                  <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg", e.type === "expert" ? "bg-tint text-brand" : "bg-soft-2 text-ink-2")}>
+                    {e.type === "expert" ? <MessagesSquare className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-semibold text-ink">{e.nom}</span>
+                  <span className="text-xs text-ink-3">{e.type === "expert" ? "Expert" : "Personne"}</span>
+                </label>
+              </li>
+            );
+          })}
         </ul>
-        {tooMany && <p className="text-xs text-ko">9 participants au plus par conversation : retirez quelqu’un.</p>}
-        {error && <p className="text-xs text-ko">{error}</p>}
+        {tooMany && <p role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">Trop de participants : 9 au plus, vous compris. Retirez quelqu’un.</p>}
+        {refusal && <p role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{refusal}</p>}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Annuler
-          </Button>
-          <Button
-            disabled={!keys.length || tooMany}
-            onClick={() => {
-              setError(null);
-              onStart(keys).then(() => setPicked([]), (e: unknown) => setError(e instanceof Error ? e.message : "Conversation non ouverte."));
-            }}
-          >
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button onClick={() => void go()} disabled={!keys.length || tooMany || opening}>
+            {opening && <Loader2 className="animate-spin" />}
             Ouvrir la conversation
           </Button>
         </DialogFooter>
