@@ -16,7 +16,7 @@ export function versionOf(name: string): { key: string; n: number } | null {
 /**
  * The entries with each document's older versions set apart. A document counts as versioned when two
  * files or more share its name but for the number; the highest number stays (compared as numbers: v10
- * beats v9), the others go to `older`, newest first. Folders and unversioned files stay as they are,
+ * beats v9), the others go to `older`, by document, newest first. Folders and unversioned files stay as they are,
  * in their order.
  */
 export function splitVersions<T extends { name: string; type?: string }>(entries: readonly T[]): { current: T[]; older: T[] } {
@@ -31,12 +31,13 @@ export function splitVersions<T extends { name: string; type?: string }>(entries
     if (!held || v.n > held.n) best.set(v.key, { entry: e, n: v.n });
   }
   const current: T[] = [];
-  const older: { entry: T; n: number }[] = [];
+  const older: { entry: T; n: number; key: string }[] = [];
   for (const e of entries) {
     const v = e.type === "directory" ? null : versionOf(e.name);
     if (!v || (count.get(v.key) ?? 0) < 2 || best.get(v.key)?.entry === e) current.push(e);
-    else older.push({ entry: e, n: v.n });
+    else older.push({ entry: e, n: v.n, key: v.key });
   }
-  older.sort((a, b) => b.n - a.n);
+  // One document after the other, each newest first.
+  older.sort((a, b) => a.key.localeCompare(b.key, "fr") || b.n - a.n);
   return { current, older: older.map((o) => o.entry) };
 }
