@@ -19,6 +19,9 @@ export interface JourZero {
   checks: JourZeroCheck[];
   /** No file yet: the expert has not prepared. */
   absent?: true;
+  /** No file, but the expert's folder already holds its work: it was at work before the day-zero
+   * preparation existed (Kouassi, Leslie 02/11). Nothing to prompt then: no banner, no chip. */
+  working?: true;
 }
 
 export const JOUR_ZERO_MAX_BYTES = 16 * 1024;

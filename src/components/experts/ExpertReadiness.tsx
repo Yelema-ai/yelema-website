@@ -65,12 +65,13 @@ export function ExpertReadiness({
     };
   }, [agentId, profileId, jzKey]);
 
-  const st = jz ? stage(jz) : null;
+  // An expert already at work counts as ready: its conversation shows no preparation step.
+  const st = jz ? (jz.working ? "ready" : stage(jz)) : null;
   useEffect(() => onStage?.(st), [onStage, st]);
 
   // During an update the chip says so: the expert answers slower, and it is not a fault of its own.
   // The banner above the chat bar has nothing to say then, nor once the expert is ready.
-  if (variant === "banner" && (updating || !jz || stage(jz) === "ready")) return null;
+  if (variant === "banner" && (updating || !jz || jz.working || stage(jz) === "ready")) return null;
   // « Prêt » stays beside the name once the expert is ready (Leslie, 01/11, back on her 31/10 choice).
   if (updating)
     return (
@@ -78,7 +79,7 @@ export function ExpertReadiness({
         <UpdateSpinner className="size-3" /> Mise à jour
       </span>
     );
-  if (!jz) return null;
+  if (!jz || jz.working) return null;
   const r = readiness(jz);
   const Icon = r.state === "ready" ? Check : CircleDashed;
   return (
