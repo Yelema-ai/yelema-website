@@ -73,9 +73,11 @@ export type TelegramHubStatus = {
   link?: { url: string; expiresAt: string; started: boolean };
 };
 
-export type RelayChannel = "slack" | "teams";
-export type RelayLink = { code: string; expiresAt: string; installUrl?: string; appUrl?: string | null };
+export type RelayChannel = "slack" | "teams" | "telegram";
+export type RelayLink = { code: string; expiresAt: string; installUrl?: string; appUrl?: string | null; botUrl?: string };
 export type RelayStatus = { enabled: boolean; accounts: number };
+
+const relayPath = (channel: RelayChannel): string => (channel === "telegram" ? "telegram-relay" : channel);
 
 // The gateway's own JSON routes (Telegram, relays, capabilities, pack files): never a stream.
 const gatewayJson = (gw: RuntimeGateway, path: string, init?: RequestInit) => gatewayFetch(gw, path, withTimeout(init, JSON_TIMEOUT_MS));
@@ -370,10 +372,12 @@ export const agent37 = {
 
   // Slack and Teams of a Claude Code instance, relayed by the runtime gateway: a link code (and, for Slack,
   // the « Add to Slack » install link), how many accounts are linked, unplug.
+  // Telegram relayed for a member of a team instance (`telegram-relay`); the account is the caller's, named to the
+  // gateway so it ties the link to that member.
   channelRelay: {
-    link: async (id: string, channel: RelayChannel): Promise<RelayLink> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${channel}/link`, { method: "POST" })),
-    status: async (id: string, channel: RelayChannel): Promise<RelayStatus> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${channel}`)),
-    unlink: async (id: string, channel: RelayChannel): Promise<{ ok: true }> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${channel}`, { method: "DELETE" })),
+    link: async (id: string, channel: RelayChannel): Promise<RelayLink> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${relayPath(channel)}/link`, await asUser({ method: "POST" }))),
+    status: async (id: string, channel: RelayChannel): Promise<RelayStatus> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${relayPath(channel)}`, await asUser({}))),
+    unlink: async (id: string, channel: RelayChannel): Promise<{ ok: true }> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${relayPath(channel)}`, await asUser({ method: "DELETE" }))),
   },
 
   // What finished routine runs came to (absent: still running or unreadable); `null` direct, with no gateway.
@@ -388,6 +392,6 @@ export const agent37 = {
   capabilities: async (id: string): Promise<RuntimeCapabilities | null> => {
     const gw = runtimeGateway();
     if (!gw) return null;
-    return parseAgent37<RuntimeCapabilities>(await gatewayJson(gw, `/v1/instances/${urlId(id)}/capabilities`));
+    return parseAgent37<RuntimeCapabilities>(await gatewayJson(gw, `/v1/instances/${urlId(id)}/capabilities`, await asUser({})));
   },
 };

@@ -11,7 +11,7 @@ export async function GET(_request: Request, { params }: Ctx) {
     const { id } = await params;
     await requireAgentAccess(id);
     const caps = await runtimeCapabilities(id);
-    return json({ runtime: caps?.runtime ?? "hermes", hermesTools: caps ? caps.capabilities.includes("hermesTools") : true });
+    return json({ runtime: caps?.runtime ?? "hermes", hermesTools: caps ? caps.capabilities.includes("hermesTools") : true, telegramRelay: caps?.capabilities.includes("telegramRelay") ?? false });
   } catch (e) {
     return handleError(e);
   }
