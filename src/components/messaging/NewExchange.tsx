@@ -34,7 +34,9 @@ export function NewExchange({ kind, onClose, directory, mine, onStart }: { kind:
 
   const picked = people.filter((p) => members.includes(p.membre));
   const chosen = picked.flatMap((p) => [p.person, ...p.experts]).filter((e): e is BuzzEntry => e !== null && entries.has(entryId(e)));
-  const keys = [...new Set(chosen.flatMap(entryKeys))];
+  // An expert written to brings its owner along: they see what their expert receives.
+  const owners = picked.filter((p) => p.person && p.experts.some((e) => entries.has(entryId(e)))).map((p) => p.person as BuzzEntry);
+  const keys = [...new Set([...chosen, ...owners].flatMap(entryKeys))];
   const tooMany = kind === "salon" ? keys.length > SALON_MAX_KEYS : keys.length + mine.length > MAX_RECIPIENTS + 1;
 
   function reset() {
@@ -75,7 +77,7 @@ export function NewExchange({ kind, onClose, directory, mine, onStart }: { kind:
         <DialogHeader className="text-left">
           <DialogTitle className="font-display text-xl font-bold text-ink">{copy.title}</DialogTitle>
           <DialogDescription>
-            {step === 1 ? copy.first : "Pour chaque membre : la personne, un ou plusieurs de ses Experts."}
+            {step === 1 ? copy.first : "Pour chaque membre : la personne, un ou plusieurs de ses Experts. Le propriétaire d’un Expert voit toujours la conversation."}
             {kind === "message" && " 9 participants au plus, vous compris."}
           </DialogDescription>
         </DialogHeader>
