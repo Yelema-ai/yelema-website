@@ -6,6 +6,8 @@ test("a conversation opened by a command is named in French", () => {
   assert.equal(sessionTitle("Run tableau command #4", "/tableau"), "Tableau de bord");
   assert.equal(sessionTitle("Run tableau command", null), "Tableau de bord");
   assert.equal(sessionTitle(null, "/tableau"), "Tableau de bord");
+  assert.equal(sessionTitle("/tableau #3", "Tableau de bord"), "Tableau de bord");
+  assert.equal(sessionTitle("/onboarding", null), "Faire connaissance");
   assert.equal(sessionTitle("Run rapport command #2", null), "Commande rapport");
 });
 

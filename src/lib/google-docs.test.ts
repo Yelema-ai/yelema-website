@@ -50,3 +50,17 @@ test("the document named in a later reply, without its link, is the one in use",
   assert.deepEqual(used.map((d) => [d.title, d.usedAt]), [["Suivi des candidatures", 3], ["Fiche de poste BDM", 2]]);
   assert.deepEqual(usedGoogleDocs([{ text: `Le tableau : ${SHEET}`, at: 1 }, { text: "Google Sheets est ouvert.", at: 2 }]).map((d) => d.usedAt), [1]);
 });
+
+test("a bare link takes its title from the sentence before it", () => {
+  const url = "https://docs.google.com/presentation/d/1P2wblICUsczE5qoSsDbYjaWAlxHJppINmZkXaQmWI/edit";
+  const [d] = googleDocs(`Ces trois points sont dans la présentation WhatsApp, pages 13 à 17 :\n${url}`);
+  assert.equal(d.title, "Présentation WhatsApp");
+  const [h] = googleDocs(`Il est dans la présentation WhatsApp.\n\n${url}`);
+  assert.equal(h.title, "Google Slides");
+  const [e] = googleDocs(`Ces trois points sont dans la présentation WhatsApp, pages 13 à 17 : ${url}`);
+  assert.equal(e.title, "Présentation WhatsApp");
+  const [f] = googleDocs(`Le kit de test WhatsApp v3 est à jour : ${url}`);
+  assert.equal(f.title, "Kit de test WhatsApp v3");
+  const [g] = googleDocs(`Voici le document : ${url}`);
+  assert.equal(g.title, "Google Slides");
+});
