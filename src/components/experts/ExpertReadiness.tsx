@@ -15,12 +15,24 @@ const TONE = {
   partial: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
   absent: "bg-soft text-ink-3",
 };
-// Beside the expert's name (Leslie, 28/10): a dot and a word, lighter than a chip.
-const DOT = {
-  ready: { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300" },
-  partial: { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-300" },
-  absent: { dot: "bg-ink-3", text: "text-ink-3" },
-};
+// One shape for the three states, as an icon (Leslie, 03/11): a green disc with a check once ready,
+// an amber ring half drawn while it prepares, a grey dashed ring before anything.
+function StateIcon({ state }: { state: "ready" | "partial" | "absent" }) {
+  if (state === "ready")
+    return (
+      <span className="grid size-[18px] place-items-center rounded-full bg-emerald-500 text-white">
+        <Check className="size-3" strokeWidth={3} />
+      </span>
+    );
+  if (state === "partial")
+    return (
+      <svg viewBox="0 0 18 18" className="size-[18px] text-amber-500" aria-hidden>
+        <circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" strokeOpacity=".25" strokeWidth="2.5" />
+        <path d="M9 2a7 7 0 0 1 0 14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      </svg>
+    );
+  return <CircleDashed className="size-[18px] text-ink-3" strokeWidth={2.25} aria-hidden />;
+}
 
 // Whether the expert has done its day-zero preparation: a chip, and its checks behind it.
 export function ExpertReadiness({
@@ -138,15 +150,16 @@ export function ExpertReadiness({
           </div>
         </div>
       ) : variant === "dot" ? (
+        // The icon alone, on every screen (Leslie, 03/11: « une bulle ne suffit-elle pas ? », then option B).
+        // Its word shows on hover and is read aloud; a click still opens the preparation.
         <button
           type="button"
           onClick={() => setOpen(true)}
-          title="Voir sa préparation"
-          className={cn("inline-flex items-center gap-1.5 text-[13px] font-semibold hover:underline", DOT[r.state].text, className)}
+          title={r.label}
+          aria-label={`${r.label} : voir sa préparation`}
+          className={cn("grid size-6 shrink-0 place-items-center rounded-full hover:bg-soft", className)}
         >
-          <span className={cn("size-2 rounded-full", DOT[r.state].dot)} />
-          {/* On a phone the dot alone: the expert's name keeps the room. */}
-          <span className="max-sm:sr-only">{r.label}</span>
+          <StateIcon state={r.state} />
         </button>
       ) : (
         <button
