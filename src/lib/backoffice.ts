@@ -93,6 +93,8 @@ export interface BoInstanceView {
   ready: boolean;
   /** Which Composio the instance's experts use. */
   tools: "yelema" | "agent37";
+  /** Set when the member has no instance of their own: their agent (enterprise chat) or seat (team instance). */
+  seat?: string;
   /**
    * `profile` is the name to send to the instance; `key` joins the public catalogue. `displayName`
    * and `avatarUrl` are what the member chose for it, null when they kept the catalogue's. `cycle`
