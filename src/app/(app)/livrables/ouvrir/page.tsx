@@ -30,5 +30,7 @@ export default async function OpenDeliverable({ searchParams }: { searchParams: 
   // The Expert's folder is its first name (« Livrables/Djeneba/… »); its profile is « <client>__<expert> ».
   const owner = fold(folder.split("/")[2] ?? "");
   const profile = owner ? ((row.profiles ?? []).find((pr) => fold(pr.split("__").pop() ?? "") === owner) ?? null) : null;
-  redirect(`${agentTabPath(row.agent37_id, "files", profile)}?dossier=${encodeURIComponent(folder)}`);
+  // A file opens at once in its preview, over its folder: one click from the message, not two.
+  const file = folder !== path && /\.[a-z0-9]{1,6}$/i.test(path.split("/").pop() ?? "") ? `&fichier=${encodeURIComponent(path)}` : "";
+  redirect(`${agentTabPath(row.agent37_id, "files", profile)}?dossier=${encodeURIComponent(folder)}${file}`);
 }

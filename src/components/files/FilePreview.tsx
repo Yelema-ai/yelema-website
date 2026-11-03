@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type TouchEvent } from "react";
 import { Download, ExternalLink, Loader2, Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
@@ -10,7 +10,9 @@ import type { Expert } from "@/lib/types";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { CharteAdopt, isCharteDoc, Preview as DocPreview } from "@/components/chat/DocumentCards";
-import { docKind } from "@/lib/drive-links";
+import { docKind, normDrivePath } from "@/lib/drive-links";
+import { DOC_TONE, usePreviewSiblings } from "./preview-siblings";
+import { cn } from "@/lib/utils";
 import { contentUrl, formatBytes, previewKind, thumbUrl, type FileEntry } from "./types";
 import { Markdown } from "@/components/chat/Markdown";
 import { GoogleTile } from "@/components/chat/GoogleDocs";
@@ -34,7 +36,56 @@ export function FilePreview({
   entry: FileEntry | null;
   onClose: () => void;
 }) {
+  // A pill picked at the top of the preview shows that file instead, until another file is opened.
+  const siblings = usePreviewSiblings();
+  const [pick, setPick] = useState<{ from: string; entry: FileEntry } | null>(null);
+  if (pick && pick.from !== entry?.path) setPick(null);
+  const asked = entry;
+  entry = entry && pick?.from === entry.path ? pick.entry : entry;
+  const current = entry ? normDrivePath(entry.path) : "";
+  const pills = asked && siblings.length > 1 && siblings.some((d) => normDrivePath(d.path) === normDrivePath(asked.path)) ? siblings : [];
   const open = !!entry;
+  // From one deliverable to the next without the pills: arrow keys on a computer, a swipe on a phone.
+  const at = pills.findIndex((d) => normDrivePath(d.path) === current);
+  const go = (step: number) => {
+    const d = pills[at + step];
+    if (!asked || at < 0 || !d) return;
+    setPick({ from: asked.path, entry: { name: d.name, path: d.path, type: "file", size: d.size, modified: d.modified ?? 0, hidden: false } });
+  };
+  const goRef = useRef(go);
+  goRef.current = go;
+  const hasPills = pills.length > 1;
+  useEffect(() => {
+    if (!open || !hasPills) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.altKey || e.ctrlKey || e.metaKey || t?.closest("input, textarea, select, [contenteditable=true]")) return;
+      if (e.key === "ArrowRight") goRef.current(1);
+      else if (e.key === "ArrowLeft") goRef.current(-1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, hasPills]);
+  useEffect(() => {
+    document.querySelector<HTMLElement>('[data-preview-pill="on"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [current]);
+  const touch = useRef<{ x: number; y: number; t: EventTarget | null } | null>(null);
+  const onTouchStart = (e: TouchEvent) => {
+    touch.current = hasPills ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: e.target } : null;
+  };
+  const onTouchEnd = (e: TouchEvent) => {
+    const s0 = touch.current;
+    touch.current = null;
+    if (!s0) return;
+    const dx = e.changedTouches[0].clientX - s0.x;
+    const dy = e.changedTouches[0].clientY - s0.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    // A table wider than the panel scrolls sideways: its swipe is for it.
+    for (let el = s0.t as HTMLElement | null; el && el !== e.currentTarget; el = el.parentElement) {
+      if (el.scrollWidth > el.clientWidth + 2 && /auto|scroll/.test(getComputedStyle(el).overflowX)) return;
+    }
+    go(dx < 0 ? 1 : -1);
+  };
   const router = useRouter();
   const { experts } = useExpertsContext();
   const editor = entry ? editorOf(experts, agentId, entry.path) : null;
@@ -62,8 +113,34 @@ export function FilePreview({
                 </DialogDescription>
               </span>
             </DialogHeader>
-            <div className="min-h-0 flex-1 overflow-y-auto p-5">
-              <PreviewBody agentId={agentId} entry={entry} />
+            {pills.length > 0 && (
+              <div role="tablist" aria-label="Livrables de cette discussion" className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-line px-5 py-2.5 [mask-image:linear-gradient(to_right,transparent,black_18px,black_calc(100%-18px),transparent)] [scrollbar-width:none]">
+                {pills.map((d) => {
+                  const on = normDrivePath(d.path) === current;
+                  const ext = d.name.includes(".") ? d.name.split(".").pop()!.slice(0, 4).toUpperCase() : "FICH";
+                  return (
+                    <button
+                      key={d.path}
+                      type="button"
+                      role="tab"
+                      aria-selected={on}
+                      data-preview-pill={on ? "on" : undefined}
+                      title={d.name}
+                      onClick={() => asked && setPick({ from: asked.path, entry: { name: d.name, path: d.path, type: "file", size: d.size, modified: d.modified ?? 0, hidden: false } })}
+                      className={cn(
+                        "inline-flex h-11 max-w-[14rem] shrink-0 items-center gap-2 rounded-full border pl-1.5 pr-3.5 text-[13px] font-medium transition-colors",
+                        on ? "border-brand bg-tint text-brand-ink" : "border-line bg-surface text-ink hover:bg-soft",
+                      )}
+                    >
+                      <span className={cn("grid size-8 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white", DOC_TONE[d.kind])}>{ext}</span>
+                      <span className="truncate">{d.name.replace(/\.[^.]+$/, "")}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="min-h-0 flex-1 overflow-y-auto p-5" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+              <PreviewBody key={entry.path} agentId={agentId} entry={entry} />
             </div>
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-5 py-4">
               {/* A Google shortcut has nothing to download: its document opens in Google. */}
@@ -89,7 +166,9 @@ export function FilePreview({
                   }}
                 >
                   {opening ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
-                  {editor.name ? `Modifier avec ${editor.name}` : "Modifier dans le chat d’entreprise"}
+                  {/* On a phone both buttons hold on one line: « Modifier » alone, the Expert is in the title. */}
+                  <span className="sm:hidden">Modifier</span>
+                  <span className="max-sm:hidden">{editor.name ? `Modifier avec ${editor.name}` : "Modifier dans le chat d’entreprise"}</span>
                 </Button>
               )}
               {isCharteDoc(entry) && (

@@ -1,5 +1,6 @@
 "use client";
 
+import { isNumberCell, isTotalRow } from "@/lib/sheet-cells";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Download, File, Loader2, Palette, FileImage, FileSpreadsheet, FileText, Presentation, type LucideIcon } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -297,9 +298,9 @@ function Table({ sheet, rows, full }: { sheet: string | null; rows: string[][]; 
         <table className="w-full border-collapse text-[12.5px]">
           <tbody>
             {rows.map((r, i) => (
-              <tr key={i} className={i === 0 ? "bg-[#E3F4EA] font-semibold" : undefined}>
+              <tr key={i} className={i === 0 ? "bg-[#E3F4EA] font-semibold" : i > 0 && isTotalRow(r) ? "bg-[#f6f6f9] font-semibold" : undefined}>
                 {Array.from({ length: width }, (_, j) => (
-                  <td key={j} className="max-w-[12rem] truncate border border-[#e3e3ea] px-2 py-1.5">
+                  <td key={j} className={cn("max-w-[12rem] truncate border border-[#e3e3ea] px-2 py-1.5", i > 0 && isNumberCell(r[j] ?? "") && "text-right tabular-nums")}>
                     {r[j] ?? ""}
                   </td>
                 ))}

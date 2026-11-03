@@ -45,9 +45,34 @@ export function normDrivePath(path: string): string {
   return safeDecode(path).replace(/^(?:\/home\/node\/)?Livrables(?=\/|$)/, "~/Livrables");
 }
 
+// The Experts also give a deliverable as an address of the app (« https://<client>.app.yelema.ai/livrables/ouvrir?p=… »,
+// made for Telegram): in the chat it is that file.
+export const OPEN_ADDRESS = /(?:https?:\/\/[^\s)<>\]]+)?\/livrables\/ouvrir\?p=[^\s)<>»\]]+/g;
+
+/** An address of /livrables/ouvrir?p=… (on any host), as the drive path it names; null for any other address. */
+export function openTarget(href: string): { path: string; file: boolean } | null {
+  let url: URL;
+  try {
+    url = new URL(href, "http://x");
+  } catch {
+    return null;
+  }
+  if (url.pathname !== "/livrables/ouvrir") return null;
+  const raw = url.searchParams.get("p")?.trim();
+  if (!raw) return null;
+  const path = normDrivePath(raw);
+  if (!/^~\/Livrables\//.test(path) || path.split("/").includes("..")) return null;
+  // A file has an extension; a folder opens in Livrables.
+  return { path, file: /\.[a-z0-9]{1,6}$/i.test(path.split("/").pop() ?? "") };
+}
+
 /** The drive files a text names, in the order it names them, each once. */
 export function drivePathsIn(text: string): string[] {
   const found: { at: number; path: string }[] = [];
+  for (const m of text.matchAll(OPEN_ADDRESS)) {
+    const t = openTarget(m[0]);
+    if (t?.file) found.push({ at: m.index ?? 0, path: t.path });
+  }
   for (const re of [ANGLED, LINKED, CODE]) for (const m of text.matchAll(re)) found.push({ at: m.index ?? 0, path: m[1] });
   for (const m of text.matchAll(BARE)) found.push({ at: (m.index ?? 0) + m[1].length, path: m[2] });
   const seen = new Set<string>();

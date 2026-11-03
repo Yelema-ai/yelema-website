@@ -10,8 +10,11 @@ import { FilesView } from "./FilesView";
 // enforce admin on every mutation, so there is nothing to gate in the UI yet.
 // « ?dossier=<path> » opens that folder: a folder the Expert cites in the chat links here.
 export function FilesTab({ agentId, initialPath }: { agentId: string; initialPath?: string }) {
-  const openPath = useSearchParams().get("dossier");
+  const params = useSearchParams();
+  const openPath = params.get("dossier");
+  // « &fichier=<path> » opens that file's preview over its folder (a deliverable cited outside the app).
+  const openFile = params.get("fichier");
   // What the member imports goes to « Reçus » in the Expert's folder, apart from what the Expert made.
   const inbox = `${initialPath ?? DRIVE_ROOT}/Reçus`;
-  return <FilesView agentId={agentId} initialPath={openPath ?? initialPath} openPath={openPath} inbox={inbox} />;
+  return <FilesView agentId={agentId} initialPath={openPath ?? initialPath} openPath={openPath} openFile={openFile} inbox={inbox} />;
 }

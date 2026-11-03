@@ -3,22 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, FolderOpen } from "lucide-react";
-import type { DocKind, TurnDoc } from "@/lib/drive-links";
+import type { TurnDoc } from "@/lib/drive-links";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { FilePreview } from "@/components/files/FilePreview";
+import { DOC_TONE } from "@/components/files/preview-siblings";
 import type { FileEntry } from "@/components/files/types";
 import { cn } from "@/lib/utils";
 import { GOOGLE_LABEL, type GoogleDoc } from "@/lib/google-docs";
 import { GoogleTile } from "./GoogleDocs";
 
-const TONE: Record<DocKind, string> = {
-  pdf: "bg-[#B4321F]",
-  excel: "bg-[#137A4B]",
-  word: "bg-[#2E4EC4]",
-  powerpoint: "bg-[#B85A12]",
-  image: "bg-brand",
-  other: "bg-ink-3",
-};
+const TONE = DOC_TONE;
 
 const ext = (name: string) => (name.includes(".") ? name.split(".").pop()!.slice(0, 4).toUpperCase() : "FICH");
 
