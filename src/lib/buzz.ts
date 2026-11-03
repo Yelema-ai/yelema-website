@@ -25,8 +25,8 @@ export function conversationName(members: string[], mine: string[], labels: Map<
   return others.length ? others.join(", ") : fallback;
 }
 
-/** Buzz names every direct conversation « DM »; any other named channel is a salon (unit or opened in the app). */
-export const isSalonName = (name: string): boolean => name !== "DM" && name !== "Conversation";
+/** Buzz names a direct conversation « DM » or « Group DM (3) »; any other named channel is a salon. */
+export const isSalonName = (name: string): boolean => !/^(group )?dm( \(\d+\))?$/i.test(name.trim()) && name !== "Conversation";
 
 /** Who is in a conversation, as people read it: one « vous » for all one's devices, unknown keys (the relay) left out. */
 export function participants(members: string[], mine: string[], labels: Map<string, string>): string[] {

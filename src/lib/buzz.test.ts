@@ -36,5 +36,6 @@ test("annuaire par membre : soi d'abord (pour ses propres Experts), puis les aut
 
 test("salon : tout canal nommé autrement que « DM »", () => {
   assert.equal(isSalonName("DM"), false);
+  assert.equal(isSalonName("Group DM (3)"), false);
   assert.equal(isSalonName("Clôture mensuelle"), true);
 });
