@@ -1,19 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { PageBody } from "@/components/app/PageBody";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { SettingsCard, SettingsRow } from "@/components/settings/SettingsRows";
 import { Switch } from "@/components/experts/RoutinesTable";
 import { Button } from "@/components/ui/button";
-import { askNotificationPermission, notificationSupport, type NotificationSupport } from "@/components/activity/system-notify";
+import { askNotificationPermission, notificationSupport, setSystemNotifyOn, systemNotifyOn, type NotificationSupport } from "@/components/activity/system-notify";
 import { DEFAULT_NOTIFY_PREFS, readNotifyPrefs, saveNotifyPrefs, type NoticeKind, type NotifyPrefs } from "@/lib/notify-prefs";
 import { syncPrefs } from "@/lib/prefs-sync";
 
-// Paramètres · Notifications : ce qui mérite d'interrompre, sur le web et dans l'app seulement.
-// Un type coupé reste dans la cloche ; il ne s'affiche plus en bulle ni en notification.
+// Paramètres, Notifications : ce qui mérite d'interrompre, sur le web et dans l'app seulement. Deux
+// réglages distincts, nommés comme on les voit (Leslie, 30/10 : « tu actives la cloche, le pop-up ou
+// le numéro ? ») : les pop-ups dans l'app, par type, et les notifications de l'ordinateur sur cet
+// appareil, qu'on peut aussi couper. La cloche garde tout, quoi qu'on coupe.
 const KINDS: { kind: NoticeKind; label: string; hint: string }[] = [
   { kind: "reply", label: "Réponses des Experts", hint: "Quand un Expert répond à votre message." },
   { kind: "routine", label: "Routines terminées", hint: "Quand une routine a livré son résultat." },
@@ -30,8 +31,10 @@ export default function Page() {
   const kinds = useWorkspace().current?.access === "entreprise" ? CHAT_ONLY_KINDS : KINDS;
   const [notif, setNotif] = useState<NotificationSupport>("unsupported");
   const [prefs, setPrefs] = useState<NotifyPrefs>(DEFAULT_NOTIFY_PREFS);
+  const [deviceOn, setDeviceOn] = useState(true);
   useEffect(() => {
     setNotif(notificationSupport());
+    setDeviceOn(systemNotifyOn());
     setPrefs(readNotifyPrefs());
     void syncPrefs().then(() => setPrefs(readNotifyPrefs()));
   }, []);
@@ -39,7 +42,11 @@ export default function Page() {
   async function enable() {
     const next = await askNotificationPermission();
     setNotif(next);
-    if (next === "granted") toast.success("Notifications activées sur cet appareil.");
+    if (next === "granted") {
+      setSystemNotifyOn(true);
+      setDeviceOn(true);
+      toast.success("Notifications activées sur cet appareil.");
+    }
   }
 
   function flip(kind: NoticeKind) {
@@ -48,8 +55,15 @@ export default function Page() {
     void saveNotifyPrefs(next);
   }
 
+  function flipDevice() {
+    setSystemNotifyOn(!deviceOn);
+    setDeviceOn(!deviceOn);
+  }
+
+  const section = "mb-2 px-1 text-[12px] font-bold uppercase tracking-wider text-ink-3";
   return (
     <PageBody>
+      <p className={section}>Pop-ups dans l’app</p>
       <SettingsCard>
         {kinds.map((k) => (
           <SettingsRow key={k.kind} label={k.label} hint={k.hint} inline>
@@ -58,22 +72,24 @@ export default function Page() {
         ))}
       </SettingsCard>
 
-      <div className="mt-4">
+      <p className="mt-2 px-1 text-[13px] text-ink-3">La cloche garde toujours tout, même ce que vous coupez ici.</p>
+
+      <div className="mt-7">
+        <p className={section}>Notifications de l’ordinateur</p>
         <SettingsCard>
           <SettingsRow
             label="Sur cet appareil"
+            inline={notif === "granted"}
             hint={
               notif === "denied"
                 ? "Refusées : autorisez-les dans les réglages du navigateur."
                 : notif === "unsupported"
                   ? "Ce navigateur ne sait pas afficher de notifications."
-                  : "Être prévenu même dans un autre onglet."
+                  : "Une alerte de l’ordinateur quand Yelema est dans un autre onglet, pour les types activés au-dessus."
             }
           >
             {notif === "granted" ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-ok-pale px-2.5 py-1 text-xs font-semibold text-ok">
-                <Check className="h-3.5 w-3.5" /> Activées
-              </span>
+              <Switch on={deviceOn} label="Notifications de l’ordinateur" onChange={flipDevice} />
             ) : notif === "default" ? (
               <Button size="sm" onClick={() => void enable()}>
                 Activer

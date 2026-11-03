@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { docKind, drivePathsIn, isHiddenInChat, normDrivePath, turnDocs } from "./drive-links.ts";
+import { citedFolder, docKind, drivePathsIn, FOLDER_BARE, FOLDER_CODE, isHiddenInChat, normDrivePath, noteFolder, openTarget, turnDocs } from "./drive-links.ts";
 
 test("the paths a reply names, in order, once each, in one spelling", () => {
   const text = [
@@ -11,6 +11,18 @@ test("the paths a reply names, in order, once each, in one spelling", () => {
   ].join("\n");
   assert.deepEqual(drivePathsIn(text), ["~/Livrables/Kouassi/Devis Yao.pdf", "~/Livrables/Kouassi/pipeline.xlsx", "~/Livrables/Kouassi/Note de visite.docx"]);
   assert.equal(normDrivePath("/home/node/Livrables/A%20B.pdf"), "~/Livrables/A B.pdf");
+});
+
+test("a path written from the drive itself, without ~/, is a file too (Leslie, 28/10)", () => {
+  const text = "Le détail est ici : Livrables/Djeneba/Reunions/2026-10-28_comptes-rendus.md.\nEt `Livrables/Djeneba/plan.xlsx`";
+  assert.deepEqual(drivePathsIn(text), ["~/Livrables/Djeneba/Reunions/2026-10-28_comptes-rendus.md", "~/Livrables/Djeneba/plan.xlsx"]);
+  assert.equal(normDrivePath("Livrables/A.pdf"), "~/Livrables/A.pdf");
+  // A note gets no card, but its name opens its folder; memory stays unlinked.
+  assert.equal(noteFolder("Livrables/Djeneba/Reunions/2026-10-28_comptes-rendus.md"), "~/Livrables/Djeneba/Reunions");
+  assert.equal(noteFolder("~/Livrables/Koffi/_memoire/client.md"), null);
+  assert.equal(noteFolder("~/Livrables/Koffi/deck.pdf"), null);
+  // A folder stays a folder.
+  assert.deepEqual(drivePathsIn("Dossier : Livrables/Fatima/tajplast/"), []);
 });
 
 test("formats", () => {
@@ -59,4 +71,32 @@ test("a note (.md) or a memory file named in the reply or by a MEDIA tag gets no
   const docs = turnDocs(text, [], ["~/Livrables/Koffi/notes.md", "~/Livrables/Koffi/Mémoire/suivi.docx", "~/Livrables/Koffi/deck.pdf"]);
   assert.deepEqual(docs.map((d) => d.name), ["affiche.png", "deck.pdf"]);
   assert.ok(isHiddenInChat("~/Livrables/Koffi/brief.MD") && !isHiddenInChat("~/Livrables/Koffi/deck.pdf"));
+  assert.ok(isHiddenInChat("~/Livrables/Koffi/compte-rendu.txt") && isHiddenInChat("Livrables/Koffi/notes.TXT"));
+});
+
+test("a folder the Expert cites, in backticks or bare with its slash", () => {
+  const text = "Dossier local : `Livrables/Fatima/tajplast/flyers-modernes/`\nAussi ~/Livrables/Koffi/stand/ et `~/Livrables/Pièces jointes` ici.";
+  const code = [...text.matchAll(FOLDER_CODE)].map((m) => citedFolder(m[1]));
+  assert.deepEqual(code, ["~/Livrables/Fatima/tajplast/flyers-modernes", "~/Livrables/Pièces jointes"]);
+  const bare = [...text.matchAll(FOLDER_BARE)].map((m) => citedFolder(m[2]));
+  assert.deepEqual(bare, ["~/Livrables/Koffi/stand"]);
+});
+
+test("a file, or a memory folder, is not a folder link", () => {
+  assert.equal(citedFolder("~/Livrables/Fatima/post.docx"), null);
+  assert.equal(citedFolder("/home/node/Livrables/Fatima/_memoire/"), null);
+  assert.equal(citedFolder("/home/node/Livrables/Fatima/"), "~/Livrables/Fatima");
+});
+
+test("openTarget: an address of /livrables/ouvrir names a drive file or folder, nothing else", () => {
+  assert.deepEqual(openTarget("https://unifood.app.yelema.ai/livrables/ouvrir?p=Livrables%2FFatima%2Fplan.pdf"), { path: "~/Livrables/Fatima/plan.pdf", file: true });
+  assert.deepEqual(openTarget("/livrables/ouvrir?p=~/Livrables/Fatima/campagne"), { path: "~/Livrables/Fatima/campagne", file: false });
+  assert.equal(openTarget("https://x.app.yelema.ai/livrables/ouvrir?p=Livrables/../.hermes/a.txt"), null);
+  assert.equal(openTarget("https://x.app.yelema.ai/livrables/ouvrir?p=/home/node/.hermes/a.txt"), null);
+  assert.equal(openTarget("https://example.com/autre?p=Livrables/a.pdf"), null);
+});
+
+test("drivePathsIn: a deliverable given as an app address is a cited file", () => {
+  const text = "Voici le devis : https://unifood.app.yelema.ai/livrables/ouvrir?p=Livrables%2FKouassi%2Fdevis_v2.xlsx et le dossier https://unifood.app.yelema.ai/livrables/ouvrir?p=Livrables%2FKouassi";
+  assert.deepEqual(drivePathsIn(text), ["~/Livrables/Kouassi/devis_v2.xlsx"]);
 });

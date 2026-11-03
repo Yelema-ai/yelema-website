@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useConversationStatus } from "@/components/activity/hooks";
-import { Archive, CheckCheck, ChevronRight, Link2, Loader2, MoreHorizontal, Pencil, Pin, PinOff, Plus, Repeat, RotateCw, Search, Trash2, X } from "lucide-react";
+import { Archive, ChevronRight, Link2, Loader2, MoreHorizontal, Pencil, Pin, PinOff, Plus, Repeat, RotateCw, Search, Trash2, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNotifications } from "@/components/activity/ActivityProvider";
 import { convKey } from "@/lib/activity";
@@ -67,6 +67,7 @@ function groupSessions(sessions: ChatSession[]): { label: string; items: ChatSes
 
 // No « Archivées » here (Leslie, 25/10): archived conversations are found under Toutes les conversations.
 type Filter = "all" | "unread" | "routines";
+const PINNED = "Épinglées";
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "Tout" },
   { id: "unread", label: "Non lues" },
@@ -132,8 +133,11 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     let found = q ? sessions.filter((s) => fold(s.routine ?? s.title ?? "Nouvelle conversation").includes(q)) : sessions;
     if (filter === "unread") found = found.filter((s) => statusOf(s.session_id) === "unread");
     if (filter === "routines") found = found.filter((s) => s.routine);
+    // « Tout » is the member's own conversations (Leslie, 29/10): routines live under « Routines », and an
+    // unread one still shows in « Non lues » and the bell. A search still finds them.
+    if (filter === "all" && !q) found = found.filter((s) => !s.routine);
     const { pinned, rest } = arrange(found, (s) => convKey(agentId, profile, s.session_id), marks);
-    return [...(pinned.length ? [{ label: "Épinglées", items: pinned }] : []), ...groupSessions(rest)];
+    return [...(pinned.length ? [{ label: PINNED, items: pinned }] : []), ...groupSessions(rest)];
   }, [sessions, query, filter, statusOf, marks, agentId, profile]);
 
   function archive(s: ChatSession) {
@@ -212,6 +216,7 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     // A routine run is named after its routine; the repeat icon says what it is.
     const label = s.routine ?? (s.title || "Nouvelle conversation");
     const status = statusOf(s.session_id);
+    const pinned = pinnedIds.has(keyOf(s));
     if (editingId === s.session_id)
       return (
         <input
@@ -240,16 +245,18 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           onDoubleClick={() => startRename(s.session_id, s.title)}
           className={cn(
             "flex min-h-10 w-full select-none items-center gap-2 rounded-[10px] px-2.5 py-2 text-left text-[13.5px] transition-colors",
-            highlightedSessionId === s.session_id ? "bg-soft-2 font-semibold text-ink" : "text-ink-2 hover:bg-soft"
+            highlightedSessionId === s.session_id ? "bg-soft-2 font-semibold text-ink" : pinned ? "bg-tint text-ink hover:bg-soft" : "text-ink-2 hover:bg-soft"
           )}
         >
+          {/* A pinned thread carries its pin and a light tint (Leslie, 31/10): it stands out from the dates. */}
+          {pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-brand-ink" aria-label="Épinglée" />}
           {s.routine && <Repeat className="h-3.5 w-3.5 shrink-0 text-ink-3" aria-label="Routine" />}
           <span className="min-w-0 flex-1">
             <span className={cn("block truncate", status === "unread" && "font-semibold text-ink")}>{label}</span>
             {status && <ConversationBadge status={status} />}
           </span>
-          {/* The date gives way to the row's actions on hover. */}
-          <span className="shrink-0 text-[11.5px] font-normal tabular-nums text-ink-3 group-hover:invisible group-has-[[data-state=open]]:invisible pointer-coarse:mr-7 pointer-coarse:group-hover:visible pointer-coarse:group-has-[[data-state=open]]:visible">{shortWhen(activeAt(s))}</span>
+          {/* The date gives way to the row's actions on hover, and while « … » holds the focus (back from its menu). */}
+          <span className="shrink-0 text-[11.5px] font-normal tabular-nums text-ink-3 group-hover:invisible group-has-[[data-state=open]]:invisible group-has-[:focus-visible]:invisible pointer-coarse:mr-7 pointer-coarse:group-hover:visible pointer-coarse:group-has-[[data-state=open]]:visible">{shortWhen(activeAt(s))}</span>
         </button>
         {/* Renommer, Épingler, Copier, Archiver and Supprimer behind « … »: on hover with a mouse, always shown on a touch screen. */}
         <DropdownMenu>
@@ -311,6 +318,20 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           </button>
           </span>
         </div>
+        {/* An expert's new conversation starts from its list of conversations (Leslie, 28/10). */}
+        {profile && (
+          <button
+            type="button"
+            onClick={() => {
+              startNewChat();
+              onNavigate?.();
+            }}
+            className="mx-1 mb-2.5 inline-flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-brand/60 bg-surface text-[13.5px] font-semibold text-brand-ink transition-colors hover:bg-tint"
+          >
+            <Plus className="h-4 w-4" />
+            Nouvelle conversation
+          </button>
+        )}
         {sessionsError ? (
           <p className="px-2.5 pb-2 text-xs text-ink-3">
             Liste non mise à jour : l’instance ne répond pas.{" "}
@@ -344,7 +365,9 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
         )}
 
         {sessions.length > 0 && (
-          <div role="group" aria-label="Filtrer les conversations" className="mx-1 mb-2 flex flex-wrap gap-1.5 border-b border-line pb-2.5">
+          // One bar across the column, set on the search field (Leslie, 27/10, choice C): three equal places.
+          // No « Tout marquer comme lu » here (Leslie, 31/10): it sits at the top of the « Non lues » list.
+          <div role="group" aria-label="Filtrer les conversations" className="mx-1 mb-2.5 grid grid-cols-3 gap-0.5 rounded-xl bg-soft p-[3px]">
             {FILTERS.map(({ id, label }) => (
               <button
                 key={id}
@@ -352,29 +375,29 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                 onClick={() => setFilter(id)}
                 aria-pressed={filter === id}
                 className={cn(
-                  "h-8 whitespace-nowrap rounded-full border px-2.5 text-[12.5px] font-semibold transition-colors",
-                  filter === id ? "border-brand/40 bg-tint text-brand-ink" : "border-line text-ink-2 hover:bg-soft"
+                  "inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-[9px] px-2 text-[12.5px] font-semibold transition-colors",
+                  filter === id ? "bg-surface text-brand-ink shadow-[0_1px_3px_rgba(20,10,60,0.12)]" : "text-ink-2 hover:text-ink"
                 )}
               >
                 {label}
-                {id === "unread" && unreadCount > 0 && <span className="ml-1 tabular-nums">{unreadCount}</span>}
+                {/* A dot, not a number (Leslie, 28/10, A): the count is on the bell. After the word, on its
+                    line (Leslie, 31/10), never in the tab's corner. */}
+                {id === "unread" && unreadCount > 0 && <span className="size-1.5 shrink-0 rounded-full bg-brand" aria-label={`${unreadCount} non lues`} />}
               </button>
             ))}
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={() => markRead(unreadIds.map((id) => convKey(agentId, profile, id)))}
-                title="Tout marquer comme lu"
-                aria-label="Tout marquer comme lu"
-                className="ml-auto grid size-8 place-items-center rounded-full text-ink-3 hover:bg-soft hover:text-ink"
-              >
-                <CheckCheck className="h-4 w-4" />
-              </button>
-            )}
           </div>
         )}
 
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {filter === "unread" && unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={() => markRead(unreadIds.map((id) => convKey(agentId, profile, id)))}
+              className="mb-1 ml-auto flex min-h-9 items-center rounded-[10px] px-2.5 text-[12.5px] font-semibold text-brand-ink hover:bg-soft"
+            >
+              Tout marquer comme lu
+            </button>
+          )}
           {loadingSessions ? (
             <div className="flex items-center gap-2 px-2.5 py-2 text-xs text-ink-3">
               <Loader2 className="h-3 w-3 animate-spin" /> Chargement…
@@ -393,6 +416,7 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                     className="flex min-h-9 w-full items-center gap-1.5 rounded-[10px] px-2 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 hover:bg-soft"
                   >
                     <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", !shut && "rotate-90")} aria-hidden />
+                    {g.label === PINNED && <Pin className="h-3.5 w-3.5 text-brand-ink" aria-hidden />}
                     {g.label}
                     <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-soft px-1.5 text-[11px] tabular-nums tracking-normal">{g.items.length}</span>
                   </button>
@@ -403,7 +427,7 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           )}
           {!loadingSessions && sessions.length > 0 && groups.length === 0 && (
             <p className="px-2.5 py-2 text-[13px] text-ink-3">
-              {query.trim() ? "Aucune conversation ne correspond." : filter === "unread" ? "Tout est lu." : "Aucune routine pour l’instant."}
+              {query.trim() ? "Aucune conversation ne correspond." : filter === "unread" ? "Tout est lu." : filter === "all" ? "Aucune conversation pour l’instant." : "Aucune routine pour l’instant."}
             </p>
           )}
         </div>

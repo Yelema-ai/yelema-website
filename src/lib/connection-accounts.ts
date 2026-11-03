@@ -48,17 +48,20 @@ export function accountLabel(c: IntegrationConnection, index: number): string {
   return `Compte ${index + 1} · ${tail}`;
 }
 
-/** What the screen calls an account: the member's label, else its e-mail, else its name, else its rank. */
+/** What the screen calls an account: the member's label, else its e-mail, else its name, else a chosen alias, else its rank. */
 export function accountTitle(c: IntegrationConnection, index: number): string {
-  return c.label || c.email || c.accountName || c.alias || `Compte ${index + 1}`;
+  return c.label || c.email || c.accountName || (c.alias && !DRAWN_ALIAS.test(c.alias) ? c.alias : null) || `Compte ${index + 1}`;
 }
+
+// The alias drawn when the member chose none (`gmail-a1b2c3`, older `gmail-2`): no name for anyone.
+const DRAWN_ALIAS = /^[a-z0-9_]+-(?:[0-9a-f]{6}|\d+)$/;
 
 /** What the back office keeps about each account, laid over Composio's list (unknown ids stay as they are). */
 export function withAccountDetails(conns: readonly IntegrationConnection[], details: readonly BoAccountDetails[]): IntegrationConnection[] {
   const byId = new Map(details.map((d) => [d.id, d]));
   return conns.map((c) => {
     const d = byId.get(c.id);
-    return d ? { ...c, email: d.email, accountName: d.name, label: d.label, isDefault: d.isDefault, addedBy: d.addedBy } : c;
+    return d ? { ...c, email: d.email ?? c.email ?? null, accountName: d.name ?? c.accountName ?? null, label: d.label, isDefault: d.isDefault, addedBy: d.addedBy } : c;
   });
 }
 

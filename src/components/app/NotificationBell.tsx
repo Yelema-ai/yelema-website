@@ -69,7 +69,7 @@ export function NotificationBell() {
               const name = company ? "Chat d’entreprise" : who.displayName;
               const title =
                 i.kind === "routine"
-                  ? routineDoneTitle(i.routine)
+                  ? routineDoneTitle(i.routine, i.silent)
                   : i.kind === "failed"
                     ? isAccountToTopUp(i.text)
                       ? "Votre compte d’IA est à recharger"

@@ -113,10 +113,23 @@ test("routine runs: first look sets the mark, later finished runs are new", () =
   assert.deepEqual(detectRoutineRuns(later.since, [{ session_id: "c3", routine: "Point", last_active: 360 }]).fresh, []);
 });
 
+test("routine runs: a run whose outcome is not read yet waits for the next look", () => {
+  const next = detectRoutineRuns(100_000, [
+    { session_id: "c2", routine: "Mémoire", last_active: 200, message_count: 2, silent: false, pending: true },
+  ]);
+  assert.deepEqual(next, { since: 100_000, fresh: [] });
+  const later = detectRoutineRuns(next.since, [{ session_id: "c2", routine: "Mémoire", last_active: 200, message_count: 2, silent: true }]);
+  assert.deepEqual(later.fresh.map((r) => [r.session_id, r.silent]), [["c2", true]]);
+});
+
 test("a routine run marks its conversation unless it is on screen", () => {
   const key = convKey("a1", "p", "cron_x");
   assert.equal(conversationStatus(routineFinished(EMPTY_ACTIVITY, key, true, 1).state, key), "unread");
   assert.equal(routineFinished(view(EMPTY_ACTIVITY, key), key, true, 1).notice, null);
+  // Nothing to report: a line in the bell, no unread mark (no dot on the expert).
+  const quiet = routineFinished(EMPTY_ACTIVITY, key, true, 1, true);
+  assert.equal(conversationStatus(quiet.state, key), null);
+  assert.notEqual(quiet.notice, null);
 });
 
 test("persistence round-trips one instance and rejects junk", () => {
@@ -182,4 +195,12 @@ test("routineDoneTitle never says « routine » twice", () => {
   assert.equal(routineDoneTitle("Calendrier éditorial"), "Routine « Calendrier éditorial » terminée");
   assert.equal(routineDoneTitle("Routine du point de 17 h"), "« Routine du point de 17 h » terminée");
   assert.equal(routineDoneTitle(null), "Routine terminée");
+});
+
+test("a quiet run's unread mark saved before is dropped on load, its bell line kept", () => {
+  const k = "a1|p1|s9";
+  const raw = JSON.stringify({ unread: { [k]: { at: 5, kind: "routine" } }, notes: { [k]: { at: 5, kind: "routine", text: "", routine: "Rangement", silent: true } } });
+  const p = parsePersisted(raw, "a1", 10);
+  assert.deepEqual(p.unread, {});
+  assert.equal(p.notes[k]?.silent, true);
 });

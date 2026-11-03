@@ -1,7 +1,8 @@
 "use client";
 
+import { isNumberCell, isTotalRow } from "@/lib/sheet-cells";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Download, File, FileImage, FileSpreadsheet, FileText, Presentation, type LucideIcon } from "lucide-react";
+import { Download, File, Loader2, Palette, FileImage, FileSpreadsheet, FileText, Presentation, type LucideIcon } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { isMemoryFolder } from "@/lib/drive-order";
 import type { DocKind, DriveFile, TurnDoc } from "@/lib/drive-links";
@@ -10,6 +11,10 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { FilePreview, ReducedImage } from "@/components/files/FilePreview";
 import { contentUrl, formatBytes, thumbUrl, type FileEntry } from "@/components/files/types";
+import { fileLabel } from "@/lib/drive-paths";
+import { cachedFetch, forget } from "@/lib/client-cache";
+import type { MemoryList } from "@/lib/memory";
+import { toast } from "sonner";
 
 const KINDS: Record<DocKind, { label: string; icon: LucideIcon; tone: string }> = {
   pdf: { label: "PDF", icon: FileText, tone: "bg-[#FCE8E4] text-[#B4321F] dark:bg-[#3b2520] dark:text-[#f4a28c]" },
@@ -49,6 +54,7 @@ export function DocumentCards({ agentId, docs }: { agentId: string; docs: TurnDo
               <Preview agentId={agentId} doc={d} />
             </button>
             <FileRow agentId={agentId} doc={d} />
+            {isCharteDoc(d) && <CharteAdopt agentId={agentId} doc={d} />}
           </li>
         ))}
       </ul>
@@ -66,16 +72,62 @@ function FileRow({ agentId, doc }: { agentId: string; doc: TurnDoc }) {
         <Icon className="size-5" />
       </span>
       <span className="min-w-0 grow">
-        <span title={doc.name} className="block truncate text-[14px] font-semibold text-ink">
-          {doc.name}
+        <span title={fileLabel(doc)} className="block truncate text-[14px] font-semibold text-ink">
+          {fileLabel(doc)}
         </span>
         <span className="block text-[12.5px] text-ink-3">{size ? `${kindLabel(doc)}, ${size}` : kindLabel(doc)}</span>
       </span>
       <Button asChild className="h-10 shrink-0 rounded-xl px-3 sm:px-4">
-        <a href={contentUrl(agentId, doc.path, "attachment")} download={doc.name} aria-label={`Télécharger ${doc.name}`}>
+        <a href={contentUrl(agentId, doc.path, "attachment")} download={fileLabel(doc)} aria-label={`Télécharger ${fileLabel(doc)}`}>
           <Download /> <span className="hidden min-[400px]:inline">Télécharger</span>
         </a>
       </Button>
+    </div>
+  );
+}
+
+// A brand book an Expert delivered (« Charte graphique… », Koffi's /charte): whoever may deposit for the
+// whole company makes it the company's in one click; the app copies it into the Contexte, as a new
+// version when one is there (Leslie, 01/11: the Expert writes nothing in the memory himself).
+export const isCharteDoc = (doc: { name: string }) => /charte\s+graphique/i.test(doc.name) && !/\.(gdoc|gsheet|gslides)$/i.test(doc.name);
+
+export function CharteAdopt({ agentId, doc }: { agentId: string; doc: { name: string; path: string } }) {
+  const [memory, setMemory] = useState<MemoryList | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    cachedFetch("memory-items", () => apiFetch<MemoryList>("/api/memory/items"), 60_000)
+      .then(setMemory)
+      .catch(() => setMemory(null));
+  }, []);
+  if (!memory?.canDepositForAll) return null;
+  const current = memory.items.find((i) => i.kind === "document" && /charte/i.test(i.title));
+  if (current?.fileName === doc.name && !done) return null;
+  async function adopt() {
+    setBusy(true);
+    try {
+      await apiFetch("/api/memory/charte", { method: "POST", body: JSON.stringify({ agentId, path: doc.path, replace: current?.id ?? null }) });
+      forget("memory-items");
+      setDone(true);
+      toast.success("C’est la charte de l’entreprise : vos Experts l’appliquent désormais.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-3 rounded-2xl bg-tint px-3 py-2.5">
+      <Palette className="size-5 shrink-0 text-brand-ink" />
+      <span className="min-w-0 grow basis-40 text-[13.5px] text-ink-2">
+        {done ? "Dans le Contexte : tous vos Experts l’appliquent." : "Pour que tous vos Experts l’appliquent :"}
+      </span>
+      {!done && (
+        <Button size="sm" className="h-10 rounded-xl max-sm:w-full" disabled={busy} onClick={() => void adopt()}>
+          {busy && <Loader2 className="animate-spin" />}
+          En faire la charte de l’entreprise
+        </Button>
+      )}
     </div>
   );
 }
@@ -87,7 +139,7 @@ function FormatThumb({ doc, failed }: { doc: TurnDoc; failed?: boolean }) {
   return (
     <span className={cn("flex size-full flex-col items-center justify-center gap-3 px-6 text-center", tone)}>
       <Icon className="size-16" strokeWidth={1.3} />
-      <span className="line-clamp-2 max-w-sm text-[14px] font-semibold">{doc.name}</span>
+      <span className="line-clamp-2 max-w-sm text-[14px] font-semibold">{fileLabel(doc)}</span>
       {failed && <span className="text-[13px] opacity-80">Aperçu indisponible. Téléchargez le fichier pour l’ouvrir.</span>}
     </span>
   );
@@ -246,9 +298,9 @@ function Table({ sheet, rows, full }: { sheet: string | null; rows: string[][]; 
         <table className="w-full border-collapse text-[12.5px]">
           <tbody>
             {rows.map((r, i) => (
-              <tr key={i} className={i === 0 ? "bg-[#E3F4EA] font-semibold" : undefined}>
+              <tr key={i} className={i === 0 ? "bg-[#E3F4EA] font-semibold" : i > 0 && isTotalRow(r) ? "bg-[#f6f6f9] font-semibold" : undefined}>
                 {Array.from({ length: width }, (_, j) => (
-                  <td key={j} className="max-w-[12rem] truncate border border-[#e3e3ea] px-2 py-1.5">
+                  <td key={j} className={cn("max-w-[12rem] truncate border border-[#e3e3ea] px-2 py-1.5", i > 0 && isNumberCell(r[j] ?? "") && "text-right tabular-nums")}>
                     {r[j] ?? ""}
                   </td>
                 ))}
@@ -374,29 +426,6 @@ const renderDocx: Render = async (data, _doc, _width, full) => {
 
 // --- PowerPoint: each slide's text, title first, on a 16:9 card (the first one in the chat) --------
 
-const slideNo = (path: string) => Number(path.match(/slide(\d+)\.xml$/)?.[1] ?? 0);
-
-async function readPptx(data: ArrayBuffer): Promise<string[][]> {
-  const JSZip = (await import("jszip")).default;
-  const zip = await JSZip.loadAsync(data);
-  const parts = Object.keys(zip.files)
-    .filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p))
-    .sort((a, b) => slideNo(a) - slideNo(b))
-    .slice(0, 60);
-  const slides: string[][] = [];
-  for (const p of parts) {
-    const part = zip.file(p);
-    if (((part as unknown as { _data?: { uncompressedSize?: number } } | null)?._data?.uncompressedSize ?? 0) > MAX_XML_PART_BYTES) continue;
-    const xml = new DOMParser().parseFromString((await part?.async("string")) ?? "", "application/xml");
-    // One line per paragraph (a:p), its runs (a:t) joined.
-    const lines = [...xml.getElementsByTagName("a:p")]
-      .map((para) => [...para.getElementsByTagName("a:t")].map((t) => t.textContent ?? "").join("").trim())
-      .filter(Boolean);
-    slides.push(lines);
-  }
-  if (!slides.length) throw new Error("no slide");
-  return slides;
-}
 
 function Slide({ lines, n, of }: { lines: string[]; n: number; of: number }) {
   const [title, ...rest] = lines;
@@ -415,21 +444,14 @@ function Slide({ lines, n, of }: { lines: string[]; n: number; of: number }) {
   );
 }
 
+// Each slide drawn as it looks (pictures, text boxes, background); one with nothing drawable shows its text.
 const renderPptx: Render = async (data, _doc, _width, full) => {
-  const slides = await readPptx(data);
-  if (!full)
-    return (
-      <span className="flex size-full items-center justify-center bg-[#FDEEDF] p-5">
-        <Slide lines={slides[0]} n={1} of={slides.length} />
-      </span>
-    );
-  return (
-    <span className="flex size-full flex-col gap-4 overflow-auto bg-[#f6f6f9] p-4">
-      {slides.map((lines, i) => (
-        <Slide key={i} lines={lines} n={i + 1} of={slides.length} />
-      ))}
-    </span>
-  );
+  const { readSlides, SlideDrawing, drawable } = await import("./pptx-slides");
+  const slides = await readSlides(data, MAX_XML_PART_BYTES, full ? undefined : 1);
+  const one = (i: number) =>
+    drawable(slides[i]) ? <SlideDrawing key={i} slide={slides[i]} n={i + 1} of={slides.length} /> : <Slide key={i} lines={slides[i].lines} n={i + 1} of={slides.length} />;
+  if (!full) return <span className="flex size-full items-center justify-center bg-[#FDEEDF] p-5">{one(0)}</span>;
+  return <span className="flex size-full flex-col gap-4 overflow-auto bg-[#f6f6f9] p-4">{slides.map((_, i) => one(i))}</span>;
 };
 
 // The expert's drive folder, and the subfolders changed since `since`, one level down: where the

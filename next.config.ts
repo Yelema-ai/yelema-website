@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
       // Before any render: a redirect from the page would render the whole shell first.
       { source: "/integrations", destination: "/integrations/connecteurs", permanent: false },
       { source: "/administration", destination: "/parametres/membres", permanent: false },
+      { source: "/integrations/voix", destination: "/integrations/modeles#voix", permanent: false },
       { source: "/administration/membres", destination: "/parametres/membres", permanent: false },
       { source: "/administration/memoire", destination: "/parametres/entreprise", permanent: false },
       { source: "/administration/:tab(instances|facturation|consommation|entreprise|organigramme)", destination: "/parametres/:tab", permanent: false },

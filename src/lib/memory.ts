@@ -18,6 +18,10 @@ export interface MemoryItem {
   error: string | null;
   sentAt: string | null;
   canEdit: boolean;
+  /** A website: its address (read again every week). */
+  url?: string | null;
+  /** A document replaced since its first deposit: its version number (2, 3…). */
+  version?: number | null;
 }
 
 export interface MemoryList {
@@ -29,7 +33,9 @@ export interface MemoryList {
 
 export interface MemoryNote {
   title: string;
-  note: string;
+  note?: string;
+  /** A website instead of a note. */
+  url?: string;
   description?: string;
   unit?: string | null;
 }

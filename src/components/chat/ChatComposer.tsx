@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Check, Loader2, Mic, Send, Square, Trash2 } from "lucide-react";
+import { Check, Info, Loader2, Mic, Send, Square, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { AttachButton, AttachmentTray } from "./Attachments";
@@ -13,9 +13,12 @@ import { useChatContext } from "./ChatProvider";
 import { findModel, prettyModelLabel, type ChatSettings } from "./types";
 import type { SendSettings } from "./useChat";
 import { useDictation } from "./useDictation";
+import { rememberSettings, rememberedSettings } from "./rememberedSettings";
 import { useCallState } from "@/components/voice/CallProvider";
 import { useVoices } from "@/components/voice/useVoices";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
+import { commandsOf, filterCommands, missingFor, type ExpertCommand } from "@/lib/expert-commands";
+import { CommandMenu } from "./CommandMenu";
 
 interface Props {
   agentId: string;
@@ -33,12 +36,26 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
   const [text, setText] = useState("");
   // model + provider are always chosen together (one selection); effort is independent. Group
   // them as the composer's outgoing ChatSettings so send is just `{ ...settings, files }`.
-  const [settings, setSettings] = useState<ChatSettings>({ model: null, provider: null, reasoningEffort: null });
+  const [settings, setSettingsState] = useState<ChatSettings>({ model: null, provider: null, reasoningEffort: null });
+  // The last choice, from any screen, once this Expert's models are known: a model it does not offer
+  // falls back to its default, the effort always carries over.
+  const setSettings = (next: (s: ChatSettings) => ChatSettings) =>
+    setSettingsState((s) => {
+      const v = next(s);
+      rememberSettings(v);
+      return v;
+    });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Each expert's profile has its own model configuration.
   const { profile } = useChatContext();
   const { groups, defaultModel, loading } = useChatModels(agentId, profile);
+  useEffect(() => {
+    if (loading) return;
+    const r = rememberedSettings();
+    const known = findModel(groups, r.model, r.provider);
+    setSettingsState({ model: known ? r.model : null, provider: known ? r.provider : null, reasoningEffort: r.reasoningEffort });
+  }, [loading, groups]);
 
   useEffect(() => {
     if (focusToken === 0) return;
@@ -67,7 +84,21 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
   // Dictation goes through the speech service: offered only where voice is on (voices are offered).
   const canDictate = useVoices().length > 0;
   const { experts } = useExpertsContext();
-  const expertKey = experts.find((e) => e.agentId === agentId && e.profileId === profile)?.catalogueKey ?? null;
+  const expert = experts.find((e) => e.agentId === agentId && e.profileId === profile);
+  const expertKey = expert?.catalogueKey ?? null;
+  // « / » opens the Expert's commands; a command picked shows as a chip and says what it still needs.
+  const commands = useMemo(() => commandsOf(expertKey, expert?.driveFolder ?? expert?.displayName), [expertKey, expert?.driveFolder, expert?.displayName]);
+  const [chosen, setChosen] = useState<ExpertCommand | null>(null);
+  const [active, setActive] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+  const menuOpen = !chosen && !dismissed && commands.length > 0 && /^\/\S*$/.test(text);
+  const shown = useMemo(() => (menuOpen ? filterCommands(commands, text.slice(1)) : []), [menuOpen, commands, text]);
+  useEffect(() => setActive(0), [text]);
+  const pick = (c: ExpertCommand) => {
+    setChosen(c);
+    setText("");
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
   const dictation = useDictation({
     expert: expertKey,
     onText: (said) => {
@@ -88,18 +119,49 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
   }, [onCall, dictation]);
 
   // Sending stays open while the expert answers: the message joins the running turn, or waits behind it.
-  const canSend = (text.trim().length > 0 || att.hasFiles) && !att.blocksSend && !dictating;
+  const missing = chosen ? missingFor(chosen, text, att.hasFiles) : null;
+  const canSend = (chosen ? !missing : text.trim().length > 0 || att.hasFiles) && !att.blocksSend && !dictating;
 
   const submit = () => {
-    const trimmed = text.trim();
-    if ((!trimmed && !att.hasFiles) || att.blocksSend) return;
+    const typed = text.trim();
+    if (chosen ? missing !== null : !typed && !att.hasFiles) return;
+    if (att.blocksSend) return;
+    const trimmed = chosen ? `/${chosen.cmd}${typed ? ` ${typed}` : ""}` : typed;
     const attachments = att.takeAttachments();
     onSend(trimmed, { ...settings, files: attachments.map((a) => a.path), attachments });
     setText("");
+    setChosen(null);
+    setDismissed(false);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (menuOpen) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (shown.length) setActive((i) => (i + (e.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length);
+        return;
+      }
+      if ((e.key === "Enter" && !e.shiftKey) || e.key === "Tab") {
+        if (shown[active]) {
+          e.preventDefault();
+          pick(shown[active]);
+          return;
+        }
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setDismissed(true);
+        return;
+      }
+    }
+    // Backspace in an empty field takes the command back off.
+    if (e.key === "Backspace" && chosen && !text) {
+      e.preventDefault();
+      setChosen(null);
+      setText("/");
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submit();
@@ -110,9 +172,38 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
     <div
       className={cn(
         "@container mx-auto w-full rounded-[22px] border border-line bg-surface shadow-[0_8px_30px_rgb(48_22_103_/_0.06)] transition-[border-color,box-shadow] focus-within:border-brand/30",
-        large ? "max-w-2xl" : "max-w-3xl"
+        large ? "max-w-2xl" : "max-w-3xl",
+        "relative"
       )}
     >
+      {menuOpen && (
+        <CommandMenu
+          name={expert?.displayName ?? "l’Expert"}
+          items={shown}
+          total={commands.length}
+          active={active}
+          onHover={setActive}
+          onPick={pick}
+        />
+      )}
+      {chosen && (
+        <div className="px-4 pt-3">
+          <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-tint px-2 py-0.5 text-sm font-semibold text-brand-ink">
+            <span className="truncate">{chosen.label}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setChosen(null);
+                textareaRef.current?.focus();
+              }}
+              aria-label="Retirer la commande"
+              className="inline-flex size-5 shrink-0 items-center justify-center rounded hover:bg-brand/10"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        </div>
+      )}
       <textarea
         ref={textareaRef}
         value={text}
@@ -123,13 +214,30 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
         onKeyDown={onKeyDown}
         onPaste={att.handlePaste}
         rows={1}
-        placeholder="Écrivez votre message…"
+        placeholder={
+          chosen
+            ? chosen.example
+              ? `Ex. : ${chosen.example}`
+              : "Ajoutez une précision, ou envoyez"
+            : commands.length > 0
+              ? "Écrivez, ou tapez / pour les commandes"
+              : "Écrivez votre message…"
+        }
         className={cn(
-          "w-full resize-none bg-transparent px-5 pb-2 pt-4 text-ink placeholder:text-ink-3 focus:outline-none",
+          "w-full resize-none bg-transparent px-5 pb-2 text-ink placeholder:text-ink-3 focus:outline-none",
+          chosen ? "pt-2" : "pt-4",
           large ? "min-h-[76px] max-h-[180px] text-[15px] leading-6" : "min-h-[44px] max-h-[180px] text-[15px] leading-relaxed"
         )}
       />
       <AttachmentTray files={att.files} onRemove={att.removeFile} onRetry={att.retryFile} />
+      {missing && (
+        <p className="mx-3 mb-2 flex items-start gap-2 rounded-xl bg-coral-pale px-3 py-2 text-[13px] text-coral-ink">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Il manque {missing}.{chosen?.fileOk ? " Écrivez-le, ou joignez le document." : " Écrivez-le avant d’envoyer."}
+          </span>
+        </p>
+      )}
       {dictating ? (
         <DictationBar dictation={dictation} />
       ) : (

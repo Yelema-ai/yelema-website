@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { callDuration, callHeaders, chosenVoice, expertDefaultVoice, countryFlag, countryName, filterVoices, isCallTranscript, parseVoicePrefs, signalingStep, transcriptOf, findInText, summarySections, frenchSpacing, voiceFacets, type VoiceOption } from "./voice.ts";
+import { callDuration, callShareText, callHeaders, chosenVoice, expertDefaultVoice, countryFlag, countryName, filterVoices, sortVoices, isCallTranscript, parseVoicePrefs, signalingStep, transcriptOf, findInText, summarySections, frenchSpacing, voiceFacets, type VoiceOption } from "./voice.ts";
 
 test("a relayed step is only one the SDK sends, with its own method", () => {
   assert.equal(signalingStep("conv_abc-1", "offer", "POST"), "offer");
@@ -79,8 +79,8 @@ test("gender × country: each row narrows the other; neutral voices only under a
   assert.deepEqual(keys({ gender: null, country: null }), ["claire", "nicolas", "adjoua", "kouame", "mamadou"]);
   assert.deepEqual(keys({ gender: "female", country: "FR" }), ["claire"]);
   assert.deepEqual(keys({ gender: "male", country: null }), ["nicolas", "mamadou"]);
-  assert.deepEqual(voiceFacets(voices, { gender: null, country: null }), { genders: ["female", "male"], countries: ["CI", "FR", "SN"] });
-  assert.deepEqual(voiceFacets(voices, { gender: "female", country: null }).countries, ["CI", "FR"]);
+  assert.deepEqual(voiceFacets(voices, { gender: null, country: null }), { genders: ["female", "male"], countries: ["FR", "CI", "SN"] });
+  assert.deepEqual(voiceFacets(voices, { gender: "female", country: null }).countries, ["FR", "CI"]);
   assert.deepEqual(voiceFacets(voices, { gender: null, country: "SN" }).genders, ["male"]);
   assert.equal(countryName("CI"), "Côte d’Ivoire");
   assert.equal(countryFlag("fr"), "🇫🇷");
@@ -153,4 +153,19 @@ test("the voices kept by the back office: the expert's own over those for all; a
   assert.deepEqual(voicesFor({ "*": { fr: "akissi" } }, "awa"), { fr: "akissi" });
   assert.deepEqual(voicesFor({}, "awa"), {});
   assert.deepEqual(voicePatch("koffi", { fr: "moussa" }), { koffi: { fr: "moussa", en: null } });
+});
+
+test("a shared call reads as a short account, transcript last", () => {
+  const text = callShareText(
+    { summary: ["Point des commandes"], keyPoints: ["3 commandes en retard"], decisions: [], nextSteps: ["Relancer Prosuma"], transcript: [{ who: "user", text: "Le point." }, { who: "expert", text: "Voici." }] },
+    { title: "Commandes Prosuma", meta: "27 oct. · 3 min", expertName: "Salif", memberName: "Leslie" }
+  );
+  assert.equal(text, "Appel avec Salif : Commandes Prosuma\n27 oct. · 3 min\n\nPoints clés\n- 3 commandes en retard\n\nProchaines étapes\n- Relancer Prosuma\n\nTranscription\nLeslie : Le point.\nSalif : Voici.\n");
+  assert.ok(!callShareText({ summary: ["Vu"] }, { title: "T", meta: "", expertName: "S", memberName: "L" }).includes("Transcription"));
+});
+
+test("voices: France first, then countries and first names in French order", () => {
+  const v = (label: string, country: string) => ({ key: label, label, language: "fr" as const, gender: "female" as const, country, previewUrl: "", default: false });
+  assert.deepEqual(sortVoices([v("Aïcha", "CM"), v("Léa", "FR"), v("Akissi", "CI"), v("Adèle", "FR")]).map((x) => x.label), ["Adèle", "Léa", "Aïcha", "Akissi"]);
+  assert.deepEqual(voiceFacets([v("A", "CM"), v("B", "FR"), v("C", "CI")], { gender: null, country: null }).countries, ["FR", "CM", "CI"]);
 });

@@ -67,6 +67,22 @@ export function vaultPath(scope: VaultScope, profile: unknown, handle?: unknown)
   return typeof handle === "string" && HANDLE.test(handle) ? `${base}/${handle}` : null;
 }
 
+/** Une connexion d'un profil, désignée pour un retrait. */
+export type VaultRef = { profile: string; handle: string };
+
+/** Les profils visés par un ajout groupé (1 à 64, bien formés) ; null sinon. */
+export function parseVaultProfiles(v: unknown): string[] | null {
+  if (!Array.isArray(v) || v.length === 0 || v.length > 64) return null;
+  return v.every((p) => typeof p === "string" && PROFILE.test(p)) ? (v as string[]) : null;
+}
+
+/** Les connexions d'un retrait groupé (1 à 256, bien formées) ; null sinon. */
+export function parseVaultRefs(v: unknown): VaultRef[] | null {
+  if (!Array.isArray(v) || v.length === 0 || v.length > 256) return null;
+  const refs = v.map((e) => (e && typeof e === "object" ? (e as Record<string, unknown>) : {})).map((e) => ({ profile: e.profile, handle: e.handle }));
+  return refs.every((r) => typeof r.profile === "string" && PROFILE.test(r.profile) && typeof r.handle === "string" && HANDLE.test(r.handle)) ? (refs as VaultRef[]) : null;
+}
+
 /** Un brouillon tiré d'un corps de requête, avec ses six champs seulement ; null sinon. Bornes larges : le back-office tient les vraies règles. */
 export function parseVaultDraft(body: unknown): VaultDraft | null {
   if (!body || typeof body !== "object") return null;

@@ -341,7 +341,7 @@ export function McpView() {
             </Button>
           )}
           <Button onClick={() => setAdding(true)}>
-            <Plus /> Ajouter un serveur MCP
+            <Plus /> Ajouter un outil
           </Button>
         </div>
       </div>
@@ -386,7 +386,7 @@ export function McpView() {
             <p className="mt-1 max-w-sm text-xs text-ink-3">Ajoutez vos serveurs MCP pour connecter vos sources de données et vos outils à vos Experts.</p>
             <Button onClick={() => setAdding(true)} variant="outline" size="sm" className="mt-4">
               <Plus />
-              Ajouter un serveur MCP
+              Ajouter un outil
             </Button>
           </div>
         )}

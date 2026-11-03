@@ -28,15 +28,16 @@ async function boToken(row: AgentRow): Promise<string | null> {
 }
 
 // Composio's list, with what the back office keeps (e-mail, label, default, author). Without it the list still shows.
+// Both are asked at once (Leslie, 28/10: « connecté, pas connecté » shows late), not one after the other.
 async function connectionsWithDetails(row: AgentRow): Promise<IntegrationConnectionsResult> {
-  const [result, token] = await Promise.all([listConnections(composioUserId(row)), boToken(row)]);
-  if (!token) return result;
-  try {
-    return { connections: withAccountDetails(result.connections, (await backoffice.connectorAccounts(token)).accounts) };
-  } catch (e) {
-    console.warn("[integrations] account details unavailable:", e instanceof Error ? e.message : e);
-    return result;
-  }
+  const details = boToken(row)
+    .then((token) => (token ? backoffice.connectorAccounts(token).then((r) => r.accounts) : null))
+    .catch((e) => {
+      console.warn("[integrations] account details unavailable:", e instanceof Error ? e.message : e);
+      return null;
+    });
+  const [result, accounts] = await Promise.all([listConnections(composioUserId(row)), details]);
+  return accounts ? { connections: withAccountDetails(result.connections, accounts) } : result;
 }
 
 // The back office notes who added the account; a miss only loses the author, never the connection.

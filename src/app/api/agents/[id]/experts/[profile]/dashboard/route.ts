@@ -3,6 +3,7 @@ import { shareForBrowser, shareUrlOf } from "@/lib/dashboard-share";
 import { agent37, instanceFetch } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { fetchCachedDashboardState } from "@/lib/dashboard-cache";
+import { expertDriveFolders } from "@/lib/expert-folders";
 import { getDashboardMeta, isTrustedDashboardUrl } from "@/lib/dashboards";
 import { JSON_TIMEOUT_MS, withTimeout } from "@/lib/fetch-timeout";
 import { memo } from "@/lib/memo";
@@ -99,28 +100,36 @@ async function linkFromSessions(id: string, profile: string): Promise<string | n
   return null;
 }
 
+// A path the state file names, kept only inside the drive and of the expected kind.
+function drivePath(value: unknown, ext: string): string | null {
+  if (typeof value !== "string") return null;
+  const p = value.trim().replace(/^~\//, "");
+  return p.toLowerCase().endsWith(ext) && p.startsWith("Livrables/") && !p.split("/").includes("..") ? p : null;
+}
+
 async function instanceView(id: string, profile: string): Promise<InstanceView> {
-  const capitalized = profile.charAt(0).toUpperCase() + profile.slice(1).toLowerCase();
   const isDjeneba = profile.toLowerCase().includes("djeneba");
-  const defaults = [`Livrables/${capitalized}/Tableau-de-bord`, `Livrables/${profile}/Tableau-de-bord`];
+  // Its own drive folder (« Livrables/Djénéba »), where the pack builds its page in `tableau-de-bord/`.
+  const folders = await expertDriveFolders(profile);
+  const defaults = folders.flatMap((f) => [`Livrables/${f}/tableau-de-bord`, `Livrables/${f}/Tableau-de-bord`, `Livrables/${f}/Tableaux de bord`]);
   const [state, team, defaultFiles] = await Promise.all([
-    fetchCachedDashboardState(id, profile),
+    fetchCachedDashboardState(id, profile, folders),
     isDjeneba
       ? Promise.all(
-          [`Livrables/Djeneba/_memoire/state/tableaux-de-l-equipe.json`, `Livrables/${capitalized}/_memoire/state/tableaux-de-l-equipe.json`, `memory/state/tableaux-de-l-equipe.json`].map((p) => readJsonFile(id, p))
+          [...folders.map((f) => `Livrables/${f}/_memoire/state/tableaux-de-l-equipe.json`), `memory/state/tableaux-de-l-equipe.json`].map((p) => readJsonFile(id, p))
         ).then((all) => all.map((t) => trusted(t?.lien)).find(Boolean) ?? null)
       : Promise.resolve(null),
     deliverableFiles(id, defaults),
   ]);
   const lien = trusted(state?.lien);
-  const folder = lien && typeof state?.fichiers === "string" ? state.fichiers.trim() : "";
-  const own = folder ? await deliverableFiles(id, [`Livrables/${capitalized}/${folder}`.replace(/\/+$/, ""), `Livrables/${profile}/${folder}`.replace(/\/+$/, "")]) : null;
+  const folder = typeof state?.fichiers === "string" ? state.fichiers.trim().replace(/\/+$/, "") : "";
+  const own = folder && !folder.split("/").includes("..") ? await deliverableFiles(id, folders.map((f) => `Livrables/${f}/${folder}`)) : null;
   return {
     lien: lien ?? (await linkFromSessions(id, profile)),
     hebergeur: lien && typeof state?.hebergeur === "string" ? state.hebergeur : "render",
-    maj: lien && typeof state?.maj === "string" ? state.maj : null,
-    pdfPath: own?.pdfPath ?? defaultFiles.pdfPath,
-    htmlPath: own?.htmlPath ?? defaultFiles.htmlPath,
+    maj: typeof state?.maj === "string" ? state.maj : null,
+    pdfPath: drivePath(state?.pdfPath, ".pdf") ?? own?.pdfPath ?? defaultFiles.pdfPath,
+    htmlPath: drivePath(state?.htmlPath, ".html") ?? own?.htmlPath ?? defaultFiles.htmlPath,
     pptxPath: own?.pptxPath ?? defaultFiles.pptxPath,
     teamViewLien: team,
   };

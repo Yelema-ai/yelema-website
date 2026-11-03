@@ -14,6 +14,7 @@ const mockBackend = (over: Partial<YeleBackend> = {}): YeleBackend => ({
   consulterAppelsEtVoix: async (e) => `Voix (${e ?? "tous"}): 12 briefs d'appel prêts.`,
   rechercherDansLaMemoire: async (q, e) => `Recherche '${q}' (${e ?? "tous"}): 3 correspondances.`,
   consulterSkillsExperts: async (e) => `Skills (${e ?? "tous"}): 8 modules métiers.`,
+  trouverCommande: async (b) => `Commande pour ${b ?? "tout"}.`,
   diagnostiquerConfiguration: async () => "Configuration saine: Telegram OK, mémoire OK, secrets masqués.",
   ...over,
 });
@@ -44,6 +45,7 @@ test("yele-mcp: lists the 12 super-power tools", async () => {
     "consulter_appels_et_voix",
     "rechercher_dans_la_memoire",
     "consulter_skills_experts",
+    "trouver_une_commande",
     "diagnostiquer_configuration",
   ]);
 });

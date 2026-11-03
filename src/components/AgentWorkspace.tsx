@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Copy, FolderOpen, Mail, MessageSquare, Pencil, Repeat, Phone } from "lucide-react";
 import { agentTabPath, parseAgentRoute, type AgentTab } from "@/lib/expert-tabs";
@@ -20,7 +20,9 @@ import { expertDisplayName } from "@/lib/experts";
 import { DRIVE_ROOT } from "@/lib/drive-paths";
 import { ChatProvider } from "@/components/chat/ChatProvider";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
-import { ChatView } from "@/components/chat/ChatView";
+import { ChatView, hasScreen } from "@/components/chat/ChatView";
+import { ComputerButton } from "@/components/experts/ExpertComputer";
+import { DashboardButtonFace } from "@/components/experts/ExpertDashboard";
 import { setChatFull, useChatFull, useChatListHidden, useChatSidePanel } from "@/components/chat/chat-layout";
 import { FilesTab } from "@/components/files/FilesTab";
 import { cn } from "@/lib/utils";
@@ -28,6 +30,8 @@ import { CallButton } from "@/components/voice/CallButton";
 import { VoiceButton } from "@/components/voice/VoiceButton";
 import { ExpertCalls } from "@/components/voice/ExpertCalls";
 import { useVoices } from "@/components/voice/useVoices";
+import { NotificationBell } from "@/components/app/NotificationBell";
+import { UpdateBanner } from "@/components/app/DeployStatus";
 
 const TABS: { id: AgentTab; label: string; icon: typeof MessageSquare }[] = [
   // Livrables right after Discussion (Leslie, 25/10), then Appels and E-mails.
@@ -162,11 +166,19 @@ export function AgentWorkspace({
     window.addEventListener("popstate", read);
     return () => window.removeEventListener("popstate", read);
   }, []);
+  // A link into one thread from elsewhere in the app (« Modifier avec » on a file) arrives by router.push.
+  const searchSession = useSearchParams().get("session");
+  useEffect(() => {
+    if (searchSession) setUrlSessionId(searchSession);
+  }, [searchSession]);
 
   // Its member may rename it and change its picture, where the back office keeps them.
   const canEdit = usePublicConfig().authVia === "backoffice" && !!expert?.catalogueKey;
   const [editOpen, setEditOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  // The header's place for Ordinateur and Tableau (the chat renders them there).
+  const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
+  const [dashboardAsked, setDashboardAsked] = useState(false);
   // The phone's tab pills scroll: the current one is brought into view.
   const pillsRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -210,53 +222,57 @@ export function AgentWorkspace({
     >
       <div className="flex min-h-0 flex-1">
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          {/* The expert heads the page, on a computer as on a phone: who (photo with its state dot,
-              the pencil to personalise it), the address to copy, Appeler; then the tabs in one row.
-              Nothing is cut: the header shrinks the name, never a button. */}
+          {/* The expert heads the page in one row on a computer (Leslie, 28/10, variante B): who (photo with
+              the pencil to personalise it, the name with its state beside it, the job), the tabs, then what
+              is its own (Ordinateur, Tableau), Appeler and the bell. On a phone: who and its actions, then
+              the tabs. Nothing is cut: the header shrinks the name, never a button. */}
           <div className="shrink-0 border-b border-line bg-surface">
+            <div className="flex flex-wrap items-center lg:h-16 lg:flex-nowrap lg:gap-5 lg:px-6">
             {expert && (
-              <div className="flex items-center gap-2.5 px-4 pb-1 pt-2.5 lg:gap-4 lg:px-8 lg:pb-3 lg:pt-5">
+              // On a computer the tabs start past the conversations' line, level with the chat's own bar
+              // (Leslie, 29/10): 288px column + the bar's 28px padding, less the header's 24px padding and 20px gap.
+              <div className="order-1 flex min-w-0 flex-1 items-center gap-2.5 px-4 pb-1 pt-2.5 lg:w-[272px] lg:flex-none lg:p-0">
                 <span className="relative shrink-0">
                   <ExpertAvatar expert={expert} size="sm" className="lg:hidden" />
-                  <ExpertAvatar expert={expert} size="lg" className="max-lg:hidden" />
+                  <ExpertAvatar expert={expert} size="md" className="max-lg:hidden" />
                   {(canEdit || (callee && voiceOn)) && (
                     <button
                       type="button"
                       onClick={() => (canEdit ? setEditOpen(true) : setVoiceOpen(true))}
                       title={`Personnaliser ${expertName}`}
                       aria-label={`Personnaliser ${expertName}`}
-                      className="absolute -bottom-0.5 -right-0.5 grid size-4 place-items-center lg:-bottom-1 lg:-right-1 rounded-full bg-ink text-surface ring-2 ring-surface hover:opacity-85 lg:size-7"
+                      className="absolute -bottom-0.5 -right-0.5 grid size-4 place-items-center rounded-full bg-ink text-surface ring-2 ring-surface after:absolute after:-inset-3 after:content-[''] hover:opacity-85 lg:size-5"
                     >
-                      <Pencil className="size-2 lg:size-3.5" />
+                      <Pencil className="size-2 lg:size-2.5" />
                     </button>
                   )}
                 </span>
                 <span className="ml-0.5 min-w-0 flex-1">
-                  <span className="block truncate font-display text-sm font-bold leading-tight text-ink lg:text-[28px]">{expert.displayName}</span>
-                  <span className="mt-0.5 flex min-w-0 items-center gap-3 text-[10px] text-ink-3 lg:mt-1 lg:text-[14px]">
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <span className="truncate font-display text-sm font-bold leading-tight text-ink lg:text-[19px]">{expert.displayName}</span>
+                    {profileId && <ExpertReadiness variant="dot" agentId={agentId} profileId={profileId} expertName={expertName} onOpenTools={() => router.push("/integrations/connecteurs")} className="shrink-0 max-lg:text-[11px]" />}
+                  </span>
+                  <span className="mt-0.5 flex min-w-0 items-center gap-2 text-[10px] text-ink-3 lg:text-[13px]">
                     {expert.role && <span className="truncate max-lg:hidden">{expert.role}</span>}
                     {inbox && (
                       <button
                         type="button"
                         onClick={copyAddress}
-                        title="Copier l’adresse e-mail"
-                        className="flex min-w-0 items-center gap-1.5 text-left hover:text-ink"
+                        title={`Copier l’adresse e-mail : ${inbox.address}`}
+                        aria-label="Copier l’adresse e-mail"
+                        className="flex min-w-0 items-center gap-1.5 text-left hover:text-ink max-lg:-my-2 max-lg:py-2"
                       >
                         <Mail className="size-3.5 shrink-0 max-lg:hidden" />
-                        <span className="truncate">{inbox.address}</span>
-                        <Copy className="size-3 shrink-0" />
+                        <span className="truncate lg:hidden">{inbox.address}</span>
+                        <Copy className="size-3 shrink-0 lg:hidden" />
                       </button>
                     )}
                   </span>
                 </span>
-                {profileId && <ExpertReadiness agentId={agentId} profileId={profileId} expertName={expertName} onOpenTools={() => router.push("/integrations/connecteurs")} className="shrink-0" />}
-                {callee && <CallButton expert={callee} iconOnly className="size-11 shrink-0 rounded-full lg:hidden" />}
-                {callee && <CallButton expert={callee} className="h-11 shrink-0 rounded-full bg-brand px-5 text-[15px] text-on-brand hover:bg-brand/90 max-lg:hidden" />}
               </div>
             )}
-            <nav ref={pillsRef} className="flex items-center gap-1 overflow-x-auto px-4 py-2 max-lg:[mask-image:linear-gradient(to_right,black_82%,transparent)] [scrollbar-width:none] lg:gap-2 lg:px-8 lg:py-0 [&::-webkit-scrollbar]:hidden">
+            <nav ref={pillsRef} className="order-3 flex w-full items-center gap-0.5 overflow-x-auto px-2.5 py-2 max-[389px]:[mask-image:linear-gradient(to_right,black_82%,transparent)] sm:gap-1 sm:px-4 [scrollbar-width:none] lg:order-2 lg:h-full lg:w-auto lg:min-w-0 lg:flex-1 lg:gap-3 lg:p-0 min-[1440px]:gap-5 [&::-webkit-scrollbar]:hidden">
               {tabs.map((t) => {
-                const Icon = t.icon;
                 const on = currentTab === t.id || (t.id === "chat" && isChat);
                 return (
                   <button
@@ -265,16 +281,40 @@ export function AgentWorkspace({
                     onClick={() => selectTab(t.id)}
                     aria-current={on ? "page" : undefined}
                     className={cn(
-                      "min-h-9 shrink-0 rounded-full px-3 py-1.5 text-[13px] font-semibold lg:-mb-px lg:inline-flex lg:min-h-12 lg:items-center lg:gap-2 lg:rounded-none lg:border-b-2 lg:px-2 lg:text-[15px]",
+                      "min-h-9 shrink-0 rounded-full px-2 py-1.5 text-[13px] font-semibold sm:px-3 lg:-mb-px lg:inline-flex lg:h-full lg:items-center lg:rounded-none lg:border-b-2 lg:px-0.5 lg:text-[15px]",
                       on ? "bg-tint text-brand-ink lg:border-brand lg:bg-transparent" : "text-ink-2 hover:bg-soft lg:border-transparent lg:hover:bg-transparent lg:hover:text-ink"
                     )}
                   >
-                    <Icon className="size-[18px] max-lg:hidden" />
                     {t.label}
                   </button>
                 );
               })}
             </nav>
+            {expert && (
+              <div className="order-2 flex shrink-0 items-center gap-2 pr-4 pt-1.5 lg:order-3 lg:p-0">
+                {/* Ordinateur and Tableau, placed here by the chat (they open its panels). */}
+                <span ref={setActionsSlot} className="flex items-center gap-2">
+                  {/* Until the chat is first opened, the same buttons open it there. */}
+                  {profileId && !chatOpened && (
+                    <>
+                      {hasScreen(agents.find((a) => a.agent37_id === agentId) ?? null) && (
+                        <span className="contents" onClickCapture={() => selectTab("chat")}>
+                          <ComputerButton inHeader />
+                        </span>
+                      )}
+                      <DashboardButtonFace inHeader onClick={() => { setDashboardAsked(true); selectTab("chat"); }} />
+                    </>
+                  )}
+                </span>
+                {callee && <CallButton expert={callee} iconOnly className="size-11 shrink-0 rounded-full lg:hidden" />}
+                {callee && <CallButton expert={callee} className="h-10 shrink-0 rounded-full bg-brand px-4 text-[14.5px] text-on-brand hover:bg-brand/90 max-lg:hidden" />}
+                <span className="flex items-center gap-2 max-lg:hidden">
+                  <UpdateBanner />
+                  <NotificationBell />
+                </span>
+              </div>
+            )}
+            </div>
             {callee && voiceOn && <VoiceButton expert={callee} open={voiceOpen} onOpenChange={setVoiceOpen} />}
           </div>
           {/* Chat owns its full height and stays MOUNTED (just hidden) across tab switches. */}
@@ -297,7 +337,14 @@ export function AgentWorkspace({
                 <ChatSidebar />
               </div>
               <div className="min-w-0 flex-1">
-                <ChatView initialMessage={initialMessage} driveFolder={driveFolder ?? (profileId ? `${DRIVE_ROOT}/${expertName}` : DRIVE_ROOT)} />
+                <ChatView
+                  initialMessage={initialMessage}
+                  driveFolder={driveFolder ?? (profileId ? `${DRIVE_ROOT}/${expertName}` : DRIVE_ROOT)}
+                  actionsSlot={profileId ? actionsSlot : null}
+                  onAction={() => selectTab("chat")}
+                  openDashboard={dashboardAsked}
+                  onDashboardOpened={() => setDashboardAsked(false)}
+                />
               </div>
             </div>
           )}
@@ -313,6 +360,7 @@ export function AgentWorkspace({
               <div className="mx-auto w-full max-w-4xl p-6 md:px-10 md:py-8">
                 <ExpertRoutines
                   agentId={agentId}
+                  active={currentTab === "routines"}
                   expert={{
                     profileId,
                     name: expertName,
@@ -342,6 +390,7 @@ export function AgentWorkspace({
       {canEdit && expert?.catalogueKey && (
         <ExpertEditModal
           expertKey={expert.catalogueKey}
+          photoUrl={expert.photoUrl}
           open={editOpen}
           onOpenChange={setEditOpen}
           onVoice={callee && voiceOn ? () => setVoiceOpen(true) : undefined}

@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronDown, FileText, ListChecks, Loader2, Lock, Mail, Mic, ReceiptText, Send, Sheet, Sun } from "lucide-react";
+import { CalendarDays, Check, ChevronDown, FileText, ListChecks, Loader2, Lock, Mail, Mic, ReceiptText, Send, Sheet, Sparkles, Sun } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { useWorkspace } from "@/components/WorkspaceProvider";
@@ -14,7 +14,13 @@ import { CompanyProfileCard } from "@/components/company/CompanyProfileCard";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { useOwnAgentId } from "@/components/conversations/useAllConversations";
-import { RecentDeliverables } from "@/components/home/RecentDeliverables";
+import { RecentActivity } from "@/components/home/RecentActivity";
+import { ModelMenu } from "@/components/chat/ModelMenu";
+import { EffortMenu } from "@/components/chat/EffortMenu";
+import { useChatModels } from "@/components/chat/useChatModels";
+import { findModel, prettyModelLabel, type ChatSettings } from "@/components/chat/types";
+import { rememberSettings, rememberedSettings } from "@/components/chat/rememberedSettings";
+import { expertCycle, expertRank, isDjeneba } from "@/lib/expert-cycle";
 import { agentTabPath } from "@/lib/expert-tabs";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -72,7 +78,6 @@ function fillShortcut(field: HTMLTextAreaElement | null, prompt: string, setText
     else field.setSelectionRange(prompt.length, prompt.length);
   });
 }
-const isDjeneba = (e: Expert) => (e.catalogueKey ?? e.profileId).toLowerCase().includes("djeneba");
 
 // The back office says the installation failed: said at once, with the experts concerned when it
 // names them. Why it failed is Yelema's to see; nothing technical is shown.
@@ -132,6 +137,17 @@ function Installing() {
 // Accueil: greeting, "Demander à mon équipe" (chips pick the expert; sending opens that expert's
 // chat with the message on its way), then the team. Everything shown is what is installed for
 // this user; the catalogue only dresses it.
+const keyOf = (e: Expert) => `${e.agentId}:${e.profileId}`;
+const rankOf = expertRank;
+
+// The four openers follow whoever gets the message: Djénéba's day (mail, agenda), an Expert's own
+// first requests from the catalogue, the chat d'entreprise's files.
+function shortcutsFor(to: Expert | null, hasDjeneba: boolean): readonly { label: string; icon: typeof Sun; prompt: string }[] {
+  if (to && !isDjeneba(to) && to.suggestions?.length)
+    return to.suggestions.slice(0, 4).map((s) => ({ label: s.length > 34 ? `${s.slice(0, 32).trimEnd()}…` : s, icon: Sparkles, prompt: s }));
+  return to || hasDjeneba ? SHORTCUTS : CHAT_SHORTCUTS;
+}
+
 /** A member with the company chat only gets its own home; everyone else the Experts' home. */
 export function HomeView() {
   const { current } = useWorkspace();
@@ -146,10 +162,32 @@ function ExpertsHome() {
   // write to her instead.
   const ownAgentId = useOwnAgentId();
   const djeneba = experts.find(isDjeneba) ?? null;
-  const [picked, setPicked] = useState<"entreprise" | "djeneba">("entreprise");
+  // Who gets the message: the chat d'entreprise, or any Expert of the team (Myriel, Leslie 30/10),
+  // Djénéba first, then by cycle in the offer's order.
+  const team = [...experts].sort((a, b) => rankOf(a) - rankOf(b));
+  const [picked, setPicked] = useState<string>("entreprise");
   const [text, setText] = useState("");
   const field = useRef<HTMLTextAreaElement>(null);
-  const to = picked === "djeneba" && djeneba ? djeneba : null;
+  const to = team.find((e) => keyOf(e) === picked) ?? null;
+  const shortcuts = shortcutsFor(to, !!djeneba);
+
+  // The model and effort of whoever gets the message, as they were last chosen (any screen).
+  const { groups, defaultModel, loading: modelsLoading } = useChatModels(to?.agentId ?? ownAgentId ?? "", to?.profileId ?? null);
+  const [settings, setSettings] = useState<ChatSettings>({ model: null, provider: null, reasoningEffort: null });
+  useEffect(() => {
+    if (modelsLoading) return;
+    const r = rememberedSettings();
+    const known = findModel(groups, r.model, r.provider);
+    setSettings({ model: known ? r.model : null, provider: known ? r.provider : null, reasoningEffort: r.reasoningEffort });
+  }, [modelsLoading, groups]);
+  const choose = (next: ChatSettings) => {
+    setSettings(next);
+    rememberSettings(next);
+  };
+  const defaultLabel = useMemo(() => {
+    const def = findModel(groups, defaultModel);
+    return def ? prettyModelLabel(def.label) : modelsLoading ? "Chargement…" : "Par défaut";
+  }, [groups, defaultModel, modelsLoading]);
   const hello = userFirstName || userEmail.split("@")[0];
 
   // The microphone of the chat, here too: what is said lands in the field, sent with Envoyer.
@@ -178,7 +216,7 @@ function ExpertsHome() {
   const hasText = text.trim().length > 0;
 
   return (
-    <div className="relative min-h-full overflow-hidden">
+    <div className="relative min-h-full shrink-0 overflow-hidden">
       {/* La fleur Yelema en filigrane, à la couleur de l'entreprise, penchée et coupée en bas à gauche. */}
       <div
         aria-hidden
@@ -208,23 +246,32 @@ function ExpertsHome() {
               <DictationBar dictation={dictation} />
             ) : (
               <div className="flex items-center gap-2">
-                {/* Who gets the message: the chat d'entreprise, or Djénéba for who has her. */}
-                {djeneba ? (
+                {/* Who gets the message: the chat d'entreprise, or an Expert with its cycle. */}
+                {team.length > 0 ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button type="button" className={cn("inline-flex h-9 items-center gap-2 rounded-full border border-line bg-surface text-[13px] font-semibold text-ink hover:bg-soft", to ? "pl-1 pr-2.5" : "px-3")}>
-                        {to ? <ExpertAvatar expert={{ ...to, gateway: null }} size="xs" /> : <Lock className="size-3.5" />}
-                        {to ? to.displayName : "Chat d’entreprise"}
-                        <ChevronDown className="size-4 text-ink-3" />
+                      <button type="button" className={cn("inline-flex h-9 min-w-0 items-center gap-2 rounded-full border border-line bg-surface text-[13px] font-semibold text-ink hover:bg-soft", to ? "pl-1 pr-2.5" : "px-3")}>
+                        {to ? <ExpertAvatar expert={{ ...to, gateway: null }} size="xs" /> : <Lock className="size-3.5 shrink-0" />}
+                        <span className="truncate">{to ? to.displayName : "Chat d’entreprise"}</span>
+                        <ChevronDown className="size-4 shrink-0 text-ink-3" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-60">
-                      <DropdownMenuItem onSelect={() => setPicked("entreprise")}>
-                        <Lock className="size-4" /> Chat d’entreprise
+                    <DropdownMenuContent align="start" className="max-h-[60vh] w-72 overflow-y-auto">
+                      <DropdownMenuItem onSelect={() => setPicked("entreprise")} className="gap-2.5">
+                        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-tint text-brand-ink">
+                          <Lock className="size-3.5" />
+                        </span>
+                        <span className="flex-1">Chat d’entreprise</span>
+                        {!to && <Check className="size-4 text-brand-ink" />}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => setPicked("djeneba")}>
-                        <ExpertAvatar expert={{ ...djeneba, gateway: null }} size="xs" /> {djeneba.displayName}
-                      </DropdownMenuItem>
+                      {team.map((e) => (
+                        <DropdownMenuItem key={keyOf(e)} onSelect={() => setPicked(keyOf(e))} className="gap-2.5">
+                          <ExpertAvatar expert={{ ...e, gateway: null }} size="xs" />
+                          <span className="min-w-0 flex-1 truncate">{e.displayName}</span>
+                          <span className="text-xs text-ink-3">{expertCycle(e)?.name}</span>
+                          {to && keyOf(to) === keyOf(e) && <Check className="size-4 text-brand-ink" />}
+                        </DropdownMenuItem>
+                      ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
@@ -232,6 +279,20 @@ function ExpertsHome() {
                     <Lock className="size-3.5" /> Votre IA privée. Rien ne sort de {company}.
                   </span>
                 )}
+                {groups.length > 0 && (
+                  <span className="max-sm:hidden">
+                    <ModelMenu
+                      groups={groups}
+                      model={settings.model}
+                      defaultModel={defaultModel}
+                      defaultLabel={defaultLabel}
+                      onChange={(model, provider) => choose({ ...settings, model, provider })}
+                    />
+                  </span>
+                )}
+                <span className="max-sm:hidden">
+                  <EffortMenu value={settings.reasoningEffort} onChange={(reasoningEffort) => choose({ ...settings, reasoningEffort })} />
+                </span>
                 {/* One button: the microphone while the field is empty, Envoyer once something is typed. */}
                 {canDictate && !hasText ? (
                   <button
@@ -258,7 +319,7 @@ function ExpertsHome() {
           </section>
 
           <div className="mt-3 flex flex-wrap justify-center gap-2">
-            {(djeneba ? SHORTCUTS : CHAT_SHORTCUTS).map(({ label, icon: Icon, prompt }) => (
+            {shortcuts.map(({ label, icon: Icon, prompt }) => (
               <button
                 key={label}
                 type="button"
@@ -301,7 +362,7 @@ function ExpertsHome() {
             : "Votre équipe s’installe. Vos Experts apparaîtront ici dès qu’ils seront prêts."}
         </p>
       ) : null}
-      {ownAgentId && <RecentDeliverables agentId={ownAgentId} />}
+      {ownAgentId && <RecentActivity agentId={ownAgentId} />}
     </div>
     </div>
   );

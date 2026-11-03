@@ -17,6 +17,14 @@ describe("mcpRefusalMessage", () => {
 });
 
 describe("parseServerDraft", () => {
+  it("keeps a named header for the key, with bearer only, and refuses one out of shape", () => {
+    const b = { name: "unipile", url: "https://developer.unipile.com/mcp?branch=v2.0", auth: "bearer", token: "k3y" };
+    assert.deepEqual(parseServerDraft({ ...b, header: " X-API-KEY " }), { ...b, header: "X-API-KEY" });
+    assert.deepEqual(parseServerDraft({ ...b, header: "" }), b);
+    for (const header of ["X API", "X-Key:", "-x", "$(id)", 42]) assert.equal(parseServerDraft({ ...b, header }), null, String(header));
+    assert.equal(parseServerDraft({ name: "docs", url: "https://docs.exemple.com/mcp", auth: "none", header: "X-API-KEY" }), null);
+  });
+
   const ok = { name: "crm", url: "https://mcp.exemple.com/sse", auth: "bearer", token: "tok_abc.123" };
 
   it("keeps the four fields of a server, trimmed, and nothing else", () => {
@@ -66,7 +74,7 @@ describe("the back office's paths", () => {
 });
 
 describe("mcpPending", () => {
-  const server = (state: McpServer["state"]): McpServer => ({ id: "1", name: "crm", url: "https://mcp.exemple.com/sse", auth: "none", stdio: null, hint: null, state, updatedAt: null });
+  const server = (state: McpServer["state"]): McpServer => ({ id: "1", name: "crm", url: "https://mcp.exemple.com/sse", auth: "none", stdio: null, hint: null, header: null, state, updatedAt: null });
   const base: McpOverview = { own: [], stdioCatalogue: [] };
 
   it("is true while a server is still being written anywhere the caller can see", () => {

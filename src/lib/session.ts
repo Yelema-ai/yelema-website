@@ -6,7 +6,8 @@ import { cache } from "react";
 import { backoffice, BackofficeError, type BoInstance, type BoInstanceReading, type BoMe, type BoSession } from "@/lib/backoffice";
 import { tokenKid, verifyEs256, type Jwk } from "@/lib/jwt";
 import { memo } from "@/lib/memo";
-import { supabaseAnonKey, supabaseUrl } from "@/lib/runtime-config";
+import { deployVersion, supabaseAnonKey, supabaseUrl } from "@/lib/runtime-config";
+import { sharedCacheOn, sharedLayer, throughShared, vercelRuntimeCache } from "@/lib/shared-cache";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 import type { WorkspaceWithRole } from "@/lib/types";
 
@@ -30,6 +31,8 @@ const TTL_MS = 30_000;
 const STALE_MS = 5 * 60_000;
 // The back office down: the last answer keeps the member working this long (a refusal still drops it).
 const STALE_ON_OUTAGE_MS = 30 * 60_000;
+// SHARED_SESSION_CACHE=on (Vercel only): the same answers shared by the region's functions, this long.
+const SHARED_TTL_S = 15;
 
 export function encodeSession(session: BoSession): string {
   return Buffer.from(JSON.stringify(session), "utf8").toString("base64url");
@@ -90,13 +93,23 @@ const refused = (e: unknown) => e instanceof BackofficeError && (e.status === 40
 // Keyed by the workspace as well as the session: an answer given for one client is never served
 // to a request for another, even with the same token. Calls made together share one round-trip; an
 // answer past TTL_MS is served while renewed (up to STALE_MS); a refusal drops it at once.
-function sessionMemo<T>(load: (token: string) => Promise<T>) {
+function sessionMemo<T>(name: string, load: (token: string) => Promise<T>) {
   const m = memo<T>({ ttlMs: TTL_MS, staleMs: STALE_MS, staleOnErrorMs: STALE_ON_OUTAGE_MS, evict: refused, maxEntries: 2000, background: keepAlive });
+  const shared = sharedCacheOn(process.env) ? sharedLayer<T>(name, SHARED_TTL_S, () => vercelRuntimeCache(deployVersion())) : null;
   const key = (workspace: string, token: string) => `${workspace}:${fingerprint(token)}`;
-  const read = (workspace: string, token: string): Promise<T> => m.get(key(workspace, token), () => load(token));
+  const read = (workspace: string, token: string): Promise<T> => {
+    const k = key(workspace, token);
+    return m.get(k, shared ? () => throughShared(shared, `${name}:${k}`, () => load(token), refused, keepAlive) : () => load(token));
+  };
   // An answer the caller already holds (the back office's reply to a change) replaces the kept one.
-  const put = (workspace: string, token: string, value: T): void => m.put(key(workspace, token), value);
-  const drop = (workspace: string, token: string): void => m.drop(key(workspace, token));
+  const put = (workspace: string, token: string, value: T): void => {
+    m.put(key(workspace, token), value);
+    if (shared) keepAlive(shared.write(`${name}:${key(workspace, token)}`, value));
+  };
+  const drop = (workspace: string, token: string): void => {
+    m.drop(key(workspace, token));
+    if (shared) keepAlive(shared.drop(`${name}:${key(workspace, token)}`));
+  };
   return Object.assign(read, { put, drop });
 }
 
@@ -109,7 +122,7 @@ function keepAlive(settled: Promise<void>): void {
   }
 }
 
-const meOf = sessionMemo((token) => backoffice.me(token));
+const meOf = sessionMemo("me", (token) => backoffice.me(token));
 
 /** After the user changed their own profile: the next page shows it at once, not the kept answer. */
 export function rememberPrincipal(workspace: string, token: string, me: BoMe): void {
@@ -120,7 +133,7 @@ export function rememberPrincipal(workspace: string, token: string, me: BoMe): v
 export function forgetPrincipal(workspace: string, token: string): void {
   meOf.drop(workspace, token);
 }
-const instanceOf = sessionMemo((token) => backoffice.instance(token));
+const instanceOf = sessionMemo("instance", (token) => backoffice.instance(token));
 
 // A refused session (expired, suspended, no longer a member) reads as "nobody signed in"; an
 // outage is NOT that, and is thrown so the caller answers "try again" rather than signing out.

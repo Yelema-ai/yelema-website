@@ -2,6 +2,7 @@ import "server-only";
 import { coldStartWait } from "./cold-start";
 import { EXEC_TIMEOUT_MS, JSON_TIMEOUT_MS, withTimeout } from "./fetch-timeout";
 import { authViaBackoffice } from "./runtime-config";
+import type { RunOutcome } from "./routines";
 import { gatewayFetch, gatewayInstancePath, gatewayPortHeaders, runtimeGateway, type RuntimeGateway } from "./runtime-gateway";
 import type {
   Agent,
@@ -373,6 +374,13 @@ export const agent37 = {
     link: async (id: string, channel: RelayChannel): Promise<RelayLink> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${channel}/link`, { method: "POST" })),
     status: async (id: string, channel: RelayChannel): Promise<RelayStatus> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${channel}`)),
     unlink: async (id: string, channel: RelayChannel): Promise<{ ok: true }> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${channel}`, { method: "DELETE" })),
+  },
+
+  // What finished routine runs came to (absent: still running or unreadable); `null` direct, with no gateway.
+  routineOutcomes: async (id: string, ids: string[], profileQuery = ""): Promise<Record<string, RunOutcome> | null> => {
+    if (!runtimeGateway()) return null;
+    const q = `${profileQuery ? `${profileQuery}&` : "?"}ids=${ids.map(encodeURIComponent).join(",")}`;
+    return (await instanceCall<{ outcomes: Record<string, RunOutcome> }>(id, `/v1/routine-outcomes${q}`)).outcomes ?? {};
   },
 
   // What the instance's runtime offers (the gateway's /capabilities); `null` direct, where every

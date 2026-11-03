@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useShownPath } from "@/components/app/NavProgress";
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -31,7 +32,7 @@ import { useOwnAgentId } from "@/components/conversations/useAllConversations";
 import { useChatMarks } from "@/components/conversations/useChatMarks";
 import { arrange } from "@/lib/chat-marks";
 import { convKey } from "@/lib/activity";
-import { openSearch } from "@/components/conversations/SearchDialog";
+import { openSearch, warmSearch } from "@/components/conversations/SearchDialog";
 import { useCompanySessions } from "@/components/conversations/useCompanySessions";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,8 @@ import { cn } from "@/lib/utils";
 
 export function EnterpriseSidebar({ collapsed, onToggle, onNavigate }: { collapsed: boolean; onToggle: () => void; onNavigate?: () => void }) {
   const pathname = usePathname();
+  // Lit at the click, before the next page is there.
+  const here = useShownPath();
   const { current } = useWorkspace();
   // The company's main logo first (« Entreprise »), then the deployment's, then the initial.
   // Never the Yelema Y here: it is only the tab icon (favicon), Yelema stays in « Powered by ».
@@ -118,6 +121,8 @@ export function EnterpriseSidebar({ collapsed, onToggle, onNavigate }: { collaps
       <button
         type="button"
         onClick={openSearch}
+        onPointerEnter={warmSearch}
+        onFocus={warmSearch}
         title="Rechercher (Ctrl K)"
         className={cn("flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors text-ink-2 hover:bg-soft", collapsed && "justify-center px-0")}
       >
@@ -134,7 +139,7 @@ export function EnterpriseSidebar({ collapsed, onToggle, onNavigate }: { collaps
         onClick={onNavigate}
         className={cn(
           "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors",
-          pathname.startsWith("/integrations") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
+          here.startsWith("/integrations") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
           collapsed && "justify-center px-0"
         )}
       >
@@ -146,7 +151,7 @@ export function EnterpriseSidebar({ collapsed, onToggle, onNavigate }: { collaps
         onClick={onNavigate}
         className={cn(
           "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors",
-          pathname.startsWith("/integrations") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
+          here.startsWith("/integrations") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
           collapsed && "justify-center px-0"
         )}
       >
@@ -188,7 +193,7 @@ export function EnterpriseSidebar({ collapsed, onToggle, onNavigate }: { collaps
                   // Keyed on instance and profile: a profile name alone is not unique across instances.
                   key={`${e.agentId}:${e.profileId}`}
                   expert={e}
-                  active={pathname === `/experts/${e.agentId}/${e.profileId}` || pathname.startsWith(`/experts/${e.agentId}/${e.profileId}/`)}
+                  active={here === `/experts/${e.agentId}/${e.profileId}` || here.startsWith(`/experts/${e.agentId}/${e.profileId}/`)}
                   compact={collapsed}
                   onNavigate={onNavigate}
                   className={g.cycle && !collapsed ? "pl-4" : undefined}
@@ -213,7 +218,7 @@ export function EnterpriseSidebar({ collapsed, onToggle, onNavigate }: { collaps
           onClick={onNavigate}
           className={cn(
             "mt-3 flex min-h-10 items-center gap-1.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors",
-            pathname.startsWith("/conversations") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft"
+            here.startsWith("/conversations") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft"
           )}
         >
           Toutes les conversations <ArrowRight className="size-4" />

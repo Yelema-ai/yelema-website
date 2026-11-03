@@ -13,7 +13,6 @@ const TABS = [
   { href: "/integrations/connecteurs", label: "Connecteurs", exact: false, adminOnly: false },
   { href: "/integrations/canaux", label: "Canaux", exact: false, adminOnly: false },
   { href: "/integrations/emails", label: "E-mails", exact: false, adminOnly: true, backoffice: true },
-  { href: "/integrations/voix", label: "Voix", exact: false, adminOnly: false, backoffice: true },
   { href: "/integrations/modeles", label: "Modèles", exact: false, adminOnly: false, backoffice: true },
   { href: "/integrations/mcp", label: "MCP", exact: false, adminOnly: false },
   { href: "/integrations/identifiants", label: "Accès aux sites", exact: false, adminOnly: false, backoffice: true },
@@ -24,7 +23,7 @@ const TABS = [
 // règlent sa propre instance. E-mails, pour les admins, dit qui peut faire écrire chaque expert.
 // Modèles dit sur quel compte de modèle tournent les experts : un admin le règle pour l'entreprise
 // ou pour un membre, un membre pour lui-même si son admin l'a permis. MCP, aux mêmes portées, branche
-// sur les experts les serveurs d'outils du client. Accès aux sites (adresse /identifiants) confie à un expert l'accès à un site. Voix porte la clé de transcription du client.
+// sur les experts les serveurs d'outils du client. Accès aux sites (adresse /identifiants) confie à un expert l'accès à un site. La clé de transcription du client (dictée) est au bas de Modèles (Leslie, 27/10) : /integrations/voix y renvoie.
 export default function IntegrationsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { current } = useWorkspace();

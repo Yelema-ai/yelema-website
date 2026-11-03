@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { cached, cachedFetch } from "@/lib/client-cache";
+import { modelsKey } from "@/components/experts/expert-preload";
 import { profileQuery } from "@/lib/profile-id";
 import type { ModelsResponse } from "@/lib/types";
 import type { ModelGroup, ModelOption } from "./types";
@@ -17,17 +18,20 @@ export interface ChatModelsState {
 // composer's model switcher. Failures degrade to an empty list (the agent default still runs).
 export function useChatModels(agentId: string, profile: string | null = null): ChatModelsState {
   const q = profileQuery(profile);
-  const key = `models:${agentId}${q}`;
-  // Back on an expert already seen: its list at once, read again behind it past a minute.
-  const [state, setState] = useState<ChatModelsState>(() => cached<ChatModelsState>(key) ?? { groups: [], defaultModel: null, loading: true });
+  const key = modelsKey(agentId, profile);
+  // Back on an expert already seen, or read ahead by the menu: its list at once, read again past a minute.
+  const [state, setState] = useState<ChatModelsState>(() => {
+    const kept = cached<ModelsResponse>(key);
+    return kept ? toState(kept) : { groups: [], defaultModel: null, loading: true };
+  });
 
   useEffect(() => {
     let cancelled = false;
-    const kept = cached<ChatModelsState>(key);
-    if (kept) setState(kept);
-    cachedFetch(key, () => apiFetch<ModelsResponse>(`/api/agents/${agentId}/chat/models${q}`).then(toState), 60_000)
+    const kept = cached<ModelsResponse>(key);
+    if (kept) setState(toState(kept));
+    cachedFetch(key, () => apiFetch<ModelsResponse>(`/api/agents/${agentId}/chat/models${q}`), 60_000)
       .then((next) => {
-        if (!cancelled) setState(next);
+        if (!cancelled) setState(toState(next));
       })
       .catch(() => {
         if (!cancelled) setState((s) => ({ ...s, loading: false }));

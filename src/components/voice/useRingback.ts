@@ -47,8 +47,21 @@ const GAP_S = 0.12;
 
 // Opened during the click that starts the call: a browser lets a page play sound only from a
 // context a gesture started, and the expert may hang up long after, with no click (Leslie, 25/10:
-// no tone when the expert hangs up). The end tone plays on it, then it is released.
+// no tone when the expert hangs up). The connection tone plays on it during the call, the end tone
+// at its end, then it is released.
 let primed: AudioContext | null = null;
+
+/** The call's context, opened at the click; null when there is none. */
+export function callAudioContext(): AudioContext | null {
+  return primed && primed.state !== "closed" ? primed : null;
+}
+
+/** Closes the call's context when no end tone took it (the expert never answered). */
+export function releaseCallAudio(): void {
+  const c = primed;
+  primed = null;
+  void c?.close().catch(() => {});
+}
 
 export function primeHangupTone(): void {
   if (primed) return;

@@ -145,6 +145,7 @@ function toRoutine(job: HermesJob, expertName: string): Routine {
     enabled: job.enabled,
     suggested: !job.enabled && !job.last_run_at && (job.paused_reason ?? "").startsWith(SHIPPED),
     lastRunAt: job.last_run_at ?? null,
+    deliver: job.deliver ?? null,
     nextRunAt: job.enabled ? (job.next_run_at ?? null) : null,
   };
 }

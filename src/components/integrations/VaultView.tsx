@@ -30,7 +30,6 @@ function groupKeys(items: VaultEntry[]): KeyGroup[] {
   }
   return [...groups.values()];
 }
-const vaultUrl = (profile: string, handle?: string) => `/api/vault/own/${encodeURIComponent(profile)}${handle ? `/${encodeURIComponent(handle)}` : ""}`;
 
 // Intégrations · Accès aux sites : les connexions confiées aux experts de SA propre instance, en une liste (Leslie,
 // 24/10) : un accès pour tous les experts ou pour certains. Le coffre est par expert : un même accès
@@ -65,9 +64,9 @@ export function VaultView() {
   const holders = (g: KeyGroup) => (all.length > 1 && all.every((p) => g.entries.some((e) => e.profile === p)) ? "Tous les Experts" : g.entries.map((e) => nameOf(e.profile)).join(", "));
   const shown = paginate(rows, page, PER_PAGE);
 
-  // One call per expert: the vault has no shared key.
+  // One call for every chosen Expert: the back office writes each vault in one command on the instance.
   async function add(targets: string[], draft: VaultDraft) {
-    for (const t of targets) await apiFetch(vaultUrl(t), { method: "POST", body: JSON.stringify(draft) });
+    await apiFetch("/api/vault/own", { method: "POST", body: JSON.stringify({ ...draft, profiles: targets }) });
     toast.success(`Accès « ${draft.label} » confié à ${targets.length === all.length && all.length > 1 ? "tous les Experts" : targets.map(nameOf).join(", ")}`);
     setAdding(false);
     await load();
@@ -75,7 +74,7 @@ export function VaultView() {
 
   async function remove() {
     if (!removing) return;
-    for (const e of removing.entries) await apiFetch(vaultUrl(e.profile, e.id), { method: "DELETE" });
+    await apiFetch("/api/vault/own", { method: "DELETE", body: JSON.stringify({ entries: removing.entries.map((e) => ({ profile: e.profile, handle: e.id })) }) });
     toast.success(`Accès « ${removing.label} » retiré`);
     await load();
   }

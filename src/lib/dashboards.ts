@@ -175,9 +175,11 @@ export function isTrustedDashboardUrl(url: unknown): url is string {
 /**
  * Chemins d'emplacement candidats du fichier d'état du tableau de bord sur l'instance Agent37.
  */
-export function getDashboardStateCandidatePaths(profile: string): string[] {
+export function getDashboardStateCandidatePaths(profile: string, folders: readonly string[] = []): string[] {
   const capitalized = profile ? profile.charAt(0).toUpperCase() + profile.slice(1).toLowerCase() : "";
   return [
+    // The expert's drive folder is its name (« Djénéba »), not its profile (« unifood__djeneba »).
+    ...folders.map((f) => `Livrables/${f}/_memoire/state/tableau-de-bord-metier.json`),
     `Livrables/${capitalized}/_memoire/state/tableau-de-bord-metier.json`,
     `Livrables/${profile}/_memoire/state/tableau-de-bord-metier.json`,
     `memory/state/tableau-de-bord-metier.json`,

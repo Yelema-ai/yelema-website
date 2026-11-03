@@ -130,7 +130,7 @@ export function EnterpriseHome() {
   const hasText = text.trim().length > 0;
 
   return (
-    <div className="relative min-h-full overflow-hidden">
+    <div className="relative min-h-full shrink-0 overflow-hidden">
       {/* La fleur Yelema en filigrane, à la couleur de l'entreprise, penchée et coupée en bas à gauche. */}
       <div
         aria-hidden

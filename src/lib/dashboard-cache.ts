@@ -27,9 +27,9 @@ async function readState(agentId: string, path: string): Promise<StoredDashboard
 }
 
 /** The dashboard state of an expert: the first candidate file with a link (else the first found), all read at once. */
-export function fetchCachedDashboardState(agentId: string, profile: string): Promise<StoredDashboardState | null> {
+export function fetchCachedDashboardState(agentId: string, profile: string, folders: readonly string[] = []): Promise<StoredDashboardState | null> {
   return states.get(`${agentId}:${profile.toLowerCase()}`, async () => {
-    const found = await Promise.all(getDashboardStateCandidatePaths(profile).map((p) => readState(agentId, p)));
+    const found = await Promise.all(getDashboardStateCandidatePaths(profile, folders).map((p) => readState(agentId, p)));
     return found.find((s) => typeof s?.lien === "string" && s.lien) ?? found.find((s) => s !== null) ?? null;
   });
 }

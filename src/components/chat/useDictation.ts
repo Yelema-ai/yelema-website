@@ -8,8 +8,12 @@ import { downsample, encodeWav } from "@/lib/wav";
 // the speech service reads), in the language chosen for the expert's calls. Ported from the voice dictation of
 // feat/agentMail (ddbf907), which recorded WebM for six speech engines.
 
-/** About 4 minutes: the speech service takes 8 MB at most. */
-const MAX_SECONDS = 240;
+/** Two minutes: a WAV at 16 kHz is 32 kB a second, and the host refuses a request over 4 MB before
+ * the route sees it (src/lib/upload-limit.ts). Longer, the dictation was lost with a vague error. */
+const MAX_SECONDS = 120;
+/** A transcription that fails for a reason worth a second try (network, speech service down) is sent
+ * once more, after this pause, before the member sees an error. */
+const RETRY_AFTER_MS = 1200;
 
 export type DictationState = "idle" | "recording" | "transcribing";
 
@@ -50,11 +54,25 @@ export function useDictation({ expert, onText, onError }: { expert: string | nul
       if (all.length < rate / 2) return setState("idle"); // under half a second: nothing said
       setState("transcribing");
       try {
-        const form = new FormData();
-        form.append("file", new Blob([encodeWav(downsample(all, rate))], { type: "audio/wav" }), "dictee.wav");
-        form.append("language", expert ? readVoicePrefs(expert).language : "fr");
-        const res = await fetch("/api/voice/transcribe", { method: "POST", body: form });
-        const data = (await res.json().catch(() => ({}))) as { text?: string; error?: { message?: string } };
+        const wav = new Blob([encodeWav(downsample(all, rate))], { type: "audio/wav" });
+        const language = expert ? readVoicePrefs(expert).language : "fr";
+        const send = async () => {
+          const form = new FormData();
+          form.append("file", wav, "dictee.wav");
+          form.append("language", language);
+          const res = await fetch("/api/voice/transcribe", { method: "POST", body: form });
+          const data = (await res.json().catch(() => ({}))) as { text?: string; error?: { message?: string } };
+          return { res, data };
+        };
+        // The recording is kept: a network hiccup or a speech service that does not answer gets a
+        // second try instead of losing what was said. A refusal (4xx) is final.
+        let out = await send().catch(() => null);
+        if (!out || out.res.status >= 500) {
+          await new Promise((r) => setTimeout(r, RETRY_AFTER_MS));
+          out = await send().catch(() => null);
+        }
+        if (!out) throw new Error("La connexion a coupé pendant l’envoi de la dictée. Réessayez.");
+        const { res, data } = out;
         if (!res.ok) throw new Error(data.error?.message ?? "La dictée n’a pas pu être transcrite.");
         if (data.text?.trim()) onText(data.text.trim());
         else onError("Rien n’a été entendu. Réessayez plus près du micro.");

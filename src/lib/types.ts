@@ -71,6 +71,8 @@ export interface Expert {
   /** Titre court, pour les listes étroites. */
   title?: string | null;
   tagline?: string | null;
+  /** Trois demandes pour démarrer, sous la barre de message d'une discussion vide (catalogue, `suggestions`). */
+  suggestions?: string[];
   /** Portrait de l'Expert. */
   photoUrl?: string | null;
   /** Son dossier dans le drive (~/Livrables/<dossier>), quand le catalogue le connaît. */

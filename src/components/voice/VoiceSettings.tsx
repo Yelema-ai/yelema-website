@@ -9,6 +9,7 @@ import {
   expertDefaultVoice,
   countryName,
   filterVoices,
+  sortVoices,
   voiceFacets,
   VOICE_LANGUAGES,
   type VoiceExpert,
@@ -85,7 +86,7 @@ export function VoiceSettings({
         />
       ) : null}
       <VoicePicker
-        voices={filterVoices(ofLanguage, filter)}
+        voices={sortVoices(filterVoices(ofLanguage, filter))}
         value={chosen?.key ?? null}
         defaultKey={fallback?.key ?? null}
         onChange={(key) => onChange({ ...prefs, voices: { ...prefs.voices, [prefs.language]: key } })}

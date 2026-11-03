@@ -4,8 +4,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from "sonner";
 import { useChatPresence } from "@/components/activity/hooks";
 import { apiFetch } from "@/lib/api";
-import { cached, remember } from "@/lib/client-cache";
+import { cached, cachedFetch, remember } from "@/lib/client-cache";
 import { browserPollEnv, startPoll } from "@/lib/poll";
+import { sessionsKey } from "@/components/experts/expert-preload";
 import { mergeRail, movedUpstream } from "@/lib/chat-rail";
 import { profileQuery } from "@/lib/profile-id";
 import type { MergedAgent } from "@/lib/types";
@@ -63,6 +64,8 @@ export function useChatContext() {
 /** Where the rail of one space is published, as it is on screen (new and renamed threads included). */
 export const railViewKey = (agentId: string, profile: string | null) => `rail-view:${agentId}:${profile ?? ""}`;
 
+const FRESH_RAIL_MS = 15_000;
+
 export function ChatProvider({
   agentId,
   profile,
@@ -87,8 +90,8 @@ export function ChatProvider({
 }) {
   // Every chat route takes the expert as ?profile=; threads of one expert are invisible to another.
   const q = profileQuery(profile);
-  // The rail last read for this expert, kept for the page's life: coming back to it paints at once.
-  const railKey = `sessions:${agentId}:${profile ?? ""}`;
+  // The rail last read for this expert (or read ahead by the menu, expert-preload): it paints at once.
+  const railKey = sessionsKey(agentId, profile);
   const [sessions, setSessions] = useState<ChatSession[]>(() => cached<ChatSession[]>(railKey) ?? []);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(urlSessionId);
   const [composerFocusToken, setComposerFocusToken] = useState(0);
@@ -127,11 +130,13 @@ export function ChatProvider({
   const loadSeq = useRef(0);
 
   const reloadSessions = useCallback(
-    async (retries = 0): Promise<void> => {
+    async (retries = 0, shared = false): Promise<void> => {
       const seq = ++loadSeq.current;
       setRefreshingSessions(true);
       try {
-        const res = await apiFetch<{ sessions: ChatSession[] }>(`/api/agents/${agentId}/chat/sessions${q}`);
+        const read = () => apiFetch<{ sessions: ChatSession[] }>(`/api/agents/${agentId}/chat/sessions${q}`);
+        // On opening, a read the menu has running or has just made is joined instead of repeated.
+        const res = shared ? { sessions: await cachedFetch(railKey, () => read().then((r) => r.sessions), FRESH_RAIL_MS) } : await read();
         if (seq !== loadSeq.current) return;
         if (movedUpstream(serverRail.current, res.sessions, openRef.current)) setThreadVersion((v) => v + 1);
         serverRail.current = res.sessions;
@@ -161,7 +166,7 @@ export function ChatProvider({
     serverRail.current = kept;
     setSessions(kept ?? []);
     setLoadingSessions(kept === null);
-    void reloadSessions(3);
+    void reloadSessions(3, true);
     // Every 30 s while visible; hidden, nothing, and one reading on the way back.
     const poll = startPoll(() => reloadSessions(), { everyMs: 30_000, immediate: false }, browserPollEnv());
     return () => {

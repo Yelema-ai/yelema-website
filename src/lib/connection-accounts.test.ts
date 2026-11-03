@@ -59,6 +59,15 @@ test("le nom d'un compte vient du back-office : libellé, sinon e-mail, sinon no
   assert.equal(c!.isDefault, undefined);
 });
 
+test("sans fiche au back-office, l'adresse lue chez Composio puis un alias choisi nomment le compte, jamais un alias tiré", () => {
+  const details = [{ id: "ca_a", email: null, name: null, label: null, isDefault: false, addedBy: null }];
+  const [a] = withAccountDetails([{ ...conn("ca_a", "ACTIVE", "gmail"), email: "compta@acme.ci" }], details);
+  assert.equal(accountTitle(a!, 0), "compta@acme.ci");
+  assert.equal(accountTitle({ ...conn("ca_b", "ACTIVE", "gmail"), alias: "Boîte compta" }, 1), "Boîte compta");
+  assert.equal(accountTitle({ ...conn("ca_c", "ACTIVE", "gmail"), alias: "gmail-a1b2c3" }, 2), "Compte 3");
+  assert.equal(accountTitle({ ...conn("ca_d", "ACTIVE", "gmail"), alias: "gmail-2" }, 3), "Compte 4");
+});
+
 test("le compte par défaut est épinglé seul, dans un ordre stable", () => {
   assert.deepEqual(pinnedAccounts({ slack: "ca_s", gmail: "ca_g" }), { gmail: ["ca_g"], slack: ["ca_s"] });
   assert.equal(JSON.stringify(pinnedAccounts({ slack: "ca_s", gmail: "ca_g" })), JSON.stringify(pinnedAccounts({ gmail: "ca_g", slack: "ca_s" })));

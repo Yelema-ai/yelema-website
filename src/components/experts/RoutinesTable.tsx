@@ -26,7 +26,7 @@ export function Switch({ on, label, disabled, onChange }: { on: boolean; label: 
       aria-label={label}
       disabled={disabled}
       onClick={onChange}
-      className={cn("relative h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-50", on ? "bg-primary" : "bg-soft-2")}
+      className={cn("relative h-6 w-10 shrink-0 rounded-full transition-colors after:absolute after:-inset-2.5 after:content-[''] disabled:opacity-50", on ? "bg-primary" : "bg-soft-2")}
     >
       <span className={cn("absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-[left]", on ? "left-5" : "left-1")} />
     </button>

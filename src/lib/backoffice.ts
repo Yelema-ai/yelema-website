@@ -6,7 +6,7 @@ import type { ComposioCall } from "@/lib/composio-usage";
 import { voiceKeyPath, type VoiceKeysOverview } from "@/lib/voice-keys";
 import { isServerId, mcpScopePath, mcpServerPath, type McpOauthQuery, type McpOauthServer, type McpOverview, type McpToolsOverview, type McpToolsReport, type McpServerDraft, type McpWritten } from "@/lib/mcp-servers";
 import type { UnipileAccount, UnipileDraft, UnipileStatus } from "@/lib/unipile";
-import { vaultPath, type VaultDraft, type VaultItem, type VaultList, type VaultOverview, type VaultScope } from "@/lib/vault";
+import { vaultPath, type VaultDraft, type VaultEntry, type VaultItem, type VaultList, type VaultOverview, type VaultRef, type VaultScope } from "@/lib/vault";
 import { scopePath, type LlmModelChoice, type LlmOverview, type LlmWritten, type SettingScope } from "@/lib/llm";
 import { mailPath, type MailDetail, type MailDraft, type MailInbox, type MailRights, type MailRightsPatch, type MailSummary } from "@/lib/mail";
 import { isPublicId, type MemoryList, type MemoryNote, type MemoryPatch, type OrgAssignmentDraft, type OrgChart, type OrgGrantDraft, type OrgMember, type OrgRole } from "@/lib/memory";
@@ -30,6 +30,7 @@ const TIMEOUT_MS = process.env.NODE_ENV === "development" ? 60_000 : 15_000;
 const MAIL_SEND_TIMEOUT_MS = 90_000;
 // Saving a model key waits for the provider to say whether it accepts it.
 const SETTING_WRITE_TIMEOUT_MS = 30_000;
+const VAULT_BATCH_TIMEOUT_MS = 130_000;
 // Le code de connexion attend la réponse de Claude sur l'instance (jusqu'à ~25 s).
 const CLAUDE_LOGIN_TIMEOUT_MS = 60_000;
 const memberQuery = (member: string | null): string => (member ? `?member=${encodeURIComponent(member)}` : "");
@@ -381,6 +382,9 @@ export const backoffice = {
   // First access or a new password: consumes the link the back office sent.
   accept: (tokenHash: string, type: string, password: string) =>
     call<BoOpenedSession>("/app/auth/accept", { method: "POST", body: { tokenHash, type, password } }),
+  // A new invitation from an expired one: the back office finds the member from the old link and sends
+  // a fresh one (a route asked of the back office on 27/10/26). Always answers ok.
+  resendInvite: (tokenHash: string) => call<{ ok: true }>("/app/auth/invite/resend", { method: "POST", body: { tokenHash } }),
   // Always answers ok, whether or not the account exists.
   forgot: (email: string) => call<{ ok: true }>("/app/auth/forgot", { method: "POST", body: { email } }),
   logout: (token: string) => call<{ ok: true }>("/app/auth/logout", { method: "POST", token }),
@@ -556,6 +560,11 @@ export const backoffice = {
     if (!path) throw new BackofficeError(404, "not_found", "Profil introuvable.");
     return call<{ ok: true; item: VaultItem }>(path, { method: "POST", token, body: draft, timeoutMs: SETTING_WRITE_TIMEOUT_MS });
   },
+  // Several Experts in one command on the instance (bounded at 120 s by the back office).
+  addVaultItems: (token: string, profiles: string[], draft: VaultDraft) =>
+    call<{ ok: true; items: VaultEntry[] }>("/app/vault/own", { method: "POST", token, body: { ...draft, profiles }, timeoutMs: VAULT_BATCH_TIMEOUT_MS }),
+  removeVaultItems: (token: string, entries: VaultRef[]) =>
+    call<{ ok: true; removed: number }>("/app/vault/own", { method: "DELETE", token, body: { entries }, timeoutMs: VAULT_BATCH_TIMEOUT_MS }),
   removeVaultItem: (token: string, scope: VaultScope, profile: string, handle: string) => {
     const path = vaultPath(scope, profile, handle);
     if (!path) throw new BackofficeError(404, "not_found", "Connexion introuvable.");
@@ -565,7 +574,11 @@ export const backoffice = {
   unipile: (token: string) => call<UnipileStatus>("/app/unipile", { token, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
   testUnipile: (token: string, draft: UnipileDraft) => call<{ accounts: UnipileAccount[] }>("/app/unipile/test", { method: "POST", token, body: draft, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
   setUnipile: (token: string, draft: UnipileDraft) => call<UnipileStatus>("/app/unipile", { method: "PUT", token, body: draft, timeoutMs: 60_000 }),
+  // The Experts who reach the messaging, the key already on the instance kept (Leslie, 01/11: no DSN and key typed again).
+  setUnipileExperts: (token: string, experts: string[]) => call<UnipileStatus>("/app/unipile/experts", { method: "PUT", token, body: { experts }, timeoutMs: 60_000 }),
   clearUnipile: (token: string) => call<{ ok: true }>("/app/unipile", { method: "DELETE", token, timeoutMs: 60_000 }),
+  // A one-click Unipile link, made by the instance (it alone holds the key), to link a broken account again.
+  reconnectUnipile: (token: string, accountId: string) => call<{ url: string }>("/app/unipile/reconnect", { method: "POST", token, body: { accountId }, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
   mcp: (token: string) => call<McpOverview>("/app/mcp", { token }),
   addMcpServer: (token: string, scope: SettingScope, draft: McpServerDraft) => {
     const path = mcpScopePath(scope);
@@ -639,6 +652,9 @@ export const backoffice = {
   uploadMemoryDocument: (token: string, form: FormData) => call<{ id: string }>("/app/memory/items", { method: "POST", token, form, timeoutMs: MAIL_SEND_TIMEOUT_MS }),
   updateMemoryItem: (token: string, id: string, patch: MemoryPatch) => call<{ ok: true }>(ownPath("/app/memory/items", id), { method: "PATCH", token, body: patch }),
   deleteMemoryItem: (token: string, id: string) => call<{ ok: true }>(ownPath("/app/memory/items", id), { method: "DELETE", token }),
+  // A new file for a deposited document; the back office keeps the old one as the previous version.
+  uploadMemoryVersion: (token: string, id: string, form: FormData) =>
+    call<{ id: string; version: number }>(`${ownPath("/app/memory/items", id)}/versions`, { method: "POST", token, form, timeoutMs: MAIL_SEND_TIMEOUT_MS }),
   // The document of a deposit, as a stream for the route to pipe. 404 when the member does not read its compartment.
   memoryDocument: (token: string, id: string) => stream(`${ownPath("/app/memory/items", id)}/file`, token),
 

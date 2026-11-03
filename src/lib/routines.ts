@@ -18,6 +18,8 @@ export interface Routine {
   // ISO date-times from Hermes; null before the first run, or while paused for the next one.
   lastRunAt: string | null;
   nextRunAt: string | null;
+  /** Where Hermes sends the result: « telegram:…,local », « local », « origin », or null. */
+  deliver?: string | null;
 }
 
 // The time zone schedules are read in. The instances run on UTC, which is Abidjan's time all year.
@@ -91,6 +93,25 @@ export function routineRunText(content: string): string {
   return end < 0 ? content : content.slice(end + 3).trim();
 }
 
+// What a run was asked, for the member to read: the routine's task in plain words. Commands, paths,
+// file names and Hermes's markers stay out (Leslie, 28/10: « évite les trucs genre python »); null
+// when nothing plain is left.
+const TECHNICAL = /`|\bpython|\.(py|json|sh|md|ya?ml)\b|\/home\/|~\/|\[?\b(SILENT|NO_REPLY|CRON_FAILURE)\b\]?|https?:\/\/|\{|\}/i;
+// One sentence: the routine's own line, not the steps it goes through.
+const MAX_SENTENCES = 1;
+
+export function routinePlainText(content: string): string | null {
+  const { task } = splitPrompt(routineRunText(content));
+  const sentences = task
+    .replace(/^Tu es [^.\n]+\.\s*/, "")
+    .replace(/\*\*/g, "")
+    .split(/\n+/)
+    .flatMap((line) => line.replace(/^[-*\d.)\s]+/, "").split(/(?<=[.!?])\s+/))
+    .map((s) => s.trim())
+    .filter((s) => s.length > 2 && !TECHNICAL.test(s));
+  return sentences.length ? sentences.slice(0, MAX_SENTENCES).join(" ") : null;
+}
+
 // A run with nothing to report answers [SILENT] (or SILENT / NO_REPLY), alone or on its first or last
 // line: Hermes's own rule (gateway/response_filters.py), which then sends nothing.
 const SILENT_LINE = /^\[?(SILENT|NO[_ ]REPLY)\]?[.!]?$/i;
@@ -116,10 +137,32 @@ export interface SessionHint {
 // The routine a conversation is a run of, by name, or null for a conversation a person started.
 export function routineOfSession({ id, title, preview }: SessionHint): string | null {
   const t = (title ?? "").trim();
-  if (!id.startsWith("cron_") && !isRoutineRun(preview ?? "") && !(RUN_TITLE_DATE.test(t) && (preview ?? "").startsWith("[IMPORTANT:"))) {
+  // Hermes may also title a run with its own preamble, the preview then starting with a skill it loaded.
+  if (!id.startsWith("cron_") && !isRoutineRun(preview ?? "") && !t.startsWith("[IMPORTANT: You are running as a scheduled cron job") && !(RUN_TITLE_DATE.test(t) && (preview ?? "").startsWith("[IMPORTANT:"))) {
     return null;
   }
-  return t.replace(RUN_TITLE_DATE, "").trim() || "Routine";
+  return (t.startsWith("[IMPORTANT:") ? "" : t.replace(RUN_TITLE_DATE, "").trim()) || "Routine";
+}
+
+// A memory routine works for the expert alone (« Routine de mémoire, silencieuse »): its runs are never
+// a conversation nor a notification, whatever they answer (Leslie, 29/10).
+const MEMORY_NAME = /^m[ée]moire\b/i;
+const MEMORY_TASK = /routine de m[ée]moire/i;
+
+export function isMemoryRun(session: SessionHint): boolean {
+  const routine = routineOfSession(session);
+  if (routine === null) return false;
+  return MEMORY_NAME.test(routine) || MEMORY_TASK.test(session.preview ?? "") || MEMORY_TASK.test(session.title ?? "");
+}
+
+export function isMemoryRoutine(r: Pick<Routine, "name" | "task">): boolean {
+  return MEMORY_NAME.test(r.name.trim()) || MEMORY_TASK.test(r.task);
+}
+
+// Whether a past run opens as a conversation: only one that delivered something, and never a memory
+// routine's (Leslie, 30/10: « rien à signaler » is a line in the history, not a page).
+export function runOpens(run: Pick<RoutineRun, "outcome">, routine: Pick<Routine, "name" | "task">): boolean {
+  return run.outcome === "sent" && !isMemoryRoutine(routine);
 }
 
 // Whether a conversation is one of THIS routine's runs: its id, else its title (name cut as Hermes does).
@@ -210,20 +253,96 @@ export function recurrenceOf(parts: CronParts): string {
   return recurrenceLabel(parts.dom, parts.dow) ?? "";
 }
 
-// "Chaque lundi à 07:30", "Le 6 octobre à 09:00, une fois".
+// "07:30" → "7 h 30", "17:00" → "17 h": as a French reader says it (Leslie, 30/10), with no-break
+// spaces so a narrow row never splits « 7 h » from « 30 ».
+export function frTime(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  return m ? `${h}\u00a0h\u00a0${pad(String(m))}` : `${h}\u00a0h`;
+}
+
+// « 17 7-21 * * * », the memory routines' hourly runs, read « Toutes les heures de 7 h à 21 h »
+// rather than « Horaire : 17 7-21 * * * ».
+function hourlyLabel(f: string[]): string | null {
+  if (!/^\d{1,2}$/.test(f[0]) || f[2] !== "*" || f[3] !== "*" || !["*", "1-5"].includes(f[4])) return null;
+  const days = f[4] === "1-5" ? ", du lundi au vendredi" : "";
+  const range = /^(\d{1,2})-(\d{1,2})$/.exec(f[1]);
+  if (range) return `Toutes les heures de ${frTime(range[1])} à ${frTime(range[2])}${days}`;
+  const step = /^\*\/(\d{1,2})$/.exec(f[1]);
+  if (step) return `Toutes les ${step[1]} heures${days}`;
+  if (f[1] === "*") return `Toutes les heures${days}`;
+  return null;
+}
+
+// "Chaque lundi à 7 h 30", "Le 6 octobre à 9 h, une fois".
 export function scheduleLabel(schedule: string): string {
   if (isOneOff(schedule)) {
     const d = new Date(schedule);
     if (Number.isNaN(d.getTime())) return schedule;
     const day = d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" });
-    return `Le ${day} à ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}, une fois`;
+    return `Le ${day} à ${frTime(`${d.getUTCHours()}:${d.getUTCMinutes()}`)}, une fois`;
   }
   const parts = cronParts(schedule);
-  return parts ? `${recurrenceOf(parts)} à ${parts.time}` : `Horaire : ${schedule}`;
+  if (parts) return `${recurrenceOf(parts)} à ${frTime(parts.time)}`;
+  return hourlyLabel(schedule.trim().split(/\s+/)) ?? `Horaire : ${schedule}`;
+}
+
+// A run's day and hour, in words and in the routines' time zone (UTC): « aujourd’hui à 17 h »,
+// « demain à 7 h 30 », « hier à 8 h », « lundi à 7 h 30 », « le 12 novembre à 9 h ».
+export function runDayLabel(at: number, now = Date.now()): string {
+  const d = new Date(at);
+  const n = new Date(now);
+  const time = frTime(`${d.getUTCHours()}:${d.getUTCMinutes()}`);
+  const days = Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())) / 86_400_000);
+  if (days === 0) return `aujourd’hui à ${time}`;
+  if (days === 1) return `demain à ${time}`;
+  if (days === -1) return `hier à ${time}`;
+  if (Math.abs(days) < 7) return `${d.toLocaleDateString("fr-FR", { weekday: "long", timeZone: "UTC" })}${days < 0 ? " dernier" : ""} à ${time}`;
+  return `le ${d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" })} à ${time}`;
+}
+export const nextRunLabel = runDayLabel;
+
+/**
+ * The chip beside a routine's schedule. A next run already past (an instance that slept: no routine
+ * runs then) never reads « Prochaine : lundi dernier » (Leslie, 01/11): it says the run has not left yet.
+ */
+export function nextRunChip(nextRunAt: number, now = Date.now()): string {
+  if (nextRunAt < now - 60_000) return `Pas encore partie, prévue ${runDayLabel(nextRunAt, now)}`;
+  return `Prochaine : ${runDayLabel(nextRunAt, now)}`;
+}
+
+const PLATFORMS: Record<string, string> = { telegram: "Telegram", slack: "Slack", teams: "Teams", whatsapp: "WhatsApp", discord: "Discord", email: "e-mail", local: "l’app" };
+
+// Where a routine's result arrives (PDF du 30/10 : « canal de réception »). The app always shows a run
+// that delivered; « origin » or nothing is a routine an Expert set up from a chat: its result is in the
+// app only. Said calmly, with a way to receive it elsewhere too, never as an alert (Leslie, 01/11).
+export function deliveryLabel(deliver: string | null | undefined): { text: string; ok: boolean } {
+  const targets = (deliver ?? "").split(",").map((t) => t.trim().split(":")[0].toLowerCase()).filter(Boolean);
+  if (!targets.length || targets.every((t) => t === "origin")) return { text: "Reçue dans l’app", ok: false };
+  const names = [...new Set(["l’app", ...targets.filter((t) => t !== "origin").map((t) => PLATFORMS[t] ?? t)])];
+  const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} et ${names[names.length - 1]}` : names[0];
+  return { text: `Reçue dans ${list}`, ok: true };
 }
 
 // Today, or a day ahead, as "YYYY-MM-DD" (the form's date field).
 export function todayIso(offsetDays = 0): string {
   const d = new Date(Date.now() + offsetDays * 86_400_000);
   return d.toISOString().slice(0, 10);
+}
+
+// Upkeep: the routines an expert runs on itself (memory, the evening tidy-up, its connections, its
+// own review) or that only sync a form to a sheet. They send nothing when all is well and open no
+// conversation, so the Routines tab folds them under « Entretien », below the work (Leslie, 29/10).
+const UPKEEP = [
+  /^routine de mémoire\b/i,
+  /\brange ta journée sans écrire\b/i,
+  /\brévise ta mémoire\b/i,
+  /\bbalaie tes connexions\b/i,
+  /^synchronise\b/i,
+];
+const UPKEEP_NAME = /^(m[ée]moire\b|r[ée]vision (de la )?m[ée]moire|relecture de moi|rangement du soir|balayage des connexions)|\bsynchro\b/i;
+
+export function isUpkeep(r: Pick<Routine, "name" | "task">): boolean {
+  if (UPKEEP_NAME.test(r.name.trim())) return true;
+  const task = r.task.replace(/^Tu es [^.\n]+\.\s*/, "").trim();
+  return UPKEEP.some((re) => re.test(task));
 }

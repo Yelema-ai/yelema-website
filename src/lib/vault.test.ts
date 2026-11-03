@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseVaultDraft, profileLabel, vaultPath, vaultRefusalMessage } from "./vault.ts";
+import { parseVaultDraft, parseVaultProfiles, parseVaultRefs, profileLabel, vaultPath, vaultRefusalMessage } from "./vault.ts";
 
 test("the back office path of a vault scope, profile and handle; null for anything malformed", () => {
   assert.equal(vaultPath({ kind: "own" }, "adjoua"), "/app/vault/own/adjoua");
@@ -31,4 +31,14 @@ test("entries of one expert or of all, newest first", async () => {
   const items = [e("a", "adjoua", "2026-10-01"), e("b", "default", "2026-10-03"), e("c", "adjoua", "2026-10-02")];
   assert.deepEqual(entriesOf(items, null).map((i) => i.id), ["b", "c", "a"]);
   assert.deepEqual(entriesOf(items, "adjoua").map((i) => i.id), ["c", "a"]);
+});
+
+test("the profiles of a grouped add and the handles of a grouped removal; null for anything malformed", () => {
+  assert.deepEqual(parseVaultProfiles(["default", "adjoua"]), ["default", "adjoua"]);
+  assert.equal(parseVaultProfiles([]), null);
+  assert.equal(parseVaultProfiles(["../x"]), null);
+  assert.equal(parseVaultProfiles("adjoua"), null);
+  assert.deepEqual(parseVaultRefs([{ profile: "adjoua", handle: "vault_0123456789ab", extra: 1 }]), [{ profile: "adjoua", handle: "vault_0123456789ab" }]);
+  assert.equal(parseVaultRefs([{ profile: "adjoua", handle: "a/b" }]), null);
+  assert.equal(parseVaultRefs([]), null);
 });

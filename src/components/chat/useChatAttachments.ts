@@ -79,6 +79,17 @@ export function useChatAttachments(agentId: string, onFocusRequest?: () => void)
     [onFocusRequest, startUpload]
   );
 
+  // A deliverable already in the drive, given to the expert as the file to work on (« Modifier avec
+  // <Expert> », Myriel, Leslie 30/10): nothing to upload, its drive path rides in the turn's `files`.
+  const addReference = useCallback(
+    (path: string) => {
+      const name = path.split("/").pop() || path;
+      setFiles((prev) => (prev.some((f) => f.path === path) ? prev : [...prev, { id: uid("f"), file: new File([], name), previewUrl: null, status: "uploaded", path }]));
+      onFocusRequest?.();
+    },
+    [onFocusRequest]
+  );
+
   const removeFile = useCallback((id: string) => {
     controllers.current.get(id)?.abort();
     setFiles((prev) => {
@@ -138,6 +149,7 @@ export function useChatAttachments(agentId: string, onFocusRequest?: () => void)
 
   return {
     files,
+    addReference,
     dragOver,
     addFiles,
     removeFile,

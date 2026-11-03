@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
@@ -13,7 +13,7 @@ import { RoutineDialog, type RoutineExpert } from "./RoutineDialog";
 import { RoutineHistoryDialog } from "./RoutineHistoryDialog";
 import { RoutinesList } from "./RoutinesList";
 
-export function ExpertRoutines({ agentId, expert }: { agentId: string; expert: RoutineExpert }) {
+export function ExpertRoutines({ agentId, expert, active: shown = true }: { agentId: string; expert: RoutineExpert; active?: boolean }) {
   const expertKey = expert.profileId;
   const [routines, setRoutines] = useState<Routine[] | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -38,6 +38,14 @@ export function ExpertRoutines({ agentId, expert }: { agentId: string; expert: R
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The tab stays mounted once opened: read again on each return to it, so a routine the expert set up
+  // in the chat or on a call meanwhile is there (Leslie, 29/10).
+  const wasShown = useRef(shown);
+  useEffect(() => {
+    if (shown && !wasShown.current) void load();
+    wasShown.current = shown;
+  }, [shown, load]);
 
   const replace = (r: Routine) => setRoutines((list) => list && (list.some((x) => x.id === r.id) ? list.map((x) => (x.id === r.id ? r : x)) : [...list, r]));
 

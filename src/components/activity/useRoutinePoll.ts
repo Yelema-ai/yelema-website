@@ -45,7 +45,7 @@ export function useRoutinePoll(
         for (const run of found.fresh) fresh.push({ key: convKey(agentId, profile, run.session_id), run });
       }
       fresh.sort((a, b) => toMs(a.run.last_active) - toMs(b.run.last_active));
-      fresh.forEach(({ key, run }, i) => actions.routineDone(key, run.routine, run.session_id, run.last_active, i >= fresh.length - MAX_TOASTS));
+      fresh.forEach(({ key, run }, i) => actions.routineDone(key, run.routine, run.session_id, run.last_active, i >= fresh.length - MAX_TOASTS, run.silent));
       persist(stateRef.current);
     };
     // The instances are asked together; hidden, nothing is asked, and one look follows the return.

@@ -45,8 +45,8 @@ export function VoiceKeysView() {
   }, [data, admin]);
 
   const keys = (scope.kind === "client" ? data?.client : scope.kind === "member" ? data?.members?.find((m) => m.id === scope.id)?.keys : data?.own) ?? [];
-  const labelOf = (id: string) => data?.providers.find((p) => p.id === id)?.label ?? id;
-  const chosen = data?.providers.find((p) => p.id === provider);
+  const labelOf = (id: string) => data?.providers?.find((p) => p.id === id)?.label ?? id;
+  const chosen = data?.providers?.find((p) => p.id === provider);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -76,7 +76,7 @@ export function VoiceKeysView() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="font-display text-[18px] font-bold tracking-tight text-ink">Clé de transcription</h3>
+        <h3 className="font-display text-[18px] font-bold tracking-tight text-ink">Transcription de la voix</h3>
         <p className="mt-1 max-w-xl text-sm text-ink-3">Pour la dictée et les notes vocales (Telegram, WhatsApp…). Les appels vocaux ne changent pas.</p>
       </div>
 
@@ -119,7 +119,7 @@ export function VoiceKeysView() {
             <KeyRound className="h-4 w-4 text-brand" /> Ajouter ou remplacer une clé
           </p>
           <div role="radiogroup" aria-label="Fournisseur" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {data.providers.map((p) => (
+            {(data.providers ?? []).map((p) => (
               <button key={p.id} type="button" role="radio" aria-checked={provider === p.id} onClick={() => setProvider(p.id)} className={cn("rounded-xl border p-2.5 text-left text-sm font-semibold transition-colors", provider === p.id ? "border-brand bg-tint/60 text-ink" : "border-line text-ink-2 hover:border-brand/40")}>
                 {p.label}
               </button>

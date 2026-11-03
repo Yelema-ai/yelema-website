@@ -1,20 +1,50 @@
 "use client";
 
-import { useState } from "react";
-import { Check, ChevronDown, ListChecks, Loader2, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, ChevronDown, ListChecks, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { stepDone } from "@/lib/tool-steps";
 import type { ToolEvent } from "./types";
 
-// While the expert answers: its latest step, in one quiet line that stays until the reply comes.
-export function LiveStep({ tools }: { tools: ToolEvent[] }) {
+// How long a turn runs before the member is told they may leave: the reply reaches them anyway.
+const LONG_WAIT_MS = 30_000;
+
+// While the expert answers: the three dots, and one quiet line saying what it does: it reads the
+// message, then its latest step. A long turn adds one line, no more (Leslie, 27/10: light, no
+// timer, no list). The wait counts from `since`, the member's message, so a line that comes and
+// goes during the turn (a thought, a sentence before a tool) does not start it again.
+export function LiveWait({ tools, name, since }: { tools: ToolEvent[]; name: string | null; since?: number }) {
+  const [long, setLong] = useState(false);
+  useEffect(() => {
+    const left = LONG_WAIT_MS - (since ? Date.now() - since : 0);
+    if (left <= 0) {
+      setLong(true);
+      return;
+    }
+    const t = setTimeout(() => setLong(true), left);
+    return () => clearTimeout(t);
+  }, [since]);
   const current = tools.findLast((t) => t.status === "running") ?? tools.at(-1);
-  if (!current) return null;
+  const doing = current?.phrase ?? "Lit votre message";
+  const line = name ? `${name} ${doing.charAt(0).toLowerCase()}${doing.slice(1)}` : doing;
   return (
-    <p className="mb-2 flex items-center gap-2 text-[13px] text-ink-3" aria-live="polite">
-      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-      <span className="truncate">{current.phrase}</span>
-    </p>
+    <div className="mb-2" aria-live="polite">
+      <p className="flex items-center gap-2.5 py-1 text-sm text-ink-3">
+        <TypingDots />
+        <span className="truncate">{line.replace(/…$/, "")}</span>
+      </p>
+      {long && <p className="mt-0.5 text-[13px] text-ink-3">Vous serez prévenu dès que c’est prêt.</p>}
+    </div>
+  );
+}
+
+export function TypingDots() {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 text-ink-3">
+      {[0, 150, 300].map((d) => (
+        <span key={d} className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" style={{ animationDelay: `${d}ms` }} />
+      ))}
+    </span>
   );
 }
 

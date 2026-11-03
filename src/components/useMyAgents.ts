@@ -8,6 +8,8 @@ import { isTransitional } from "@/lib/format";
 import type { MergedAgent, Role } from "@/lib/types";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { usePoll } from "@/components/usePoll";
+import { usePublicConfig } from "@/components/PublicConfigProvider";
+import { instanceEvents } from "@/lib/instance-events";
 
 // The instances the signed-in user owns in a workspace, with their live state (one per member, so
 // in practice one row). ONE reading for the whole shell, seeded by the server layout; read again
@@ -55,6 +57,15 @@ function useAgentsReading(workspaceId: string | null | undefined, initial: Merge
   const current = state?.key === key ? state : null;
   const agents = current?.agents ?? EMPTY;
   usePoll(load, { everyMs: TRANSITION_POLL_MS, immediate: false, enabled: Boolean(workspaceId) && agents.some((a) => isTransitional(a.live_status)) });
+
+  // The back office changed an instance's route (activated, suspended): read the list again (EVENT_STREAM=on).
+  const { eventStream } = usePublicConfig();
+  const ids = agents.map((a) => a.agent37_id).filter((id): id is string => Boolean(id)).join(",");
+  useEffect(() => {
+    if (!eventStream || !workspaceId || !ids) return;
+    const offs = ids.split(",").map((id) => instanceEvents.on(id, (type) => type === "instance.changed" && void load()));
+    return () => offs.forEach((off) => off());
+  }, [eventStream, workspaceId, ids, load]);
 
   return { agents, loaded: current !== null };
 }

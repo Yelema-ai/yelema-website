@@ -166,6 +166,18 @@ export const YELE_TOOLS = [
     },
   },
   {
+    name: "trouver_une_commande",
+    description:
+      "Trouve la commande d'Expert qui répond à un besoin (« comment je fais pour préparer un devis ? ») : quel Expert, le nom de la commande en mots, ce qu'elle fait, un exemple et ce qu'il faut préciser. Sans besoin, liste les commandes de chaque Expert. À utiliser avant de citer une commande : n'en citer aucune autre.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        besoin: { type: "string", description: "Ce que l'utilisateur veut faire, en ses mots (ex: 'relancer un client', 'faire un devis')." },
+        expert: { type: "string", description: "Optionnel : limiter à un Expert (ex: 'koffi')." },
+      },
+    },
+  },
+  {
     name: "diagnostiquer_configuration",
     description:
       "Diagnostique la configuration générale de l'instance Hermes en toute sécurité (clés d'API et secrets automatiquement masqués). Vérifie les passerelles actives, les modèles configurés et la mémoire.",
@@ -189,6 +201,7 @@ export interface YeleBackend {
   consulterAppelsEtVoix(expert?: string): Promise<string>;
   rechercherDansLaMemoire(requete: string, expert?: string): Promise<string>;
   consulterSkillsExperts(expert?: string): Promise<string>;
+  trouverCommande(besoin?: string, expert?: string): Promise<string>;
 }
 
 type Rpc = { jsonrpc?: string; id?: string | number | null; method?: string; params?: Record<string, unknown> };
@@ -245,6 +258,11 @@ async function callTool(backend: YeleBackend, name: unknown, args: Record<string
     case "consulter_skills_experts": {
       const e = typeof args.expert === "string" ? args.expert : undefined;
       return text(await backend.consulterSkillsExperts(e));
+    }
+    case "trouver_une_commande": {
+      const b = typeof args.besoin === "string" ? args.besoin : undefined;
+      const e = typeof args.expert === "string" ? args.expert : undefined;
+      return text(await backend.trouverCommande(b, e));
     }
     case "diagnostiquer_configuration": {
       return text(await backend.diagnostiquerConfiguration());

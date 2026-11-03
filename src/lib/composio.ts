@@ -88,14 +88,19 @@ function normalizeToolkit(raw: unknown): IntegrationToolkit {
 
 // ---- Connect ---------------------------------------------------------------------------------
 
+const ALIAS = /^[\p{L}\p{N} ._@-]{1,40}$/u;
+/** An account name the member chose: short and plain, since an expert repeats it to pick the account. */
+export const isAccountAlias = (alias: string): boolean => ALIAS.test(alias);
+
 // A toolkit with no auth config in Yelema's Composio project fails with 4308 "NoManagedAuth". Several accounts
-// of one tool are allowed; the alias (unique per member and tool) is what an expert names to pick one.
+// of one tool are allowed; the alias (unique per member and tool) is what an expert names to pick one, drawn
+// when the member chose none.
 export async function connectToolkit(userId: string, toolkit: string, alias?: string): Promise<IntegrationConnectResult> {
   if (HIDDEN_TOOLKITS.has(toolkit.toLowerCase())) throw new ApiError(422, "use_unipile_card", "Unipile se relie avec sa carte « WhatsApp et messageries », en haut de cette page.");
+  const chosen = alias?.trim();
   try {
     const session = await client().toolRouter.create(userId, { manageConnections: true, multiAccount: { enable: true } });
-    const targetAlias = alias?.trim() || `${toolkit.toLowerCase()}-${randomBytes(3).toString("hex")}`;
-    const request = await session.authorize(toolkit, { alias: targetAlias });
+    const request = await session.authorize(toolkit, { alias: chosen || `${toolkit.toLowerCase()}-${randomBytes(3).toString("hex")}` });
     return { toolkit, connectedAccountId: request.id, redirectUrl: request.redirectUrl ?? "" };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
@@ -129,99 +134,33 @@ interface RawConnectedAccount {
   updated_at?: string | number;
 }
 
-const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+const EMAIL = /[\w.%+-]+@[\w.-]+\.[a-z]{2,}/i;
+const NAME_KEYS = ["displayName", "display_name", "name", "username", "login", "workspace_name", "workspaceName", "subdomain"];
+// A credential is never read for an identity, even when it happens to contain an "@".
+const SECRET_KEY = /token|secret|key|url|scope|password/i;
 
-function findEmailInRecord(obj: unknown): string | null {
-  if (!obj || typeof obj !== "object") return null;
-  const record = obj as Record<string, unknown>;
-
-  const candidateKeys = [
-    "email",
-    "user_email",
-    "userEmail",
-    "mail",
-    "displayName",
-    "display_name",
-    "username",
-    "login",
-    "account_id",
-  ];
-  for (const k of candidateKeys) {
-    const val = record[k];
-    if (typeof val === "string") {
-      const match = val.match(EMAIL_REGEX);
-      if (match) return match[0];
-    }
-  }
-
-  for (const [key, val] of Object.entries(record)) {
-    const lowerKey = key.toLowerCase();
-    if (
-      lowerKey.includes("token") ||
-      lowerKey.includes("secret") ||
-      lowerKey.includes("url") ||
-      lowerKey.includes("scope") ||
-      lowerKey.includes("key")
-    ) {
-      continue;
-    }
-    if (typeof val === "string") {
-      const match = val.match(EMAIL_REGEX);
-      if (match) return match[0];
-    } else if (typeof val === "object" && val !== null) {
-      const found = findEmailInRecord(val);
-      if (found) return found;
-    }
+function findEmail(value: unknown, depth = 0): string | null {
+  if (typeof value === "string") return EMAIL.exec(value)?.[0] ?? null;
+  if (!value || typeof value !== "object" || depth > 3) return null;
+  for (const [k, v] of Object.entries(value)) {
+    const found = SECRET_KEY.test(k) ? null : findEmail(v, depth + 1);
+    if (found) return found;
   }
   return null;
 }
 
-function findNameOrIdentity(obj: unknown): string | null {
-  if (!obj || typeof obj !== "object") return null;
-  const record = obj as Record<string, unknown>;
-  const candidateKeys = [
-    "displayName",
-    "display_name",
-    "name",
-    "username",
-    "login",
-    "workspace_name",
-    "workspaceName",
-    "subdomain",
-  ];
-  for (const k of candidateKeys) {
-    const val = record[k];
-    if (typeof val === "string" && val.trim() && !val.includes("http")) {
-      return val.trim();
-    }
-  }
-  return null;
+function findName(record: Record<string, unknown>): string | null {
+  const name = NAME_KEYS.map((k) => record[k]).find((v): v is string => typeof v === "string" && !!v.trim() && !v.includes("http"));
+  return name?.trim().slice(0, 120) ?? null;
 }
 
-function extractAccountLabel(c: RawConnectedAccount): string | null {
-  const data = (c.data ?? {}) as Record<string, unknown>;
-  const stateVal = ((c.state as { val?: Record<string, unknown> })?.val ??
-    (typeof c.state === "object" ? c.state : {})) as Record<string, unknown>;
-  const params = (c.params ?? {}) as Record<string, unknown>;
-
-  // 1. Prioritize email address (matches user request: "mieux vaut mettre l'email")
-  const email = findEmailInRecord(data) || findEmailInRecord(stateVal) || findEmailInRecord(params);
-  if (email) return email;
-
-  // 2. Second priority: displayName or identity (e.g. Canva, Notion, Slack)
-  const name = findNameOrIdentity(data) || findNameOrIdentity(stateVal) || findNameOrIdentity(params);
-  if (name) return name;
-
-  // 3. Third priority: User alias (ignore auto-generated ones like "gmail-2", "toolkit-1")
-  if (c.alias && typeof c.alias === "string" && c.alias.trim()) {
-    const trimmed = c.alias.trim();
-    const isAutoAlias = /^[a-z0-9_-]+-\d+$/i.test(trimmed);
-    if (!isAutoAlias) {
-      return trimmed;
-    }
-  }
-
-  return null;
+// Who the account is, as Composio saw it at sign-in: what the screen shows when the back office has nothing.
+function accountIdentity(c: RawConnectedAccount): { email: string | null; accountName: string | null } {
+  const sources = [c.data, c.state?.val, c.params].filter((r): r is Record<string, unknown> => !!r && typeof r === "object");
+  return {
+    email: sources.map((r) => findEmail(r)).find(Boolean) ?? null,
+    accountName: sources.map(findName).find(Boolean) ?? null,
+  };
 }
 
 function toEpochMs(value: string | number | undefined): number | null {
@@ -247,7 +186,7 @@ function normalizeConnection(raw: unknown): IntegrationConnection {
     createdAt: toEpochMs(c.createdAt ?? c.created_at),
     updatedAt: toEpochMs(c.updatedAt ?? c.updated_at),
     alias: c.alias ?? null,
-    label: extractAccountLabel(c),
+    ...accountIdentity(c),
   };
 }
 
@@ -314,4 +253,43 @@ export async function mintMcpSession(userId: string, pins: Record<string, string
   }
   if (Object.keys(headers).length === 0) headers["x-api-key"] = apiKey();
   return { url, headers };
+}
+
+// ---- Files for the tools (the Livrables bridge, src/lib/livrables-bridge.ts) ----------------
+
+export interface StagedFile {
+  name: string;
+  mimetype: string;
+  s3key: string;
+}
+
+// Puts a file in Composio's storage for one tool, as its SDK does (files.upload): ask a presigned
+// address for that tool, then PUT the bytes there. The answer is what the tool's file input takes.
+export async function stageFile(bytes: Uint8Array<ArrayBuffer>, name: string, mimetype: string, toolSlug: string, toolkitSlug: string): Promise<StagedFile> {
+  const res = await fetch(`${COMPOSIO_API_BASE}/api/v3.1/files/upload/request`, {
+    method: "POST",
+    headers: { "x-api-key": apiKey(), "content-type": "application/json" },
+    body: JSON.stringify({
+      filename: name,
+      mimetype,
+      md5: createHash("md5").update(bytes).digest("hex"),
+      tool_slug: toolSlug,
+      toolkit_slug: toolkitSlug,
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) throw new Error(`upload request ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+  const data = (await res.json()) as { key?: unknown; new_presigned_url?: unknown };
+  if (typeof data.key !== "string" || typeof data.new_presigned_url !== "string") throw new Error("upload request: no key or address");
+  // The storage address is signed: no key of ours goes with the bytes.
+  const put = await fetch(data.new_presigned_url, {
+    method: "PUT",
+    headers: { "content-type": mimetype },
+    body: bytes,
+    cache: "no-store",
+    signal: AbortSignal.timeout(120_000),
+  });
+  if (!put.ok) throw new Error(`upload ${put.status}`);
+  return { name, mimetype, s3key: data.key };
 }

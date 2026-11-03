@@ -1,3 +1,4 @@
+import { isAccountAlias } from "@/lib/composio";
 import { requireAgentAccess } from "@/lib/auth";
 import { ApiError, handleError, json, readJson } from "@/lib/http";
 import { integrations } from "@/lib/integrations";
@@ -16,7 +17,11 @@ export async function POST(request: Request, { params }: Ctx) {
       throw new ApiError(400, "invalid_request", "Choisissez un outil");
     }
 
-    return json(await integrations.connect(row, toolkit, typeof alias === "string" ? alias : undefined));
+    const chosen = typeof alias === "string" && alias.trim() ? alias.trim() : undefined;
+    if (chosen && !isAccountAlias(chosen)) {
+      throw new ApiError(400, "invalid_alias", "Nom du compte : 40 caractères au plus, lettres, chiffres, espaces, point, @, _ ou -.");
+    }
+    return json(await integrations.connect(row, toolkit, chosen));
   } catch (e) {
     return handleError(e);
   }

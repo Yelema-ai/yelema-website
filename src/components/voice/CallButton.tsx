@@ -13,12 +13,15 @@ export function CallButton({
   className,
   label = "Appeler",
   iconOnly = false,
+  primary = false,
 }: {
   expert: { key: string; name: string; photoUrl: string | null };
   className?: string;
   label?: string;
   /** A round icon, for a phone's header: the label goes to the screen reader. */
   iconOnly?: boolean;
+  /** The page's main action (an empty « Appels »): the brand button, larger. */
+  primary?: boolean;
 }) {
   const voices = useVoices();
   const { call } = useCall();
@@ -31,8 +34,8 @@ export function CallButton({
   return (
     <>
       <Button
-        variant="secondary"
-        size={iconOnly ? "icon" : "sm"}
+        variant={primary ? "default" : "secondary"}
+        size={iconOnly ? "icon" : primary ? "lg" : "sm"}
         className={className}
         onClick={() => call(expert, voices)}
         onPointerEnter={() => preloadFace(expert.photoUrl)}

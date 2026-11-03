@@ -44,8 +44,11 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
   const pathname = usePathname();
   const { experts } = useExpertsContext();
   const trail = crumbs(pathname, experts);
+  // An expert's page heads itself on a computer, its bell included (Leslie, 28/10, variante B): no bar
+  // above it, the conversation gets the room. Its own menu button keeps the bar on a phone.
+  const expertPage = pathname.startsWith("/experts/") && parseAgentRoute(pathname.split("/").filter(Boolean).slice(2))?.profileId != null;
   return (
-    <header className="sticky top-0 z-30 flex h-[62px] shrink-0 items-center gap-2.5 border-b border-line bg-bg/85 px-4 backdrop-blur md:px-6">
+    <header className={cn("sticky top-0 z-30 flex h-[62px] shrink-0 items-center gap-2.5 border-b border-line bg-bg/85 px-4 backdrop-blur md:px-6", expertPage && "lg:hidden")}>
       <button
         type="button"
         onClick={onMenu}

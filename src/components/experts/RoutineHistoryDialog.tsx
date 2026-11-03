@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { absoluteFr, relativeFr } from "@/lib/fr-dates";
-import type { Routine, RoutineRun, RunOutcome } from "@/lib/routines";
+import { runOpens, type Routine, type RoutineRun, type RunOutcome } from "@/lib/routines";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -16,7 +16,7 @@ const OUTCOME: Record<RunOutcome, { label: string; variant: "success" | "muted" 
   failed: { label: "Échec", variant: "destructive" },
 };
 
-// A routine's past runs, newest first, each opening its conversation.
+// A routine's past runs, newest first; one that delivered opens its conversation, the others are a line.
 export function RoutineHistoryDialog({
   agentId,
   profileId,
@@ -43,7 +43,7 @@ export function RoutineHistoryDialog({
       <DialogContent className="max-h-[calc(100vh-2rem)] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Historique : {routine.name}</DialogTitle>
-          <DialogDescription>Ses dernières exécutions. Chacune ouvre la conversation où l’Expert a travaillé.</DialogDescription>
+          <DialogDescription>Ses dernières exécutions. Celles qui ont livré ouvrent leur conversation.</DialogDescription>
         </DialogHeader>
         {error ? (
           <p className="text-sm text-ko">{error}</p>
@@ -57,18 +57,32 @@ export function RoutineHistoryDialog({
           <ul className="divide-y divide-line">
             {runs.map((run) => (
               <li key={run.sessionId}>
-                <Link href={`${chat}?session=${encodeURIComponent(run.sessionId)}`} onClick={onClose} className="flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-soft">
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm text-ink">{absoluteFr(run.at)}</span>
-                    <span className="block text-xs text-ink-3">{relativeFr(run.at)}</span>
-                  </span>
-                  {run.outcome && <Badge variant={OUTCOME[run.outcome].variant}>{OUTCOME[run.outcome].label}</Badge>}
-                </Link>
+                {runOpens(run, routine) ? (
+                  <Link href={`${chat}?session=${encodeURIComponent(run.sessionId)}`} onClick={onClose} className="flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-soft">
+                    <RunLine run={run} />
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-3 px-2 py-2.5">
+                    <RunLine run={run} />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function RunLine({ run }: { run: RoutineRun }) {
+  return (
+    <>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm text-ink">{absoluteFr(run.at)}</span>
+        <span className="block text-xs text-ink-3">{relativeFr(run.at)}</span>
+      </span>
+      {run.outcome && <Badge variant={OUTCOME[run.outcome].variant}>{OUTCOME[run.outcome].label}</Badge>}
+    </>
   );
 }

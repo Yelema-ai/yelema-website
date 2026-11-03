@@ -1,22 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Plus, Sparkles } from "lucide-react";
 import { ComputerButton, ComputerDialog, ComputerPanel } from "@/components/experts/ExpertComputer";
 import { DashboardProvider } from "@/components/experts/DashboardProvider";
-import { DashboardButton, DashboardPanel, DashboardDialog, ShareDashboardModal, SidePanelSync } from "@/components/experts/ExpertDashboard";
+import { DashboardButton, DashboardPanel, DashboardDialog, OpenDashboardOnMount, ShareDashboardModal, SidePanelSync } from "@/components/experts/ExpertDashboard";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { expertDisplayName } from "@/lib/experts";
 import { cn } from "@/lib/utils";
+import { agentTabPath } from "@/lib/expert-tabs";
+import { citedFolder, type TurnDoc } from "@/lib/drive-links";
+import { ConversationDocs } from "./ConversationDocs";
+import { PreviewSiblings } from "@/components/files/preview-siblings";
+import { GooglePin } from "./GoogleDocs";
+import type { GoogleDoc } from "@/lib/google-docs";
 import { DropOverlay } from "@/components/DropOverlay";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChatComposer } from "./ChatComposer";
+import { ExpertReadiness } from "@/components/experts/ExpertReadiness";
+import { useVoiceExpert } from "@/components/voice/useVoiceExpert";
+import type { Stage } from "@/lib/jour-zero";
 import { ChatMessages } from "./ChatMessages";
 import { ChatSessionsPanel } from "./ChatSessionsPanel";
 import { setChatFull, setChatListHidden, useChatFull, useChatListHidden, useChatSidePanel } from "./chat-layout";
 import { useChatContext } from "./ChatProvider";
 import { useChat } from "./useChat";
 import { useChatAttachments } from "./useChatAttachments";
+import { rememberedSettings } from "./rememberedSettings";
 
 // The conversation pane, rendered full-height in the chat tab's main column. Empty state = a
 // centered welcome (heading + big composer + subtitle); once there are messages it becomes a
@@ -27,8 +39,28 @@ import { useChatAttachments } from "./useChatAttachments";
 const SCREEN_TEMPLATE = "yelema-hermes";
 const SCREEN_MIN_REVISION = 5;
 
+export const hasScreen = (instance: { image: { template: string; revision: number | null } | null } | null) =>
+  instance?.image?.template === SCREEN_TEMPLATE && (instance.image.revision ?? 0) >= SCREEN_MIN_REVISION;
+
 // `driveFolder`: the expert's folder in the drive, where the documents of its replies are looked for.
-export function ChatView({ initialMessage, driveFolder = null }: { initialMessage?: string | null; driveFolder?: string | null }) {
+export function ChatView({
+  initialMessage,
+  driveFolder = null,
+  actionsSlot = null,
+  onAction,
+  openDashboard = false,
+  onDashboardOpened,
+}: {
+  initialMessage?: string | null;
+  driveFolder?: string | null;
+  /** On an expert's page, its header: « Ordinateur » and « Tableau » sit there, beside its name (Leslie, 28/10). */
+  actionsSlot?: HTMLElement | null;
+  /** Called on a click on one of them, so the Discussion shows where its panel opens. */
+  onAction?: () => void;
+  /** « Tableau » was clicked in the header before the chat was ever opened: opened once mounted. */
+  openDashboard?: boolean;
+  onDashboardOpened?: () => void;
+}) {
   const {
     agentId,
     profile,
@@ -43,7 +75,7 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
     bumpSession,
     threadVersion,
   } = useChatContext();
-  const { messages, isStreaming, loadingHistory, error, send, stop, killRun } = useChat({
+  const { messages, isStreaming, loadingHistory, error, send, stop, killRun, unqueue } = useChat({
     agentId,
     profile,
     sessionId: activeSessionId,
@@ -63,9 +95,34 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
 
   // Switching threads / starting a new chat empties the staged tray, so a file picked for one
   // conversation can't silently ride along into the next.
+  // « Modifier avec <Expert> » from a file's preview (?ref=): the file comes pinned above the field
+  // of the conversation it opened on, and leaves the address so a refresh does not pin it again. Kept
+  // while that conversation stays open (the tray is emptied again as the rail loads); another
+  // conversation drops it (Myriel, Leslie 30/10).
+  const { addReference } = att;
+  // The chat stays mounted while another tab of the expert shows: the address is read as it changes.
+  const params = useSearchParams();
+  const refParam = params.get("ref");
+  const pinned = useRef<{ path: string; session: string | null } | null>(null);
   useEffect(() => {
     clearFiles();
-  }, [activeSessionId, clearFiles]);
+    const p = pinned.current;
+    if (!p) return;
+    if ((activeSessionId ?? null) !== p.session) {
+      pinned.current = null;
+      return;
+    }
+    addReference(p.path);
+  }, [activeSessionId, clearFiles, addReference]);
+  useEffect(() => {
+    if (!refParam) return;
+    const url = new URL(window.location.href);
+    pinned.current = { path: refParam, session: url.searchParams.get("session") };
+    if ((activeSessionId ?? null) === pinned.current.session) addReference(refParam);
+    url.searchParams.delete("ref");
+    window.history.replaceState(window.history.state, "", url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refParam]);
 
   // A message handed over by the home page ("Demander à mon équipe") is sent once, into a new
   // thread, and dropped from the URL so a refresh does not send it again.
@@ -76,7 +133,9 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
     const url = new URL(window.location.href);
     url.searchParams.delete("q");
     window.history.replaceState(window.history.state, "", url);
-    void send(initialMessage);
+    // Sent with the model and effort chosen on the home's chat bar.
+    const { model, provider, reasoningEffort } = rememberedSettings();
+    void send(initialMessage, { model, provider, reasoningEffort });
   }, [initialMessage, activeSessionId, send]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -126,17 +185,26 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
   const showWelcome = !loadingHistory && messages.length === 0;
   // Memoized so the per-token re-renders during streaming don't re-scan the thread list.
   const activeTitle = useMemo(
-    () => sessions.find((s) => s.session_id === activeSessionId)?.title?.trim(),
+    () => {
+      // A routine's run is titled by the routine, as in the list, never by Hermes's instructions.
+      const s = sessions.find((x) => x.session_id === activeSessionId);
+      return (s?.routine ?? s?.title)?.trim();
+    },
     [sessions, activeSessionId]
   );
   const headerTitle = activeTitle || (activeSessionId ? "Discussion" : "Nouvelle discussion");
   // The expert this chat talks to, dressed by the catalogue (name, portrait); null on the
   // instance's default home or while the list loads.
+  const router = useRouter();
   const { experts } = useExpertsContext();
+  const voiceExpert = useVoiceExpert();
   const expert = useMemo(
     () => (profile ? (experts.find((e) => e.agentId === agentId && e.profileId === profile) ?? null) : null),
     [experts, agentId, profile]
   );
+  const pronoun = expert?.catalogueKey ? voiceExpert(expert.catalogueKey).pronoun : null;
+  // Before « Faire connaissance », it is the one action shown: the catalogue's requests wait (Leslie, 31/10).
+  const [prepStage, setPrepStage] = useState<Stage | null>(null);
   const instance = useMemo(() => agents.find((x) => x.agent37_id === agentId) ?? null, [agents, agentId]);
   // The expert's name when the chat targets one; the company chat otherwise (never the instance's
   // name, which the back office writes as the list of its Experts).
@@ -148,10 +216,19 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
   const listHidden = useChatListHidden();
   const full = useChatFull();
   const sidePanel = useChatSidePanel();
-  const hasComputer =
-    Boolean(profile) &&
-    instance?.image?.template === SCREEN_TEMPLATE &&
-    (instance.image.revision ?? 0) >= SCREEN_MIN_REVISION;
+  const hasComputer = Boolean(profile) && hasScreen(instance);
+
+  // The documents this discussion produced: the « Livrables » button of the chat's bar lists them.
+  const [docs, setDocs] = useState<TurnDoc[]>([]);
+  // The Google documents this discussion uses, the last one used first (Leslie, 31/10).
+  const [google, setGoogle] = useState<(GoogleDoc & { usedAt: number | null })[]>([]);
+  useEffect(() => {
+    setDocs([]);
+    setGoogle([]);
+  }, [activeSessionId]);
+  const docsFolder = (docs[0] && citedFolder(docs[0].path.slice(0, docs[0].path.lastIndexOf("/")))) || driveFolder;
+  const docsHref = `${agentTabPath(agentId, "files", profile)}${docsFolder ? `?dossier=${encodeURIComponent(docsFolder)}` : ""}`;
+  const inHeader = Boolean(profile && actionsSlot);
 
     const handleTriggerTableau = useCallback(() => {
     void send("/tableau");
@@ -166,7 +243,9 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
       isStreaming={isStreaming}
       messages={messages}
     >
+    <PreviewSiblings.Provider value={docs}>
     <SidePanelSync hasComputer={hasComputer} />
+    {openDashboard && onDashboardOpened && <OpenDashboardOnMount onDone={onDashboardOpened} />}
     <div className="flex h-full min-h-0">
     <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col wide:min-w-[400px]" {...att.dragHandlers}>
       {att.dragOver && <DropOverlay label="Déposez vos fichiers pour les joindre" />}
@@ -192,8 +271,23 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-        {hasComputer && <ComputerButton />}
-        {Boolean(profile) && <DashboardButton />}
+        {profile && messages.length > 0 && <ConversationDocs agentId={agentId} docs={docs} google={google} folderHref={docsHref} />}
+        {inHeader && actionsSlot ? (
+          createPortal(
+            <span className="contents" onClickCapture={onAction}>
+              {hasComputer && <ComputerButton inHeader />}
+              <DashboardButton inHeader />
+            </span>,
+            actionsSlot
+          )
+        ) : (
+          <>
+            {hasComputer && <ComputerButton />}
+            {Boolean(profile) && <DashboardButton />}
+          </>
+        )}
+        {/* An expert's new conversation lives in its list of conversations (Leslie, 28/10). */}
+        {!profile && (
         <button
           type="button"
           onClick={startNewChat}
@@ -204,6 +298,7 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
           {/* Beside an open panel the chat is narrow: the icon says enough, the title keeps its room. */}
           <span className={cn("hidden sm:inline", sidePanel && "wide:hidden")}>Nouvelle conversation</span>
         </button>
+        )}
         {/* Plein écran: in the corner, where a window is enlarged. */}
         <button
           type="button"
@@ -216,6 +311,7 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
         </button>
         </div>
       </header>
+      {messages.length > 0 && <GooglePin doc={google[0] ?? null} />}
       {/* Top: scrolling transcript when there are messages; the centered welcome heading when
           empty (justify-end seats it just above the composer). */}
       <div
@@ -235,7 +331,7 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
           </div>
         ) : messages.length > 0 ? (
           <div ref={contentRef}>
-            <ChatMessages messages={messages} isStreaming={isStreaming} face={face} driveFolder={driveFolder} onShowEarlier={showEarlier} />
+            <ChatMessages messages={messages} isStreaming={isStreaming} face={face} driveFolder={driveFolder} onShowEarlier={showEarlier} onUnqueue={unqueue} onDocs={setDocs} onGoogle={setGoogle} routine={sessions.find((s) => s.session_id === activeSessionId)?.routine ?? null} pronoun={pronoun} />
           </div>
         ) : (
           <>
@@ -258,6 +354,19 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
         <div className={cn("mx-auto w-full", showWelcome ? "max-w-2xl" : "max-w-3xl")} aria-live="polite">
           {error && <p className="mb-2 rounded-xl bg-ko-pale px-3 py-2 text-[13px] text-ko">{error}</p>}
         </div>
+        {profile && showWelcome && (
+          <ExpertReadiness
+            variant="banner"
+            agentId={agentId}
+            profileId={profile}
+            expertName={agentName}
+            pronoun={pronoun}
+            onCommand={(text) => void send(text)}
+            onStage={setPrepStage}
+            onOpenTools={() => router.push("/integrations/connecteurs")}
+            className={cn("mb-3", showWelcome && "max-w-2xl")}
+          />
+        )}
         <ChatComposer
           agentId={agentId}
           isStreaming={isStreaming}
@@ -272,9 +381,36 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
       {/* Bottom: balances the vertical centering and carries the welcome subtitle. */}
       {showWelcome && (
         <div className="flex flex-1 flex-col items-center px-4 pt-3">
-          <p className="text-center text-sm text-ink-3">
-            Plus vous donnez de contexte, meilleure sera la réponse.
-          </p>
+          {/* An expert's first discussion: three requests from the catalogue, sent as is on a click. If
+              something is missing for one (a tool to connect), the expert says what (its own rules). */}
+          {/* Before its « Faire connaissance », that comes first, in colour, among the requests (Leslie, 02/11: B). */}
+          {profile && (prepStage === "intro" || expert?.suggestions?.length) ? (
+            <div role="group" aria-label={`Demander à ${agentName}`} className="flex max-w-2xl flex-wrap justify-center gap-2">
+              {prepStage === "intro" && (
+                <button
+                  type="button"
+                  onClick={() => void send("/onboarding")}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-brand bg-tint px-3.5 py-1.5 text-[13.5px] font-semibold text-brand-ink transition-colors hover:bg-brand hover:text-on-brand"
+                >
+                  <Sparkles className="size-4" /> Faire connaissance avec {agentName}
+                </button>
+              )}
+              {(expert?.suggestions ?? []).slice(0, prepStage === "intro" ? 2 : 3).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => void send(s)}
+                  className="min-h-9 rounded-full border border-line bg-surface px-3.5 py-1.5 text-[13.5px] font-semibold text-ink transition-colors hover:border-brand/40 hover:bg-tint"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center text-sm text-ink-3">
+              Plus vous donnez de contexte, meilleure sera la réponse.
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -292,6 +428,7 @@ export function ChatView({ initialMessage, driveFolder = null }: { initialMessag
         </>
       )}
     </div>
+    </PreviewSiblings.Provider>
     </DashboardProvider>
   );
 }

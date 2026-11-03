@@ -10,6 +10,7 @@ import { HALO_COLOR, haloOf, tint } from "@/lib/call-turns";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { chosenVoice, type VoiceOption } from "@/lib/voice";
 import { useVoiceExpert } from "./useVoiceExpert";
+import { useConnectionTone } from "./useConnectionTone";
 import { loadVoicePrefs } from "@/lib/voice-prefs";
 import { cn } from "@/lib/utils";
 import { CallView, inCallPhase } from "./CallDialog";
@@ -79,6 +80,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const voiceExpert = useVoiceExpert();
   const inCall = inCallPhase(live.phase);
   useRingback(view !== null && live.phase === "connecting");
+  useConnectionTone(live.phase, inCall);
 
   const dial = useCallback(
     async (who: Callee) => {
@@ -271,7 +273,7 @@ function MiniCall(p: {
         {color && <span aria-hidden className="absolute -inset-[3px] rounded-full transition-colors duration-300" style={{ backgroundColor: tint(color, 0.9), boxShadow: `0 0 14px ${tint(color, 0.7)}` }} />}
         <span className="relative grid size-full place-items-center overflow-hidden rounded-full bg-tint text-base font-bold text-brand-ink ring-2 ring-surface">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          {face ? <img {...face} className="size-full object-cover object-[50%_18%]" /> : p.expert.name.charAt(0)}
+          {face ? <img {...face} className={p.expert.photoUrl?.startsWith("/yele/") ? "size-[78%] object-contain" : "size-full object-cover object-[50%_18%]"} /> : p.expert.name.charAt(0)}
         </span>
       </span>
       <span className="min-w-0 flex-1" aria-live="polite">

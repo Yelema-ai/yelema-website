@@ -25,6 +25,8 @@ const PER_PAGE = 10;
 interface ItemActions {
   onToggle: (item: MemoryItem) => void;
   onRemove: (item: MemoryItem) => void;
+  /** A new file for a document: the old one is kept as its previous version. */
+  onNewVersion?: (item: MemoryItem) => void;
 }
 
 // The deposits, one folding block per compartment (the first open), 10 to a page.
@@ -64,7 +66,7 @@ function Group({ name, items, defaultOpen, ...actions }: { name: string; items: 
   );
 }
 
-function Item({ item, onToggle, onRemove }: { item: MemoryItem } & ItemActions) {
+function Item({ item, onToggle, onRemove, onNewVersion }: { item: MemoryItem } & ItemActions) {
   return (
     <li className="py-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -77,9 +79,17 @@ function Item({ item, onToggle, onRemove }: { item: MemoryItem } & ItemActions) 
               </a>
             ) : item.kind === "note" ? (
               "Note"
+            ) : item.url ? (
+              <>
+                <a href={item.url} target="_blank" rel="noreferrer" className="font-semibold text-brand-ink underline-offset-2 hover:underline">
+                  {item.url.replace(/^https?:\/\//, "")}
+                </a>
+                , relu chaque semaine
+              </>
             ) : (
               "Site web"
             )}
+            {item.kind === "document" && item.version && item.version > 1 && <span>, version {item.version}</span>}
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -97,6 +107,9 @@ function Item({ item, onToggle, onRemove }: { item: MemoryItem } & ItemActions) 
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {item.kind === "document" && onNewVersion && (
+                  <DropdownMenuItem onSelect={() => onNewVersion(item)}>Déposer une nouvelle version</DropdownMenuItem>
+                )}
                 <DropdownMenuItem onSelect={() => onToggle(item)}>{item.active ? "Désactiver" : "Réactiver"}</DropdownMenuItem>
                 <DropdownMenuItem className="text-ko" onSelect={() => onRemove(item)}>
                   Supprimer

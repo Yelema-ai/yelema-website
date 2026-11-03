@@ -31,6 +31,11 @@ type Props = { src: string; className?: string; priority?: boolean } & (
   | { size?: never; sizes: string }
 );
 
+// Pictures this tab has already shown. A face drawn again (menu folded or unfolded, a cycle
+// opened, another page) is in the browser's cache: it shows at once, without the initial and the
+// fade in between (Leslie, 03/11: « les avatars prennent du temps pour apparaître »).
+const shown = new Set<string>();
+
 export function ExpertImage({ src, className, priority, size, sizes }: Props) {
   // Keyed on the address: a new picture starts again from its own loading state.
   return <Picture key={src} src={src} className={className} priority={priority} size={size} sizes={sizes} />;
@@ -38,15 +43,20 @@ export function ExpertImage({ src, className, priority, size, sizes }: Props) {
 
 function Picture({ src, className, priority, size, sizes }: { src: string; className?: string; priority?: boolean; size?: number; sizes?: string }) {
   const [attempt, setAttempt] = useState<"optimized" | "original" | "failed">(optimizable(src) ? "optimized" : "original");
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(() => shown.has(src));
   if (attempt === "failed") return null;
   const common = {
     src,
     alt: "",
     priority,
+    // A face is a few KB and always in sight (menu, header): never wait for the lazy loader.
+    loading: priority ? undefined : ("eager" as const),
     unoptimized: attempt === "original",
-    className: cn("transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0", className),
-    onLoad: () => setLoaded(true),
+    className: cn(loaded ? "opacity-100" : "opacity-0 transition-opacity duration-150", className),
+    onLoad: () => {
+      shown.add(src);
+      setLoaded(true);
+    },
     onError: () => setAttempt((a) => (a === "optimized" ? "original" : "failed")),
   };
   return size ? <Image {...common} width={size} height={size} /> : <Image {...common} fill sizes={sizes} />;

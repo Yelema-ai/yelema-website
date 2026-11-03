@@ -44,13 +44,14 @@ const screenFrame = (viewOnly: boolean) =>
 
 const LiveDot = () => <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-ko" />;
 
-export function ComputerButton() {
+export function ComputerButton({ inHeader = false }: { inHeader?: boolean }) {
   const { panelOpen, setPanelOpen, setDialogOpen } = useComputer();
   const sidePanel = useChatSidePanel();
   return (
     <button
       type="button"
       title="Son ordinateur"
+      aria-label="Son ordinateur"
       onClick={() => (window.matchMedia(WIDE).matches ? setPanelOpen(!panelOpen) : setDialogOpen(true))}
       className={cn(
         "inline-flex h-9 items-center gap-1.5 rounded-full border bg-card px-3 text-[13px] font-semibold text-ink hover:bg-soft",
@@ -59,7 +60,11 @@ export function ComputerButton() {
     >
       <Monitor className="h-4 w-4" />
       {/* Beside the open panel the chat is narrow, and the highlighted icon says enough. */}
-      <span className={cn("hidden sm:inline", (panelOpen || sidePanel) && "wide:hidden")}>Son ordinateur</span>
+      {inHeader ? (
+        <span className="max-[1439px]:hidden">Ordinateur</span>
+      ) : (
+        <span className={cn("hidden sm:inline", (panelOpen || sidePanel) && "wide:hidden")}>Son ordinateur</span>
+      )}
     </button>
   );
 }

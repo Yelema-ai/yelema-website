@@ -41,11 +41,14 @@ function identityNote(look: ExpertLook): string | null {
  */
 export function ExpertEditModal({
   expertKey,
+  photoUrl,
   open,
   onOpenChange,
   onVoice,
 }: {
   expertKey: string;
+  /** The face already on the page: shown at once, while the back office answers. */
+  photoUrl?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** « Sa voix » opens the voice window, where voice is on. */
@@ -159,7 +162,7 @@ export function ExpertEditModal({
   }
 
   const saved = look?.avatarUrl ?? look?.defaultAvatarUrl ?? null;
-  const portrait = preview ?? saved;
+  const portrait = preview ?? saved ?? photoUrl ?? null;
   const customized = Boolean(look && (look.displayName || look.avatarUrl));
 
   // Back to the catalogue's name and face, in one gesture: the name first, then the picture. Each
@@ -249,7 +252,12 @@ export function ExpertEditModal({
                 <div className="flex items-center gap-4">
                   {/* Fixed color on purpose: behind a portrait, in both themes. */}
                   <div className="relative size-20 shrink-0 overflow-hidden rounded-full bg-[#8E6FB0]">
-                    {portrait && <ExpertImage src={portrait} size={80} className="size-full object-cover object-[50%_15%]" />}
+                    {/* The header's own copy first, already in the browser's cache (Leslie, 29/10: the
+                        portrait came late), then the sharper one fades in over it. */}
+                    {!preview && photoUrl && (
+                      <ExpertImage src={photoUrl} size={48} className="absolute inset-0 size-full object-cover object-[50%_15%]" />
+                    )}
+                    {portrait && <ExpertImage src={portrait} size={80} className="relative size-full object-cover object-[50%_15%]" />}
                     {busy === "save" && pending && (
                       <div className="absolute inset-0 grid place-items-center bg-black/30">
                         <Loader2 className="size-5 animate-spin text-white" />

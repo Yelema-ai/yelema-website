@@ -1,11 +1,10 @@
 import { agent37, instanceFetch } from "@/lib/agent37";
-import { getSession } from "@/lib/auth";
-import { listConnections } from "@/lib/composio";
+import { composioUserId, hashAppsToken, listConnections } from "@/lib/composio";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { hashAppsToken } from "@/lib/composio";
 import { withTimeout } from "@/lib/fetch-timeout";
-import { profileQuery } from "@/lib/profile-id";
+import { isProfileId, profileQuery } from "@/lib/profile-id";
 import { pinnedWorkspaceId } from "@/lib/tenant";
+import { TenantError } from "@/lib/tenant-resolver";
 import { answerRpc } from "@/lib/yele-mcp";
 import {
   createYeleSupervisionBackend,
@@ -94,7 +93,7 @@ if (fs.existsSync(hermesDir)) {
     const models = {};
     if (fs.existsSync(f)) {
       try {
-        const lines = fs.readFileSync(f, 'utf8').trim().split('\\\\n').filter(Boolean);
+        const lines = fs.readFileSync(f, 'utf8').trim().split('\\n').filter(Boolean);
         for (const l of lines) {
           totalCrons++;
           try {
@@ -260,67 +259,23 @@ function errorJson(status: number, error: string): Response {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // Yélé's instance calls with its own token, as for `apps` and `memoire`; no browser session.
   const token = /^Bearer\s+(.+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]?.trim();
+  if (!token) return errorJson(401, "missing bearer token");
 
-  let agentId: string | null = null;
-  let userId: string | null = null;
-
-  // Verrouillage multi-tenant : vérifier le workspace épinglé s'il est configuré
-  let pinnedWorkspace: string | undefined = undefined;
+  let pinned: string | undefined;
   try {
-    pinnedWorkspace = await pinnedWorkspaceId();
-  } catch {}
-
-  const db = createAdminClient();
-
-  if (token) {
-    // Authentification par jeton d'instance (Hermes / yelema-hermes)
-    const tokenHash = hashAppsToken(token);
-    let q = db
-      .from("agents")
-      .select("agent37_id, user_id, workspace_id")
-      .eq("apps_token_hash", tokenHash);
-
-    if (pinnedWorkspace) {
-      q = q.eq("workspace_id", pinnedWorkspace);
-    }
-
-    const { data: agent } = await q.maybeSingle();
-
-    if (agent?.agent37_id) {
-      agentId = agent.agent37_id;
-      userId = agent.user_id;
-    }
+    pinned = await pinnedWorkspaceId();
+  } catch (e) {
+    return e instanceof TenantError && e.status < 500 ? errorJson(401, "invalid token") : errorJson(503, "token lookup unavailable");
   }
-
-  if (!agentId || !userId) {
-    // Authentification par session utilisateur (Bulle web Yélé)
-    const { user } = await getSession();
-    if (user) {
-      userId = user.id;
-      let q = db
-        .from("agents")
-        .select("agent37_id, workspace_id")
-        .eq("user_id", user.id);
-
-      if (pinnedWorkspace) {
-        q = q.eq("workspace_id", pinnedWorkspace);
-      }
-
-      const { data: agent } = await q
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (agent?.agent37_id) {
-        agentId = agent.agent37_id;
-      }
-    }
-  }
-
-  if (!agentId || !userId) {
-    return errorJson(401, "Non authentifié ou instance introuvable.");
-  }
+  const { data: agent, error } = await createAdminClient()
+    .from("agents")
+    .select("agent37_id, workspace_id, owner_user_id")
+    .eq("apps_token_hash", hashAppsToken(token))
+    .maybeSingle<{ agent37_id: string; workspace_id: string | null; owner_user_id: string | null }>();
+  if (error) return errorJson(503, "token lookup unavailable");
+  if (!agent?.agent37_id || (pinned && agent.workspace_id !== pinned)) return errorJson(401, "invalid token");
 
   const raw = await request.text();
   let message: unknown;
@@ -334,8 +289,8 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const resolvedAgentId = agentId;
-  const resolvedUserId = userId;
+  const resolvedAgentId = agent.agent37_id;
+  const composioUser = composioUserId(agent);
 
   // Cache mémoire par requête pour éviter les appels redondants vers l'instance
   let cachedDiag: SandboxDiagPayload | null = null;
@@ -362,7 +317,8 @@ export async function POST(request: Request): Promise<Response> {
     fetchUsageStats: async () => (await getDiag())?.usage ?? null,
     fetchIncidentAlerts: async () => (await getDiag())?.alerts ?? null,
     fetchVoiceBriefs: async () => (await getDiag())?.voiceBriefs ?? null,
-    searchMemories: async (q: string, exp?: string) => searchMemoriesInSandbox(resolvedAgentId, q, exp),
+    // The expert ends up in a path on the instance: a name of the wrong shape searches nobody.
+    searchMemories: async (q: string, exp?: string) => (exp && !isProfileId(exp.trim()) ? [] : searchMemoriesInSandbox(resolvedAgentId, q, exp)),
     fetchSkillsCatalog: async () => (await getDiag())?.skills ?? null,
     listSessions: async (): Promise<RawSessionInfo[]> => {
       const experts = await getExperts();
@@ -414,7 +370,7 @@ export async function POST(request: Request): Promise<Response> {
     },
     listConnections: async () => {
       try {
-        const { connections } = await listConnections(resolvedUserId);
+        const { connections } = await listConnections(composioUser);
         return connections.map((c) => ({
           toolkitSlug: c.toolkitSlug,
           status: c.status,

@@ -170,7 +170,7 @@ export function ExpertEmails({ inbox, expertKey = null, expertName, loaded }: { 
             type="button"
             onClick={() => setFilter(f.id)}
             aria-pressed={filter === f.id}
-            className={cn("rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors", filter === f.id ? "bg-brand text-on-brand" : "text-ink-2 hover:bg-soft")}
+            className={cn("rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors max-sm:py-2.5", filter === f.id ? "bg-brand text-on-brand" : "text-ink-2 hover:bg-soft")}
           >
             {f.label}
           </button>

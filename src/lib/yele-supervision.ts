@@ -1,4 +1,5 @@
 import type { YeleBackend } from "@/lib/yele-mcp";
+import { commandGuide } from "./command-guide.ts";
 
 /** Expert découvert dynamiquement dans la sandbox (~/.hermes/profiles) */
 export interface DiscoveredExpert {
@@ -844,6 +845,11 @@ export function createYeleSupervisionBackend(deps: SupervisionDeps): YeleBackend
       } catch (e) {
         return `Impossible de consulter les compétences métiers : ${e instanceof Error ? e.message : String(e)}`;
       }
+    },
+
+    async trouverCommande(besoin?: string, expert?: string): Promise<string> {
+      const experts = deps.listInstalledExperts ? await deps.listInstalledExperts().catch(() => []) : [];
+      return commandGuide(experts, besoin, expert);
     },
 
     async diagnostiquerConfiguration(): Promise<string> {

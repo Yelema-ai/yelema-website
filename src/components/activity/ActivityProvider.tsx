@@ -40,6 +40,8 @@ import { useTurnWatch } from "./useTurnWatch";
 import { systemNotify } from "./system-notify";
 
 const STORAGE_PREFIX = "yelema.activity.";
+const GROUP_TOAST = "activity";
+const GROUP_MS = 6000;
 
 export interface ChatPresence {
   open: (sessionId: string) => void;
@@ -56,7 +58,7 @@ export interface ActivityActions {
   prune: (agentId: string, profile: string | null, sessionIds: string[]) => void;
   /** The chat of one expert, while it is mounted: how to open one of its threads, add a rail row. */
   present: (agentId: string, profile: string | null, presence: ChatPresence) => () => void;
-  routineDone: (key: string, routine: string, sessionId: string, at: number, announce: boolean) => void;
+  routineDone: (key: string, routine: string, sessionId: string, at: number, announce: boolean, silent?: boolean) => void;
 }
 
 /** The notification centre (the bell): what the provider already knows, newest first. */
@@ -148,6 +150,9 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
     [router]
   );
 
+  // The pop-ups of answers and routines share one place (Leslie, 28/10, A): a second one turns it into
+  // « N nouvelles notifications » with « Tout fermer », instead of a pile to close one by one.
+  const grouped = useRef(new Set<string>());
   const announce = useCallback(
     (n: Notice, text: string, routine?: string) => {
       const expert = expertsRef.current.find((e) => expertKey(e.agentId, e.profileId) === expertKey(n.agentId, n.profile));
@@ -162,12 +167,26 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
       const open = () => openConversation(n.agentId, n.profile, n.sessionId);
       // A kind the user switched off in Paramètres stays in the bell but no longer pops up.
       if (!readNotifyPrefs()[n.kind]) return;
-      if (n.toast) {
-        const show = n.kind === "failed" ? toast.error : toast;
-        // The expert's face stands in for the icon of a reply or a routine; a failure keeps the error mark.
-        // eslint-disable-next-line @next/next/no-img-element
-        const icon = n.kind !== "failed" && expert?.photoUrl ? <img src={expert.photoUrl} alt="" className="toast-face" /> : undefined;
-        show(title, { id: n.key, description: body, icon, action: { label: "Ouvrir", onClick: open }, duration: 8000 });
+      if (n.toast && n.kind === "failed") {
+        toast.error(title, { id: n.key, description: body, action: { label: "Ouvrir", onClick: open }, duration: 8000 });
+      } else if (n.toast && !grouped.current.has(n.key)) {
+        // Counted by key: the same event from the stream and from polling is one notification.
+        const reset = () => grouped.current.clear();
+        const count = grouped.current.add(n.key).size;
+        const ends = { id: GROUP_TOAST, duration: GROUP_MS, onDismiss: reset, onAutoClose: reset };
+        if (count === 1) {
+          // The expert's face stands in for the icon of a reply or a routine.
+          // eslint-disable-next-line @next/next/no-img-element
+          const icon = expert?.photoUrl ? <img src={expert.photoUrl} alt="" className="toast-face" /> : undefined;
+          toast(title, { ...ends, description: body, icon, action: { label: "Ouvrir", onClick: open } });
+        } else {
+          toast(`${count} nouvelles notifications`, {
+            ...ends,
+            description: `Dernière : ${title}`,
+            icon: null,
+            action: { label: "Tout fermer", onClick: () => toast.dismiss(GROUP_TOAST) },
+          });
+        }
       }
       if (n.system) systemNotify(title, body, n.key, open);
     },
@@ -206,14 +225,15 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
           if (presenceRef.current.get(k) === presence) presenceRef.current.delete(k);
         };
       },
-      routineDone: (key, routine, sessionId, at, loud) => {
+      routineDone: (key, routine, sessionId, at, loud, silent = false) => {
         const ref = parseConvKey(key);
-        if (ref) driveChanged(ref.agentId);
-        if (ref) presenceRef.current.get(expertKey(ref.agentId, ref.profile))?.addSession({ session_id: sessionId, title: routine, last_active: at, routine });
+        // Nothing to report: a line in the bell, no conversation and no pop-up (Leslie, 28/10: « juste une notif »).
+        if (ref && !silent) driveChanged(ref.agentId);
+        if (ref && !silent) presenceRef.current.get(expertKey(ref.agentId, ref.profile))?.addSession({ session_id: sessionId, title: routine, last_active: at, routine });
         const now = Date.now();
-        const r = routineFinished(stateRef.current, key, visible(), now);
-        commit(r.notice ? remember(r.state, r.notice, "", routine, now) : r.state);
-        if (r.notice && loud) announce(r.notice, "", routine);
+        const r = routineFinished(stateRef.current, key, visible(), now, silent);
+        commit(r.notice ? remember(r.state, r.notice, "", routine, now, silent) : r.state);
+        if (r.notice && loud && !silent) announce(r.notice, "", routine);
       },
     }),
     [announce, commit, load]
@@ -224,7 +244,8 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
       items: notifications(state),
       open: (item) => {
         commit(markRead(stateRef.current, [item.key]));
-        openConversation(item.agentId, item.profile, item.sessionId);
+        // A run with nothing to report is no conversation (Leslie, 29/10): its line has nothing to open.
+        if (!item.silent) openConversation(item.agentId, item.profile, item.sessionId);
       },
       markAllRead: () => commit(markRead(stateRef.current, null)),
       markRead: (keys) => commit(markRead(stateRef.current, keys)),

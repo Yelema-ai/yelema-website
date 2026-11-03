@@ -194,7 +194,7 @@ function Portrait({ photoUrl, name, halo }: { photoUrl: string | null; name: str
         style={{ width: FACE_PX, height: FACE_PX }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        {face ? <img {...face} className="size-full object-cover object-[50%_18%]" /> : name.charAt(0)}
+        {face ? <img {...face} className={photoUrl?.startsWith("/yele/") ? "size-[78%] object-contain" : "size-full object-cover object-[50%_18%]"} /> : name.charAt(0)}
       </span>
       {(halo === "cherche" || halo === "muet") && (
         <span

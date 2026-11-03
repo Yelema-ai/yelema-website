@@ -23,6 +23,8 @@ export interface McpServer {
   /** The catalogue key of a `stdio` server. */
   stdio: string | null;
   hint: string | null;
+  /** The header that carries the token as is (`X-API-KEY`); null: `Authorization: Bearer`. */
+  header: string | null;
   state: McpState;
   updatedAt: string | null;
 }
@@ -65,6 +67,8 @@ export interface McpServerDraft {
   auth: McpAuth;
   /** With `bearer` only. */
   token?: string;
+  /** With `bearer` only: the header that carries the token as is, instead of `Authorization: Bearer`. */
+  header?: string;
   /** With `stdio` only: a key of `stdioCatalogue`. */
   stdio?: string;
 }
@@ -72,10 +76,14 @@ export interface McpServerDraft {
 // Loose bounds only: the back office holds the real rules (the shape of a name, a public https
 // address, the characters of a token). These keep an oversized or mistyped body from travelling.
 
-/** A server draft from a request body, with nothing but its four fields; null when it is not one. */
+const HEADER = /^[A-Za-z][A-Za-z0-9-]{0,62}[A-Za-z0-9]$/;
+
+/** A server draft from a request body, with nothing but its fields; null when it is not one. */
 export function parseServerDraft(body: unknown): McpServerDraft | null {
   if (!body || typeof body !== "object") return null;
-  const { name, url, auth, token, stdio } = body as Record<string, unknown>;
+  const { name, url, auth, token, stdio, header } = body as Record<string, unknown>;
+  const named = typeof header === "string" ? header.trim() : header;
+  if (named !== undefined && named !== "" && (auth !== "bearer" || typeof named !== "string" || !HEADER.test(named))) return null;
   if (typeof name !== "string" || !name.trim() || name.length > 60) return null;
   if (auth === "stdio") return typeof stdio === "string" && /^[a-z0-9_-]{1,40}$/.test(stdio) && url === undefined && token === undefined ? { name: name.trim(), url: "", auth, stdio } : null;
   if (typeof url !== "string" || !url.trim() || url.length > 2000) return null;
@@ -83,7 +91,7 @@ export function parseServerDraft(body: unknown): McpServerDraft | null {
   const draft: McpServerDraft = { name: name.trim(), url: url.trim(), auth };
   if (auth !== "bearer") return token === undefined || token === "" ? draft : null;
   if (typeof token !== "string" || !token.trim() || token.length > 4200) return null;
-  return { ...draft, token: token.trim() };
+  return { ...draft, token: token.trim(), ...(named ? { header: named as string } : {}) };
 }
 
 const SERVER_ID = /^\d{1,12}$/;
@@ -116,6 +124,7 @@ const REFUSALS: Record<string, string> = {
   oauth_unavailable: "Ce serveur n’a pas proposé d’autorisation. Vérifiez son adresse, ou choisissez une autre méthode.",
   instance_error: "Votre instance n’a pas pu traiter la demande. Réessayez dans un instant.",
   bad_stdio: "Ce serveur ne fait pas partie du catalogue de Yelema.",
+  bad_header: "Cet en-tête n’est pas accepté : des lettres, des chiffres et des tirets (X-API-KEY…), ni Authorization ni un en-tête du navigateur.",
 };
 
 /**

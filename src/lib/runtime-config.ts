@@ -1,4 +1,5 @@
 import "server-only";
+import { eventStreamOn } from "@/lib/instance-events";
 
 // Deployment configuration, read from the environment AT RUNTIME — never at build time.
 //
@@ -114,6 +115,8 @@ export type PublicConfig = {
   supabaseAnonKey: string;
   siteUrl: string | null;
   logoUrl: string | null;
+  /** The instance's event stream is open (EVENT_STREAM=on and the gateway): polls wait for it. */
+  eventStream: boolean;
 };
 
 // Signed in through the back office, the browser never talks to Supabase: it gets neither value.
@@ -125,5 +128,6 @@ export function publicConfig(): PublicConfig {
     supabaseAnonKey: viaBackoffice ? "" : (supabaseAnonKey() ?? ""),
     siteUrl: siteUrl() ?? null,
     logoUrl: brandLogoUrl() ?? null,
+    eventStream: eventStreamOn(process.env),
   };
 }

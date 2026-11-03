@@ -189,20 +189,25 @@ export function DashboardProvider({
 
   // URL pour l'integration dans l'iframe (securisee par sandbox strict sans allow-same-origin)
   const embedUrl = useMemo(() => {
-    if (!activeUrl) return null;
+    // No published link: the page the expert left in its drive, as the pack sends it without a host.
+    if (!activeUrl) {
+      return data?.htmlPath && agentId && profile && activeTab === "metier"
+        ? `/api/dashboards/frame?agentId=${encodeURIComponent(agentId)}&profile=${encodeURIComponent(profile)}&path=${encodeURIComponent(data.htmlPath)}`
+        : null;
+    }
     if (isTrustedFrameUrl(activeUrl) && agentId && profile) {
       return `/api/dashboards/frame?agentId=${encodeURIComponent(agentId)}&profile=${encodeURIComponent(profile)}`;
     }
     return activeUrl;
-  }, [activeUrl, agentId, profile]);
+  }, [activeUrl, agentId, profile, data?.htmlPath, activeTab]);
 
-  // Quand le lien arrive alors qu'on generait
+  // Quand le lien (ou la page dans le drive) arrive alors qu'on generait
   useEffect(() => {
-    if (isGenerating && activeUrl) {
+    if (isGenerating && embedUrl) {
       setIsGenerating(false);
-      toast.success("Le tableau de bord est mis en ligne.");
+      toast.success(activeUrl ? "Le tableau de bord est mis en ligne." : "Le tableau de bord est prêt.");
     }
-  }, [isGenerating, activeUrl]);
+  }, [isGenerating, embedUrl, activeUrl]);
 
   // Si le streaming du chat se termine alors qu'on etait en attente
   useEffect(() => {

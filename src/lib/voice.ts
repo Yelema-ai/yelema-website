@@ -123,9 +123,15 @@ export function voiceFacets(voices: VoiceOption[], f: VoiceFilter): { genders: (
   const countries = new Set(filterVoices(voices, { ...f, country: null }).map((v) => v.country));
   return {
     genders: (["female", "male"] as const).filter((g) => genders.has(g)),
-    countries: [...countries].sort((a, b) => countryName(a).localeCompare(countryName(b), "fr")),
+    countries: [...countries].sort(byCountry),
   };
 }
+
+// France first, then the other countries in French order (Leslie, 29/10).
+const byCountry = (a: string, b: string): number => Number(a.toUpperCase() !== "FR") - Number(b.toUpperCase() !== "FR") || countryName(a).localeCompare(countryName(b), "fr");
+
+/** The voices by country, France first, then by first name. */
+export const sortVoices = (voices: VoiceOption[]): VoiceOption[] => [...voices].sort((a, b) => byCountry(a.country, b.country) || a.label.localeCompare(b.label, "fr"));
 
 const REGIONS = new Intl.DisplayNames(["fr"], { type: "region" });
 export const countryName = (code: string): string => REGIONS.of(code) ?? code;
@@ -264,4 +270,21 @@ export function findInText(text: string, query: string): [number, number][] {
  */
 export function frenchSpacing(text: string): string {
   return text.replace(/ ([%:;?!»])/g, "\u00a0$1").replace(/« /g, "«\u00a0");
+}
+
+/**
+ * A call's account as plain text, to share it (e-mail, WhatsApp, copy, a .txt file): title and date,
+ * the summary (its sections, else its lines), then the transcript when the back office serves one.
+ */
+export function callShareText(
+  c: Pick<CallRecord, "summary" | "keyPoints" | "decisions" | "nextSteps" | "transcript">,
+  { title, meta, expertName, memberName }: { title: string; meta: string; expertName: string; memberName: string }
+): string {
+  const out = [`Appel avec ${expertName} : ${title}`, meta, ""];
+  const sections = summarySections(c);
+  if (sections) for (const s of sections) out.push(s.title, ...s.items.map((i) => `- ${i}`), "");
+  else if (lines(c.summary).length) out.push("Résumé", ...lines(c.summary).map((i) => `- ${i}`), "");
+  const said = transcriptOf(c);
+  if (said.length) out.push("Transcription", ...said.map((l) => `${l.who === "expert" ? expertName : memberName} : ${l.text}`), "");
+  return out.join("\n").trim() + "\n";
 }

@@ -5,14 +5,16 @@ import { FileText, FolderOpen } from "lucide-react";
 import { useDriveFiles } from "@/components/conversations/useAllConversations";
 import { FilePreview } from "@/components/files/FilePreview";
 import { formatMtime, type FileEntry } from "@/components/files/types";
+import { fileLabel, isMemberUpload } from "@/lib/drive-paths";
 
 const SHOWN = 6;
 
 // « Derniers livrables » on the home page: the latest files of the drive. A click opens the file's
-// preview. While nothing is read, or when the drive is empty, the block says so in a line.
+// preview. While nothing is read, or when the drive is empty, the block says so in a line. What the
+// member brought (attachments, « Reçus ») is not a deliverable (Leslie, 30/10).
 export function RecentDeliverables({ agentId }: { agentId: string }) {
   const all = useDriveFiles(agentId);
-  const files = all ? all.slice(0, SHOWN) : null;
+  const files = all ? all.filter((f) => !isMemberUpload(f.path)).slice(0, SHOWN) : null;
   const [preview, setPreview] = useState<FileEntry | null>(null);
 
   return (
@@ -37,7 +39,7 @@ export function RecentDeliverables({ agentId }: { agentId: string }) {
                 <FileText className="size-5" />
               </span>
               <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold text-ink">{f.name}</span>
+                <span className="block truncate text-sm font-semibold text-ink">{fileLabel(f)}</span>
                 <span className="block truncate text-xs text-ink-3">{formatMtime(f.modified)}</span>
               </span>
             </button>

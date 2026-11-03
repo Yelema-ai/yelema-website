@@ -1,4 +1,5 @@
 import "server-only";
+import { catalogueCycle, catalogueJob } from "@/lib/expert-cycle";
 import { backofficeAgentRow, type DB } from "@/lib/auth";
 import { loadCatalogue, matchCatalogue } from "@/lib/catalogue";
 import { expertDisplayName } from "@/lib/experts";
@@ -138,11 +139,12 @@ export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
       distribution: p.distribution,
       catalogueKey: entry?.key ?? null,
       role: entry?.role ?? null,
-      title: entry?.title ?? null,
+      title: catalogueJob({ catalogueKey: entry?.key ?? null, profileId: p.profileId }, entry?.title ?? null),
       tagline: entry?.tagline ?? null,
+      suggestions: entry?.suggestions ?? [],
       photoUrl: look?.avatarUrl || entry?.avatarUrl || null,
       driveFolder: entry?.driveFolder ?? entry?.name ?? null,
-      cycle: look?.cycle ?? null,
+      cycle: catalogueCycle({ catalogueKey: entry?.key ?? null, profileId: p.profileId }, look?.cycle ?? null),
     };
   });
 

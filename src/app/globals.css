@@ -186,12 +186,40 @@
 .chat-markdown {
   overflow-wrap: anywhere;
 }
-.chat-markdown p + p {
-  margin-top: 0.6em;
-}
 .chat-markdown a {
   color: var(--link);
   text-decoration: underline;
+}
+/* Air between blocks (Leslie, 30/10), and a drawn rule is a real one (lib/reply-lines.ts). */
+.chat-markdown p + p {
+  margin-top: 0.9em;
+}
+.chat-markdown hr {
+  margin: 1em 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+/* A link that is an action (« Ouvrir le manuel », its label in bold) reads as a button, apart from the text. */
+.chat-markdown [data-streamdown="link"]:has(> [data-streamdown="strong"]:only-child) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  margin: 0.35em 0.4em 0.15em 0;
+  padding: 0.3em 0.85em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--brand-ink, var(--link));
+  font-size: 0.92em;
+  text-decoration: none;
+  line-height: 1.4;
+}
+.chat-markdown [data-streamdown="link"]:has(> [data-streamdown="strong"]:only-child)::before {
+  content: "↗";
+  font-weight: 600;
+}
+.chat-markdown [data-streamdown="link"]:has(> [data-streamdown="strong"]:only-child):hover {
+  background: var(--soft);
 }
 /* Lists: the bullets and numbers stay inside the bubble (Streamdown's list-inside is not in the
    compiled CSS, and the reset leaves lists without any indent). */
@@ -311,6 +339,24 @@ html [data-sonner-toast][data-styled="true"] [data-button] {
 }
 html [data-sonner-toast][data-styled="true"] [data-button]:hover {
   opacity: 0.9;
+}
+/* The deliveries pop-up: its list takes the whole width, the buttons go under it, on the right. */
+html [data-sonner-toast].toast-stack {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+html [data-sonner-toast].toast-stack [data-content] {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+/* Both buttons together on the right, « Ouvrir » last, same height, on every width. */
+html [data-sonner-toast].toast-stack {
+  justify-content: flex-end;
+  column-gap: 8px;
+}
+html [data-sonner-toast].toast-stack [data-button] {
+  margin: 0;
+  height: 36px;
 }
 html [data-sonner-toast] [data-close-button] {
   left: auto;

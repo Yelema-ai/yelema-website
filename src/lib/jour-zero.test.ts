@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { JOUR_ZERO_ABSENT, JOUR_ZERO_MAX_BYTES, parseJourZero, readiness } from "./jour-zero.ts";
+import { FIX, JOUR_ZERO_ABSENT, JOUR_ZERO_CHECK_IDS, JOUR_ZERO_MAX_BYTES, parseJourZero, pointsLeft, readiness, stage } from "./jour-zero.ts";
 
 const check = (id: string, ok: unknown = true, extra: object = {}) => ({ id, label: `Vérif ${id}`, ok, detail: "ok", ...extra });
 const file = (extra: object = {}) =>
@@ -38,4 +38,21 @@ test("readiness: ready, partial or not prepared", () => {
   assert.equal(readiness(parseJourZero(file({ pret: true, checks: [check("outils", false)] }))!).state, "partial");
   assert.deepEqual(readiness(JOUR_ZERO_ABSENT), { state: "absent", label: "Pas encore préparé" });
   assert.equal(readiness(parseJourZero(file({ pret: false, checks: [] }))!).state, "absent");
+});
+
+test("stage: « Faire connaissance » first, then the points left, then nothing", () => {
+  const left = { pret: false, checks: [check("outils", false), check("charte"), check("canaux"), check("entreprise"), check("competences")] };
+  assert.equal(stage(parseJourZero(file(left))!), "intro");
+  assert.equal(stage(JOUR_ZERO_ABSENT), "intro");
+  const after = parseJourZero(file({ ...left, onboarding: "2026-10-31T21:00:00Z" }))!;
+  assert.equal(after.onboarding, "2026-10-31T21:00:00Z");
+  assert.equal(stage(after), "left");
+  assert.deepEqual(pointsLeft(after).map((c) => c.id), ["outils"]);
+  assert.equal(stage(parseJourZero(file())!), "ready");
+  assert.equal(parseJourZero(file({ onboarding: "hier" }))?.onboarding, null);
+});
+
+test("every point has its sentence; only the skills have no page", () => {
+  for (const id of JOUR_ZERO_CHECK_IDS) assert.ok(FIX[id].text.length > 10);
+  assert.deepEqual(JOUR_ZERO_CHECK_IDS.filter((id) => !FIX[id].action), ["competences"]);
 });

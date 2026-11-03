@@ -82,6 +82,7 @@ export function useVoiceCall(): UseVoiceCall {
   const phaseRef = useRef<CallPhase>("idle");
   const switches = useRef({ muted: false, longer: false, holding: false });
   const answered = useRef(false);
+  const unlisten = useRef<(() => void) | null>(null);
 
   const go = useCallback((next: CallPhase) => {
     if (phaseRef.current === "ended" || phaseRef.current === "unreachable") return;
@@ -96,6 +97,8 @@ export function useVoiceCall(): UseVoiceCall {
     setTool(false);
     timers.current.forEach(clearInterval);
     timers.current = [];
+    unlisten.current?.();
+    unlisten.current = null;
     call.current?.stop();
     call.current = null;
     mic.current?.close();
@@ -207,6 +210,11 @@ export function useVoiceCall(): UseVoiceCall {
         return res;
       };
       let connected = false;
+      let peer: RTCPeerConnectionState = "new";
+      const back = () => {
+        go("listening");
+        if (switches.current.holding) call.current?.send({ type: "hold-floor", on: true });
+      };
       try {
         const c = new VoiceCall({
           agentId: "yelema", // ignored: the back office picks the agent
@@ -231,18 +239,31 @@ export function useVoiceCall(): UseVoiceCall {
                 if (sw.holding) c.send({ type: "hold-floor", on: true });
                 const t0 = Date.now();
                 timers.current.push(setInterval(meter(), LEVEL_MS), setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000));
+                // The browser knows the network is gone seconds before the peer connection does.
+                const offline = () => {
+                  const ph = phaseRef.current;
+                  if (ph === "listening" || ph === "speaking" || ph === "thinking") go("reconnecting");
+                };
+                const online = () => {
+                  if (peer === "connected" && phaseRef.current === "reconnecting") back();
+                };
+                window.addEventListener("offline", offline);
+                window.addEventListener("online", online);
+                unlisten.current = () => {
+                  window.removeEventListener("offline", offline);
+                  window.removeEventListener("online", online);
+                };
+                if (!navigator.onLine) offline();
               } else if (s === "ended") {
                 release();
                 go("ended");
               }
             },
             onPeerStateChange: (p) => {
+              peer = p;
               if (!connected) return;
               if (p === "disconnected" || p === "failed") go("reconnecting");
-              else if (p === "connected" && phaseRef.current === "reconnecting") {
-                go("listening");
-                if (switches.current.holding) c.send({ type: "hold-floor", on: true });
-              }
+              else if (p === "connected" && phaseRef.current === "reconnecting" && navigator.onLine) back();
             },
             onError: (e) => fail(refusal ?? messageOf(e)),
             onClose: () => {

@@ -1,4 +1,6 @@
+import { after } from "next/server";
 import { requireAgentAccess } from "@/lib/auth";
+import { hermesCron, repointRoutines } from "@/lib/hermes-cron";
 import { routinesOf } from "@/lib/routine-store";
 import { handleError, json, readJson } from "@/lib/http";
 import { routineExpert, routineFields, type RoutineBody } from "./_body";
@@ -15,7 +17,14 @@ export async function GET(request: Request, { params }: Ctx) {
     const { id } = await params;
     const { row } = await requireAgentAccess(id);
     const [expert, store] = await Promise.all([routineExpert(row, new URL(request.url).searchParams.get("expert"), { skills: false }), routinesOf(id)]);
-    return json({ routines: await store.list(id, expert.profile, expert.name) });
+    const routines = await store.list(id, expert.profile, expert.name);
+    // A routine an Expert set up from a chat answers « where it was asked », which is no channel when it
+    // was the app: it is pointed at the Expert's chats (the app, its Telegram topic if any), as a saved
+    // routine is, after the answer and once per reading (Leslie, 01/11: « on peut pas fixer ça par défaut ? »).
+    if (store === hermesCron && routines.some((r) => !r.deliver || r.deliver === "origin")) {
+      after(() => repointRoutines(id, [expert.profile]).catch((e) => console.error("[routines] repoint", (e as Error).message)));
+    }
+    return json({ routines });
   } catch (e) {
     return handleError(e);
   }

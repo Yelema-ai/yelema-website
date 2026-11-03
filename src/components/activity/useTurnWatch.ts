@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { apiFetch } from "@/lib/api";
 import { splitSSE, WATCH_TTL_MS, type Outcome, type Turn } from "@/lib/activity";
+import { instanceEvents, nextEvent } from "@/lib/instance-events";
 import { profileQuery } from "@/lib/profile-id";
 import type { SessionDetail } from "@/lib/types";
 import type { ActivityActions } from "./ActivityProvider";
@@ -81,6 +82,16 @@ async function follow(t: Turn, signal: AbortSignal): Promise<{ outcome: Outcome;
       }
     } catch {
       // Try again on the next round.
+    }
+    // The instance's stream is up: the end of a turn wakes the watch, the poll is only the safety net.
+    if (instanceEvents.connected(t.agentId)) {
+      const wake = new AbortController();
+      const stop = () => wake.abort();
+      signal.addEventListener("abort", stop, { once: true });
+      await Promise.race([sleep(POLL_MAX_MS, wake.signal), nextEvent(instanceEvents, t.agentId, "turn.ended", wake.signal)]);
+      wake.abort();
+      signal.removeEventListener("abort", stop);
+      continue;
     }
     await sleep(delay, signal);
     delay = Math.min(Math.round(delay * 1.5), POLL_MAX_MS);

@@ -21,6 +21,10 @@ export default function ResetPasswordPage() {
   const [hasSession, setHasSession] = useState<boolean | null>(null);
   const [done, setDone] = useState(false);
   const [link, setLink] = useState<{ tokenHash: string; type: string } | null>(null);
+  // An invitation (type=invite) is a first visit, not a reset: its own words, straight into the space
+  // once the password is chosen, and a new invitation in one click when it has expired (Leslie, 27/10).
+  const invite = link?.type === "invite";
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
     // Le lien de récupération passe par /auth/callback, qui ouvre une session avant de
@@ -57,13 +61,20 @@ export default function ResetPasswordPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...link, password }),
         });
-        if (!res.ok) failure = await readApiError(res, "Une erreur est survenue. Réessayez dans un instant.");
+        if (!res.ok) {
+          if (invite && res.status === 401) {
+            setLoading(false);
+            return setExpired(true);
+          }
+          failure = await readApiError(res, "Une erreur est survenue. Réessayez dans un instant.");
+        }
       } catch {
         failure = "Connexion impossible. Vérifiez votre réseau, puis réessayez.";
       }
     }
     setLoading(false);
     if (failure) return toast.error(failure);
+    if (invite) return window.location.replace("/");
     setDone(true);
   }
 
@@ -94,6 +105,8 @@ export default function ResetPasswordPage() {
     );
   }
 
+  if (expired && link) return <InviteExpired tokenHash={link.tokenHash} />;
+
   if (!hasSession) {
     return (
       <AuthShell>
@@ -116,11 +129,15 @@ export default function ResetPasswordPage() {
 
   return (
     <AuthShell>
-      <AuthHeading title="Nouveau mot de passe">Choisissez-le, puis reconnectez-vous.</AuthHeading>
+      {invite ? (
+        <AuthHeading title="Bienvenue sur Yelema">Créez votre mot de passe pour retrouver vos Experts.</AuthHeading>
+      ) : (
+        <AuthHeading title="Nouveau mot de passe">Choisissez-le, puis reconnectez-vous.</AuthHeading>
+      )}
 
       <form onSubmit={onSubmit} className="flex flex-col gap-5">
         <PasswordField
-          label="Nouveau mot de passe"
+          label={invite ? "Mot de passe" : "Nouveau mot de passe"}
           autoComplete="new-password"
           placeholder="8 caractères minimum"
           value={password}
@@ -172,10 +189,66 @@ export default function ResetPasswordPage() {
           disabled={!canSave}
           className="mt-1 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[15px] font-semibold text-on-brand hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? "Enregistrement…" : "Enregistrer le mot de passe"}
+          {loading ? "Enregistrement…" : invite ? "Entrer dans mon espace" : "Enregistrer le mot de passe"}
           <ArrowRight className="size-[18px]" />
         </button>
       </form>
+    </AuthShell>
+  );
+}
+
+// An expired invitation: a new one by e-mail in one click (the back office sends it from the old link);
+// if that cannot be done, who to ask. Never "a reset link lasts 30 minutes": this person has no password yet.
+function InviteExpired({ tokenHash }: { tokenHash: string }) {
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
+
+  async function resend() {
+    setState("sending");
+    try {
+      const res = await fetch("/api/auth/resend-invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tokenHash }),
+      });
+      setState(res.ok ? "sent" : "failed");
+    } catch {
+      setState("failed");
+    }
+  }
+
+  return (
+    <AuthShell>
+      <span className={cn("grid size-12 place-items-center rounded-2xl", state === "sent" ? "bg-ok-pale text-ok" : "bg-ko-pale text-ko")}>
+        {state === "sent" ? <CircleCheck className="size-6" /> : <CircleX className="size-6" />}
+      </span>
+      {state === "sent" ? (
+        <AuthHeading title="C’est envoyé">Une nouvelle invitation vous attend dans votre boîte e-mail.</AuthHeading>
+      ) : (
+        <AuthHeading title="Cette invitation a expiré">
+          {state === "failed" ? "Impossible de l’envoyer pour le moment. Demandez à la personne qui vous a invité de vous la renvoyer." : "Recevez-en une nouvelle par e-mail."}
+        </AuthHeading>
+      )}
+      {state !== "sent" && state !== "failed" && (
+        <button
+          type="button"
+          onClick={resend}
+          disabled={state === "sending"}
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[15px] font-semibold text-on-brand hover:opacity-90 disabled:opacity-60"
+        >
+          {state === "sending" ? "Envoi…" : "Recevoir une nouvelle invitation"} <ArrowRight className="size-[18px]" />
+        </button>
+      )}
+      <p className="text-center text-[13px] leading-relaxed text-ink-3">
+        {state === "idle" || state === "sending" ? (
+          <>
+            Rien reçu ? Demandez à la personne qui vous a invité.
+            <br />
+          </>
+        ) : null}
+        <a href="/login" className="font-semibold text-brand-ink hover:underline">
+          J’ai déjà un compte
+        </a>
+      </p>
     </AuthShell>
   );
 }
