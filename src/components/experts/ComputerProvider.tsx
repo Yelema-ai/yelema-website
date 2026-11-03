@@ -3,6 +3,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Loader2, RotateCw } from "lucide-react";
 import type RFB from "@novnc/novnc";
+import type { ScreencastClient } from "@/lib/screencast-client";
+
+// What the provider drives: noVNC (the instance's desktop) or, for a team member, their experts' tabs.
+type ScreenClient = Pick<RFB, "disconnect" | "focus" | "viewOnly"> & { addEventListener(type: "connect" | "disconnect", fn: () => void): void };
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -50,7 +54,7 @@ export function ComputerProvider({ agentId, children }: { agentId: string | null
   const [dialogOpen, setDialogOpen] = useState(false);
   const statusRef = useRef<ComputerStatus>("idle");
   const viewOnlyRef = useRef(true);
-  const rfbRef = useRef<RFB | null>(null);
+  const rfbRef = useRef<ScreenClient | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const slotsRef = useRef<HTMLElement[]>([]);
   const lingerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -113,15 +117,21 @@ export function ComputerProvider({ agentId, children }: { agentId: string | null
     setViewOnly(true);
     setStatus("connecting");
     try {
-      const [{ default: RFBClient }, { ws }] = await Promise.all([
-        import("@novnc/novnc"),
-        apiFetch<{ ws: string }>(`/api/agents/${agentId}/computer`, { method: "POST" }),
-      ]);
+      const { ws, kind } = await apiFetch<{ ws: string; kind?: "vnc" | "cast" }>(`/api/agents/${agentId}/computer`, { method: "POST" });
       if (gen !== genRef.current) return;
-      const rfb = new RFBClient(host(), ws);
-      rfb.scaleViewport = true;
+      let rfb: ScreenClient;
+      if (kind === "cast") {
+        const { ScreencastClient: Cast } = await import("@/lib/screencast-client");
+        rfb = new Cast(host(), ws) as ScreencastClient;
+      } else {
+        const { default: RFBClient } = await import("@novnc/novnc");
+        const vnc = new RFBClient(host(), ws);
+        vnc.scaleViewport = true;
+        vnc.background = "#f3f1f8";
+        rfb = vnc as unknown as ScreenClient;
+      }
+      if (gen !== genRef.current) return rfb.disconnect();
       rfb.viewOnly = viewOnlyRef.current;
-      rfb.background = "#f3f1f8";
       rfb.addEventListener("connect", () => {
         if (gen === genRef.current) setStatus("live");
       });

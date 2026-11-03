@@ -1,6 +1,7 @@
 import { agent37 } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { handleError, json } from "@/lib/http";
+import { currentInstance } from "@/lib/session";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -14,8 +15,11 @@ export async function POST(_request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
     await requireAgentAccess(id);
+    // A member of a team instance never sees the shared desktop: their own experts' tabs, streamed.
+    const instance = await currentInstance().catch(() => null);
+    if (instance?.id === id && instance.seat?.includes("u-")) return json(await agent37.screen(id));
     const signed = new URL((await agent37.signedUrl(id, 6901, 60)).url);
-    return json({ ws: `wss://${signed.host}/websockify?a37_token=${encodeURIComponent(signed.searchParams.get("a37_token") ?? "")}` });
+    return json({ ws: `wss://${signed.host}/websockify?a37_token=${encodeURIComponent(signed.searchParams.get("a37_token") ?? "")}`, kind: "vnc" });
   } catch (e) {
     return handleError(e);
   }

@@ -387,6 +387,10 @@ export const agent37 = {
     return (await instanceCall<{ outcomes: Record<string, RunOutcome> }>(id, `/v1/routine-outcomes${q}`)).outcomes ?? {};
   },
 
+  // A team member's screen: the tabs of their own experts, through the gateway (which reads their screen token).
+  screen: async (id: string): Promise<{ ws: string; kind: "cast" }> =>
+    parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/screen`, await asUser({ method: "POST" }))),
+
   // What the instance's runtime offers (the gateway's /capabilities); `null` direct, where every
   // instance is Hermes and offers everything.
   capabilities: async (id: string): Promise<RuntimeCapabilities | null> => {
