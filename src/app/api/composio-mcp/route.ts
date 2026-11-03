@@ -1,11 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { instanceFetch } from "@/lib/agent37";
 import { backoffice, BackofficeError, type ComposioCallsDeclaration } from "@/lib/backoffice";
-import { composioUserId, hashAppsToken, mintMcpSession, type McpSession } from "@/lib/composio";
+import { composioUserId, hashAppsToken, mintMcpSession, stageFile, type McpSession } from "@/lib/composio";
 import { pinnedAccounts } from "@/lib/connection-accounts";
 import { extractComposioCalls } from "@/lib/composio-usage";
 import { fetchUntilHeaders } from "@/lib/fetch-timeout";
+import {
+  addBridgeTool,
+  bridgeAnswer,
+  bridgeCall,
+  bridgePath,
+  bridgeToolSlug,
+  fileNameOf,
+  isToolsList,
+  MAX_BRIDGE_BYTES,
+  mimeOf,
+  toolkitOf,
+} from "@/lib/livrables-bridge";
 import { memo } from "@/lib/memo";
 import { backofficeUrl } from "@/lib/runtime-config";
 import { pinnedWorkspaceId } from "@/lib/tenant";
@@ -134,6 +147,39 @@ function declareCalls(token: string, row: { agent37_id: string; workspace_id: st
   }
 }
 
+// The Livrables bridge (src/lib/livrables-bridge.ts): a file of the instance's drive staged in Composio's
+// storage for the tool the expert names, answered as the { name, mimetype, s3key } that tool takes.
+// Answered here, never forwarded: Composio does not know the tool. The path is checked before it
+// reaches the instance (the files API reads anything there, keys included).
+const BRIDGE_READ_TIMEOUT_MS = 60_000;
+
+async function runBridge(agentId: string, args: Record<string, unknown>, id: unknown) {
+  const path = bridgePath(args.chemin);
+  if (!path) return bridgeAnswer(id, { ok: false, message: "Chemin refusé : donne le chemin d'un fichier de tes Livrables, par exemple ~/Livrables/<ton prénom>/devis.pdf." });
+  const tool = bridgeToolSlug(args.outil);
+  if (!tool) return bridgeAnswer(id, { ok: false, message: "Donne le nom exact de l'outil qui recevra le fichier, par exemple GOOGLEDRIVE_UPLOAD_FILE ou GMAIL_SEND_EMAIL." });
+  const tooBig = bridgeAnswer(id, { ok: false, message: "Ce fichier dépasse 25 Mo : trop lourd pour être joint. Dépose un lien vers un document Google à la place." });
+  try {
+    const qs = new URLSearchParams({ path, disposition: "attachment" });
+    const res = await instanceFetch(agentId, `/v1/files/content?${qs}`, { signal: AbortSignal.timeout(BRIDGE_READ_TIMEOUT_MS) });
+    if (res.status === 404) return bridgeAnswer(id, { ok: false, message: `Fichier introuvable : ${path}. Liste le dossier pour avoir le nom exact, puis réessaie.` });
+    if (!res.ok) {
+      console.warn(`[composio-mcp] ${agentId}: bridge read ${res.status}`);
+      return bridgeAnswer(id, { ok: false, message: "Le fichier n'a pas pu être lu dans tes Livrables. Réessaie dans un instant." });
+    }
+    if (Number(res.headers.get("content-length")) > MAX_BRIDGE_BYTES) return tooBig;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.byteLength > MAX_BRIDGE_BYTES) return tooBig;
+    if (bytes.byteLength === 0) return bridgeAnswer(id, { ok: false, message: `Le fichier ${path} est vide.` });
+    const name = fileNameOf(path);
+    const file = await stageFile(bytes, name, mimeOf(name, res.headers.get("content-type")), tool, toolkitOf(tool));
+    return bridgeAnswer(id, { ok: true, file });
+  } catch (e) {
+    console.warn(`[composio-mcp] ${agentId}: bridge failed:`, e instanceof Error ? e.message : e);
+    return bridgeAnswer(id, { ok: false, message: "Le fichier n'a pas pu être préparé pour l'outil. Réessaie dans un instant." });
+  }
+}
+
 // Chat d'entreprise: the enterprise instance has no agents row; its agent (`u-…`, header X-Yelema-Profile)
 // reaches the apps of ITS member, whom the back office names from the instance token. Unknown agent: no row.
 const SEAT_PROFILE = /^u-[a-z0-9]{6}$/;
@@ -192,6 +238,15 @@ async function handle(request: Request): Promise<Response> {
   const pins = await defaultPins(token, row.workspace_id, seat);
 
   const body = request.method === "POST" ? await request.arrayBuffer() : undefined;
+  const text = body ? new TextDecoder().decode(body) : "";
+  // The bridge reads the expert's own instance: an enterprise seat has no instance of its own here.
+  const bridge = text ? bridgeCall(text) : null;
+  if (bridge) {
+    const answer = found
+      ? await runBridge(row.agent37_id, bridge.args, bridge.id)
+      : bridgeAnswer(bridge.id, { ok: false, message: "Cet outil n'est pas disponible dans le chat d'entreprise." });
+    return Response.json(answer, { headers: { "cache-control": "no-store" } });
+  }
   try {
     let upstream = await forward(await getSession(userId, pins), request, body);
     if (upstream.status === 404 || upstream.status === 401) {
@@ -206,6 +261,10 @@ async function handle(request: Request): Promise<Response> {
     for (const name of FORWARD_RESPONSE_HEADERS) {
       const value = upstream.headers.get(name);
       if (value) headers.set(name, value);
+    }
+    // The tool list gets the bridge (an expert's instance only): read whole, it is a short answer.
+    if (found && upstream.ok && isToolsList(text)) {
+      return new Response(addBridgeTool(await upstream.text(), upstream.headers.get("content-type")), { status: upstream.status, headers });
     }
     return new Response(upstream.body, { status: upstream.status, headers });
   } catch (e) {
