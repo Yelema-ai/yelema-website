@@ -69,22 +69,12 @@ export function UpdateSpinner({ className }: { className?: string }) {
 
 const UPDATE_TEXT = "Mise à jour en cours. Vos Experts répondent un peu plus lentement.";
 
-/** In the top bar while an update runs, from a tablet up. */
-export function UpdateBanner() {
-  if (useDeployPhase() !== "maintenance") return null;
-  return (
-    <span role="status" className="flex min-w-0 items-center gap-2 rounded-full bg-amber-100 px-3.5 py-2 text-[13px] font-semibold text-amber-800 max-sm:hidden dark:bg-amber-500/15 dark:text-amber-300">
-      <UpdateSpinner />
-      <span className="truncate">{UPDATE_TEXT}</span>
-    </span>
-  );
-}
-
-/** On a phone the top bar has no room: a strip right under it, the whole sentence on two lines. */
+/** While an update runs: one thin strip under the top bar, on every screen. No chip beside an Expert's name
+ *  nor pill in the header, which squeezed the tabs (Leslie, 03/11: « visuellement pas ouf »). */
 export function UpdateStrip() {
   if (useDeployPhase() !== "maintenance") return null;
   return (
-    <div role="status" className="flex items-center gap-2.5 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-[13px] font-semibold leading-snug text-amber-800 sm:hidden dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+    <div role="status" className="flex items-center gap-2.5 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[13px] font-semibold leading-snug text-amber-800 md:px-8 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
       <UpdateSpinner />
       <span>{UPDATE_TEXT}</span>
     </div>

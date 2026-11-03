@@ -1,6 +1,7 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { ExternalLink, Pin } from "lucide-react";
 import { GOOGLE_LABEL, type GoogleDoc, type GoogleKind } from "@/lib/google-docs";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +41,56 @@ export function GoogleTile({ kind, className }: { kind: GoogleKind; className?: 
   );
 }
 
+// ── The pinned document (Leslie, 03/11) ─────────────────────────────────────────────────────────────────
+// One document stays above the conversation, never two or three (« ça surchargera encore plus la vue »):
+// the one the client pinned from the « Livrables » menu, else the last one used. Kept in this browser, per
+// conversation (no back-office route yet). Stored as a list, as #110 did, so a pin made then still reads.
+
+type Pins = { pinned: string[]; toggle: (id: string) => void };
+const PinsContext = createContext<Pins | null>(null);
+const pinKey = (scope: string) => `yelema.documents-epingles.${scope}`;
+
+function readPins(scope: string): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(pinKey(scope)) ?? "[]");
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(0, 1) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The pinned document of one conversation (`scope`: instance, expert, session), and how to change it. */
+export function usePinnedDocs(scope: string | null): Pins {
+  const [pinned, setPinned] = useState<string[]>([]);
+  useEffect(() => {
+    setPinned(scope ? readPins(scope) : []);
+  }, [scope]);
+  const toggle = useCallback(
+    (id: string) => {
+      if (!scope) return;
+      setPinned((cur) => {
+        // Pinning one unpins the other; pinning it again gives the place back to the last one used.
+        const next = cur[0] === id ? [] : [id];
+        try {
+          localStorage.setItem(pinKey(scope), JSON.stringify(next));
+        } catch {
+          /* private window: pinned for this visit only */
+        }
+        return next;
+      });
+    },
+    [scope]
+  );
+  return useMemo(() => ({ pinned, toggle }), [pinned, toggle]);
+}
+
+export function PinnedDocsProvider({ value, children }: { value: Pins; children: React.ReactNode }) {
+  return <PinsContext.Provider value={value}>{children}</PinsContext.Provider>;
+}
+
+/** The pins of the conversation around, or null outside one. */
+export const usePins = () => useContext(PinsContext);
+
 /** Under a reply: one card per Google document it made or changed. */
 export function GoogleDocCards({ docs }: { docs: GoogleDoc[] }) {
   if (!docs.length) return null;
@@ -71,18 +122,22 @@ export function GoogleDocCards({ docs }: { docs: GoogleDoc[] }) {
   );
 }
 
-/** Above the conversation: the Google document the Expert touched last, one click from anywhere in it. */
-export function GooglePin({ doc }: { doc: GoogleDoc | null }) {
+/** Above the conversation: one Google document, the pinned one or else the last used, one click from anywhere in it. */
+export function GoogleDocsRow({ docs }: { docs: (GoogleDoc & { usedAt: number | null })[] }) {
+  const pins = useContext(PinsContext);
+  const doc = docs.find((d) => pins?.pinned.includes(d.id)) ?? docs[0] ?? null;
   if (!doc) return null;
+  const on = Boolean(pins?.pinned.includes(doc.id));
   return (
     <div className="mx-auto flex w-full max-w-3xl shrink-0 items-center gap-2.5 px-4 py-2 sm:px-6">
       <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl border border-line bg-surface py-2 pl-3 pr-2">
         <GoogleGlyph kind={doc.kind} />
         <span className="min-w-0 grow leading-tight">
-          <span title={doc.title} className="block truncate text-[13.5px] font-semibold text-ink">
-            {doc.title}
+          <span title={doc.title} className="flex min-w-0 items-center gap-1.5 text-[13.5px] font-semibold text-ink">
+            {on && <Pin className="size-3.5 shrink-0 fill-current text-brand-ink" aria-label="Épinglé" />}
+            <span className="truncate">{doc.title}</span>
           </span>
-          <span className="block text-[12px] text-ink-3">Document en cours, {GOOGLE_LABEL[doc.kind]}</span>
+          <span className="block text-[12px] text-ink-3">{on ? "Épinglé" : "Document en cours"}, {GOOGLE_LABEL[doc.kind]}</span>
         </span>
         <a
           href={doc.url}

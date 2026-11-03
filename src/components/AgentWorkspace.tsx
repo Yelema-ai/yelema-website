@@ -31,7 +31,6 @@ import { VoiceButton } from "@/components/voice/VoiceButton";
 import { ExpertCalls } from "@/components/voice/ExpertCalls";
 import { useVoices } from "@/components/voice/useVoices";
 import { NotificationBell } from "@/components/app/NotificationBell";
-import { UpdateBanner } from "@/components/app/DeployStatus";
 
 const TABS: { id: AgentTab; label: string; icon: typeof MessageSquare }[] = [
   // Livrables right after Discussion (Leslie, 25/10), then Appels and E-mails.
@@ -309,7 +308,6 @@ export function AgentWorkspace({
                 {callee && <CallButton expert={callee} iconOnly className="size-11 shrink-0 rounded-full lg:hidden" />}
                 {callee && <CallButton expert={callee} className="h-10 shrink-0 rounded-full bg-brand px-4 text-[14.5px] text-on-brand hover:bg-brand/90 max-lg:hidden" />}
                 <span className="flex items-center gap-2 max-lg:hidden">
-                  <UpdateBanner />
                   <NotificationBell />
                 </span>
               </div>

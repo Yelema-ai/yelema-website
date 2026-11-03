@@ -8,13 +8,15 @@ const COMMANDS: Record<string, string> = {
   configuration: "Ses outils",
 };
 
-const COMMAND_TITLE = /^Run \/?([\w-]+) command(?: #\d+)?$/i;
+// « Run tableau command #4 », and since 03/11 « /tableau #3 » (Leslie's screenshot).
+const COMMAND_TITLE = /^(?:Run \/?([\w-]+) command|\/([\w-]+))(?: #\d+)?$/i;
 const COMMAND_PREVIEW = /^\/([\w-]+)\s*$/;
 
 export function sessionTitle(title: string | null | undefined, preview: string | null | undefined): string | null {
   const t = title?.trim() || "";
   const p = preview?.trim() || "";
-  const command = COMMAND_TITLE.exec(t)?.[1] ?? (!t ? COMMAND_PREVIEW.exec(p)?.[1] : undefined);
+  const named = COMMAND_TITLE.exec(t);
+  const command = (named?.[1] ?? named?.[2]) ?? (!t ? COMMAND_PREVIEW.exec(p)?.[1] : undefined);
   if (command) return COMMANDS[command.toLowerCase()] ?? `Commande ${command.toLowerCase()}`;
   return t || p || null;
 }
