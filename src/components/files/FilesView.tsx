@@ -34,6 +34,7 @@ import { shortcutKind } from "@/lib/google-docs";
 import { MoveDialog } from "./MoveDialog";
 import { VariantGroups } from "./VariantGroups";
 import { groupVariants, isSourceFolder } from "@/lib/visual-variants";
+import { splitVersions } from "@/lib/drive-versions";
 import { useFileBrowser } from "./useFileBrowser";
 import { BackButton } from "@/components/ui/back-button";
 import { archiveUrl, breadcrumbs, contentUrl, formatBytes, formatMtime, isDir, type FileEntry } from "./types";
@@ -206,9 +207,14 @@ export function FilesView({ agentId, initialPath, openPath, inbox }: { agentId: 
   // and the editable « source » folder always comes last (Myriel, Leslie 30/10).
   const variants = useMemo(() => groupVariants(fb.visibleEntries.filter((e) => !isDir(e))), [fb.visibleEntries]);
   const [byVisual, setByVisual] = useState(true);
-  const listEntries = useMemo(() => {
+  // A document's older versions (« _v17 » beside « _v18 ») fold at the bottom (Leslie, 02/11): kept, never in the way.
+  const { listEntries, olderVersions } = useMemo(() => {
     const rest = variants && byVisual ? fb.visibleEntries.filter((e) => !variants.grouped.has(e)) : fb.visibleEntries;
-    return [...rest.filter((e) => !(isDir(e) && isSourceFolder(e.name))), ...rest.filter((e) => isDir(e) && isSourceFolder(e.name))];
+    const { current, older } = splitVersions(rest);
+    return {
+      listEntries: [...current.filter((e) => !(isDir(e) && isSourceFolder(e.name))), ...current.filter((e) => isDir(e) && isSourceFolder(e.name))],
+      olderVersions: older,
+    };
   }, [fb.visibleEntries, variants, byVisual]);
   const selectedEntry = useMemo(
     () => (selectedPath == null ? null : fb.visibleEntries.find((entry) => entry.path === selectedPath) ?? null),
@@ -504,6 +510,30 @@ export function FilesView({ agentId, initialPath, openPath, inbox }: { agentId: 
               </div>
             )}
               </>
+            )}
+
+            {olderVersions.length > 0 && (
+              <details className="group mt-4 rounded-lg border bg-card" onClick={(e) => e.stopPropagation()}>
+                <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 text-sm font-medium text-muted-foreground hover:text-foreground">
+                  <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
+                  Versions précédentes ({olderVersions.length})
+                </summary>
+                <ul className="border-t">
+                  {olderVersions.map((entry) => (
+                    <li
+                      key={entry.path}
+                      className="flex min-h-11 cursor-default select-none items-center gap-3 border-b border-border/70 px-4 py-2 text-sm last:border-0 hover:bg-secondary/35"
+                      {...entryHandlers(entry)}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <EntryName entry={entry} selected={selectedEntry?.path === entry.path} />
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground max-sm:hidden">{formatBytes(entry.size)}</span>
+                      <span className="w-44 shrink-0 text-right text-xs text-muted-foreground max-sm:w-auto">{formatMtime(entry.modified)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
 
             {fb.truncated && (
