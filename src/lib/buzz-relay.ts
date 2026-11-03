@@ -140,7 +140,7 @@ const now = (): number => Math.floor(Date.now() / 1000);
 const tag = (e: Event, name: string): string | undefined => e.tags.find((t) => t[0] === name)?.[1];
 
 export interface Conversation { id: string; name: string; members: string[] }
-export interface Message { id: string; author: string; text: string; at: number; replyTo: string | null }
+export interface Message { id: string; author: string; text: string; at: number; replyTo: string | null; mentions: string[] }
 
 /** The channels (salons and direct messages) the key belongs to, with their name and members. */
 export async function conversations(c: BuzzConnection, me: string): Promise<Conversation[]> {
@@ -161,14 +161,16 @@ export const toMessage = (e: Event): Message => ({
   text: e.content,
   at: e.created_at,
   replyTo: e.tags.find((t) => t[0] === "e" && t[3] === "reply")?.[1] ?? null,
+  mentions: e.tags.filter((t) => t[0] === "p" && typeof t[1] === "string").map((t) => t[1] as string),
 });
 
 export async function messages(c: BuzzConnection, channel: string, limit = 50): Promise<Message[]> {
   return (await c.query({ kinds: MESSAGE_KINDS, "#h": [channel], limit })).map(toMessage).sort((a, b) => a.at - b.at || Number(a.replyTo !== null) - Number(b.replyTo !== null));
 }
 
-export function sendMessage(c: BuzzConnection, channel: string, text: string, replyTo: string | null) {
-  const tags = [["h", channel], ...(replyTo ? [["e", replyTo, "", "reply"]] : [])];
+/** `mentions` : clés d'Experts interpellés (étiquette `p`) ; un Expert ne travaille que si son propriétaire le mentionne. */
+export function sendMessage(c: BuzzConnection, channel: string, text: string, replyTo: string | null, mentions: string[] = []) {
+  const tags = [["h", channel], ...(replyTo ? [["e", replyTo, "", "reply"]] : []), ...mentions.map((k) => ["p", k])];
   return c.publish({ kind: 9, created_at: now(), tags, content: text });
 }
 

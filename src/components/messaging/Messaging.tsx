@@ -1,16 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CornerDownRight, Hash, Loader2, MessagesSquare, Plus, RefreshCw, Send, User, Users, X } from "lucide-react";
+import { AtSign, CornerDownRight, Hash, Loader2, MessagesSquare, Plus, RefreshCw, Send, User, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
-import { conversationName, isSalonName, labelsOf, participants, type BuzzOverview } from "@/lib/buzz";
+import { conversationName, isSalonName, labelsOf, myExpertsIn, participants, working, type BuzzOverview } from "@/lib/buzz";
 import { deviceKey } from "@/lib/buzz-keys";
 import { BuzzConnection, conversations, messages, MESSAGE_KINDS, openDirect, sendMessage, toMessage, type Conversation, type Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NewExchange, type ExchangeKind } from "@/components/messaging/NewExchange";
+import { SalonDeliverables } from "@/components/messaging/SalonDeliverables";
 
 // Échanges entre membres : les salons des équipes et les conversations directes, lus et écrits par ce
 // navigateur sur le relais du client. Le back-office ne fait qu'admettre la clé de l'appareil.
@@ -36,6 +37,8 @@ export function Messaging() {
   const [thread, setThread] = useState<Message[] | null>(null);
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [pane, setPane] = useState<"fil" | "livrables">("fil");
+  const [asked, setAsked] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [composing, setComposing] = useState<ExchangeKind | null>(null);
@@ -116,20 +119,30 @@ export function Messaging() {
   }, [open, me]);
 
   const current = list?.find((c) => c.id === open) ?? null;
+  // Dans un salon : vos Experts présents, qui travaillent quand vous les mentionnez (eux seuls vous obéissent).
+  const askable = useMemo(() => (current && isSalon(current) ? myExpertsIn(overview?.annuaire ?? [], mine, current.members) : []), [current, isSalon, overview, mine]);
+  const busy = useMemo(() => working(thread ?? [], mine, askable), [thread, mine, askable]);
+
+  useEffect(() => {
+    setPane("fil");
+    setAsked([]);
+  }, [open]);
 
   async function send(event: React.FormEvent) {
     event.preventDefault();
     const c = relay.current;
-    const text = draft.trim();
-    if (!c || !open || !text) return;
+    const targets = askable.filter((e) => asked.includes(e.nom));
+    const text = `${targets.map((e) => `@${e.nom.replace(/ \(de .*\)$/, "")} `).join("")}${draft.trim()}`.trim();
+    if (!c || !open || !draft.trim()) return;
     setSending(true);
     try {
-      const r = await sendMessage(c, open, text, replyTo?.id ?? null);
+      const r = await sendMessage(c, open, text, replyTo?.id ?? null, targets.flatMap((e) => e.cles));
       if (!r.ok) throw new Error(r.message.replace(/^[a-z-]+: /, "") || "Message refusé.");
       const recipients = (list?.find((x) => x.id === open)?.members ?? []).filter((k) => !mine.includes(k));
       void apiFetch("/api/buzz/sent", { method: "POST", body: JSON.stringify({ kind: replyTo ? "reply" : current && isSalon(current) ? "salon" : "dm", recipients }) }).catch(() => undefined);
       setDraft("");
       setReplyTo(null);
+      setAsked([]);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -251,7 +264,20 @@ export function Messaging() {
                   <header className="border-b border-line px-5 py-4">
                     <h2 className="font-display text-lg font-bold text-ink">{nameOf(current)}</h2>
                     <p className="mt-0.5 text-xs text-ink-3">{kindOf(current)} · {participants(current.members, mine, labels).join(", ")}</p>
+                    {isSalon(current) && (
+                      <div role="tablist" className="mt-3 flex w-fit items-center gap-1 rounded-full border border-line p-1">
+                        {(["fil", "livrables"] as const).map((t) => (
+                          <button key={t} type="button" role="tab" aria-selected={pane === t} onClick={() => setPane(t)} className={cn("rounded-full px-3 py-1 text-xs font-semibold transition-colors", pane === t ? "bg-brand text-on-brand" : "text-ink-2 hover:bg-soft")}>
+                            {t === "fil" ? "Fil" : "Livrables"}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </header>
+                  {pane === "livrables" && isSalon(current) ? (
+                    <SalonDeliverables salon={current.id} />
+                  ) : (
+                  <>
                   <ol className="flex-1 space-y-3 overflow-y-auto px-5 py-4" aria-busy={thread === null}>
                     {thread === null && <li className="flex items-center gap-2 text-sm text-ink-3"><Loader2 className="h-4 w-4 animate-spin" />Chargement…</li>}
                     {thread?.length === 0 && <li className="text-sm text-ink-3">Aucun message pour l’instant.</li>}
@@ -271,6 +297,12 @@ export function Messaging() {
                         </li>
                       );
                     })}
+                    {busy.map((e) => (
+                      <li key={`busy-${e.nom}`} className="flex items-center gap-2 text-sm text-ink-3" role="status">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {e.nom.replace(/ \(de .*\)$/, "")} travaille…
+                      </li>
+                    ))}
                   </ol>
                   <form onSubmit={(e) => void send(e)} className="space-y-2 border-t border-line p-4">
                     {replyTo && (
@@ -278,6 +310,19 @@ export function Messaging() {
                         <CornerDownRight className="h-3.5 w-3.5 shrink-0" />
                         <span className="min-w-0 flex-1 truncate">Réponse à {mine.includes(replyTo.author) ? "vous" : (labels.get(replyTo.author) ?? "ce message")} : « {replyTo.text} »</span>
                         <button type="button" aria-label="Annuler la réponse" onClick={() => setReplyTo(null)}><X className="h-3 w-3" /></button>
+                      </div>
+                    )}
+                    {askable.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="flex items-center gap-1 text-xs text-ink-3"><AtSign className="h-3.5 w-3.5" />Demander à</span>
+                        {askable.map((e) => {
+                          const on = asked.includes(e.nom);
+                          return (
+                            <button key={e.nom} type="button" aria-pressed={on} onClick={() => setAsked((a) => (on ? a.filter((n) => n !== e.nom) : [...a, e.nom]))} className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors", on ? "border-brand/40 bg-tint text-brand" : "border-line text-ink-2 hover:bg-soft")}>
+                              {e.nom.replace(/ \(de .*\)$/, "")}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                     <div className="flex items-end gap-2">
@@ -294,7 +339,7 @@ export function Messaging() {
                         }}
                         rows={2}
                         maxLength={8000}
-                        placeholder="Écrire un message"
+                        placeholder={asked.length ? "Votre demande à vos Experts" : "Écrire un message"}
                         className="min-w-0 flex-1 resize-none rounded-xl border border-line bg-surface p-3 text-[15px] text-ink placeholder:text-ink-3 focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15"
                       />
                       <Button type="submit" disabled={!draft.trim() || sending}>
@@ -303,6 +348,8 @@ export function Messaging() {
                       </Button>
                     </div>
                   </form>
+                  </>
+                  )}
                 </>
               )}
             </section>

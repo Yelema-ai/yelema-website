@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { conversationName, isSalonName, labelsOf, participants, peopleOf, type BuzzEntry } from "./buzz.ts";
+import { conversationName, isSalonName, labelsOf, myExpertsIn, participants, peopleOf, working, type BuzzEntry } from "./buzz.ts";
 
 const k = (c: string) => c.repeat(64);
 const directory: BuzzEntry[] = [
@@ -38,4 +38,17 @@ test("salon : tout canal nommé autrement que « DM »", () => {
   assert.equal(isSalonName("DM"), false);
   assert.equal(isSalonName("Group DM (3)"), false);
   assert.equal(isSalonName("Clôture mensuelle"), true);
+});
+
+test("salon : je ne peux mentionner que MES Experts présents dans le salon", () => {
+  const dir: BuzzEntry[] = [...directory, { nom: "Djénéba (de Selim)", type: "expert", membre: "21", cles: [k("e")] }, { nom: "Awa (de Selim)", type: "expert", membre: "21", cles: [k("f")] }];
+  assert.deepEqual(myExpertsIn(dir, [k("d")], [k("d"), k("e"), k("c")]).map((e) => e.nom), ["Djénéba (de Selim)"], "ni Mamadou de Leslie, ni Awa hors du salon");
+});
+
+test("salon : un Expert « travaille » tant qu'il n'a pas répondu à ma dernière demande", () => {
+  const dj: BuzzEntry = { nom: "Djénéba (de Selim)", type: "expert", membre: "21", cles: [k("e")] };
+  const ask = { author: k("d"), at: 10, mentions: [k("e")] };
+  assert.deepEqual(working([ask], [k("d")], [dj]).length, 1);
+  assert.deepEqual(working([ask, { author: k("e"), at: 12, mentions: [] }], [k("d")], [dj]).length, 0);
+  assert.deepEqual(working([{ author: k("a"), at: 10, mentions: [k("e")] }], [k("d")], [dj]).length, 0, "la mention d'un collègue ne la fait pas travailler");
 });

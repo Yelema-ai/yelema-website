@@ -47,3 +47,22 @@ export function peopleOf(directory: BuzzEntry[], mine: string[]): DirectoryPerso
   }
   return [...byMember.values()].filter((p) => p.person || p.experts.length).sort((a, b) => Number(b.self) - Number(a.self) || a.nom.localeCompare(b.nom, "fr"));
 }
+
+/** The caller's own member id in the directory (the person whose devices are all mine), or null. */
+export function myMember(directory: BuzzEntry[], mine: string[]): string | null {
+  return directory.find((e) => e.type === "personne" && e.cles.length > 0 && e.cles.every((k) => mine.includes(k)))?.membre ?? null;
+}
+
+/** My experts present in a salon: the only ones I can ask for work there. */
+export function myExpertsIn(directory: BuzzEntry[], mine: string[], members: string[]): BuzzEntry[] {
+  const me = myMember(directory, mine);
+  return me ? directory.filter((e) => e.type === "expert" && e.membre === me && e.cles.some((k) => members.includes(k))) : [];
+}
+
+/** Experts still on a request: mentioned by me in a message they have not answered since. */
+export function working(thread: { author: string; at: number; mentions: string[] }[], mine: string[], experts: BuzzEntry[]): BuzzEntry[] {
+  return experts.filter((e) => {
+    const asked = thread.filter((m) => mine.includes(m.author) && m.mentions.some((k) => e.cles.includes(k))).at(-1);
+    return asked !== undefined && !thread.some((m) => m.at >= asked.at && e.cles.includes(m.author));
+  });
+}
