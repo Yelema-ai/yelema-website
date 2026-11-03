@@ -261,7 +261,10 @@ export async function readSheet(book: Book, index: number, maxRows: number, maxC
   const spanAt = new Map<string, { rowSpan: number; colSpan: number }>();
   for (const m of merges) {
     spanAt.set(`${m.r0}:${m.c0}`, { rowSpan: Math.min(m.r1, heights.length - 1) - m.r0 + 1, colSpan: Math.min(m.c1, cols.length - 1) - m.c0 + 1 });
-    for (let r = m.r0; r <= m.r1; r++) for (let c = m.c0; c <= m.c1; c++) if (r !== m.r0 || c !== m.c0) covered.add(`${r}:${c}`);
+    // Bornée à la zone dessinée : une fusion « A1:XFD1048576 » ferait 17 milliards de tours.
+    const r1 = Math.min(m.r1, heights.length - 1);
+    const c1 = Math.min(m.c1, cols.length - 1);
+    for (let r = m.r0; r <= r1; r++) for (let c = m.c0; c <= c1; c++) if (r !== m.r0 || c !== m.c0) covered.add(`${r}:${c}`);
   }
   // A formula saved without its result (a file written by a script, not by Excel): the simple ones are
   // worked out here (SUM, AVERAGE, MIN, MAX, COUNT over cells of this sheet); any other stays empty.
@@ -277,9 +280,14 @@ export async function readSheet(book: Book, index: number, maxRows: number, maxC
     for (const part of m[2]!.replace(/\$/g, "").split(",")) {
       const [a, b = a] = part.trim().split(":");
       if (!/^[A-Z]+\d+$/i.test(a!) || !/^[A-Z]+\d+$/i.test(b!)) return null;
-      for (let r = rowIndex(a!); r <= rowIndex(b!); r++) for (let c = colIndex(a!.toUpperCase()); c <= colIndex(b!.toUpperCase()); c++) {
-        const v = valueAt(r, c);
-        if (v != null) vals.push(v);
+      // Seules les cellules présentes : « SUM(A1:XFD1048576) » ne parcourt pas toute la feuille.
+      const [r0, r1, c0, c1] = [rowIndex(a!), rowIndex(b!), colIndex(a!.toUpperCase()), colIndex(b!.toUpperCase())];
+      for (const [r, row] of raw) {
+        if (r < r0 || r > r1) continue;
+        for (const c of row.cells.keys()) {
+          const v = c >= c0 && c <= c1 ? valueAt(r, c) : null;
+          if (v != null) vals.push(v);
+        }
       }
     }
     const fn = m[1]!.toUpperCase();
