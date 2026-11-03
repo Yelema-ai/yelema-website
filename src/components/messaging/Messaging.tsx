@@ -1,16 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CornerDownRight, Loader2, MessagesSquare, Plus, RefreshCw, Send, User, Users, X } from "lucide-react";
+import { CornerDownRight, Hash, Loader2, MessagesSquare, Plus, RefreshCw, Send, User, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
-import { conversationName, labelsOf, MAX_RECIPIENTS, type BuzzEntry, type BuzzOverview } from "@/lib/buzz";
+import { conversationName, isSalonName, labelsOf, participants, type BuzzOverview } from "@/lib/buzz";
 import { deviceKey } from "@/lib/buzz-keys";
 import { BuzzConnection, conversations, messages, MESSAGE_KINDS, openDirect, sendMessage, toMessage, type Conversation, type Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { NewExchange, type ExchangeKind } from "@/components/messaging/NewExchange";
 
 // Échanges entre membres : les salons des équipes et les conversations directes, lus et écrits par ce
 // navigateur sur le relais du client. Le back-office ne fait qu'admettre la clé de l'appareil.
@@ -20,7 +20,7 @@ type Filter = "all" | "salons" | "direct";
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "Tous" },
-  { id: "salons", label: "Salons d’équipe" },
+  { id: "salons", label: "Salons" },
   { id: "direct", label: "Conversations" },
 ];
 
@@ -38,13 +38,15 @@ export function Messaging() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [composing, setComposing] = useState(false);
+  const [composing, setComposing] = useState<ExchangeKind | null>(null);
   const relay = useRef<BuzzConnection | null>(null);
 
   const labels = useMemo(() => labelsOf(overview?.annuaire ?? []), [overview]);
   const mine = useMemo(() => [...(overview?.appareils.map((d) => d.cle) ?? []), ...(me ? [me] : [])], [overview, me]);
-  const salonIds = useMemo(() => new Set(overview?.salons.map((s) => s.id) ?? []), [overview]);
-  const nameOf = useCallback((c: Conversation) => overview?.salons.find((s) => s.id === c.id)?.nom ?? conversationName(c.members, mine, labels, "Conversation"), [overview, mine, labels]);
+  const unitSalons = useMemo(() => new Set(overview?.salons.map((s) => s.id) ?? []), [overview]);
+  const isSalon = useCallback((c: Conversation) => unitSalons.has(c.id) || isSalonName(c.name), [unitSalons]);
+  const nameOf = useCallback((c: Conversation) => overview?.salons.find((s) => s.id === c.id)?.nom ?? (isSalonName(c.name) ? c.name : conversationName(c.members, mine, labels, "Conversation")), [overview, mine, labels]);
+  const kindOf = (c: Conversation): string => (unitSalons.has(c.id) ? "Salon d’équipe" : isSalon(c) ? "Salon" : "Conversation");
 
   const refresh = useCallback(async () => {
     if (!relay.current || !me) return;
@@ -113,6 +115,8 @@ export function Messaging() {
     return () => live?.close();
   }, [open, me]);
 
+  const current = list?.find((c) => c.id === open) ?? null;
+
   async function send(event: React.FormEvent) {
     event.preventDefault();
     const c = relay.current;
@@ -123,7 +127,7 @@ export function Messaging() {
       const r = await sendMessage(c, open, text, replyTo?.id ?? null);
       if (!r.ok) throw new Error(r.message.replace(/^[a-z-]+: /, "") || "Message refusé.");
       const recipients = (list?.find((x) => x.id === open)?.members ?? []).filter((k) => !mine.includes(k));
-      void apiFetch("/api/buzz/sent", { method: "POST", body: JSON.stringify({ kind: replyTo ? "reply" : salonIds.has(open) ? "salon" : "dm", recipients }) }).catch(() => undefined);
+      void apiFetch("/api/buzz/sent", { method: "POST", body: JSON.stringify({ kind: replyTo ? "reply" : current && isSalon(current) ? "salon" : "dm", recipients }) }).catch(() => undefined);
       setDraft("");
       setReplyTo(null);
     } catch (e) {
@@ -133,18 +137,21 @@ export function Messaging() {
     }
   }
 
-  async function start(keys: string[]) {
+  async function start(kind: ExchangeKind, keys: string[], name: string) {
     const c = relay.current;
     if (!c) return;
-    const id = await openDirect(c, [...new Set([...mine.filter((k) => k !== me), ...keys])]);
-    setComposing(false);
+    const id =
+      kind === "salon"
+        ? (await apiFetch<{ id: string }>("/api/buzz/salons", { method: "POST", body: JSON.stringify({ nom: name, cles: keys }) }, "Le salon n’a pas pu être créé")).id
+        : await openDirect(c, [...new Set([...mine.filter((k) => k !== me), ...keys])]);
+    setComposing(null);
     await refresh();
     setOpen(id);
-    void apiFetch("/api/buzz/sent", { method: "POST", body: JSON.stringify({ kind: "dm", recipients: keys }) }).catch(() => undefined);
+    if (kind === "message") void apiFetch("/api/buzz/sent", { method: "POST", body: JSON.stringify({ kind: "dm", recipients: keys }) }).catch(() => undefined);
   }
 
-  const shown = (list ?? []).filter((c) => filter === "all" || (filter === "salons") === salonIds.has(c.id));
-  const current = list?.find((c) => c.id === open) ?? null;
+  const shown = (list ?? []).filter((c) => filter === "all" || (filter === "salons") === isSalon(c));
+  const groups = filter === "all" ? [{ title: "Salons", items: shown.filter(isSalon) }, { title: "Conversations", items: shown.filter((c) => !isSalon(c)) }].filter((g) => g.items.length) : [{ title: null, items: shown }];
 
   return (
     <div className="space-y-5">
@@ -162,7 +169,11 @@ export function Messaging() {
           <Button variant="outline" size="icon" onClick={() => void refresh()} disabled={state.kind !== "ready" || refreshing} aria-label="Actualiser">
             <RefreshCw className={cn(refreshing && "animate-spin")} />
           </Button>
-          <Button onClick={() => setComposing(true)} disabled={state.kind !== "ready"}>
+          <Button variant="outline" onClick={() => setComposing("salon")} disabled={state.kind !== "ready"}>
+            <Hash />
+            Nouveau salon
+          </Button>
+          <Button onClick={() => setComposing("message")} disabled={state.kind !== "ready"}>
             <Plus />
             Nouveau message
           </Button>
@@ -193,31 +204,39 @@ export function Messaging() {
                 {[1, 2, 3].map((n) => <div key={n} className="h-[62px] animate-pulse rounded-[18px] border border-line bg-surface" />)}
               </div>
             ) : shown.length === 0 ? (
-              <Empty title="Aucun échange ici" text="Vos salons d’équipe et les conversations avec vos collègues apparaissent ici." />
+              <Empty title="Aucun échange ici" text="Vos salons et vos conversations avec vos collègues apparaissent ici." />
             ) : (
-              <ul className="space-y-2.5">
-                {shown.map((c) => {
-                  const salon = salonIds.has(c.id);
-                  return (
-                    <li key={c.id}>
-                      <button
-                        type="button"
-                        onClick={() => setOpen(c.id)}
-                        aria-current={open === c.id}
-                        className={cn("flex w-full items-center gap-3 rounded-[18px] border bg-surface p-3.5 text-left transition-colors", open === c.id ? "border-brand/40 bg-tint" : "border-line hover:border-brand/40")}
-                      >
-                        <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl", salon ? "bg-tint text-brand" : "bg-soft-2 text-ink-2")}>
-                          {salon ? <Users className="h-4 w-4" /> : <User className="h-4 w-4" />}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-ink">{nameOf(c)}</span>
-                          <span className="mt-0.5 block truncate text-xs text-ink-3">{salon ? "Salon d’équipe" : "Conversation"} · {c.members.length} participant{c.members.length > 1 ? "s" : ""}</span>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="space-y-4">
+                {groups.map((g) => (
+                  <div key={g.title ?? "all"}>
+                    {g.title && <h2 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-ink-3">{g.title}</h2>}
+                    <ul className="space-y-2.5">
+                      {g.items.map((c) => {
+                        const salon = isSalon(c);
+                        const who = participants(c.members, mine, labels).length;
+                        return (
+                          <li key={c.id}>
+                            <button
+                              type="button"
+                              onClick={() => setOpen(c.id)}
+                              aria-current={open === c.id}
+                              className={cn("flex w-full items-center gap-3 rounded-[18px] border bg-surface p-3.5 text-left transition-colors", open === c.id ? "border-brand/40 bg-tint" : "border-line hover:border-brand/40")}
+                            >
+                              <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl", salon ? "bg-tint text-brand" : "bg-soft-2 text-ink-2")}>
+                                {unitSalons.has(c.id) ? <Users className="h-4 w-4" /> : salon ? <Hash className="h-4 w-4" /> : <User className="h-4 w-4" />}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-semibold text-ink">{nameOf(c)}</span>
+                                <span className="mt-0.5 block truncate text-xs text-ink-3">{kindOf(c)} · {who} participant{who > 1 ? "s" : ""}</span>
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
             )}
 
             <section className="flex min-h-[460px] flex-col rounded-[22px] border border-line bg-surface">
@@ -225,13 +244,13 @@ export function Messaging() {
                 <div className="m-auto p-10 text-center">
                   <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-soft text-ink-3"><MessagesSquare className="h-6 w-6" /></span>
                   <h2 className="mt-3 text-base font-semibold text-ink">Choisissez un échange</h2>
-                  <p className="mx-auto mt-1 max-w-sm text-sm text-ink-3">Ou écrivez à quelqu’un de l’entreprise avec « Nouveau message ».</p>
+                  <p className="mx-auto mt-1 max-w-sm text-sm text-ink-3">« Nouveau message » écrit à une personne ou à ses Experts ; « Nouveau salon » ouvre un espace nommé à plusieurs.</p>
                 </div>
               ) : (
                 <>
                   <header className="border-b border-line px-5 py-4">
                     <h2 className="font-display text-lg font-bold text-ink">{nameOf(current)}</h2>
-                    <p className="mt-0.5 text-xs text-ink-3">{salonIds.has(current.id) ? "Salon d’équipe" : "Conversation"} · {[...new Set(current.members.map((k) => (mine.includes(k) ? "vous" : labels.get(k))).filter((v): v is string => Boolean(v)))].join(", ")}</p>
+                    <p className="mt-0.5 text-xs text-ink-3">{kindOf(current)} · {participants(current.members, mine, labels).join(", ")}</p>
                   </header>
                   <ol className="flex-1 space-y-3 overflow-y-auto px-5 py-4" aria-busy={thread === null}>
                     {thread === null && <li className="flex items-center gap-2 text-sm text-ink-3"><Loader2 className="h-4 w-4 animate-spin" />Chargement…</li>}
@@ -291,7 +310,7 @@ export function Messaging() {
         </>
       )}
 
-      <NewConversation open={composing} onClose={() => setComposing(false)} directory={overview?.annuaire ?? []} mine={mine} onStart={start} />
+      <NewExchange kind={composing} onClose={() => setComposing(null)} directory={overview?.annuaire ?? []} mine={mine} onStart={start} />
     </div>
   );
 }
@@ -303,64 +322,5 @@ function Empty({ title, text }: { title: string; text: string }) {
       <h2 className="mt-3 text-base font-semibold text-ink">{title}</h2>
       <p className="mx-auto mt-1 max-w-md text-sm text-ink-3">{text}</p>
     </div>
-  );
-}
-
-function NewConversation({ open, onClose, directory, mine, onStart }: { open: boolean; onClose: () => void; directory: BuzzEntry[]; mine: string[]; onStart: (keys: string[]) => Promise<void> }) {
-  const [picked, setPicked] = useState<string[]>([]);
-  const [refusal, setRefusal] = useState<string | null>(null);
-  const [opening, setOpening] = useState(false);
-  const reachable = directory.filter((e) => e.cles.length && !e.cles.every((k) => mine.includes(k)));
-  const keys = [...new Set(reachable.filter((e) => picked.includes(e.nom)).flatMap((e) => e.cles))];
-  const tooMany = keys.length + mine.length > MAX_RECIPIENTS + 1;
-
-  async function go() {
-    setRefusal(null);
-    setOpening(true);
-    try {
-      await onStart(keys);
-      setPicked([]);
-    } catch (e) {
-      setRefusal(e instanceof Error ? e.message : "Conversation non ouverte.");
-    } finally {
-      setOpening(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader className="text-left">
-          <DialogTitle className="font-display text-xl font-bold text-ink">Nouveau message</DialogTitle>
-          <DialogDescription>Choisissez les personnes ou les Experts de l’entreprise à qui écrire. 9 participants au plus, vous compris.</DialogDescription>
-        </DialogHeader>
-        <ul className="max-h-80 space-y-1.5 overflow-y-auto pt-1">
-          {reachable.map((e) => {
-            const checked = picked.includes(e.nom);
-            return (
-              <li key={`${e.type}:${e.nom}`}>
-                <label className={cn("flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors", checked ? "border-brand/40 bg-tint" : "border-line hover:bg-soft")}>
-                  <input type="checkbox" className="accent-brand" checked={checked} onChange={(ev) => setPicked((p) => (ev.target.checked ? [...p, e.nom] : p.filter((n) => n !== e.nom)))} />
-                  <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg", e.type === "expert" ? "bg-tint text-brand" : "bg-soft-2 text-ink-2")}>
-                    {e.type === "expert" ? <MessagesSquare className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-semibold text-ink">{e.nom}</span>
-                  <span className="text-xs text-ink-3">{e.type === "expert" ? "Expert" : "Personne"}</span>
-                </label>
-              </li>
-            );
-          })}
-        </ul>
-        {tooMany && <p role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">Trop de participants : 9 au plus, vous compris. Retirez quelqu’un.</p>}
-        {refusal && <p role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{refusal}</p>}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Annuler</Button>
-          <Button onClick={() => void go()} disabled={!keys.length || tooMany || opening}>
-            {opening && <Loader2 className="animate-spin" />}
-            Ouvrir la conversation
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

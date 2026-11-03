@@ -24,3 +24,26 @@ export function conversationName(members: string[], mine: string[], labels: Map<
   const others = [...new Set(members.filter((m) => !mine.includes(m)).map((m) => labels.get(m)).filter((n): n is string => Boolean(n)))];
   return others.length ? others.join(", ") : fallback;
 }
+
+/** Buzz names every direct conversation « DM »; any other named channel is a salon (unit or opened in the app). */
+export const isSalonName = (name: string): boolean => name !== "DM" && name !== "Conversation";
+
+/** Who is in a conversation, as people read it: one « vous » for all one's devices, unknown keys (the relay) left out. */
+export function participants(members: string[], mine: string[], labels: Map<string, string>): string[] {
+  return [...new Set(members.map((k) => (mine.includes(k) ? "vous" : labels.get(k))).filter((v): v is string => Boolean(v)))];
+}
+
+export interface DirectoryPerson { membre: string; nom: string; self: boolean; person: BuzzEntry | null; experts: BuzzEntry[] }
+
+/** The directory by member: the person (when reachable) and their experts; oneself first, for one's own experts. */
+export function peopleOf(directory: BuzzEntry[], mine: string[]): DirectoryPerson[] {
+  const byMember = new Map<string, DirectoryPerson>();
+  for (const e of directory) {
+    const self = e.type === "personne" && e.cles.length > 0 && e.cles.every((k) => mine.includes(k));
+    const row = byMember.get(e.membre) ?? { membre: e.membre, nom: e.nom, self: false, person: null, experts: [] };
+    if (e.type === "personne") Object.assign(row, { nom: e.nom, self, person: e.cles.length && !self ? e : null });
+    else row.experts.push(e);
+    byMember.set(e.membre, row);
+  }
+  return [...byMember.values()].filter((p) => p.person || p.experts.length).sort((a, b) => Number(b.self) - Number(a.self) || a.nom.localeCompare(b.nom, "fr"));
+}

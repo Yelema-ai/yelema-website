@@ -14,7 +14,7 @@ export interface WorkspaceWithRole extends Workspace {
   /** The company's main logo (back office `me.workspace.logoUrl`), shown at the top of the menu. */
   logo_url?: string | null;
   /** `entreprise`: the company chat only (an agent on the company's instance): no Experts, no integrations. */
-  access?: "instance" | "entreprise";
+  access?: "instance" | "entreprise" | "equipe";
   /** The company's main color (back office `me.workspace.brandColor`, #rrggbb), when it has one. */
   brand_color?: string | null;
 }
@@ -31,7 +31,7 @@ export interface WorkspaceMember {
   instance_name?: string | null;
   /** Back-office member id; `entreprise` members can be removed by an admin when `removable`. */
   id?: string;
-  access?: "instance" | "entreprise";
+  access?: "instance" | "entreprise" | "equipe";
   removable?: boolean;
 }
 

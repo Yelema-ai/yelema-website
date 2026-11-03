@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { conversationName, labelsOf, type BuzzEntry } from "./buzz.ts";
+import { conversationName, isSalonName, labelsOf, participants, peopleOf, type BuzzEntry } from "./buzz.ts";
 
 const k = (c: string) => c.repeat(64);
 const directory: BuzzEntry[] = [
@@ -19,4 +19,22 @@ test("une conversation directe porte le nom des autres, sans doublon ni soi-mêm
   const labels = labelsOf(directory);
   assert.equal(conversationName([k("a"), k("b"), k("c"), k("d")], [k("d")], labels, "DM"), "Leslie, Mamadou (de Leslie)");
   assert.equal(conversationName([k("d")], [k("d")], labels, "DM (1)"), "DM (1)");
+});
+
+test("participants : un seul « vous » pour tous ses appareils, la clé du relais écartée", () => {
+  const labels = labelsOf([...directory, { nom: "Djénéba (de Selim)", type: "expert", membre: "21", cles: [k("e")] }]);
+  assert.deepEqual(participants([k("d"), k("f"), k("e"), k("0")], [k("d"), k("f")], labels), ["vous", "Djénéba (de Selim)"]);
+});
+
+test("annuaire par membre : soi d'abord (pour ses propres Experts), puis les autres avec leurs Experts", () => {
+  const people = peopleOf([...directory, { nom: "Djénéba (de Selim)", type: "expert", membre: "21", cles: [k("e")] }], [k("d")]);
+  assert.deepEqual(people.map((p) => [p.nom, p.self, p.person?.nom ?? null, p.experts.map((e) => e.nom)]), [
+    ["Selim", true, null, ["Djénéba (de Selim)"]],
+    ["Leslie", false, "Leslie", ["Mamadou (de Leslie)"]],
+  ]);
+});
+
+test("salon : tout canal nommé autrement que « DM »", () => {
+  assert.equal(isSalonName("DM"), false);
+  assert.equal(isSalonName("Clôture mensuelle"), true);
 });

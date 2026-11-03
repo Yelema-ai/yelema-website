@@ -16,6 +16,7 @@ import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { usePoll } from "@/components/usePoll";
 import { runPool } from "@/lib/bulk";
 import { driveTree } from "@/lib/drive-store";
+import { expertPath } from "@/lib/expert-tabs";
 
 // The company memory: what the experts know of the company. Everyone sees the deposits of their own
 // compartments; whoever may deposit adds a note or a document. The back office sends each deposit
@@ -233,7 +234,7 @@ export function MemoryView({ embedded = false, onDeposit }: { embedded?: boolean
             )}
             {!charte && !offer && designer && (
               <Button asChild size="sm" className="max-sm:w-full">
-                <Link href={`/experts/${designer.agentId}/${designer.profileId}/chat?q=${encodeURIComponent("/charte")}`}>
+                <Link href={`${expertPath(designer.agentId, designer.profileId)}/chat?q=${encodeURIComponent("/charte")}`}>
                   La créer avec {designer.displayName}
                 </Link>
               </Button>

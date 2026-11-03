@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { agentAccessRole, backofficeAgentRow, getAgentRow, getRole, requireUser } from "@/lib/auth";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { openConversation } from "@/lib/conversation-token";
-import { movedTabPath, parseAgentRoute } from "@/lib/expert-tabs";
+import { movedTabPath, parseAgentRoute, resolveProfile } from "@/lib/expert-tabs";
 import { AgentWorkspace } from "@/components/AgentWorkspace";
 
 // L'espace d'un expert. L'instance et l'expert (son profil Hermes) sont portés par l'URL, puis
@@ -31,7 +31,8 @@ export default async function AgentWorkspacePage({
   if (authViaBackoffice()) {
     const row = await backofficeAgentRow();
     if (!row || row.agent37_id !== agentId) notFound();
-    return <AgentWorkspace key={`${agentId}:${route.profileId ?? ""}`} agentId={agentId} profileId={route.profileId} workspaceId={row.workspace_id} initialTab={route.tab} />;
+    const profileId = route.profileId && (resolveProfile(route.profileId, row.profiles ?? []) ?? route.profileId);
+    return <AgentWorkspace key={`${agentId}:${profileId ?? ""}`} agentId={agentId} profileId={profileId} workspaceId={row.workspace_id} initialTab={route.tab} />;
   }
 
   const { db, user } = await requireUser();

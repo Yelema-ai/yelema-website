@@ -79,8 +79,8 @@ export interface BoMe {
   user: { id: string; email: string; firstName: string | null; lastName: string | null; name: string | null; jobTitle: string | null; role: "admin" | "member"; avatarUrl?: string | null; /** Call voice per expert (`*` = all) and language, shared with the mobile app. */ voices?: Record<string, Partial<Record<"fr" | "en", string>>> };
   workspace: { id: string; name: string; logoUrl: string | null; brandColor?: string | null };
   instance: { id: string } | null;
-  /** `entreprise`: company chat only — no Experts, no instance of one's own. Absent on older back offices. */
-  access?: "instance" | "entreprise";
+  /** `entreprise`: company chat only — no Experts, no instance of one's own. `equipe`: Experts on a team instance. */
+  access?: "instance" | "entreprise" | "equipe";
 }
 
 export interface BoInstanceView {
@@ -110,7 +110,11 @@ export interface BoInstanceView {
   }[];
   /** Where a channel that receives by webhook is reached: the address to give Microsoft for Teams. */
   channels?: { teams?: { endpoint: string | null } };
+  /** Team instance only: the team, its members (the caller first) and the expert keys open to each. */
+  team?: TeamRoster;
 }
+
+export interface TeamRoster { name: string; members: { name: string | null; email: string; you: boolean; experts: string[] }[] }
 
 /** Where the expert's own name stands on the instance: written in its SOUL.md, or on its way. */
 export type ExpertIdentityState = "pending" | "applied" | "failed";
@@ -654,6 +658,7 @@ export const backoffice = {
   buzz: (token: string) => call<BuzzOverview>("/app/buzz", { token }),
   buzzAddDevice: (token: string, device: { pubkey: string; label: string }) => call<{ ok: true }>("/app/buzz/devices", { method: "POST", token, body: device }),
   buzzRemoveDevice: (token: string, pubkey: string) => call<{ ok: true }>("/app/buzz/devices", { method: "DELETE", token, body: { pubkey } }),
+  buzzSalon: (token: string, salon: { nom: string; cles: string[] }) => call<{ id: string; nom: string }>("/app/buzz/salons", { method: "POST", token, body: salon, timeoutMs: 90_000 }),
   buzzSent: (token: string, sent: { kind: string; recipients: string[] }) => call<{ ok: true }>("/app/buzz/outbox", { method: "POST", token, body: sent }),
   memoryItems: (token: string) => call<MemoryList>("/app/memory/items", { token }),
   createMemoryNote: (token: string, note: MemoryNote) => call<{ id: string }>("/app/memory/items", { method: "POST", token, body: note }),

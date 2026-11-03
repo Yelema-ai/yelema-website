@@ -36,6 +36,7 @@ import { openSearch, warmSearch } from "@/components/conversations/SearchDialog"
 import { useCompanySessions } from "@/components/conversations/useCompanySessions";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { expertPath } from "@/lib/expert-tabs";
 
 // Le haut du menu : « Nouvelle conversation » (l'accueil et sa barre de chat), en couleur, puis
 // Rechercher (Ctrl K) et Intégrations. Recruter n'est plus au menu (Leslie, 23/10) ; sa page reste à
@@ -193,7 +194,7 @@ export function EnterpriseSidebar({ collapsed, onToggle, onNavigate }: { collaps
                   // Keyed on instance and profile: a profile name alone is not unique across instances.
                   key={`${e.agentId}:${e.profileId}`}
                   expert={e}
-                  active={here === `/experts/${e.agentId}/${e.profileId}` || here.startsWith(`/experts/${e.agentId}/${e.profileId}/`)}
+                  active={here === expertPath(e.agentId, e.profileId) || here.startsWith(`${expertPath(e.agentId, e.profileId)}/`)}
                   compact={collapsed}
                   onNavigate={onNavigate}
                   className={g.cycle && !collapsed ? "pl-4" : undefined}

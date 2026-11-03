@@ -16,6 +16,7 @@ import {
   SquarePen,
   Pin,
   Plus,
+  UsersRound,
 } from "lucide-react";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { EnterpriseSidebar } from "@/components/enterprise/EnterpriseSidebar";
@@ -34,6 +35,7 @@ import { useCompanySessions } from "@/components/conversations/useCompanySession
 import type { Expert } from "@/lib/types";
 import { cycleKind, expertRank, isDjeneba } from "@/lib/expert-cycle";
 import { cn } from "@/lib/utils";
+import { expertPath } from "@/lib/expert-tabs";
 
 // Le haut du menu : « Nouvelle conversation » (l'accueil et sa barre de chat), en couleur, puis
 // Rechercher (Ctrl K) et Intégrations. Recruter n'est plus au menu (Leslie, 23/10) ; sa page reste à
@@ -84,7 +86,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
       return next;
     });
   const isActive = (e: { agentId: string; profileId: string }) =>
-    here === `/experts/${e.agentId}/${e.profileId}` || here.startsWith(`/experts/${e.agentId}/${e.profileId}/`);
+    here === expertPath(e.agentId, e.profileId) || here.startsWith(`${expertPath(e.agentId, e.profileId)}/`);
 
   return (
     <aside
@@ -174,6 +176,20 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         <MessagesSquare className="size-5 shrink-0" strokeWidth={1.9} />
         {!collapsed && "Échanges"}
       </Link>
+      {current?.access === "equipe" && (
+        <Link
+          href="/equipe"
+          onClick={onNavigate}
+          className={cn(
+            "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors",
+            here.startsWith("/equipe") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
+            collapsed && RAIL_SQUARE
+          )}
+        >
+          <UsersRound className="size-5 shrink-0" strokeWidth={1.9} />
+          {!collapsed && "Mon équipe"}
+        </Link>
+      )}
 
       {/* The Experts and the conversations scroll between the top of the menu and its foot, which stay put. */}
       <div className={cn("-mx-3 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3", collapsed && "-mx-2.5 items-center px-2.5")}>
