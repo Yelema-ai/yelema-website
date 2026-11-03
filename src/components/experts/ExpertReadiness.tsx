@@ -6,7 +6,7 @@ import { BookOpen, Check, CircleDashed, Plug, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { FIX, pointsLeft, readiness, stage, type JourZero, type Stage } from "@/lib/jour-zero";
 import { cn } from "@/lib/utils";
-import { UpdateSpinner, useDeployPhase } from "@/components/app/DeployStatus";
+import { useDeployPhase } from "@/components/app/DeployStatus";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cached, cachedFetch } from "@/lib/client-cache";
 
@@ -81,17 +81,11 @@ export function ExpertReadiness({
   const st = jz ? (jz.working ? "ready" : stage(jz)) : null;
   useEffect(() => onStage?.(st), [onStage, st]);
 
-  // During an update the chip says so: the expert answers slower, and it is not a fault of its own.
+  // During an update the strip under the top bar says so (DeployStatus): no chip beside the name.
   // The banner above the chat bar has nothing to say then, nor once the expert is ready.
   // Before « Faire connaissance » the banner says nothing either: that is the first request under the chat bar.
   if (variant === "banner" && (updating || !jz || jz.working || stage(jz) !== "left")) return null;
   // « Prêt » stays beside the name once the expert is ready (Leslie, 01/11, back on her 31/10 choice).
-  if (updating)
-    return (
-      <span role="status" className={cn("inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[12px] font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300", className)}>
-        <UpdateSpinner className="size-3" /> Mise à jour
-      </span>
-    );
   if (!jz || jz.working) return null;
   const r = readiness(jz);
   const Icon = r.state === "ready" ? Check : CircleDashed;
