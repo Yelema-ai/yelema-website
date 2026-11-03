@@ -64,3 +64,12 @@ const BY_SLUG = new Map(DEFAULT_INTEGRATION_TOOLKITS.map((t) => [t.slug, t]));
 export function catalogToolkit(slug: string): IntegrationToolkit | undefined {
   return BY_SLUG.get(slug.toLowerCase());
 }
+
+// The catalog sorted by use, for the filters above it (Leslie, 03/11). A tool found by a search has no
+// group: it shows under « Tous » only.
+export const INTEGRATION_GROUPS: { label: string; slugs: string[] }[] = [
+  { label: "Messagerie et agenda", slugs: ["gmail", "outlook", "googlecalendar", "microsoft_teams", "slack", "zoom", "calendly"] },
+  { label: "Documents et fichiers", slugs: ["googledrive", "googledocs", "googlesheets", "one_drive", "dropbox", "notion", "airtable", "trello"] },
+  { label: "Ventes et finance", slugs: ["hubspot", "quickbooks"] },
+  { label: "Réseaux et création", slugs: ["linkedin", "facebook", "instagram", "canva"] },
+];
