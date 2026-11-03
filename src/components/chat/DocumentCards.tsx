@@ -383,6 +383,20 @@ async function readXlsx(data: ArrayBuffer, maxRows = ROWS, maxCols = COLS): Prom
 
 const renderSheet: Render = async (data, doc, _width, full) => {
   const [r, c] = full ? [FULL_ROWS, FULL_COLS] : [ROWS, COLS];
+  // A workbook as Excel draws it: colours, logos, merged cells, every sheet (Leslie, 03/11). The plain
+  // table of its values stays the fallback for a file this reader does not follow.
+  if (ext(doc.name) !== "csv") {
+    try {
+      const { openBook, readSheet, Workbook } = await import("./xlsx-book");
+      const book = await openBook(data);
+      if (book.sheets.length) {
+        const sheet = await readSheet(book, 0, r, c);
+        if (sheet.rows.length) return <Workbook book={book} first={sheet} full={full} maxRows={r} maxCols={c} />;
+      }
+    } catch (e) {
+      if ((e as Error).message === "too large") throw e;
+    }
+  }
   const { sheet, rows } = ext(doc.name) === "csv" ? { sheet: null, rows: parseCsv(new TextDecoder().decode(data), r) } : await readXlsx(data, r, c);
   if (!rows.length) throw new Error("empty");
   return <Table sheet={sheet} rows={rows} full={full} />;
