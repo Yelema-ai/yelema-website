@@ -34,6 +34,7 @@ import { shortcutKind } from "@/lib/google-docs";
 import { MoveDialog } from "./MoveDialog";
 import { VariantGroups } from "./VariantGroups";
 import { groupVariants, isSourceFolder } from "@/lib/visual-variants";
+import { splitVersions } from "@/lib/drive-versions";
 import { useFileBrowser } from "./useFileBrowser";
 import { BackButton } from "@/components/ui/back-button";
 import { archiveUrl, breadcrumbs, contentUrl, formatBytes, formatMtime, isDir, type FileEntry } from "./types";
@@ -49,7 +50,19 @@ type ViewMode = "list" | "grid";
 const MOVE_TYPE = "application/x-yelema-path";
 const HOVER_INTENT_MS = 150;
 
-export function FilesView({ agentId, initialPath, openPath, inbox }: { agentId: string; initialPath?: string; openPath?: string | null; inbox?: string }) {
+export function FilesView({
+  agentId,
+  initialPath,
+  openPath,
+  openFile,
+  inbox,
+}: {
+  agentId: string;
+  initialPath?: string;
+  openPath?: string | null;
+  openFile?: string | null;
+  inbox?: string;
+}) {
   const fb = useFileBrowser(agentId, initialPath, inbox);
   // A folder named in the address (« ?dossier= », from a path cited in the chat) opens here.
   // The first one is already the browser's starting folder; a cited folder gone opens the root.
@@ -61,6 +74,13 @@ export function FilesView({ agentId, initialPath, openPath, inbox }: { agentId: 
     void fbNavigate(openPath, true);
   }, [openPath, fbNavigate]);
   const [preview, setPreview] = useState<FileEntry | null>(null);
+  // A file named in the address opens once, checked like every path by the files routes.
+  const shownFile = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openFile || openFile === shownFile.current || !/^(~|\/home\/node)\/Livrables\//.test(openFile)) return;
+    shownFile.current = openFile;
+    setPreview({ name: openFile.split("/").pop() ?? openFile, path: openFile, type: "file", size: null, modified: 0 } as FileEntry);
+  }, [openFile]);
   const [pendingDelete, setPendingDelete] = useState<FileEntry | null>(null);
   const [moving, setMoving] = useState<FileEntry | null>(null);
   // The folder a dragged file of the list is over (Leslie, 30/10: déplacer un livrable dans un dossier).
@@ -206,9 +226,14 @@ export function FilesView({ agentId, initialPath, openPath, inbox }: { agentId: 
   // and the editable « source » folder always comes last (Myriel, Leslie 30/10).
   const variants = useMemo(() => groupVariants(fb.visibleEntries.filter((e) => !isDir(e))), [fb.visibleEntries]);
   const [byVisual, setByVisual] = useState(true);
-  const listEntries = useMemo(() => {
+  // A document's older versions (« _v17 » beside « _v18 ») fold at the bottom (Leslie, 02/11): kept, never in the way.
+  const { listEntries, olderVersions } = useMemo(() => {
     const rest = variants && byVisual ? fb.visibleEntries.filter((e) => !variants.grouped.has(e)) : fb.visibleEntries;
-    return [...rest.filter((e) => !(isDir(e) && isSourceFolder(e.name))), ...rest.filter((e) => isDir(e) && isSourceFolder(e.name))];
+    const { current, older } = splitVersions(rest);
+    return {
+      listEntries: [...current.filter((e) => !(isDir(e) && isSourceFolder(e.name))), ...current.filter((e) => isDir(e) && isSourceFolder(e.name))],
+      olderVersions: older,
+    };
   }, [fb.visibleEntries, variants, byVisual]);
   const selectedEntry = useMemo(
     () => (selectedPath == null ? null : fb.visibleEntries.find((entry) => entry.path === selectedPath) ?? null),
@@ -504,6 +529,30 @@ export function FilesView({ agentId, initialPath, openPath, inbox }: { agentId: 
               </div>
             )}
               </>
+            )}
+
+            {olderVersions.length > 0 && (
+              <details className="group mt-4 rounded-lg border bg-card" onClick={(e) => e.stopPropagation()}>
+                <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 text-sm font-medium text-muted-foreground hover:text-foreground">
+                  <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
+                  Versions précédentes ({olderVersions.length})
+                </summary>
+                <ul className="border-t">
+                  {olderVersions.map((entry) => (
+                    <li
+                      key={entry.path}
+                      className="flex min-h-11 cursor-default select-none items-center gap-3 border-b border-border/70 px-4 py-2 text-sm last:border-0 hover:bg-secondary/35"
+                      {...entryHandlers(entry)}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <EntryName entry={entry} selected={selectedEntry?.path === entry.path} />
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground max-sm:hidden">{formatBytes(entry.size)}</span>
+                      <span className="w-44 shrink-0 text-right text-xs text-muted-foreground max-sm:w-auto">{formatMtime(entry.modified)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
 
             {fb.truncated && (

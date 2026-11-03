@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
+import { Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Plus, Sparkles } from "lucide-react";
 import { ComputerButton, ComputerDialog, ComputerPanel } from "@/components/experts/ExpertComputer";
 import { DashboardProvider } from "@/components/experts/DashboardProvider";
 import { DashboardButton, DashboardPanel, DashboardDialog, OpenDashboardOnMount, ShareDashboardModal, SidePanelSync } from "@/components/experts/ExpertDashboard";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { citedFolder, type TurnDoc } from "@/lib/drive-links";
 import { ConversationDocs } from "./ConversationDocs";
+import { PreviewSiblings } from "@/components/files/preview-siblings";
 import { GooglePin } from "./GoogleDocs";
 import type { GoogleDoc } from "@/lib/google-docs";
 import { DropOverlay } from "@/components/DropOverlay";
@@ -242,6 +243,7 @@ export function ChatView({
       isStreaming={isStreaming}
       messages={messages}
     >
+    <PreviewSiblings.Provider value={docs}>
     <SidePanelSync hasComputer={hasComputer} />
     {openDashboard && onDashboardOpened && <OpenDashboardOnMount onDone={onDashboardOpened} />}
     <div className="flex h-full min-h-0">
@@ -381,9 +383,19 @@ export function ChatView({
         <div className="flex flex-1 flex-col items-center px-4 pt-3">
           {/* An expert's first discussion: three requests from the catalogue, sent as is on a click. If
               something is missing for one (a tool to connect), the expert says what (its own rules). */}
-          {profile && prepStage === "intro" ? null : profile && expert?.suggestions?.length ? (
+          {/* Before its « Faire connaissance », that comes first, in colour, among the requests (Leslie, 02/11: B). */}
+          {profile && (prepStage === "intro" || expert?.suggestions?.length) ? (
             <div role="group" aria-label={`Demander à ${agentName}`} className="flex max-w-2xl flex-wrap justify-center gap-2">
-              {expert.suggestions.slice(0, 3).map((s) => (
+              {prepStage === "intro" && (
+                <button
+                  type="button"
+                  onClick={() => void send("/onboarding")}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-brand bg-tint px-3.5 py-1.5 text-[13.5px] font-semibold text-brand-ink transition-colors hover:bg-brand hover:text-on-brand"
+                >
+                  <Sparkles className="size-4" /> Faire connaissance avec {agentName}
+                </button>
+              )}
+              {(expert?.suggestions ?? []).slice(0, prepStage === "intro" ? 2 : 3).map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -416,6 +428,7 @@ export function ChatView({
         </>
       )}
     </div>
+    </PreviewSiblings.Provider>
     </DashboardProvider>
   );
 }

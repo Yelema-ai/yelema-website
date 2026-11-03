@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
-import { ANGLED, BARE, citedFolder, CODE, FOLDER_BARE, FOLDER_CODE, isHiddenInChat, LINKED, normDrivePath, noteFolder, safeDecode } from "@/lib/drive-links";
+import { ANGLED, BARE, citedFolder, CODE, FOLDER_BARE, FOLDER_CODE, isHiddenInChat, LINKED, normDrivePath, noteFolder, openTarget, safeDecode } from "@/lib/drive-links";
 import { replyLines } from "@/lib/reply-lines";
 import { agentTabPath } from "@/lib/expert-tabs";
 import type { FileEntry } from "@/components/files/types";
@@ -13,6 +13,8 @@ import type { FileEntry } from "@/components/files/types";
 // Loaded on a click only, and apart: FilePreview itself renders markdown with this component.
 const FilePreview = dynamic(() => import("@/components/files/FilePreview").then((m) => m.FilePreview), { ssr: false });
 
+const OPEN_LINK = /\[([^\]\n]*)\]\(<?((?:https?:\/\/[^\s)>]+)?\/livrables\/ouvrir\?p=[^\s)>]+)>?\)/g;
+const OPEN_BARE = /(^|[\s(«])((?:https?:\/\/[^\s)<>]+)\/livrables\/ouvrir\?p=[^\s)<>»]+)/g;
 const HIDDEN_LINK = /\[([^\]\n]*)\]\(<?(?:file:\/\/|sandbox:)?((?:\/home\/node|~)\/Livrables\/[^)>\n]+)>?\)/g;
 
 // Experts give the drive path of what they saved (see lib/drive-paths.ts for the drive itself); turn those paths into download links (the
@@ -36,7 +38,24 @@ function linkDriveFiles(content: string, agentId: string, profileId?: string | n
     files?.set(safeDecode(path.split("/").pop() ?? path), normDrivePath(path));
     return `[${label}](${url(path)})`;
   };
+  // The Experts also write a deliverable as a full address (« https://<client>.app.yelema.ai/livrables/ouvrir?p=… »,
+  // made for Telegram). In the chat it opens beside the conversation like any other file, never on the Livrables
+  // page (Leslie, 02/11 : « je dois repartir en arrière pour repartir dans la conversation »); a folder opens in
+  // Livrables, as a cited folder does.
+  const opened = (label: string | null, href: string) => {
+    const t = openTarget(href);
+    if (!t) return null;
+    if (!t.file) return folderLink(t.path, agentId, profileId);
+    const text = label?.trim() || name(t.path);
+    files?.set(text.replace(/\\([_*\[\]])/g, "$1").replace(/[*_]/g, "").trim(), t.path);
+    return `[${text}](${url(t.path)})`;
+  };
   return content
+    .replace(OPEN_LINK, (m, label: string, href: string) => opened(label, href) ?? m)
+    .replace(OPEN_BARE, (m, lead: string, href: string) => {
+      const l = opened(null, href);
+      return l ? `${lead}${l}` : m;
+    })
     .replace(HIDDEN_LINK, (m, label: string, path: string) => {
       if (isHiddenInChat(path)) return label;
       files?.set(label.replace(/[*_]/g, "").trim(), normDrivePath(path));

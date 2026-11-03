@@ -23,6 +23,7 @@ import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { AccountMenu } from "@/components/AccountMenu";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { ExpertItem } from "@/components/experts/ExpertItem";
+import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { READ_AHEAD, useReadAhead } from "@/components/experts/expert-preload";
 import { useOwnAgentId } from "@/components/conversations/useAllConversations";
 import { useChatMarks } from "@/components/conversations/useChatMarks";
@@ -31,7 +32,7 @@ import { convKey, toMs } from "@/lib/activity";
 import { openSearch, warmSearch } from "@/components/conversations/SearchDialog";
 import { useCompanySessions } from "@/components/conversations/useCompanySessions";
 import type { Expert } from "@/lib/types";
-import { cycleKind, isDjeneba } from "@/lib/expert-cycle";
+import { cycleKind, expertRank, isDjeneba } from "@/lib/expert-cycle";
 import { cn } from "@/lib/utils";
 
 // Le haut du menu : « Nouvelle conversation » (l'accueil et sa barre de chat), en couleur, puis
@@ -56,8 +57,8 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   const deploymentLogo = usePublicConfig().logoUrl;
   const logoUrl = current?.logo_url ?? deploymentLogo;
   const { experts: installed, unreadable } = useExpertsContext();
-  // Djénéba heads « Mes Experts », the others follow in their order.
-  const experts = [...installed].sort((a, b) => Number(isDjeneba(b)) - Number(isDjeneba(a)));
+  // Djénéba heads « Mes Experts », always in sight; the others follow the catalogue, cycle by cycle.
+  const experts = [...installed].sort((a, b) => expertRank(a) - expertRank(b));
   const ownAgentId = useOwnAgentId();
   // The first Experts as the menu shows them are read ahead: page, conversations and models.
   const shown = groupByCycle(experts).flatMap((g) => g.experts);
@@ -185,8 +186,9 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
       {groupByCycle(experts).map((g) => {
         const folded =
           !collapsed && g.cycle !== null && (cycleChoice[g.cycle.key] ?? (experts.length > FOLD_FROM && !g.experts.some(isActive)));
+        // Folded, a cycle shows the faces of its Experts instead of a count (Leslie, 02/11, option C).
         return (
-          <div key={g.cycle?.key ?? "_"} className="flex flex-col gap-0.5">
+          <div key={g.cycle?.key ?? (g.experts.some(isDjeneba) ? "_lead" : "_rest")} className="flex flex-col gap-0.5">
             {/* The cycle a group of Experts came with: one quiet line, folding the group. */}
             {g.cycle && !collapsed && (
               <button
@@ -200,8 +202,21 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
                   return <Icon className="size-3.5 shrink-0" />;
                 })()}
                 <span className="min-w-0 flex-1 truncate">{g.cycle.label}</span>
-                <span className="font-medium">{g.experts.length}</span>
-                <ChevronDown className={cn("size-3.5 shrink-0 transition-transform", folded && "-rotate-90")} />
+                {folded ? (
+                  <span className="flex shrink-0 items-center" aria-label={`${g.experts.length} Expert${g.experts.length > 1 ? "s" : ""}`}>
+                    {g.experts.slice(0, FACES).map((e) => (
+                      <ExpertAvatar
+                        key={`${e.agentId}:${e.profileId}`}
+                        expert={{ ...e, gateway: null }}
+                        size="xxs"
+                        className="-ml-2 rounded-full ring-2 ring-surface first:ml-0"
+                      />
+                    ))}
+                    {g.experts.length > FACES && <span className="ml-1 text-[11px] font-semibold">+{g.experts.length - FACES}</span>}
+                  </span>
+                ) : (
+                  <ChevronDown className="size-3.5 shrink-0" />
+                )}
               </button>
             )}
             {!folded &&
@@ -275,7 +290,10 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
 // Menu folded: every entry is the same square, centred in the rail, so icons and faces line up.
 const RAIL_SQUARE = "size-11 min-h-0 shrink-0 justify-center px-0";
 // Past this many Experts, the cycles start folded (Leslie, 01/11).
-const FOLD_FROM = 8;
+// A cycle starts folded when the member has more Experts than this, except the cycle of the Expert on screen.
+const FOLD_FROM = 4;
+// A cycle holds four Experts at most (Leslie, 02/11): all their faces fit.
+const FACES = 4;
 const CYCLES_KEY = "yelema.cycles-fold";
 
 
@@ -362,15 +380,21 @@ function byDay<S extends { session_id: string; last_active: number }>(rows: S[],
   return out;
 }
 
-// Experts without a cycle first (Djénéba heads them), then one group per cycle, in the offer's order.
+// Djénéba alone first, never folded; then one group per cycle in the catalogue's order (the experts
+// arrive sorted by expertRank); an Expert the catalogue and the back office both leave without a cycle last.
 function groupByCycle(experts: Expert[]): { cycle: { key: string; label: string } | null; experts: Expert[] }[] {
-  const groups: { cycle: { key: string; label: string } | null; experts: Expert[] }[] = [{ cycle: null, experts: [] }];
+  const lead = experts.filter(isDjeneba);
+  const groups: { cycle: { key: string; label: string } | null; experts: Expert[] }[] = [];
+  const loose: Expert[] = [];
   for (const e of experts) {
-    const g = e.cycle ? groups.find((x) => x.cycle?.key === e.cycle!.key) : groups[0];
+    if (isDjeneba(e)) continue;
+    if (!e.cycle) {
+      loose.push(e);
+      continue;
+    }
+    const g = groups.find((x) => x.cycle?.key === e.cycle!.key);
     if (g) g.experts.push(e);
-    else groups.push({ cycle: e.cycle!, experts: [e] });
+    else groups.push({ cycle: e.cycle, experts: [e] });
   }
-  const rank = (g: (typeof groups)[number]) => (g.cycle ? cycleKind(g.cycle.label).rank + 1 : 0);
-  groups.sort((x, y) => rank(x) - rank(y));
-  return groups.filter((g) => g.experts.length > 0);
+  return [{ cycle: null, experts: lead }, ...groups, { cycle: null, experts: loose }].filter((g) => g.experts.length > 0);
 }

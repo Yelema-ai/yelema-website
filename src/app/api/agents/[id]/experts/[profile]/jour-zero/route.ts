@@ -1,4 +1,4 @@
-import { instanceFetch } from "@/lib/agent37";
+import { agent37, instanceFetch } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { DRIVE_ROOT } from "@/lib/drive";
 import { expertDisplayName } from "@/lib/experts";
@@ -20,11 +20,17 @@ export async function GET(_request: Request, { params }: Ctx) {
     const profile = await resolveProfile(row, raw);
     if (profile === DEFAULT_PROFILE) throw new ApiError(400, "invalid_request", "Expert inconnu");
 
-    const path = `${DRIVE_ROOT}/${expertDisplayName(profile)}/_memoire/jour-zero.json`;
+    const folder = `${DRIVE_ROOT}/${expertDisplayName(profile)}`;
+    const path = `${folder}/_memoire/jour-zero.json`;
     const res = await instanceFetch(id, `/v1/files/content?path=${encodeURIComponent(path)}`);
     if (res.status === 404) {
       await res.body?.cancel().catch(() => undefined);
-      return json(JOUR_ZERO_ABSENT);
+      // An expert whose folder already holds work was there before the preparation: not « to prepare ».
+      const working = await agent37
+        .listFiles(id, folder)
+        .then((l) => l.entries.some((e) => !e.name.startsWith(".")))
+        .catch(() => false);
+      return json(working ? { ...JOUR_ZERO_ABSENT, working: true } : JOUR_ZERO_ABSENT);
     }
     if (!res.ok) throw new ApiError(502, "jour_zero_unavailable", await upstreamErrorMessage(res, "jour-zero", UNAVAILABLE));
     if (Number(res.headers.get("content-length") ?? 0) > JOUR_ZERO_MAX_BYTES) {
