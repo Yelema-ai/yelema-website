@@ -35,7 +35,18 @@ function isAgentTab(value: string): value is AgentTab {
 // null). Both ride the URL as path segments so deep-links, refresh, and the Back button all reopen
 // the same expert + tab.
 export function agentTabPath(agentId: string, tab: AgentTab, profileId?: string | null): string {
-  return profileId ? `/experts/${agentId}/${profileId}/${tab}` : `/experts/${agentId}/${tab}`;
+  return profileId ? `${expertPath(agentId, profileId)}/${tab}` : `/experts/${agentId}/${tab}`;
+}
+
+// A team member's copy (`u-k3x9q2__mamadou`) shows as its expert's key; the page maps it back.
+const COPY = /^u-[a-z0-9]{6}__(.+)$/;
+export const urlProfile = (profileId: string): string => COPY.exec(profileId)?.[1] ?? profileId;
+export const expertPath = (agentId: string, profileId: string): string => `/experts/${agentId}/${urlProfile(profileId)}`;
+
+// The installed profile a URL segment names: itself, or the member's copy of that expert.
+export function resolveProfile(segment: string, profiles: readonly string[]): string | null {
+  if (profiles.includes(segment)) return segment;
+  return profiles.find((p) => COPY.test(p) && urlProfile(p) === segment) ?? null;
 }
 
 export interface AgentRoute {

@@ -26,7 +26,7 @@ import { RelayChannel } from "@/components/channels/RelayChannel";
 import { TelegramChannel } from "@/components/channels/TelegramChannel";
 import { TelegramTopics } from "@/components/channels/TelegramTopics";
 import { WhatsAppConnect } from "@/components/channels/WhatsAppConnect";
-import { useRuntimeTools } from "@/components/experts/useRuntimeTools";
+import { useRuntimeTools, useTelegramRelay } from "@/components/experts/useRuntimeTools";
 
 // The Messaging tab: connect this agent to the apps its owner already uses, so they can talk to it
 // from their phone instead of only from this dashboard.
@@ -51,6 +51,7 @@ export function ChannelsTab({
   const reachable = !["stopped", "deleting", "deleted", "failed", "error"].includes(agent.live_status ?? "");
   // The channels below are the Hermes harness's own; a Claude Code instance has Telegram through its hub.
   const hermesTools = useRuntimeTools(agentId);
+  const telegramRelay = useTelegramRelay(agentId);
 
   // What this page read last time, kept for the visit (Leslie, 28/10: « la page Canaux s'affiche très
   // lentement »): shown at once, the live state read again behind it.
@@ -118,7 +119,7 @@ export function ChannelsTab({
         <Header />
         <section className="space-y-3">
           <h3 className="text-sm font-semibold">Telegram</h3>
-          <TelegramChannel agentId={agentId} canManage={canManage} />
+          {telegramRelay ? <RelayChannel agentId={agentId} channel="telegram" canManage={canManage} /> : <TelegramChannel agentId={agentId} canManage={canManage} />}
         </section>
         <RelayChannel agentId={agentId} channel="slack" canManage={canManage} />
         <RelayChannel agentId={agentId} channel="teams" canManage={canManage} />

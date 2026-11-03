@@ -1,7 +1,7 @@
 import "server-only";
 import { agent37, type RuntimeCapabilities } from "@/lib/agent37";
 import { memo } from "@/lib/memo";
-import { currentInstance } from "@/lib/session";
+import { currentInstance, currentUserId } from "@/lib/session";
 
 // What an instance's runtime offers changes with its image (or a runtime switch, which changes the
 // image): kept per instance and image version, read again past 10 minutes.
@@ -14,7 +14,9 @@ export async function imageKeyOf(agentId: string): Promise<string> {
 }
 
 export async function runtimeCapabilities(agentId: string): Promise<RuntimeCapabilities | null> {
-  return caps.get(`${agentId}|${await imageKeyOf(agentId)}`, () => agent37.capabilities(agentId));
+  // Per caller: on a team instance each member's own experts (copies) are what the gateway lists.
+  const user = await currentUserId().catch(() => null);
+  return caps.get(`${agentId}|${user ?? ""}|${await imageKeyOf(agentId)}`, () => agent37.capabilities(agentId));
 }
 
 /** Whether the instance serves the Hermes-only screens (messaging channels). */

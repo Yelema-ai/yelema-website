@@ -73,9 +73,12 @@ export type TelegramHubStatus = {
   link?: { url: string; expiresAt: string; started: boolean };
 };
 
-export type RelayChannel = "slack" | "teams";
-export type RelayLink = { code: string; expiresAt: string; installUrl?: string; appUrl?: string | null };
-export type RelayStatus = { enabled: boolean; accounts: number };
+export type RelayChannel = "slack" | "teams" | "telegram";
+/** `createUrl` : Telegram d'une équipe sans bot encore, le lien qui fait créer le bot de l'espace (premier membre). */
+export type RelayLink = { code?: string; expiresAt?: string; installUrl?: string; appUrl?: string | null; botUrl?: string; createUrl?: string };
+export type RelayStatus = { enabled: boolean; accounts: number; bot?: string | null };
+
+const relayPath = (channel: RelayChannel): string => (channel === "telegram" ? "telegram-relay" : channel);
 
 // The gateway's own JSON routes (Telegram, relays, capabilities, pack files): never a stream.
 const gatewayJson = (gw: RuntimeGateway, path: string, init?: RequestInit) => gatewayFetch(gw, path, withTimeout(init, JSON_TIMEOUT_MS));
@@ -370,10 +373,12 @@ export const agent37 = {
 
   // Slack and Teams of a Claude Code instance, relayed by the runtime gateway: a link code (and, for Slack,
   // the « Add to Slack » install link), how many accounts are linked, unplug.
+  // Telegram relayed for a member of a team instance (`telegram-relay`); the account is the caller's, named to the
+  // gateway so it ties the link to that member.
   channelRelay: {
-    link: async (id: string, channel: RelayChannel): Promise<RelayLink> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${channel}/link`, { method: "POST" })),
-    status: async (id: string, channel: RelayChannel): Promise<RelayStatus> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${channel}`)),
-    unlink: async (id: string, channel: RelayChannel): Promise<{ ok: true }> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${channel}`, { method: "DELETE" })),
+    link: async (id: string, channel: RelayChannel): Promise<RelayLink> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${relayPath(channel)}/link`, await asUser({ method: "POST" }))),
+    status: async (id: string, channel: RelayChannel): Promise<RelayStatus> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${relayPath(channel)}`, await asUser({}))),
+    unlink: async (id: string, channel: RelayChannel): Promise<{ ok: true }> => parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/${relayPath(channel)}`, await asUser({ method: "DELETE" }))),
   },
 
   // What finished routine runs came to (absent: still running or unreadable); `null` direct, with no gateway.
@@ -383,11 +388,15 @@ export const agent37 = {
     return (await instanceCall<{ outcomes: Record<string, RunOutcome> }>(id, `/v1/routine-outcomes${q}`)).outcomes ?? {};
   },
 
+  // A team member's screen: the tabs of their own experts, through the gateway (which reads their screen token).
+  screen: async (id: string): Promise<{ ws: string; kind: "cast" }> =>
+    parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/screen`, await asUser({ method: "POST" }))),
+
   // What the instance's runtime offers (the gateway's /capabilities); `null` direct, where every
   // instance is Hermes and offers everything.
   capabilities: async (id: string): Promise<RuntimeCapabilities | null> => {
     const gw = runtimeGateway();
     if (!gw) return null;
-    return parseAgent37<RuntimeCapabilities>(await gatewayJson(gw, `/v1/instances/${urlId(id)}/capabilities`));
+    return parseAgent37<RuntimeCapabilities>(await gatewayJson(gw, `/v1/instances/${urlId(id)}/capabilities`, await asUser({})));
   },
 };

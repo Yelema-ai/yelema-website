@@ -4,6 +4,7 @@ import { agent37, instanceFetch, instancePortFetch } from "@/lib/agent37";
 import { ApiError } from "@/lib/http";
 import { composePrompt, splitPrompt, summarize, type Routine } from "@/lib/routines";
 import { runPool } from "@/lib/bulk";
+import { currentInstance } from "@/lib/session";
 
 // Hermes's own scheduler: each expert's routines live in its profile, the instance's gateway runs
 // them ONLY while the instance is awake (instances sleep after 45 idle minutes, so a routine due
@@ -76,12 +77,20 @@ function rejection(text: string): string {
   return "La routine n’a pas pu être enregistrée. Vérifiez l’horaire, puis réessayez.";
 }
 
+// A member of a team instance never holds the instance's key: the runtime gateway adds it for their
+// own experts' routines only.
+async function onSeat(agentId: string): Promise<boolean> {
+  const instance = await currentInstance().catch(() => null);
+  return instance?.id === agentId && Boolean(instance.seat);
+}
+
 async function hermes<T>(agentId: string, method: string, path: string, body?: unknown): Promise<T> {
+  const seat = await onSeat(agentId);
   for (let attempt = 0; ; attempt++) {
     const res = await instancePortFetch(agentId, API_PORT, path, {
       method,
       headers: {
-        Authorization: `Bearer ${await apiKey(agentId)}`,
+        ...(seat ? {} : { Authorization: `Bearer ${await apiKey(agentId)}` }),
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -89,7 +98,7 @@ async function hermes<T>(agentId: string, method: string, path: string, body?: u
     });
     // The instance got a new key (a fresh home), or this expert's profile never got it: read the
     // key again and have the instance hand it to every profile, once.
-    if (res.status === 401 && attempt === 0) {
+    if (res.status === 401 && attempt === 0 && !seat) {
       keys.delete(agentId);
       await res.body?.cancel().catch(() => undefined);
       await spreadKey(agentId);
