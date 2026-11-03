@@ -114,6 +114,9 @@ export interface BoInstanceView {
   team?: TeamRoster;
 }
 
+/** A file an expert of a salon put in its `Salons/<id>/` folder; `url` is signed and short-lived. */
+export interface SalonDeliverable { id: string; expertId: string; title: string; kind: string; updatedAt: string; url: string | null; folder: string; auteur: string }
+
 export interface TeamRoster { name: string; members: { name: string | null; email: string; you: boolean; experts: string[] }[] }
 
 /** Where the expert's own name stands on the instance: written in its SOUL.md, or on its way. */
@@ -659,6 +662,7 @@ export const backoffice = {
   buzzAddDevice: (token: string, device: { pubkey: string; label: string }) => call<{ ok: true }>("/app/buzz/devices", { method: "POST", token, body: device }),
   buzzRemoveDevice: (token: string, pubkey: string) => call<{ ok: true }>("/app/buzz/devices", { method: "DELETE", token, body: { pubkey } }),
   buzzSalon: (token: string, salon: { nom: string; cles: string[] }) => call<{ id: string; nom: string }>("/app/buzz/salons", { method: "POST", token, body: salon, timeoutMs: 90_000 }),
+  buzzSalonDeliverables: (token: string, id: string) => call<{ items: SalonDeliverable[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/livrables`, { token, timeoutMs: 30_000 }),
   buzzSent: (token: string, sent: { kind: string; recipients: string[] }) => call<{ ok: true }>("/app/buzz/outbox", { method: "POST", token, body: sent }),
   memoryItems: (token: string) => call<MemoryList>("/app/memory/items", { token }),
   createMemoryNote: (token: string, note: MemoryNote) => call<{ id: string }>("/app/memory/items", { method: "POST", token, body: note }),
