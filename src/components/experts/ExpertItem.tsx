@@ -5,7 +5,7 @@ import { useExpertActivity } from "@/components/activity/hooks";
 import { expertKey } from "@/lib/activity";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { agentTabPath } from "@/lib/expert-tabs";
-import { expertCycle } from "@/lib/expert-cycle";
+import { expertCycle, isDjeneba } from "@/lib/expert-cycle";
 import { preloadExpert, sparingData } from "@/components/experts/expert-preload";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -29,7 +29,7 @@ export function ExpertItem({
   readAhead = false,
   showCycle = false,
 }: {
-  /** Its cycle beside the name (« Direction » for Djénéba): where no cycle heading says it already. */
+  /** Its cycle beside the name, where no cycle heading says it already (never for Djénéba). */
   showCycle?: boolean;
   expert: Expert;
   /** One of the first rows of the menu: its whole page is fetched ahead, code included. */
@@ -46,7 +46,8 @@ export function ExpertItem({
   const waiting = unread
     ? bell.items.find((i) => i.unread && expertKey(i.agentId, i.profile) === expertKey(expert.agentId, expert.profileId))
     : undefined;
-  const cycle = showCycle && !compact ? expertCycle(expert) : null;
+  // Not for Djénéba: « Chief of Staff & Direction » under her name says it already (Leslie, 03/11).
+  const cycle = showCycle && !compact && !isDjeneba(expert) ? expertCycle(expert) : null;
   const hint = unread ? (unread === 1 ? "1 nouvelle réponse" : `${unread} nouvelles réponses`) : running ? "En cours" : null;
 
   return (
