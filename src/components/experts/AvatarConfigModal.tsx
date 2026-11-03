@@ -237,11 +237,11 @@ export function AvatarConfigModal({
           </div>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 gap-6 p-5 md:grid-cols-[240px_1fr] max-h-[75vh] overflow-y-auto">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 p-5 md:grid-cols-[240px_minmax(0,1fr)] max-h-[75vh] overflow-y-auto">
           {/* Colonne gauche : Aperçu & Photo de référence */}
           <div className="flex flex-col gap-3">
             <div
-              className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl border border-line shadow-inner flex items-center justify-center"
+              className="relative mx-auto aspect-[3/4] w-40 overflow-hidden rounded-2xl md:w-full border border-line shadow-inner flex items-center justify-center"
               style={{ backgroundColor: frameBackground }}
             >
               {shownAvatarSrc ? (
@@ -255,9 +255,14 @@ export function AvatarConfigModal({
                   )}
                 />
               ) : (
-                <div className="flex flex-col items-center justify-center p-4 text-center text-xs text-ink-3">
-                  Aucun portrait disponible
-                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center text-sm font-semibold text-ink-2 hover:text-brand"
+                >
+                  <ImagePlus className="size-7" />
+                  Ajouter une photo
+                </button>
               )}
 
               {phase === 'generating' && (
@@ -280,31 +285,36 @@ export function AvatarConfigModal({
                 onChange={(e) => pickReference(e.target.files?.[0] ?? null)}
               />
               <div className="flex items-center gap-1.5">
+                {/* The photo is optional (Leslie, 03/11: « on ne sait même pas qu'il faut télécharger une
+                    photo »): said on the button, and what the studio starts from said under it. */}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-dashed border-line bg-soft/50 px-2.5 py-1.5 text-xs text-ink-2 hover:border-brand/40 hover:bg-soft hover:text-brand transition-colors"
+                  className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-left text-sm font-semibold text-ink hover:border-brand/40 hover:bg-soft transition-colors"
                 >
-                  <ImagePlus className="size-3.5 shrink-0" />
-                  <span className="truncate">
-                    {referenceFile ? referenceFile.name : 'Photo de référence'}
+                  <ImagePlus className="size-4 shrink-0 text-brand" />
+                  <span className="min-w-0 flex-1 truncate">
+                    {referenceFile ? referenceFile.name : 'Partir d’une photo'}
                   </span>
+                  {!referenceFile && <span className="shrink-0 text-xs font-medium text-ink-3">facultatif</span>}
                 </button>
                 {referenceFile && (
                   <button
                     type="button"
                     onClick={() => pickReference(null)}
                     title="Revenir à l'image d'origine"
-                    className="grid size-7 shrink-0 place-items-center rounded-lg border border-line text-ink-3 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-colors"
+                    className="grid size-11 shrink-0 place-items-center rounded-xl border border-line text-ink-3 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-colors"
                   >
                     <X className="size-3.5" />
                   </button>
                 )}
               </div>
-              <p className="text-[10.5px] text-ink-3">
+              <p className="text-xs text-ink-3">
                 {referenceFile
-                  ? 'Généré en préservant le visage de ce fichier.'
-                  : 'Généré en préservant le visage du portrait actuel.'}
+                  ? 'Le portrait gardera le visage de cette photo.'
+                  : currentAvatarUrl
+                    ? 'Sans photo, le portrait garde le visage actuel.'
+                    : 'Ajoutez une photo : le portrait gardera son visage.'}
               </p>
             </div>
 
@@ -359,7 +369,7 @@ export function AvatarConfigModal({
         </div>
 
         {/* Pied de dialogue */}
-        <div className="flex items-center justify-end gap-2.5 border-t border-line bg-surface/80 px-5 py-3">
+        <div className="flex flex-wrap items-center justify-end gap-2.5 border-t border-line bg-surface/80 px-5 py-3">
           <Button
             type="button"
             variant="ghost"
