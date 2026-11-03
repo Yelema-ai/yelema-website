@@ -12,11 +12,12 @@ import { Label } from "@/components/ui/label";
 // « Nouveau message » et « Nouveau salon » : d'abord les membres, puis, pour chacun, la personne
 // et/ou ses Experts. Une conversation directe tient à 9 ; un salon est nommé et peut être plus grand.
 
-export type ExchangeKind = "message" | "salon";
+export type ExchangeKind = "message" | "salon" | "ajout";
 
 const COPY: Record<ExchangeKind, { title: string; first: string; go: string }> = {
   message: { title: "Nouveau message", first: "Choisissez les membres à qui écrire.", go: "Ouvrir la conversation" },
   salon: { title: "Nouveau salon", first: "Nommez le salon et choisissez ses membres.", go: "Créer le salon" },
+  ajout: { title: "Ajouter au salon", first: "Choisissez qui ajouter : un de vos Experts, un collègue ou ses Experts.", go: "Ajouter" },
 };
 const SALON_MAX_KEYS = 50;
 
@@ -37,7 +38,7 @@ export function NewExchange({ kind, onClose, directory, mine, onStart }: { kind:
   // An expert written to brings its owner along: they see what their expert receives.
   const owners = picked.filter((p) => p.person && p.experts.some((e) => entries.has(entryId(e)))).map((p) => p.person as BuzzEntry);
   const keys = [...new Set([...chosen, ...owners].flatMap(entryKeys))];
-  const tooMany = kind === "salon" ? keys.length > SALON_MAX_KEYS : keys.length + mine.length > MAX_RECIPIENTS + 1;
+  const tooMany = kind === "message" ? keys.length + mine.length > MAX_RECIPIENTS + 1 : keys.length > SALON_MAX_KEYS;
 
   function reset() {
     setMembers([]);
@@ -121,7 +122,7 @@ export function NewExchange({ kind, onClose, directory, mine, onStart }: { kind:
           </div>
         )}
 
-        {tooMany && <p role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{kind === "salon" ? "Trop de participants pour un salon." : "Trop de participants : 9 au plus, vous compris. Retirez quelqu’un, ou créez un salon."}</p>}
+        {tooMany && <p role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{kind !== "message" ? "Trop de participants pour un salon." : "Trop de participants : 9 au plus, vous compris. Retirez quelqu’un, ou créez un salon."}</p>}
         {refusal && <p role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{refusal}</p>}
         <DialogFooter>
           {step === 1 ? (
