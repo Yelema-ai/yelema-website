@@ -11,7 +11,7 @@ import { DisconnectButton } from "@/components/channels/DisconnectButton";
 const LABELS: Record<Channel, { title: string; intro: string; install: string }> = {
   slack: { title: "Slack", intro: "Écrivez à vos experts en message direct au bot Yelema, ou mentionnez-le dans un canal.", install: "Ajouter à Slack" },
   teams: { title: "Microsoft Teams", intro: "Écrivez à vos experts depuis Teams, en message privé ou dans vos équipes.", install: "Ouvrir Yelema dans Teams" },
-  telegram: { title: "Telegram", intro: "Écrivez à vos experts en message privé au bot Yelema, depuis votre propre compte Telegram.", install: "Ouvrir le bot Yelema" },
+  telegram: { title: "Telegram", intro: "Écrivez à vos experts en message privé au bot de votre équipe, depuis votre propre compte Telegram.", install: "Ouvrir le bot de l’équipe" },
 };
 const SAFE = /^https:\/\/(slack\.com|teams\.microsoft\.com|t\.me)\//;
 
@@ -73,7 +73,16 @@ export function RelayChannel({ agentId, channel, canManage }: { agentId: string;
           </div>
         )}
       </div>
-      {link && (
+      {link?.createUrl && SAFE.test(link.createUrl) && (
+        <ol className="list-decimal space-y-1.5 pl-5 text-xs text-muted-foreground">
+          <li>
+            <a className="inline-flex items-center gap-1 font-semibold text-brand hover:underline" href={link.createUrl} target="_blank" rel="noopener noreferrer">Créer le bot de l’équipe <ExternalLink className="h-3 w-3" /></a>{" "}
+            (une seule fois pour l’équipe ; vous êtes relié d’office).
+          </li>
+          <li>Écrivez-lui ensuite en commençant par le nom d’un expert (« Mamadou, … »). Vos collègues le relient depuis cette page.</li>
+        </ol>
+      )}
+      {link?.code && (
         <ol className="list-decimal space-y-1.5 pl-5 text-xs text-muted-foreground">
           {install && SAFE.test(install) && (
             <li>

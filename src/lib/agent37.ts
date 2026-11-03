@@ -74,8 +74,9 @@ export type TelegramHubStatus = {
 };
 
 export type RelayChannel = "slack" | "teams" | "telegram";
-export type RelayLink = { code: string; expiresAt: string; installUrl?: string; appUrl?: string | null; botUrl?: string };
-export type RelayStatus = { enabled: boolean; accounts: number };
+/** `createUrl` : Telegram d'une équipe sans bot encore, le lien qui fait créer le bot de l'espace (premier membre). */
+export type RelayLink = { code?: string; expiresAt?: string; installUrl?: string; appUrl?: string | null; botUrl?: string; createUrl?: string };
+export type RelayStatus = { enabled: boolean; accounts: number; bot?: string | null };
 
 const relayPath = (channel: RelayChannel): string => (channel === "telegram" ? "telegram-relay" : channel);
 
