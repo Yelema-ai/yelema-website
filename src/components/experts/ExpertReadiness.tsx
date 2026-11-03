@@ -15,8 +15,8 @@ const TONE = {
   partial: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
   absent: "bg-soft text-ink-3",
 };
-// One shape for the three states, as an icon (Leslie, 03/11): a green disc with a check once ready,
-// an amber ring half drawn while it prepares, a grey dashed ring before anything.
+// One shape for the states, as an icon (Leslie, 03/11): a green disc with a check once ready, an amber
+// ring half drawn while points are left, a grey dashed ring before anything (chip only, never beside the name).
 function StateIcon({ state }: { state: "ready" | "partial" | "absent" }) {
   if (state === "ready")
     return (
@@ -86,7 +86,17 @@ export function ExpertReadiness({
   // Before « Faire connaissance » the banner says nothing either: that is the first request under the chat bar.
   if (variant === "banner" && (updating || !jz || jz.working || stage(jz) !== "left")) return null;
   // « Prêt » stays beside the name once the expert is ready (Leslie, 01/11, back on her 31/10 choice).
-  if (!jz || jz.working) return null;
+  if (!jz) return null;
+  // Beside the name, every expert that answers shows the green check (Leslie, 03/11: the grey dashed ring
+  // « ne veut rien dire »): at work without a preparation file, or not prepared yet, it works all the same.
+  // Only a point left to settle changes the icon (amber ring), and only then does a click open something.
+  if (variant === "dot" && (jz.working || readiness(jz).state !== "partial"))
+    return (
+      <span role="img" title="Fonctionne" aria-label="Fonctionne" className={cn("grid size-6 shrink-0 place-items-center", className)}>
+        <StateIcon state="ready" />
+      </span>
+    );
+  if (jz.working) return null;
   const r = readiness(jz);
   const Icon = r.state === "ready" ? Check : CircleDashed;
   return (

@@ -14,7 +14,7 @@ import { agentTabPath } from "@/lib/expert-tabs";
 import { citedFolder, type TurnDoc } from "@/lib/drive-links";
 import { ConversationDocs } from "./ConversationDocs";
 import { PreviewSiblings } from "@/components/files/preview-siblings";
-import { GooglePin } from "./GoogleDocs";
+import { GoogleDocsRow, PinnedDocsProvider, usePinnedDocs } from "./GoogleDocs";
 import type { GoogleDoc } from "@/lib/google-docs";
 import { DropOverlay } from "@/components/DropOverlay";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -226,6 +226,8 @@ export function ChatView({
     setDocs([]);
     setGoogle([]);
   }, [activeSessionId]);
+  // The documents the client keeps first above this conversation (Leslie, 03/11).
+  const pins = usePinnedDocs(activeSessionId ? `${agentId}:${profile ?? ""}:${activeSessionId}` : null);
   const docsFolder = (docs[0] && citedFolder(docs[0].path.slice(0, docs[0].path.lastIndexOf("/")))) || driveFolder;
   const docsHref = `${agentTabPath(agentId, "files", profile)}${docsFolder ? `?dossier=${encodeURIComponent(docsFolder)}` : ""}`;
   const inHeader = Boolean(profile && actionsSlot);
@@ -243,6 +245,7 @@ export function ChatView({
       isStreaming={isStreaming}
       messages={messages}
     >
+    <PinnedDocsProvider value={pins}>
     <PreviewSiblings.Provider value={docs}>
     <SidePanelSync hasComputer={hasComputer} />
     {openDashboard && onDashboardOpened && <OpenDashboardOnMount onDone={onDashboardOpened} />}
@@ -311,7 +314,7 @@ export function ChatView({
         </button>
         </div>
       </header>
-      {messages.length > 0 && <GooglePin doc={google[0] ?? null} />}
+      {messages.length > 0 && <GoogleDocsRow docs={google} />}
       {/* Top: scrolling transcript when there are messages; the centered welcome heading when
           empty (justify-end seats it just above the composer). */}
       <div
@@ -429,6 +432,7 @@ export function ChatView({
       )}
     </div>
     </PreviewSiblings.Provider>
+    </PinnedDocsProvider>
     </DashboardProvider>
   );
 }
