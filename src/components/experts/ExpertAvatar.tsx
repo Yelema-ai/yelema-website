@@ -2,6 +2,8 @@ import { ExpertImage } from "@/components/experts/ExpertImage";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+// `px` is the drawn size. Every face up to 48 px is fetched at 48 (96 on a sharp screen): one
+// file per Expert, read once, then shared by the menu, the chat and the headers.
 const SIZES = {
   xxs: { px: 24, box: "size-6 text-[10px]", dot: "size-2" },
   xs: { px: 28, box: "size-7 text-xs", dot: "size-2.5" },
@@ -32,7 +34,7 @@ export function ExpertAvatar({
       <span className={cn(s.box, "relative grid place-items-center overflow-hidden rounded-full bg-tint font-bold text-brand-ink")}>
         {expert.displayName.trim()[0]?.toUpperCase() ?? "?"}
         {expert.photoUrl && (
-          <ExpertImage src={expert.photoUrl} size={s.px} className="absolute inset-0 size-full rounded-full object-cover object-[50%_20%]" />
+          <ExpertImage src={expert.photoUrl} size={Math.max(s.px, 48)} className="absolute inset-0 size-full rounded-full object-cover object-[50%_20%]" />
         )}
       </span>
       {/* La colonne « Gateway » de `hermes profile list` : le profil peut répondre, ou non. Inconnue
