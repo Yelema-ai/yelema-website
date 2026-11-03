@@ -70,12 +70,13 @@ export function ExpertItem({
       title={hint ? `${expert.displayName} · ${hint}` : expert.displayName}
       className={cn(
         "flex min-h-12 items-center gap-2.5 rounded-[11px] px-2 text-sm font-semibold transition-colors",
-        active ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
-        compact && "size-[52px] min-h-0 shrink-0 justify-center rounded-full px-0",
+        active ? (compact ? "text-ink" : "bg-soft-2 text-ink") : "text-ink-2 hover:bg-soft",
+        // Folded menu: the open Expert keeps the size of the others, a ring says it is the one (Leslie, 03/11).
+        compact && "size-11 min-h-0 shrink-0 justify-center rounded-full px-0",
         className
       )}
     >
-      <span className="relative shrink-0">
+      <span className={cn("relative shrink-0 rounded-full", compact && active && "ring-2 ring-brand ring-offset-2 ring-offset-surface")}>
         <ExpertAvatar expert={expert} />
         {/* At work: a green dot that breathes; a new answer: the violet dot; nothing: no dot. */}
         {compact && (unread > 0 || running) && (
