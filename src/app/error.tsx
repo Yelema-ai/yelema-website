@@ -2,12 +2,14 @@
 
 import { useEffect } from "react";
 import { AuthShell, AuthHeading } from "@/components/auth/AuthShell";
+import { reportClientError } from "@/lib/report-error";
 
 // The frame itself could not be built: most often the back office did not answer when asked who is
 // signed in. Nothing here says the user is signed out, so it offers to try again, not to sign in.
 export default function AppError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error(error);
+    reportClientError(error, "racine");
   }, [error]);
 
   return (
