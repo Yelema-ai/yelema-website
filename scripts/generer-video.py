@@ -10,6 +10,7 @@ import datetime
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import urllib.error
@@ -67,6 +68,44 @@ def request_json(url: str, method: str = "GET", data: dict = None, headers: dict
         return json.loads(resp.read().decode("utf-8"))
 
 
+def ensure_server_running(api_url: str):
+    """Vérifie si MoneyPrinterTurbo répond, sinon tente un démarrage automatique."""
+    try:
+        req = urllib.request.Request(f"{api_url}/ping", headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            if resp.status in (200, 404):
+                return
+    except Exception:
+        pass
+
+    # Vérification présence de l'installation locale sur l'instance
+    mpt_dirs = [
+        "/home/node/MoneyPrinterTurbo",
+        os.path.expanduser("~/MoneyPrinterTurbo"),
+        "/opt/MoneyPrinterTurbo"
+    ]
+    for d in mpt_dirs:
+        mpt_main = os.path.join(d, "main.py")
+        if os.path.exists(mpt_main) and any(h in api_url for h in ("localhost", "127.0.0.1")):
+            print("⚡ [MoneyPrinterTurbo] Démarrage automatique du moteur de montage sur le port 8088...")
+            mpt_py = os.path.join(d, ".venv/bin/python")
+            py_bin = mpt_py if os.path.exists(mpt_py) else sys.executable
+            log_f = open(os.path.join(d, "server.log"), "a")
+            try:
+                subprocess.Popen(
+                    [py_bin, "main.py"],
+                    cwd=d,
+                    stdout=log_f,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True
+                )
+                time.sleep(3)
+                return
+            except Exception as e:
+                print(f"⚠️ Échec du démarrage automatique : {e}")
+                break
+
+
 def main():
     parser = argparse.ArgumentParser(description="Générateur de vidéo universel via MoneyPrinterTurbo")
     parser.add_argument("--sujet", required=True, help="Sujet ou titre de la vidéo")
@@ -81,9 +120,12 @@ def main():
 
     args = parser.parse_args()
 
-    api_url = (args.api_url or os.environ.get("MONEYPRINTER_API_URL") or "http://localhost:8080").rstrip("/")
+    api_url = (args.api_url or os.environ.get("MONEYPRINTER_API_URL") or "http://localhost:8088").rstrip("/")
     api_key = args.api_key or os.environ.get("MONEYPRINTER_API_KEY") or ""
     voice_name = args.voix or os.environ.get("MONEYPRINTER_DEFAULT_VOICE") or "fr-FR-VivienneMultilingualNeural"
+
+    # Auto-démarrage si besoin
+    ensure_server_running(api_url)
 
     expert = args.expert or detect_expert()
     dest_path = args.sortie or get_default_dest(expert, args.sujet)
