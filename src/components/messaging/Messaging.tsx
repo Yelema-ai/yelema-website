@@ -179,6 +179,14 @@ export function Messaging() {
     }
   }
 
+  // Lève l'erreur : la fenêtre de confirmation l'affiche et reste ouverte.
+  async function remove(c: Conversation) {
+    await apiFetch(`/api/buzz/salons/${c.id}`, { method: "DELETE" }, "Le salon n’a pas pu être supprimé");
+    if (open === c.id) setOpen(null);
+    toast.success("Salon supprimé.");
+    await refresh();
+  }
+
   async function copyLink(c: Conversation) {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/echanges?c=${c.id}`);
@@ -222,6 +230,7 @@ export function Messaging() {
           onMark={(id, kind, on) => mark(markKey(id), kind, on)}
           onCopy={(c) => void copyLink(c)}
           onRename={rename}
+          onDelete={remove}
         />
       </div>
       <section className={cn("min-w-0 flex-1 flex-col bg-surface lg:flex", open ? "flex" : "hidden")}>

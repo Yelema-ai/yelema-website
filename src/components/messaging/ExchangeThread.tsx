@@ -6,6 +6,7 @@ import type { BuzzEntry } from "@/lib/buzz";
 import type { Conversation, Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
 import type { Candidate } from "@/lib/buzz-mentions";
+import { Markdown } from "@/components/chat/Markdown";
 import { MentionComposer } from "@/components/messaging/MentionComposer";
 import { SalonDeliverables } from "@/components/messaging/SalonDeliverables";
 
@@ -71,7 +72,10 @@ export function ExchangeThread(p: ThreadProps) {
                       Répondre
                     </button>
                   </div>
-                  <div className={cn("mt-1 max-w-[min(680px,90%)] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[14.5px] leading-relaxed text-ink", own ? "rounded-tr-md bg-tint" : "rounded-tl-md border border-line bg-surface")}>{m.text}</div>
+                  <div className={cn("mt-1 min-w-0 max-w-[min(680px,90%)] break-words rounded-2xl px-3.5 py-2.5 text-ink", own ? "rounded-tr-md bg-tint" : "rounded-tl-md border border-line bg-surface")}>
+                    {/* Comme le chat d'un Expert : liens cliquables (un site extérieur demande confirmation), listes, gras. */}
+                    <Markdown content={m.text} />
+                  </div>
                 </li>
               );
             })}
