@@ -3,6 +3,7 @@
 import { ArrowLeft, Hash, MessagesSquare, User, UserPlus, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/app/NotificationBell";
 
 // La bande du haut d'Échanges, comme celle d'un Expert : à gauche ce qui est ouvert (Échanges › son nom, ses
 // participants), puis les onglets soulignés (Discussion, Livrables d'un salon), à droite « Ajouter ».
@@ -72,6 +73,10 @@ export function ExchangeHeader(p: HeaderProps) {
               <UserPlus /> Ajouter
             </Button>
           )}
+          {/* La barre du haut est masquée sur ordinateur (comme pour un Expert) : la cloche vient ici. */}
+          <span className="max-lg:hidden">
+            <NotificationBell />
+          </span>
         </div>
       </div>
     </div>

@@ -35,7 +35,10 @@ export function ExchangeThread(p: ThreadProps) {
   useEffect(() => {
     setReplyTo(null);
   }, [id]);
-  useEffect(() => end.current?.scrollIntoView({ block: "end" }), [p.thread?.length, p.busy.length]);
+  // Bloc, pas expression : scrollIntoView renvoie désormais une promesse, que React prendrait pour un nettoyage.
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: "end" });
+  }, [p.thread?.length, p.busy.length]);
 
   if (!p.current)
     return (
