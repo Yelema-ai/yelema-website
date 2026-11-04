@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { conversationName, isSalonName, labelsOf, myExpertsIn, myMember, participants, working, type BuzzOverview } from "@/lib/buzz";
-import { deviceKey } from "@/lib/buzz-keys";
-import { BuzzConnection, conversations, messages, MESSAGE_KINDS, openDirect, sendMessage, toMessage, type Conversation, type Message } from "@/lib/buzz-relay";
+import { deviceKey, rememberedRelay, storedKey } from "@/lib/buzz-keys";
+import { BuzzConnection, conversations, follow, openDirect, sendMessage, watchRosters, withMessage, type Conversation, type Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
 import { useChatMarks } from "@/components/conversations/useChatMarks";
 import { ExchangeRail } from "@/components/messaging/ExchangeRail";
@@ -85,7 +85,7 @@ export function Messaging() {
           await c.connect();
         } catch {
           c.close();
-          await pause(Math.min(3000 + attempt * 2000, 30_000));
+          if (attempt + 1 < attempts) await pause(Math.min(3000 + attempt * 2000, 30_000));
           continue;
         }
         if (d.stopped) return (c.close(), false);
@@ -104,18 +104,33 @@ export function Messaging() {
     }
   }, []);
 
-  // Ouverture : la vue du back-office, la clé de ce navigateur, puis le relais.
+  // Ouverture : la vue du back-office et, en même temps, le relais de la dernière visite avec la clé déjà tenue ;
+  // la clé n'est envoyée au back-office que si elle n'y est pas encore admise.
   useEffect(() => {
     let stop = false;
+    const held = storedKey();
+    const known = rememberedRelay();
+    dialer.current = held && known ? { url: known, secret: held.secret, dialing: false, stopped: false } : null;
+    const early = dialer.current ? dial(1) : Promise.resolve(false);
     (async () => {
       try {
         const o = await apiFetch<BuzzOverview>("/api/buzz");
         if (stop) return;
+        rememberedRelay(o.relais);
         setOverview(o);
         const key = await deviceKey(o.appareils.map((d) => d.cle));
         if (stop) return;
-        dialer.current = { url: o.relais, secret: key.secret, dialing: false, stopped: false };
         setMe(key.pubkey);
+        if (o.relais === known && key.pubkey === held?.pubkey && (await early) && relay.current) {
+          if (!stop) setState({ kind: "ready" });
+          return;
+        }
+        if (dialer.current) dialer.current.stopped = true;
+        await early;
+        relay.current?.close();
+        relay.current = null;
+        if (stop) return;
+        dialer.current = { url: o.relais, secret: key.secret, dialing: false, stopped: false };
         if (await dial(8)) setState({ kind: "ready" });
         else if (!stop) setState({ kind: "closed", reason: "Votre accès aux Échanges est en cours d’activation. Réessayez dans une minute." });
       } catch (e) {
@@ -134,6 +149,21 @@ export function Messaging() {
     void refresh();
   }, [refresh, link]);
 
+  // Une conversation créée ou modifiée ailleurs apparaît d'elle-même, sans « Actualiser ».
+  useEffect(() => {
+    const c = relay.current;
+    if (!c || !me) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const watch = watchRosters(c, me, () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void refresh(), 300);
+    });
+    return () => {
+      clearTimeout(timer);
+      watch.close();
+    };
+  }, [me, link, refresh]);
+
   // « Actualiser » : l'annuaire (participants, portraits), puis la liste et le fil ; la connexion d'abord si elle est tombée.
   async function reload() {
     setRefreshing(true);
@@ -147,29 +177,27 @@ export function Messaging() {
     }
   }
 
-  // Le fil ouvert, puis chaque nouveau message en direct.
+  // Le fil ouvert puis chaque nouveau message, dans une seule requête restée ouverte.
   useEffect(() => {
     const c = relay.current;
     if (!c || !open) return;
-    let live: { close: () => void } | null = null;
     let stop = false;
     // Relu après une reconnexion : le fil affiché reste en place, sans « Chargement… ».
     if (shown.current !== open) setThread(null);
     setThreadFailed(false);
-    const since = Math.floor(Date.now() / 1000);
-    messages(c, open).then(
-      (m) => {
+    const sub = follow(c, open, {
+      onLoad: (m) => {
         if (stop) return;
         shown.current = open;
         setThread(m);
-        live = c.subscribe({ kinds: MESSAGE_KINDS, "#h": [open], since }, (e) => setThread((t) => (t?.some((x) => x.id === e.id) ? t : [...(t ?? []), toMessage(e)])));
       },
+      onLive: (m) => !stop && setThread((t) => withMessage(t, m)),
       // Une connexion muette est rouverte d'elle-même (puis le fil relu) ; d'ici là, « Réessayer ».
-      () => !stop && setThreadFailed(true),
-    );
+      onError: () => !stop && setThreadFailed(true),
+    });
     return () => {
       stop = true;
-      live?.close();
+      sub.close();
     };
   }, [open, me, link]);
 
