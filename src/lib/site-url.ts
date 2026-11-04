@@ -56,7 +56,8 @@ export function publicSiteOrigin(siteUrl: string | null | undefined, fallbackOri
 }
 
 // An address typed as https://user:pw@host makes Firefox refuse every relative fetch ("url with
-// embedded credentials"): login and every screen fail. Reload the same page without them.
+// embedded credentials"): login and every screen fail. Reload the same page without them. Firefox
+// hides them from `location`; only `document.URL` still carries them.
 export const STRIP_CREDENTIALS_BOOTSTRAP = `try{
-if(location.username||location.password){var u=new URL(location.href);u.username="";u.password="";location.replace(u.href)}
+var u=new URL(document.URL);if(u.username||u.password){u.username="";u.password="";location.replace(u.href)}
 }catch(e){}`;
