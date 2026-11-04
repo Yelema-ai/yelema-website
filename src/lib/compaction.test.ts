@@ -33,3 +33,18 @@ test("a long reply replayed further down the thread shows once, a short one may 
     ["Le relevé ?", long, "Merci", "C'est noté.", "Et le tableau ?", "C'est noté.", "Le tableau est en ligne, je vous mets le lien."],
   );
 });
+
+test("a member's message saved several times at once shows once, the same words sent later twice", () => {
+  const rows = [
+    { role: "user", content: "Le point des mails ?", created_at: "2026-11-02T08:03:00Z" },
+    { role: "user", content: "Le point des mails ? ", created_at: "2026-11-02T08:03:00Z" },
+    { role: "user", content: "Le point des mails ?", created_at: "2026-11-02T08:03:00Z" },
+    { role: "assistant", content: "Trois mails attendent une réponse." },
+    { role: "user", content: "?", created_at: "2026-11-02T08:14:00Z" },
+    { role: "user", content: "?", created_at: "2026-11-02T08:15:00Z" },
+  ];
+  assert.deepEqual(
+    visibleHistory(rows).map((r) => `${r.role}:${r.content.trim()}`),
+    ["user:Le point des mails ?", "assistant:Trois mails attendent une réponse.", "user:?", "user:?"],
+  );
+});
