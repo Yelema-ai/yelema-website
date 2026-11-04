@@ -1,5 +1,6 @@
 "use client";
 
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useChatSidePanel } from "@/components/chat/chat-layout";
 import { Maximize2, Monitor, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -44,7 +45,7 @@ const screenFrame = (viewOnly: boolean) =>
 
 const LiveDot = () => <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-ko" />;
 
-export function ComputerButton({ inHeader = false }: { inHeader?: boolean }) {
+export function ComputerButton() {
   const { panelOpen, setPanelOpen, setDialogOpen } = useComputer();
   const sidePanel = useChatSidePanel();
   return (
@@ -60,12 +61,19 @@ export function ComputerButton({ inHeader = false }: { inHeader?: boolean }) {
     >
       <Monitor className="h-4 w-4" />
       {/* Beside the open panel the chat is narrow, and the highlighted icon says enough. */}
-      {inHeader ? (
-        <span className="max-[1439px]:hidden">Ordinateur</span>
-      ) : (
-        <span className={cn("hidden sm:inline", (panelOpen || sidePanel) && "wide:hidden")}>Son ordinateur</span>
-      )}
+      <span className={cn("hidden sm:inline", (panelOpen || sidePanel) && "wide:hidden")}>Son ordinateur</span>
     </button>
+  );
+}
+
+// The same, in the header's « … ».
+export function ComputerMenuItem() {
+  const { panelOpen, setPanelOpen, setDialogOpen } = useComputer();
+  return (
+    <DropdownMenuItem className="min-h-11 gap-2.5 rounded-[10px] px-2.5 text-sm" onSelect={() => (window.matchMedia(WIDE).matches ? setPanelOpen(!panelOpen) : setDialogOpen(true))}>
+      <Monitor className="h-4 w-4" />
+      Son ordinateur
+    </DropdownMenuItem>
   );
 }
 

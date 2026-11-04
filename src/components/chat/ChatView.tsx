@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Plus, Sparkles } from "lucide-react";
-import { ComputerButton, ComputerDialog, ComputerPanel } from "@/components/experts/ExpertComputer";
+import { ComputerButton, ComputerDialog, ComputerMenuItem, ComputerPanel } from "@/components/experts/ExpertComputer";
+import { ExpertMoreMenu } from "@/components/experts/ExpertMoreMenu";
 import { DashboardProvider } from "@/components/experts/DashboardProvider";
-import { DashboardButton, DashboardPanel, DashboardDialog, OpenDashboardOnMount, ShareDashboardModal, SidePanelSync } from "@/components/experts/ExpertDashboard";
+import { DashboardButton, DashboardMenuItem, DashboardPanel, DashboardDialog, OpenDashboardOnMount, ShareDashboardModal, SidePanelSync } from "@/components/experts/ExpertDashboard";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { expertDisplayName } from "@/lib/experts";
@@ -284,10 +285,10 @@ export function ChatView({
         {profile && messages.length > 0 && <ConversationDocs agentId={agentId} docs={docs} google={google} folderHref={docsHref} />}
         {inHeader && actionsSlot ? (
           createPortal(
-            <span className="contents" onClickCapture={onAction}>
-              {hasComputer && <ComputerButton inHeader />}
-              <DashboardButton inHeader />
-            </span>,
+            <ExpertMoreMenu onAction={onAction}>
+              {hasComputer && <ComputerMenuItem />}
+              <DashboardMenuItem />
+            </ExpertMoreMenu>,
             actionsSlot
           )
         ) : (

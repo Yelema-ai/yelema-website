@@ -7,6 +7,7 @@ import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { expertCycle, isDjeneba } from "@/lib/expert-cycle";
 import { preloadExpert, sparingData } from "@/components/experts/expert-preload";
+import { setChatListHidden } from "@/components/chat/chat-layout";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +61,8 @@ export function ExpertItem({
       }
       onClick={(e) => {
         onNavigate?.();
+        // A new answer waits: the column of conversations comes back to show it (Leslie, 04/11).
+        if (unread > 0) setChatListHidden(false);
         if (!waiting || e.metaKey || e.ctrlKey || e.shiftKey) return;
         e.preventDefault();
         bell.open(waiting);

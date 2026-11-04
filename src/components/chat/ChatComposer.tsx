@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Check, Info, Loader2, Mic, Send, Square, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Check, Info, Loader2, Mic, Send, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { AttachButton, AttachmentTray } from "./Attachments";
 import { EffortMenu } from "./EffortMenu";
@@ -168,6 +169,19 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
     }
   };
 
+  const modelMenu = groups.length > 0 && (
+    <ModelMenu
+      groups={groups}
+      model={settings.model}
+      defaultModel={defaultModel}
+      defaultLabel={defaultLabel}
+      onChange={(model, provider) => setSettings((s) => ({ ...s, model, provider }))}
+    />
+  );
+  const effortMenu = (
+    <EffortMenu value={settings.reasoningEffort} onChange={(reasoningEffort) => setSettings((s) => ({ ...s, reasoningEffort }))} />
+  );
+
   return (
     <div
       className={cn(
@@ -242,21 +256,14 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
         <DictationBar dictation={dictation} />
       ) : (
       <div className="flex items-center gap-2 px-3 pb-3">
-        <div className="flex min-w-0 shrink items-center gap-1.5">
-          {groups.length > 0 && (
-            <ModelMenu
-              groups={groups}
-              model={settings.model}
-              defaultModel={defaultModel}
-              defaultLabel={defaultLabel}
-              onChange={(model, provider) => setSettings((s) => ({ ...s, model, provider }))}
-            />
-          )}
-          <EffortMenu
-            value={settings.reasoningEffort}
-            onChange={(reasoningEffort) => setSettings((s) => ({ ...s, reasoningEffort }))}
-          />
+        <div className="flex min-w-0 shrink items-center gap-1.5 max-sm:hidden">
+          {modelMenu}
+          {effortMenu}
         </div>
+        <PhoneSettings
+          model={modelMenu}
+          effort={<EffortMenu value={settings.reasoningEffort} emptyLabel="Par défaut" onChange={(reasoningEffort) => setSettings((s) => ({ ...s, reasoningEffort }))} />}
+        />
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <AttachButton onFiles={att.addFiles} />
           {canDictate && (
@@ -337,5 +344,43 @@ export function DictationBar({ dictation }: { dictation: ReturnType<typeof useDi
         </>
       )}
     </div>
+  );
+}
+
+// On a phone, one icon for the model and the effort (Leslie, 04/11, point 7): the field keeps its room.
+function PhoneSettings({ model, effort }: { model: ReactNode; effort: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Modèle et effort"
+        title="Modèle et effort"
+        className="grid size-10 shrink-0 place-items-center rounded-full bg-secondary/70 text-ink-2 hover:text-ink sm:hidden"
+      >
+        <SlidersHorizontal className="size-[18px]" />
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent
+          aria-describedby={undefined}
+          className="max-sm:bottom-0 max-sm:left-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-[22px]"
+        >
+          <DialogTitle className="text-[17px] font-bold text-ink">Modèle et effort</DialogTitle>
+          <div className="space-y-3 pb-2">
+            {model && (
+              <div className="flex min-h-11 items-center justify-between gap-3">
+                <span className="text-[14px] font-semibold text-ink-2">Modèle</span>
+                <span className="min-w-0">{model}</span>
+              </div>
+            )}
+            <div className="flex min-h-11 items-center justify-between gap-3">
+              <span className="text-[14px] font-semibold text-ink-2">Effort</span>
+              {effort}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

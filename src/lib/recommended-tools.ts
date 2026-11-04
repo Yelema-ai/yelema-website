@@ -8,7 +8,7 @@ export interface RecommendedTool {
   slug: string;
   /** The name the pack gives it, for a tool the catalog does not know. */
   name: string;
-  /** The Experts who need it, in the order of the team. */
+  /** Who needs it (the cycles of the Experts), in the order of the team. */
   experts: string[];
   essential: boolean;
 }
@@ -43,11 +43,25 @@ export function recommendTools(
     .map(({ first: _first, ...t }) => t);
 }
 
-/** « Pour Djénéba », « Pour Djénéba et Kouassi », « Pour Djénéba, Kouassi et 2 autres ». */
-export function forWhom(experts: readonly string[]): string {
-  if (experts.length === 0) return "";
-  if (experts.length === 1) return `Pour ${experts[0]}`;
-  if (experts.length === 2) return `Pour ${experts[0]} et ${experts[1]}`;
-  const rest = experts.length - 2;
-  return `Pour ${experts[0]}, ${experts[1]} et ${rest > 1 ? `${rest} autres` : experts[2]}`;
+// A cycle in a sentence (Leslie, 04/11: « pour le marketing », not the Experts' first names).
+const WITH_ARTICLE: Record<string, string> = {
+  Direction: "la direction",
+  Commercial: "le commercial",
+  Marketing: "le marketing",
+  "Service client": "le service client",
+  RH: "les RH",
+  Finance: "la finance",
+  Opérations: "les opérations",
+  Investissement: "l’investissement",
+};
+const inSentence = (who: string) => WITH_ARTICLE[who] ?? who;
+
+/** « Pour le marketing », « Pour le marketing et la finance », « Pour le marketing, la finance et 2 autres ». */
+export function forWhom(who: readonly string[]): string {
+  const w = who.map(inSentence);
+  if (w.length === 0) return "";
+  if (w.length === 1) return `Pour ${w[0]}`;
+  if (w.length === 2) return `Pour ${w[0]} et ${w[1]}`;
+  const rest = w.length - 2;
+  return `Pour ${w[0]}, ${w[1]} et ${rest > 1 ? `${rest} autres` : w[2]}`;
 }
