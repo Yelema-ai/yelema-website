@@ -15,23 +15,23 @@ const TONE = {
   partial: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
   absent: "bg-soft text-ink-3",
 };
-// One shape for the states, as an icon (Leslie, 03/11): a green disc with a check once ready, an amber
+// One shape for the states, as an icon, 14 px (Leslie, 03/11; 04/11: « un peu plus petites »): a green disc with a check once ready, an amber
 // ring half drawn while points are left, a grey dashed ring before anything (chip only, never beside the name).
 function StateIcon({ state }: { state: "ready" | "partial" | "absent" }) {
   if (state === "ready")
     return (
-      <span className="grid size-[18px] place-items-center rounded-full bg-emerald-500 text-white">
-        <Check className="size-3" strokeWidth={3} />
+      <span className="grid size-3.5 place-items-center rounded-full bg-emerald-500 text-white">
+        <Check className="size-2.5" strokeWidth={3.5} />
       </span>
     );
   if (state === "partial")
     return (
-      <svg viewBox="0 0 18 18" className="size-[18px] text-amber-500" aria-hidden>
+      <svg viewBox="0 0 18 18" className="size-3.5 text-amber-500" aria-hidden>
         <circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" strokeOpacity=".25" strokeWidth="2.5" />
         <path d="M9 2a7 7 0 0 1 0 14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
       </svg>
     );
-  return <CircleDashed className="size-[18px] text-ink-3" strokeWidth={2.25} aria-hidden />;
+  return <CircleDashed className="size-3.5 text-ink-3" strokeWidth={2.5} aria-hidden />;
 }
 
 // Whether the expert has done its day-zero preparation: a chip, and its checks behind it.

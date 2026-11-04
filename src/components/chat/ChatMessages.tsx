@@ -25,6 +25,8 @@ import { contentUrl, thumbUrl, type FileEntry } from "@/components/files/types";
 import { cleanReply } from "@/lib/chat-errors";
 import { mediaTags } from "@/lib/media-tags";
 import { LiveWait, StepsList } from "./ChatSteps";
+import { ReplyChoices } from "./ReplyActions";
+import { replyParts } from "@/lib/reply-parts";
 import type { ChatMessage, MessageAttachment } from "./types";
 import { commandText } from "@/lib/session-title";
 
@@ -137,6 +139,7 @@ export function ChatMessages({
   onGoogle,
   routine = null,
   pronoun = null,
+  onReply,
 }: {
   messages: ChatMessage[];
   isStreaming: boolean;
@@ -155,6 +158,8 @@ export function ChatMessages({
   routine?: string | null;
   /** The expert's « elle » or « il »: a command the app sent reads as its button (« Ce qu'elle sait »). */
   pronoun?: "elle" | "il" | null;
+  /** Sends a message for the member: a choice clicked. */
+  onReply?: (text: string) => void;
 }) {
   // The instance whose drive the paths in a reply point into (they become download links).
   const { agentId, profile } = useChatContext();
@@ -294,6 +299,9 @@ export function ChatMessages({
         // Once the expert works with tools, the turn shows one live step line; its reply appears when the turn ends.
         const working = live && tools.length > 0;
         const showDots = live && !working && !m.content && !m.thinking;
+        // Only the conversation's last reply can still be answered in a click; an older question reads as written.
+        const finished = !live && m.content ? replyParts(withoutGoogleActions(cleanReply(m.content))) : null;
+        const answerable = finished && onReply && !isStreaming && !routineThread && i === messages.length - 1 && finished.choices.length > 0;
 
         return (
           <div key={m.id} className="flex items-start gap-3">
@@ -305,7 +313,7 @@ export function ChatMessages({
               {routineThread && !live && isSilentRun(m.content) ? (
                 <p className="text-sm italic text-ink-3">{SILENT_RUN_LABEL}</p>
               ) : m.content && !working ? (
-                <Markdown content={live ? cleanReply(m.content) : withoutGoogleActions(cleanReply(m.content))} agentId={agentId} profileId={profile} />
+                <Markdown content={!finished ? cleanReply(m.content) : answerable ? finished.body : finished.text} agentId={agentId} profileId={profile} />
               ) : showDots && updating ? (
                 // A reply held by the update: said to be received, so the wait does not read as a bug.
                 <p role="status" className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3.5 py-2 text-sm font-medium text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
@@ -313,6 +321,7 @@ export function ChatMessages({
                   {face ? `${face.displayName} reprend` : "Votre Expert reprend"} dans un instant, votre message est bien reçu.
                 </p>
               ) : null}
+              {answerable && <ReplyChoices choices={finished.choices} note={finished.choicesNote} onSend={onReply} />}
               {!live && m.content && <GoogleDocCards docs={googleDocs(cleanReply(m.content))} />}
               {!live && m.content && <DocumentCards agentId={agentId} docs={turnDocs(cleanReply(m.content), listing, [...(m.files ?? []), ...mediaTags(m.content).paths])} />}
               {!live && m.content && !(routineThread && isSilentRun(m.content)) && <CopyReply text={cleanReply(m.content)} />}

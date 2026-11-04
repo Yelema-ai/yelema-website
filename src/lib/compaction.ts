@@ -9,13 +9,22 @@ export const isCompactionSummary = (content: string): boolean => SUMMARY.test(co
 // same answers two to four times further down the thread). Short ones (« C'est noté. ») may honestly recur.
 const REPLAY_MIN = 40;
 
-/** The rows a thread shows: summaries out, back-to-back markers folded into one, a long reply never twice. */
-export function visibleHistory<T extends { role: string; content: string }>(rows: readonly T[]): T[] {
+// One message of the member saved several times by the runtime, at the same instant (Maya's and Djénéba's
+// audits, 03/11: the same line 2 to 11 times in a row). A message sent again later keeps its own bubble.
+const sameUserMessage = (a: { role: string; content: string; created_at?: string | number | null } | undefined, b: { role: string; content: string; created_at?: string | number | null }): boolean =>
+  a?.role === "user" &&
+  b.role === "user" &&
+  (a.content ?? "").trim() === (b.content ?? "").trim() &&
+  (a.created_at ?? null) === (b.created_at ?? null);
+
+/** The rows a thread shows: summaries out, back-to-back markers folded into one, a long reply never twice, a member's message saved twice at once shown once. */
+export function visibleHistory<T extends { role: string; content: string; created_at?: string | number | null }>(rows: readonly T[]): T[] {
   const out: T[] = [];
   const said = new Set<string>();
   for (const row of rows) {
     if (isCompactionSummary(row.content ?? "")) continue;
     if (row.role === "system" && out.at(-1)?.role === "system") continue;
+    if (sameUserMessage(out.at(-1), row)) continue;
     if (row.role === "assistant") {
       const text = (row.content ?? "").trim();
       if (text.length >= REPLAY_MIN) {
