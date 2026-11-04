@@ -7,13 +7,15 @@ import type { Conversation, Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
 import type { Candidate } from "@/lib/buzz-mentions";
 import { Markdown } from "@/components/chat/Markdown";
+import { ReplyChoices } from "@/components/chat/ReplyActions";
+import { replyParts } from "@/lib/reply-parts";
 import { MentionComposer } from "@/components/messaging/MentionComposer";
 import { ParticipantAvatar } from "@/components/messaging/ParticipantAvatar";
 import { SalonDeliverables } from "@/components/messaging/SalonDeliverables";
 import { SalonParticipants } from "@/components/messaging/SalonParticipants";
 
 // Le fil d'un échange, comme le chat d'un Expert (l'en-tête et ses onglets sont dans ExchangeHeader) : messages,
-// visage de l'auteur en tête de chaque suite, « … travaille » pour vos Experts sollicités, saisie avec « @ ».
+// visage de l'auteur en tête de chaque suite, choix du dernier message en boutons (comme le chat d'un Expert), « … travaille » pour vos Experts sollicités, saisie avec « @ ».
 
 const moment = (seconds: number) => new Date(seconds * 1000).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -76,6 +78,9 @@ export function ExchangeThread(p: ThreadProps) {
             {p.thread?.length === 0 && <li className="text-sm text-ink-3">Aucun message pour l’instant.</li>}
             {p.thread?.map((m, i) => {
               const own = p.mine.includes(m.author);
+              // Seul le dernier message, d'un autre, se répond en un clic ; un choix plus ancien reste écrit.
+              const parts = !own && i === (p.thread?.length ?? 0) - 1 ? replyParts(m.text) : null;
+              const choices = parts?.choices.length ? parts : null;
               const first = startsRun(p.thread?.[i - 1], m) || Boolean(m.replyTo);
               return (
                 <li key={m.id} className={cn("group flex gap-2.5", own && "flex-row-reverse", first ? "mt-4 first:mt-0" : "mt-1", m.replyTo && "pl-8")}>
@@ -91,12 +96,19 @@ export function ExchangeThread(p: ThreadProps) {
                     <div className={cn("flex max-w-full items-center gap-1.5", own && "flex-row-reverse", first && "mt-1")}>
                       <div className={cn("min-w-0 max-w-[min(680px,90%)] break-words rounded-2xl px-3.5 py-2.5 text-ink", own ? "rounded-tr-md bg-tint" : "rounded-tl-md border border-line bg-surface")} title={first ? undefined : moment(m.at)}>
                         {/* Comme le chat d'un Expert : liens cliquables (un site extérieur demande confirmation), listes, gras. */}
-                        <Markdown content={m.text} />
+                        <Markdown content={choices ? choices.body : m.text} />
                       </div>
                       <button type="button" onClick={() => setReplyTo(m)} className="shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold text-ink-2 opacity-0 hover:bg-soft focus-visible:opacity-100 group-hover:opacity-100">
                         Répondre
                       </button>
                     </div>
+                    {choices && (
+                      <ReplyChoices
+                        choices={choices.choices}
+                        note={choices.choicesNote}
+                        onSend={(text) => !p.sending && void p.onSend(text, p.candidates.some((c) => c.mine && c.entry.cles.includes(m.author)) ? [m.author] : [], m.id)}
+                      />
+                    )}
                   </div>
                 </li>
               );
