@@ -39,6 +39,9 @@ import { rememberedSettings } from "./rememberedSettings";
 const SCREEN_TEMPLATE = "yelema-hermes";
 const SCREEN_MIN_REVISION = 5;
 
+
+/** Conversations after which « Faire connaissance » is no longer offered. */
+const INTRO_MAX = 10;
 export const hasScreen = (instance: { image: { template: string; revision: number | null } | null } | null) =>
   instance?.image?.template === SCREEN_TEMPLATE && (instance.image.revision ?? 0) >= SCREEN_MIN_REVISION;
 
@@ -205,6 +208,10 @@ export function ChatView({
   const pronoun = expert?.catalogueKey ? voiceExpert(expert.catalogueKey).pronoun : null;
   // Before « Faire connaissance », it is the one action shown: the catalogue's requests wait (Leslie, 31/10).
   const [prepStage, setPrepStage] = useState<Stage | null>(null);
+  // « Faire connaissance » goes once done, or once the member has had INTRO_MAX conversations with the
+  // expert without it: by then they know each other (Leslie, 03/11: « il doit disparaître après un certain temps »).
+  const conversations = sessions.filter((x) => !x.routine).length;
+  const showIntro = Boolean(profile) && prepStage === "intro" && conversations < INTRO_MAX;
   const instance = useMemo(() => agents.find((x) => x.agent37_id === agentId) ?? null, [agents, agentId]);
   // The expert's name when the chat targets one; the company chat otherwise (never the instance's
   // name, which the back office writes as the list of its Experts).
@@ -384,35 +391,16 @@ export function ChatView({
       {/* Bottom: balances the vertical centering and carries the welcome subtitle. */}
       {showWelcome && (
         <div className="flex flex-1 flex-col items-center px-4 pt-3">
-          {/* An expert's first discussion: three requests from the catalogue, sent as is on a click. If
-              something is missing for one (a tool to connect), the expert says what (its own rules). */}
-          {/* Before its « Faire connaissance », that comes first, in colour, among the requests (Leslie, 02/11: B). */}
-          {profile && (prepStage === "intro" || expert?.suggestions?.length) ? (
-            <div role="group" aria-label={`Demander à ${agentName}`} className="flex max-w-2xl flex-wrap justify-center gap-2">
-              {prepStage === "intro" && (
-                <button
-                  type="button"
-                  onClick={() => void send("/onboarding")}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-brand bg-tint px-3.5 py-1.5 text-[13.5px] font-semibold text-brand-ink transition-colors hover:bg-brand hover:text-on-brand"
-                >
-                  <Sparkles className="size-4" /> Faire connaissance avec {agentName}
-                </button>
-              )}
-              {(expert?.suggestions ?? []).slice(0, prepStage === "intro" ? 2 : 3).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => void send(s)}
-                  className="min-h-9 rounded-full border border-line bg-surface px-3.5 py-1.5 text-[13.5px] font-semibold text-ink transition-colors hover:border-brand/40 hover:bg-tint"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-center text-sm text-ink-3">
-              Plus vous donnez de contexte, meilleure sera la réponse.
-            </p>
+          {/* Only « Faire connaissance », and only for a while: the catalogue's requests are gone, and nothing
+              takes their place, no help sentence either (Leslie, 03/11: « simplifier au max »). */}
+          {showIntro && (
+            <button
+              type="button"
+              onClick={() => void send("/onboarding")}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-brand bg-tint px-3.5 py-1.5 text-[13.5px] font-semibold text-brand-ink transition-colors hover:bg-brand hover:text-on-brand"
+            >
+              <Sparkles className="size-4" /> Faire connaissance avec {agentName}
+            </button>
           )}
         </div>
       )}
