@@ -17,9 +17,11 @@ import { NewExchange, type ExchangeKind } from "@/components/messaging/NewExchan
 
 // Échanges entre membres, présentés comme le chat d'un Expert : la colonne des échanges, le fil à côté. Lus et
 // écrits par ce navigateur sur le relais du client ; le back-office admet la clé de l'appareil et tient les salons.
+// Une connexion coupée (veille, réseau) se rouvre seule ; chaque ouverture relit la liste et le fil.
 
 type State = { kind: "loading" } | { kind: "closed"; reason: string } | { kind: "ready" };
 const markKey = (id: string) => `echange:${id}`;
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function Messaging() {
   const router = useRouter();
@@ -35,6 +37,10 @@ export function Messaging() {
   const [composing, setComposing] = useState<ExchangeKind | null>(null);
   const [pane, setPane] = useState<ExchangePane>("fil");
   const relay = useRef<BuzzConnection | null>(null);
+  // Bumped on each (re)connection and on « Actualiser »: the list and the open thread are read again.
+  const [link, setLink] = useState(0);
+  const dialer = useRef<{ url: string; secret: Uint8Array; dialing: boolean; stopped: boolean } | null>(null);
+  const shown = useRef<string | null>(null);
   const { marks, mark } = useChatMarks();
 
   const labels = useMemo(() => labelsOf(overview?.annuaire ?? []), [overview]);
@@ -65,8 +71,39 @@ export function Messaging() {
     }
   }, [me]);
 
-  // Ouverture : la vue du back-office, la clé de ce navigateur, puis le relais (une clé qui vient d'être admise
-  // attend la synchronisation suivante : quelques essais).
+  // Ouvre le relais, avec quelques essais (une clé qui vient d'être admise attend la synchronisation suivante).
+  // Sans limite une fois la page prête : une coupure se répare d'elle-même, jusqu'à 30 s entre deux essais.
+  const dial = useCallback(async (attempts: number): Promise<boolean> => {
+    const d = dialer.current;
+    if (!d || d.dialing) return false;
+    d.dialing = true;
+    try {
+      for (let attempt = 0; attempt < attempts && !d.stopped; attempt++) {
+        const c = new BuzzConnection(d.url, d.secret);
+        try {
+          await c.connect();
+        } catch {
+          c.close();
+          await pause(Math.min(3000 + attempt * 2000, 30_000));
+          continue;
+        }
+        if (d.stopped) return (c.close(), false);
+        c.onclose = () => {
+          if (relay.current !== c) return;
+          relay.current = null;
+          void dial(Infinity);
+        };
+        relay.current = c;
+        setLink((l) => l + 1);
+        return true;
+      }
+      return false;
+    } finally {
+      d.dialing = false;
+    }
+  }, []);
+
+  // Ouverture : la vue du back-office, la clé de ce navigateur, puis le relais.
   useEffect(() => {
     let stop = false;
     (async () => {
@@ -75,50 +112,63 @@ export function Messaging() {
         if (stop) return;
         setOverview(o);
         const key = await deviceKey(o.appareils.map((d) => d.cle));
-        for (let attempt = 0; attempt < 8 && !stop; attempt++) {
-          const c = new BuzzConnection(o.relais, key.secret);
-          try {
-            await c.connect();
-            relay.current = c;
-            setMe(key.pubkey);
-            setState({ kind: "ready" });
-            return;
-          } catch {
-            c.close();
-            await new Promise((r) => setTimeout(r, 3000 + attempt * 2000));
-          }
-        }
-        if (!stop) setState({ kind: "closed", reason: "Votre accès aux Échanges est en cours d’activation. Réessayez dans une minute." });
+        if (stop) return;
+        dialer.current = { url: o.relais, secret: key.secret, dialing: false, stopped: false };
+        setMe(key.pubkey);
+        if (await dial(8)) setState({ kind: "ready" });
+        else if (!stop) setState({ kind: "closed", reason: "Votre accès aux Échanges est en cours d’activation. Réessayez dans une minute." });
       } catch (e) {
         if (!stop) setState({ kind: "closed", reason: e instanceof Error ? e.message : "Les Échanges ne sont pas disponibles." });
       }
     })();
     return () => {
       stop = true;
+      if (dialer.current) dialer.current.stopped = true;
       relay.current?.close();
       relay.current = null;
     };
-  }, []);
+  }, [dial]);
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, link]);
+
+  // « Actualiser » : l'annuaire (participants, portraits), puis la liste et le fil ; la connexion d'abord si elle est tombée.
+  async function reload() {
+    setRefreshing(true);
+    try {
+      const fresh = apiFetch<BuzzOverview>("/api/buzz").then(setOverview, () => undefined);
+      if (relay.current) setLink((l) => l + 1);
+      else if (!(await dial(1))) toast.error("Le relais ne répond pas. Nouvel essai dans un instant.");
+      await fresh;
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   // Le fil ouvert, puis chaque nouveau message en direct.
   useEffect(() => {
     const c = relay.current;
     if (!c || !open) return;
     let live: { close: () => void } | null = null;
-    setThread(null);
+    let stop = false;
+    // Relu après une reconnexion : le fil affiché reste en place, sans « Chargement… ».
+    if (shown.current !== open) setThread(null);
+    const since = Math.floor(Date.now() / 1000);
     messages(c, open).then(
       (m) => {
+        if (stop) return;
+        shown.current = open;
         setThread(m);
-        live = c.subscribe({ kinds: MESSAGE_KINDS, "#h": [open], since: Math.floor(Date.now() / 1000) }, (e) => setThread((t) => (t?.some((x) => x.id === e.id) ? t : [...(t ?? []), toMessage(e)])));
+        live = c.subscribe({ kinds: MESSAGE_KINDS, "#h": [open], since }, (e) => setThread((t) => (t?.some((x) => x.id === e.id) ? t : [...(t ?? []), toMessage(e)])));
       },
-      (e: unknown) => toast.error((e as Error).message),
+      (e: unknown) => !stop && toast.error((e as Error).message),
     );
-    return () => live?.close();
-  }, [open, me]);
+    return () => {
+      stop = true;
+      live?.close();
+    };
+  }, [open, me, link]);
 
   const current = list?.find((c) => c.id === open) ?? null;
   const directory = useMemo(() => overview?.annuaire ?? [], [overview]);
@@ -204,7 +254,6 @@ export function Messaging() {
       <ExchangeHeader
         title={current ? nameOf(current) : null}
         kind={kind}
-        who={current ? participants(current.members, mine, labels) : []}
         pane={pane}
         canAdd={kind === "salon"}
         onPane={setPane}
@@ -226,7 +275,7 @@ export function Messaging() {
           countOf={countOf}
           onOpen={setOpen}
           onNew={setComposing}
-          onRefresh={() => void refresh()}
+          onRefresh={() => void reload()}
           onMark={(id, kind, on) => mark(markKey(id), kind, on)}
           onCopy={(c) => void copyLink(c)}
           onRename={rename}
@@ -241,6 +290,7 @@ export function Messaging() {
           thread={thread}
           mine={mine}
           labels={labels}
+          directory={directory}
           busy={busy}
           candidates={candidates}
           sending={sending}
