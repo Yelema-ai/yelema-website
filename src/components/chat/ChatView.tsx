@@ -261,9 +261,14 @@ export function ChatView({
             onClick={() => setChatListHidden(!listHidden)}
             aria-label={listHidden ? "Afficher les conversations" : "Masquer les conversations"}
             title={listHidden ? "Afficher les conversations" : "Masquer les conversations"}
-            className="-ml-1.5 hidden size-9 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-soft hover:text-ink xl:grid"
+            className={cn(
+              "-ml-1.5 hidden h-9 shrink-0 items-center gap-2 rounded-full text-ink-2 hover:bg-soft hover:text-ink xl:inline-flex",
+              listHidden ? "border border-line px-3 text-sm font-medium" : "w-9 justify-center"
+            )}
           >
             {listHidden ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+            {/* Folded, the column says what it holds: an icon alone was not found (Leslie, 04/11). */}
+            {listHidden && <span>Conversations</span>}
           </button>
           {/* On an expert's page its photo and name already head the page: shown once. */}
           {face && !profile && <ExpertAvatar expert={face} size="sm" />}
