@@ -403,7 +403,7 @@ export function ChatView({
 
       {/* Bottom: balances the vertical centering and carries the welcome subtitle. */}
       {showWelcome && (
-        <div className="flex flex-1 flex-col items-center px-4 pt-3">
+        <div className="flex flex-1 flex-col items-center px-4 pt-3 sm:px-6">
           {/* Only « Faire connaissance », and only for a while: the catalogue's requests are gone, and nothing
               takes their place, no help sentence either (Leslie, 03/11: « simplifier au max »). */}
           {showIntro && (
@@ -411,11 +411,13 @@ export function ChatView({
               type="button"
               onClick={() => void send("/onboarding")}
               data-faire-connaissance
-              className="inline-flex min-h-12 items-center gap-2.5 rounded-full bg-brand py-1.5 pl-1.5 pr-4 text-[15px] font-semibold text-on-brand shadow-[0_8px_24px_rgb(48_22_103_/_0.18)] transition-opacity hover:opacity-90"
+              className="flex w-full max-w-2xl items-center gap-3.5 rounded-[18px] border-[1.5px] border-brand bg-tint p-3.5 text-left text-ink transition-colors hover:bg-brand/15"
             >
-              {face && <ExpertAvatar expert={face} size="sm" />}
-              Faire connaissance avec {agentName}
-              <ArrowRight className="size-4" />
+              {face && <ExpertAvatar expert={face} size="md" />}
+              <span className="min-w-0 flex-1 text-[16px] font-bold leading-snug">Faire connaissance avec {agentName}</span>
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-on-brand">
+                <ArrowRight className="size-[18px]" />
+              </span>
             </button>
           )}
         </div>
