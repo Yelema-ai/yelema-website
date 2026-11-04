@@ -44,6 +44,11 @@ const nextConfig: NextConfig = {
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
         ],
       },
+      // Pictures, videos and logos of /public: kept a day, then served stale while re-read for a week.
+      ...["/yele/:path*", "/experts/:path*", "/logos/:path*"].map((source) => ({
+        source,
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
+      })),
     ];
   },
 };
