@@ -334,7 +334,7 @@ export function ChatView({
           </div>
         ) : messages.length > 0 ? (
           <div ref={contentRef}>
-            <ChatMessages messages={messages} isStreaming={isStreaming} face={face} driveFolder={driveFolder} onShowEarlier={showEarlier} onUnqueue={unqueue} onDocs={setDocs} onGoogle={setGoogle} routine={sessions.find((s) => s.session_id === activeSessionId)?.routine ?? null} pronoun={pronoun} />
+            <ChatMessages messages={messages} isStreaming={isStreaming} face={face} driveFolder={driveFolder} onReply={(text) => void send(text)} onShowEarlier={showEarlier} onUnqueue={unqueue} onDocs={setDocs} onGoogle={setGoogle} routine={sessions.find((s) => s.session_id === activeSessionId)?.routine ?? null} pronoun={pronoun} />
           </div>
         ) : (
           <>
