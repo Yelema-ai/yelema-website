@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
 import { ComputerButton, ComputerDialog, ComputerMenuItem, ComputerPanel } from "@/components/experts/ExpertComputer";
 import { ExpertMoreMenu } from "@/components/experts/ExpertMoreMenu";
 import { DashboardProvider } from "@/components/experts/DashboardProvider";
@@ -12,7 +12,8 @@ import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { expertDisplayName } from "@/lib/experts";
 import { cn } from "@/lib/utils";
 import { agentTabPath } from "@/lib/expert-tabs";
-import { citedFolder, type TurnDoc } from "@/lib/drive-links";
+import { citedFolder, deliverableCount, type TurnDoc } from "@/lib/drive-links";
+import { driveTree } from "@/lib/drive-store";
 import { ConversationDocs } from "./ConversationDocs";
 import { PreviewSiblings } from "@/components/files/preview-siblings";
 import { GoogleDocsRow, PinnedDocsProvider, usePinnedDocs } from "./GoogleDocs";
@@ -210,9 +211,21 @@ export function ChatView({
   // Before « Faire connaissance », it is the one action shown: the catalogue's requests wait (Leslie, 31/10).
   const [prepStage, setPrepStage] = useState<Stage | null>(null);
   // « Faire connaissance » goes once done, or once the member has had INTRO_MAX conversations with the
-  // expert without it: by then they know each other (Leslie, 03/11: « il doit disparaître après un certain temps »).
+  // expert, or INTRO_MAX deliverables from it: by then they know each other (Leslie, 03/11 and 04/11).
   const conversations = sessions.filter((x) => !x.routine).length;
-  const showIntro = Boolean(profile) && prepStage === "intro" && conversations < INTRO_MAX;
+  const [made, setMade] = useState(0);
+  const wantsIntro = Boolean(profile) && prepStage === "intro";
+  useEffect(() => {
+    if (!wantsIntro || !driveFolder) return;
+    let cancelled = false;
+    driveTree(agentId)
+      .then((tree) => !cancelled && setMade(deliverableCount(tree.entries, driveFolder)))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [wantsIntro, agentId, driveFolder]);
+  const showIntro = wantsIntro && conversations < INTRO_MAX && made < INTRO_MAX;
   const instance = useMemo(() => agents.find((x) => x.agent37_id === agentId) ?? null, [agents, agentId]);
   // The expert's name when the chat targets one; the company chat otherwise (never the instance's
   // name, which the back office writes as the list of its Experts).
@@ -398,9 +411,12 @@ export function ChatView({
             <button
               type="button"
               onClick={() => void send("/onboarding")}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-brand bg-tint px-3.5 py-1.5 text-[13.5px] font-semibold text-brand-ink transition-colors hover:bg-brand hover:text-on-brand"
+              data-faire-connaissance
+              className="inline-flex min-h-12 items-center gap-2.5 rounded-full bg-brand py-1.5 pl-1.5 pr-4 text-[15px] font-semibold text-on-brand shadow-[0_8px_24px_rgb(48_22_103_/_0.18)] transition-opacity hover:opacity-90"
             >
-              <Sparkles className="size-4" /> Faire connaissance avec {agentName}
+              {face && <ExpertAvatar expert={face} size="sm" />}
+              Faire connaissance avec {agentName}
+              <ArrowRight className="size-4" />
             </button>
           )}
         </div>
