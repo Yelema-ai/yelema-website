@@ -41,6 +41,8 @@ export function replyParts(text: string): ReplyParts {
   return { body: trimEnd(lines.slice(0, choices.start)).join("\n"), text: written, choices: choices.items, choicesNote: choices.note };
 }
 
+const CHOICE_WORDS = /\b(quel(le)?s?|lequel|laquelle|lesquel(le)?s|pr[ée]f[ée]r|choisi|choix|voulez|veux|souhait|option|on part sur|which|prefer|choose|want)/i;
+
 function readChoices(lines: string[]): { items: ReplyChoice[]; note: string | null; start: number } | null {
   // One short line may follow the options.
   let end = lines.length;
@@ -67,7 +69,9 @@ function readChoices(lines: string[]): { items: ReplyChoice[]; note: string | nu
   // They answer something: the line above asks, or announces them. A plan written as « A) … » does not.
   if (i < 0) return null;
   const asking = plain(lines[i]);
-  if (!/[?:]$/.test(asking)) return null;
+  // « : » seul annonce aussi une liste d'étapes : il faut une tournure de choix, ou une question sous les options.
+  const asks = /\?$/.test(asking) || (/:$/.test(asking) && (CHOICE_WORDS.test(asking) || /\?/.test(note ?? "")));
+  if (!asks) return null;
   if (unclosedFence(lines.slice(0, found[0].line))) return null;
 
   return {

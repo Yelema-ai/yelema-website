@@ -48,3 +48,10 @@ test("what is not clearly a question stays text", () => {
 test("what a button sends", () => {
   assert.equal(choiceMessage({ letter: "B", label: "Non", isDefault: false }), "B : Non");
 });
+
+test("a list announced by « : » without a choice is not turned into buttons", () => {
+  assert.deepEqual(replyParts("Les étapes :\nA) Préparer\nB) Livrer").choices, []);
+  assert.deepEqual(replyParts("Deux pistes :\nA) Salon\nB) Radio\nJe recommande A.").choices, []);
+  assert.deepEqual(replyParts("Deux pistes :\nA) Salon\nB) Radio\nLaquelle te va ?").choices.map((c) => c.letter), ["A", "B"]);
+  assert.deepEqual(replyParts("Quelle version préférez-vous :\nA) Courte\nB) Longue").choices.map((c) => c.letter), ["A", "B"]);
+});
