@@ -28,7 +28,8 @@ export function treeLoader(now: () => number = Date.now): (src: TreeSource) => P
   return async (src) => {
     if (now() >= skipUntil) {
       try {
-        return await src.tree(DRIVE_ROOT, TREE_DEPTH);
+        // The gateway counts from 0 (the root's content): its depth 2 is these three levels.
+        return await src.tree(DRIVE_ROOT, TREE_DEPTH - 1);
       } catch (e) {
         if (!isNotFound(e)) throw e;
         skipUntil = now() + RETRY_TREE_MS;
