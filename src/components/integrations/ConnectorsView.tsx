@@ -451,7 +451,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
                   <ToolLogo logo={t.logo} name={t.name} />
                   <span className="min-w-0 flex-1 basis-40">
                     <span className="block truncate text-[14.5px] font-semibold leading-snug text-ink">{t.name}</span>
-                    <span className="block truncate text-[12.5px] text-ink-3">
+                    <span className="line-clamp-2 text-[12.5px] leading-snug text-ink-3">
                       {title}, {accountState(b.account) === "disabled" ? "accès coupé" : "connexion expirée"}
                     </span>
                   </span>
