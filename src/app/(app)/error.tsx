@@ -3,11 +3,13 @@
 import { useEffect } from "react";
 import { PageBody } from "@/components/app/PageBody";
 import { Button } from "@/components/ui/button";
+import { reportClientError } from "@/lib/report-error";
 
 // A page of the signed-in frame failed to render. The menu stays; the page offers to try again.
 export default function PageError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error(error);
+    reportClientError(error, "page");
   }, [error]);
 
   return (

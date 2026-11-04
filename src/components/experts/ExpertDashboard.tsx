@@ -29,7 +29,7 @@ function formatMajDate(dateStr?: string | null): string | null {
 // `inHeader`: in the expert's own header (Leslie, 28/10, variante B), a short word on a computer, the
 // icon alone on a phone; the panel still opens beside the chat.
 function useToggleDashboard() {
-  const { panelOpen, setPanelOpen, dialogOpen, setDialogOpen, activeUrl, triggerGeneration, isGenerating } = useDashboard();
+  const { panelOpen, setPanelOpen, dialogOpen, setDialogOpen } = useDashboard();
   const comp = useComputer();
   return () => {
     const isWide = typeof window !== "undefined" && window.matchMedia(WIDE).matches;
@@ -41,11 +41,10 @@ function useToggleDashboard() {
       setDialogOpen(!dialogOpen);
     }
 
-    // Ne déclencher la génération QUE si le tableau n'a JAMAIS été généré (aucun lien disponible)
-    // et qu'on ouvre le panneau. Si un tableau existe déjà, on ouvre juste le panneau sans envoyer /tableau.
-    if (!panelOpen && !activeUrl && !isGenerating) {
-      void triggerGeneration();
-    }
+    // Opening never sends /tableau by itself (Leslie, 03/11: « beaucoup de commandes tableaux lancés »).
+    // The link was checked before the panel had read the dashboard, so every click on a conversation
+    // without the link started a new « /tableau » conversation. The panel reads it, and offers
+    // « Préparer le tableau de bord » only when there is none.
   };
 }
 

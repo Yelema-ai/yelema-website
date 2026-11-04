@@ -383,6 +383,20 @@ async function readXlsx(data: ArrayBuffer, maxRows = ROWS, maxCols = COLS): Prom
 
 const renderSheet: Render = async (data, doc, _width, full) => {
   const [r, c] = full ? [FULL_ROWS, FULL_COLS] : [ROWS, COLS];
+  // A workbook as Excel draws it: colours, logos, merged cells, every sheet (Leslie, 03/11). The plain
+  // table of its values stays the fallback for a file this reader does not follow.
+  if (ext(doc.name) !== "csv") {
+    try {
+      const { openBook, readSheet, Workbook } = await import("./xlsx-book");
+      const book = await openBook(data);
+      if (book.sheets.length) {
+        const sheet = await readSheet(book, 0, r, c);
+        if (sheet.rows.length) return <Workbook book={book} first={sheet} full={full} maxRows={r} maxCols={c} />;
+      }
+    } catch (e) {
+      if ((e as Error).message === "too large") throw e;
+    }
+  }
   const { sheet, rows } = ext(doc.name) === "csv" ? { sheet: null, rows: parseCsv(new TextDecoder().decode(data), r) } : await readXlsx(data, r, c);
   if (!rows.length) throw new Error("empty");
   return <Table sheet={sheet} rows={rows} full={full} />;
@@ -427,7 +441,7 @@ const renderDocx: Render = async (data, _doc, _width, full) => {
 // --- PowerPoint: each slide's text, title first, on a 16:9 card (the first one in the chat) --------
 
 
-function Slide({ lines, n, of }: { lines: string[]; n: number; of: number }) {
+function Slide({ lines, n, of, badge = true }: { lines: string[]; n: number; of: number; badge?: boolean }) {
   const [title, ...rest] = lines;
   return (
     <span className="relative block aspect-video w-full overflow-hidden rounded-lg border border-[#e3e3ea] bg-white px-[6%] py-[5%] text-left text-[#1e1e28] shadow-sm">
@@ -437,21 +451,28 @@ function Slide({ lines, n, of }: { lines: string[]; n: number; of: number }) {
           {l}
         </span>
       ))}
-      <span className="absolute bottom-2 right-3 text-[11px] font-semibold text-[#8a8a98]">
-        {n}/{of}
-      </span>
+      {badge && (
+        <span className="absolute bottom-2 right-3 text-[11px] font-semibold text-[#8a8a98]">
+          {n}/{of}
+        </span>
+      )}
     </span>
   );
 }
 
 // Each slide drawn as it looks (pictures, text boxes, background); one with nothing drawable shows its text.
 const renderPptx: Render = async (data, _doc, _width, full) => {
-  const { readSlides, SlideDrawing, drawable } = await import("./pptx-slides");
+  const { readSlides, SlideDrawing, Slideshow, drawable } = await import("./pptx-slides");
   const slides = await readSlides(data, MAX_XML_PART_BYTES, full ? undefined : 1);
-  const one = (i: number) =>
-    drawable(slides[i]) ? <SlideDrawing key={i} slide={slides[i]} n={i + 1} of={slides.length} /> : <Slide key={i} lines={slides[i].lines} n={i + 1} of={slides.length} />;
+  const one = (i: number, badge = true) =>
+    drawable(slides[i]) ? (
+      <SlideDrawing key={i} slide={slides[i]} n={i + 1} of={slides.length} badge={badge} />
+    ) : (
+      <Slide key={i} lines={slides[i].lines} n={i + 1} of={slides.length} badge={badge} />
+    );
   if (!full) return <span className="flex size-full items-center justify-center bg-[#FDEEDF] p-5">{one(0)}</span>;
-  return <span className="flex size-full flex-col gap-4 overflow-auto bg-[#f6f6f9] p-4">{slides.map((_, i) => one(i))}</span>;
+  // Opened full size: the first slide large, the others one click or one arrow away.
+  return <Slideshow count={slides.length} slide={(i) => one(i, false)} />;
 };
 
 // The expert's drive folder, and the subfolders changed since `since`, one level down: where the

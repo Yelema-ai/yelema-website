@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
+import { reportClientError } from "@/lib/report-error";
 
 // The last resort: the root layout itself failed, so nothing of the app (fonts, theme, styles) can
 // be counted on. A page that stands on its own, with inline styles.
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error(error);
+    reportClientError(error, "global");
   }, [error]);
 
   return (

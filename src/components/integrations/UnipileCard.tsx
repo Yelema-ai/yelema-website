@@ -128,6 +128,10 @@ export function UnipileCard() {
 
   const count = status ? (status.accounts.length === 1 ? "1 compte" : `${status.accounts.length} comptes`) : "";
 
+  // Not offered on this space yet (the back office has no route for it, or the instance no messaging):
+  // no card announcing a setting that is not there (Leslie, 03/11).
+  if (!status && error) return null;
+
   // One line, the height of a connector tile (Leslie, 28/10: « le bandeau est tellement gros inutilement,
   // le connecté n'est pas centré »): the accounts in the subtitle, the faces and the state beside it.
   return (

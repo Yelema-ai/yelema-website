@@ -329,7 +329,7 @@ export function ExpertEditModal({
           onOpenChange={setStudioOpen}
           expertKey={expertKey}
           expertName={look.displayName ?? look.defaultName}
-          currentAvatarUrl={saved}
+          currentAvatarUrl={saved ?? photoUrl ?? null}
           onApplyAvatar={applyDraft}
         />
       )}

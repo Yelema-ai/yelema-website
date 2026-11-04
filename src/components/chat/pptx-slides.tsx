@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // A PowerPoint slide drawn as it looks (Leslie, 27/10: « on doit voir la main slide »): its background,
 // its pictures and its text boxes at their place and size, in an SVG whose units are the slide's points.
@@ -291,7 +292,7 @@ export async function readSlides(data: ArrayBuffer, maxXmlBytes: number, only?: 
 const ALIGN: Record<string, "left" | "center" | "right" | "justify"> = { l: "left", ctr: "center", r: "right", just: "justify" };
 const ANCHOR: Record<string, string> = { t: "flex-start", ctr: "center", b: "flex-end" };
 
-export function SlideDrawing({ slide, n, of }: { slide: SlideView; n: number; of: number }): ReactNode {
+export function SlideDrawing({ slide, n, of, badge = true }: { slide: SlideView; n: number; of: number; badge?: boolean }): ReactNode {
   const { w, h } = slide;
   return (
     <span className="relative block w-full overflow-hidden rounded-lg border border-[#e3e3ea] shadow-sm" style={{ aspectRatio: `${w} / ${h}`, background: slide.bg ?? "#FFFFFF" }}>
@@ -324,8 +325,93 @@ export function SlideDrawing({ slide, n, of }: { slide: SlideView; n: number; of
           ),
         )}
       </svg>
-      <span className="absolute bottom-1.5 right-2.5 rounded bg-white/80 px-1 text-[11px] font-semibold text-[#8a8a98]">
-        {n}/{of}
+      {badge && (
+        <span className="absolute bottom-1.5 right-2.5 rounded bg-white/80 px-1 text-[11px] font-semibold text-[#8a8a98]">
+          {n}/{of}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * A deck opened full size, as a slideshow (Leslie, 03/11: « la slide 1 en grand, un slideshow pour les
+ * autres »): one slide large, arrows on each side and the keyboard's to move, and every slide in a strip
+ * below to jump to one.
+ */
+export function Slideshow({ count, slide }: { count: number; slide: (i: number, thumb: boolean) => ReactNode }) {
+  const [at, setAt] = useState(0);
+  const strip = useRef<HTMLSpanElement>(null);
+  const go = useCallback((i: number) => setAt(Math.max(0, Math.min(count - 1, i))), [count]);
+  // The arrows move the slides first; past the first or the last one they go on to the preview's
+  // other deliverables, as before. Listened to before the preview (capture) so it does not move too.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.altKey || e.ctrlKey || e.metaKey || t?.closest("input, textarea, select, [contenteditable=true]")) return;
+      const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (!step || at + step < 0 || at + step >= count) return;
+      e.stopImmediatePropagation();
+      go(at + step);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [at, count, go]);
+  // Same with a swipe on the slide, on a phone.
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  const onTouchEnd = (e: ReactTouchEvent) => {
+    const s0 = touch.current;
+    touch.current = null;
+    if (!s0) return;
+    const dx = e.changedTouches[0].clientX - s0.x;
+    const dy = e.changedTouches[0].clientY - s0.y;
+    const step = dx < 0 ? 1 : -1;
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5 || at + step < 0 || at + step >= count) return;
+    e.stopPropagation();
+    go(at + step);
+  };
+  // The strip follows: the slide on screen is always in view below.
+  useEffect(() => {
+    strip.current?.querySelector<HTMLElement>(`[data-slide="${at}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }, [at]);
+  const arrow = "grid size-10 shrink-0 place-items-center rounded-full border border-[#e3e3ea] bg-white text-[#1e1e28] shadow-sm transition-opacity hover:bg-[#f6f6f9] disabled:pointer-events-none disabled:opacity-30";
+  return (
+    <span className="flex size-full flex-col bg-[#f6f6f9]">
+      {/* The slide takes the whole width; the arrows sit under it, beside the count. */}
+      <span
+        className="flex min-h-0 flex-1 items-center justify-center px-3 pt-4 sm:px-5"
+        onTouchStart={(e) => (touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY })}
+        onTouchEnd={onTouchEnd}
+      >
+        <span className="block w-full" style={{ maxWidth: "calc((100dvh - 300px) * 16 / 9)" }}>
+          {slide(at, false)}
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center justify-center gap-4 pt-3">
+        <button type="button" className={arrow} onClick={() => go(at - 1)} disabled={at === 0} aria-label="Diapositive précédente">
+          <ChevronLeft className="size-5" />
+        </button>
+        <span className="min-w-14 text-center text-[13px] font-semibold tabular-nums text-[#4a4a58]" aria-live="polite">
+          {at + 1} / {count}
+        </span>
+        <button type="button" className={arrow} onClick={() => go(at + 1)} disabled={at === count - 1} aria-label="Diapositive suivante">
+          <ChevronRight className="size-5" />
+        </button>
+      </span>
+      <span ref={strip} className="flex shrink-0 gap-2 overflow-x-auto px-4 pb-4 pt-3">
+        {Array.from({ length: count }, (_, i) => (
+          <button
+            key={i}
+            type="button"
+            data-slide={i}
+            onClick={() => go(i)}
+            aria-label={`Diapositive ${i + 1}`}
+            aria-current={i === at ? "true" : undefined}
+            className={`block w-24 shrink-0 rounded-lg p-0.5 transition-shadow sm:w-28 ${i === at ? "ring-2 ring-brand" : "opacity-70 hover:opacity-100"}`}
+          >
+            {slide(i, true)}
+          </button>
+        ))}
       </span>
     </span>
   );

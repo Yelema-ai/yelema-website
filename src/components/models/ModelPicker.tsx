@@ -51,7 +51,9 @@ export function ModelPicker({ groups, value, onChange, nullLabel, customProvider
     document.addEventListener("pointerdown", away);
     return () => document.removeEventListener("pointerdown", away);
   }, [open]);
-  useEffect(() => document.getElementById(`${id}-opt-${active}`)?.scrollIntoView({ block: "nearest" }), [active, id]);
+  useEffect(() => {
+    document.getElementById(`${id}-opt-${active}`)?.scrollIntoView({ block: "nearest" });
+  }, [active, id]);
 
   function close(refocus = true) {
     setOpen(false);

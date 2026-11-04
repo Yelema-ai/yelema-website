@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Loader2, RefreshCw } from "lucide-react";
+import { ChevronRight, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { cached, remember } from "@/lib/client-cache";
@@ -26,7 +26,7 @@ import { RelayChannel } from "@/components/channels/RelayChannel";
 import { TelegramChannel } from "@/components/channels/TelegramChannel";
 import { TelegramTopics } from "@/components/channels/TelegramTopics";
 import { WhatsAppConnect } from "@/components/channels/WhatsAppConnect";
-import { useRuntimeTools } from "@/components/experts/useRuntimeTools";
+import { useRuntimeTools, useTelegramRelay } from "@/components/experts/useRuntimeTools";
 
 // The Messaging tab: connect this agent to the apps its owner already uses, so they can talk to it
 // from their phone instead of only from this dashboard.
@@ -51,6 +51,7 @@ export function ChannelsTab({
   const reachable = !["stopped", "deleting", "deleted", "failed", "error"].includes(agent.live_status ?? "");
   // The channels below are the Hermes harness's own; a Claude Code instance has Telegram through its hub.
   const hermesTools = useRuntimeTools(agentId);
+  const telegramRelay = useTelegramRelay(agentId);
 
   // What this page read last time, kept for the visit (Leslie, 28/10: « la page Canaux s'affiche très
   // lentement »): shown at once, the live state read again behind it.
@@ -62,7 +63,6 @@ export function ChannelsTab({
   const [teamsEndpoint, setTeamsEndpoint] = useState<string | null>(() => seen?.teams_endpoint ?? null);
   const [loading, setLoading] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [showAll, setShowAll] = useState(false);
   // Un bot posé par la passerelle (et relevé par l'instance) a déjà ses sujets : l'ancien bouton « Créer les sujets » s'efface.
   const [hubTelegram, setHubTelegram] = useState(false);
   // The hub is the gateway's (no exec): asked at once, alongside the channels and the runtime.
@@ -119,7 +119,7 @@ export function ChannelsTab({
         <Header />
         <section className="space-y-3">
           <h3 className="text-sm font-semibold">Telegram</h3>
-          <TelegramChannel agentId={agentId} canManage={canManage} />
+          {telegramRelay ? <RelayChannel agentId={agentId} channel="telegram" canManage={canManage} /> : <TelegramChannel agentId={agentId} canManage={canManage} />}
         </section>
         <RelayChannel agentId={agentId} channel="slack" canManage={canManage} />
         <RelayChannel agentId={agentId} channel="teams" canManage={canManage} />
@@ -162,8 +162,9 @@ export function ChannelsTab({
   }
 
   const featured = (channels ?? []).filter((c) => isFeaturedChannel(c.id));
-  const rest = (channels ?? []).filter((c) => !isFeaturedChannel(c.id));
-  const connectedRest = rest.filter(isChannelConnected);
+  // The other channels (Discord, Matrix, Signal…) show only once connected: « Autres canaux » is gone,
+  // it does not speak to the market (Leslie, 03/11).
+  const connectedRest = (channels ?? []).filter((c) => !isFeaturedChannel(c.id) && isChannelConnected(c));
 
   return (
     <div className="space-y-6">
@@ -212,33 +213,6 @@ export function ChannelsTab({
             />
           )}
 
-          {rest.length > connectedRest.length && (
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => setShowAll((v) => !v)}
-                className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-              >
-                {showAll ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                Autres canaux ({rest.length - connectedRest.length})
-              </button>
-              {showAll && (
-                <div className="divide-y overflow-hidden rounded-[22px] border bg-card">
-                  {rest
-                    .filter((c) => !isChannelConnected(c))
-                    .map((channel) => (
-                      <ChannelRow
-                        key={channel.id}
-                        channel={channel}
-                        canManage={canManage}
-                        checking={!stateKnown}
-                        onOpen={() => setOpenId(channel.id)}
-                      />
-                    ))}
-                </div>
-              )}
-            </div>
-          )}
         </>
       )}
     </div>

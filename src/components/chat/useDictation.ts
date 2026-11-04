@@ -33,7 +33,7 @@ export function useDictation({ expert, onText, onError }: { expert: string | nul
   const [state, setState] = useState<DictationState>("idle");
   const [seconds, setSeconds] = useState(0);
   const [level, setLevel] = useState(0);
-  const rec = useRef<{ stream: MediaStream; ctx: AudioContext; node: ScriptProcessorNode; chunks: Float32Array[]; timer: ReturnType<typeof setInterval> } | null>(null);
+  const rec = useRef<{ stream: MediaStream; ctx: AudioContext; node: ScriptProcessorNode; chunks: Float32Array[]; timer: ReturnType<typeof setInterval>; t0: number } | null>(null);
 
   const release = useCallback(() => {
     const r = rec.current;
@@ -48,10 +48,23 @@ export function useDictation({ expert, onText, onError }: { expert: string | nul
   }, []);
 
   const transcribe = useCallback(
-    async (chunks: Float32Array[], rate: number) => {
+    async (chunks: Float32Array[], rate: number, heldMs: number) => {
       const all = new Float32Array(chunks.reduce((n, c) => n + c.length, 0));
       chunks.reduce((at, c) => (all.set(c, at), at + c.length), 0);
-      if (all.length < rate / 2) return setState("idle"); // under half a second: nothing said
+      if (all.length < rate / 2) {
+        setState("idle");
+        // Held over a second and still under half a second of sound: the microphone gave nothing
+        // (an audio context left paused by the browser). Said, never a button that silently resets.
+        if (heldMs > 1000) onError("Le micro n’a rien enregistré. Réessayez.");
+        return;
+      }
+      // A recording of pure silence (a muted or wrong microphone) is not sent to the speech service.
+      let peak = 0;
+      for (let i = 0; i < all.length; i += 64) peak = Math.max(peak, Math.abs(all[i]!));
+      if (peak < 0.001) {
+        setState("idle");
+        return onError("Rien n’a été entendu : vérifiez que le bon micro est choisi et qu’il n’est pas coupé.");
+      }
       setState("transcribing");
       try {
         const wav = new Blob([encodeWav(downsample(all, rate))], { type: "audio/wav" });
@@ -62,6 +75,8 @@ export function useDictation({ expert, onText, onError }: { expert: string | nul
           form.append("language", language);
           const res = await fetch("/api/voice/transcribe", { method: "POST", body: form });
           const data = (await res.json().catch(() => ({}))) as { text?: string; error?: { message?: string } };
+          // The host refuses a body too large before the route, with a page instead of JSON.
+          if (res.status === 413) data.error = { message: "Dictée trop longue : environ 2 minutes au plus. Coupez-la en deux." };
           return { res, data };
         };
         // The recording is kept: a network hiccup or a speech service that does not answer gets a
@@ -87,14 +102,18 @@ export function useDictation({ expert, onText, onError }: { expert: string | nul
 
   const finish = useCallback(() => {
     const r = release();
-    if (r) void transcribe(r.chunks, r.ctx.sampleRate);
+    if (r) void transcribe(r.chunks, r.ctx.sampleRate, Date.now() - r.t0);
   }, [release, transcribe]);
 
   const start = useCallback(async () => {
     if (rec.current || !navigator.mediaDevices?.getUserMedia) return onError("Ce navigateur ne permet pas la dictée.");
+    // The audio context is made in the click itself, before waiting for the microphone: made after,
+    // Safari (and Chrome at times) leaves it paused, nothing is recorded and the dictation was lost.
+    let ctx: AudioContext | null = null;
     try {
+      ctx = new AudioContext();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      const ctx = new AudioContext();
+      if (ctx.state === "suspended") await ctx.resume().catch(() => undefined);
       const node = ctx.createScriptProcessor(4096, 1, 1);
       const chunks: Float32Array[] = [];
       node.onaudioprocess = (e) => {
@@ -112,10 +131,11 @@ export function useDictation({ expert, onText, onError }: { expert: string | nul
         setSeconds(s);
         if (s >= MAX_SECONDS) finish();
       }, 250);
-      rec.current = { stream, ctx, node, chunks, timer };
+      rec.current = { stream, ctx, node, chunks, timer, t0 };
       setSeconds(0);
       setState("recording");
     } catch (e) {
+      void ctx?.close().catch(() => {});
       const denied = (e as DOMException).name === "NotAllowedError";
       onError(denied ? "Autorisez le micro pour dicter votre message." : "Le micro n’a pas pu être ouvert.");
     }

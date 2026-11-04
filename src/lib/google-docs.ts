@@ -41,6 +41,28 @@ export function titleFromLabel(label: string): string | null {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
+// A bare link names nothing (Leslie, 03/11: the card said « Google Docs »). The sentence before it often
+// does: « …dans la présentation WhatsApp, pages 13 à 17 : https://… » → « Présentation WhatsApp ».
+const NOUN = "présentation|document|doc|tableau|tableur|fichier|suivi|kit|deck|rapport|compte rendu|note|plan|fiche|guide|brief|feuille";
+const NAMED_RE = new RegExp(`(?:^|[\\s(«"'’])(?:la|le|l['’]|du|de la|au|ce|cette|notre|votre|ton|ta|mon|ma)\\s*((?:${NOUN})\\b[^,:;.!?()\\n«»"]{0,48})`, "giu");
+
+/** The title the text just before a bare link gives the document, or null. */
+export function titleBefore(text: string, at: number): string | null {
+  const start = Math.max(0, at - 200);
+  let lineStart = text.lastIndexOf("\n", at - 1) + 1;
+  // A link alone on its line belongs to the line above when that one ends on « : ».
+  if (!text.slice(lineStart, at).trim() && /:\s*$/.test(text.slice(0, Math.max(0, lineStart - 1)))) lineStart = text.lastIndexOf("\n", lineStart - 2) + 1;
+  const before = text.slice(Math.max(start, lineStart), at);
+  let last: string | null = null;
+  for (const m of before.matchAll(NAMED_RE)) last = m[1];
+  if (!last) return null;
+  const t = last.replace(/\s+(?:est|sont|se|qui|que|avec|dans|sur|pour|en|à|a)\b.*$/iu, "").replace(/\s+(?:pages?|p\.)\s*\d.*$/iu, "").trim();
+  const words = t.split(/\s+/);
+  // « le document » alone names nothing; « la présentation WhatsApp » does.
+  if (words.length < 2) return null;
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 /** The Google documents a reply points to, in order, each once, with the best title its text gives. */
 export function googleDocs(text: string): GoogleDoc[] {
   const found = new Map<string, GoogleDoc>();
@@ -54,7 +76,11 @@ export function googleDocs(text: string): GoogleDoc[] {
   }
   for (const m of text.matchAll(URL_RE)) {
     const doc = googleDocOf(m[0]);
-    if (doc && !found.has(doc.id)) found.set(doc.id, { ...doc, title: GOOGLE_LABEL[doc.kind] });
+    if (!doc) continue;
+    const had = found.get(doc.id);
+    const guess = titleBefore(text, m.index ?? 0);
+    if (!had) found.set(doc.id, { ...doc, title: guess ?? GOOGLE_LABEL[doc.kind] });
+    else if (guess && had.title === GOOGLE_LABEL[doc.kind]) had.title = guess;
   }
   return [...found.values()];
 }

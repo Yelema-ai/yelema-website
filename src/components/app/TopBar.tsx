@@ -4,7 +4,6 @@ import { settingsEntry } from "@/components/settings/settings-nav";
 import { usePathname } from "next/navigation";
 import { ChevronRight, Menu } from "lucide-react";
 import { NotificationBell } from "@/components/app/NotificationBell";
-import { UpdateBanner } from "@/components/app/DeployStatus";
 import { AppearanceSync } from "@/components/app/AppearanceSync";
 import { YeleTopButton } from "@/components/yele/YeleBubble";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
@@ -47,8 +46,10 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
   // An expert's page heads itself on a computer, its bell included (Leslie, 28/10, variante B): no bar
   // above it, the conversation gets the room. Its own menu button keeps the bar on a phone.
   const expertPage = pathname.startsWith("/experts/") && parseAgentRoute(pathname.split("/").filter(Boolean).slice(2))?.profileId != null;
+  // Échanges se présente comme une page d'Expert : sa propre bande d'en-tête, cloche comprise.
+  const headsItself = expertPage || pathname.startsWith("/echanges");
   return (
-    <header className={cn("sticky top-0 z-30 flex h-[62px] shrink-0 items-center gap-2.5 border-b border-line bg-bg/85 px-4 backdrop-blur md:px-6", expertPage && "lg:hidden")}>
+    <header className={cn("sticky top-0 z-30 flex h-[62px] shrink-0 items-center gap-2.5 border-b border-line bg-bg/85 px-4 backdrop-blur md:px-6", headsItself && "lg:hidden")}>
       <button
         type="button"
         onClick={onMenu}
@@ -68,7 +69,6 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
       </div>
       <AppearanceSync />
       <span className="ml-auto" />
-      <UpdateBanner />
       <YeleTopButton />
       <NotificationBell />
     </header>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Check, ChevronRight, Loader2, MoreHorizontal, Pencil, Plug, Plus, RotateCw, Search, Star, Trash2, Unplug } from "lucide-react";
+import { Check, Loader2, MoreHorizontal, Pencil, Plus, RotateCw, Search, Star, Trash2, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { cached, remember } from "@/lib/client-cache";
@@ -15,7 +15,7 @@ import {
   splitAccounts,
 } from "@/lib/connection-accounts";
 import { isConnectionActive as isActive } from "@/lib/expert-tools";
-import { DEFAULT_INTEGRATION_TOOLKITS, catalogToolkit, composioLogoUrl } from "@/lib/integration-catalog";
+import { DEFAULT_INTEGRATION_TOOLKITS, INTEGRATION_GROUPS, catalogToolkit, composioLogoUrl } from "@/lib/integration-catalog";
 import type {
   IntegrationConnection,
   IntegrationConnectionsResult,
@@ -35,6 +35,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ToolLogo } from "./ToolLogo";
+import { useExpertsContext } from "@/components/experts/ExpertsProvider";
+import type { ExpertTool } from "@/lib/expert-tools";
+import { forWhom, recommendTools } from "@/lib/recommended-tools";
 import { runPool } from "@/lib/bulk";
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -89,6 +92,9 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
   const [pending, setPending] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [open, setOpen] = useState<IntegrationToolkit | null>(null);
+  // The catalog's filter by use; « Tous » is null.
+  const [group, setGroup] = useState<string | null>(null);
+  const searchBox = useRef<HTMLInputElement>(null);
 
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollDeadline = useRef(0);
@@ -140,7 +146,45 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
     };
   }, [q, agentId]);
 
-  const accounts = useMemo(() => accountsBySlug(connections ?? []), [connections]);
+  // Only the accounts that work or did: a sign-in never finished is not a tool of the member's (Leslie,
+  // 03/11, « catastrophique »: 23 red tools that were only abandoned sign-ins). They stay in the panel.
+  const accounts = useMemo(() => {
+    const all = accountsBySlug(connections ?? []);
+    for (const [k, list] of all) if (splitAccounts(list).accounts.length === 0) all.delete(k);
+    return all;
+  }, [connections]);
+  // Every account to sign in again, with the tool it belongs to: the banner at the bottom names each one.
+  const broken = useMemo(
+    () => [...accounts.entries()].flatMap(([slug, list]) => list.filter(needsReconnect).map((c) => ({ slug, account: c, index: splitAccounts(list).accounts.indexOf(c) }))),
+    [accounts]
+  );
+  const [reconnecting, setReconnecting] = useState(false);
+  const bannerRef = useRef<HTMLDivElement>(null);
+
+  // « Conseillés pour vos Experts »: what the member's Experts list in their pack (outils-recommandes.json).
+  const { experts: team } = useExpertsContext();
+  const mineExperts = useMemo(() => team.filter((e) => e.agentId === agentId), [team, agentId]);
+  const [packs, setPacks] = useState<{ expert: string; tools: ExpertTool[] }[] | null>(() => cached(`packs:${agentId}`) ?? null);
+  const teamKey = mineExperts.map((e) => e.profileId).join(",");
+  useEffect(() => {
+    if (!teamKey) return;
+    let cancelled = false;
+    Promise.all(
+      mineExperts.map((e) =>
+        apiFetch<{ outils: ExpertTool[] }>(`/api/agents/${agentId}/experts/${encodeURIComponent(e.profileId)}/outils`)
+          .then((r) => ({ expert: e.displayName, tools: r.outils }))
+          .catch(() => ({ expert: e.displayName, tools: [] as ExpertTool[] }))
+      )
+    ).then((lists) => {
+      if (cancelled) return;
+      remember(`packs:${agentId}`, lists);
+      setPacks(lists);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentId, teamKey]);
 
   // The panel closes once its last account is gone.
   useEffect(() => {
@@ -177,12 +221,6 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
     // Tools with accounts first; the catalog order otherwise (sort is stable).
     return merged.sort((a, b) => Number(accounts.has(slugKey(b.slug))) - Number(accounts.has(slugKey(a.slug))));
   }, [q, base, remote, accounts]);
-
-  // The connected tools with an account to sign in again, for the sentence above the list.
-  const toFix = useMemo(
-    () => base.filter((t) => (accounts.get(slugKey(t.slug)) ?? []).some(needsReconnect)),
-    [base, accounts]
-  );
 
   // Watch the connections until this tool gains an account (the sign-in happens in another tab) or
   // the deadline passes.
@@ -254,85 +292,201 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
     }
   }
 
+  // Page (Leslie, 03/11, second pass): « Vos outils » on one line, the state on the logo (a red « ! »: an
+  // account to sign in again); the tools the Experts need; the whole catalog, each with a small Connecter;
+  // and at the very bottom one banner naming every account to sign in again.
+  const mine = q ? [] : visible.filter((t) => accounts.has(slugKey(t.slug)));
+  const inGroup = (t: IntegrationToolkit) => !group || (INTEGRATION_GROUPS.find((g) => g.label === group)?.slugs.includes(slugKey(t.slug)) ?? false);
+  const recommended = useMemo(() => {
+    if (!packs || connections === null) return [];
+    return recommendTools(packs, new Set(accounts.keys())).map((r) => ({
+      toolkit: catalogToolkit(r.slug) ?? { slug: r.slug, name: readableName(r.slug, r.name), description: null, logo: composioLogoUrl(r.slug), enabled: true, isNoAuth: false, authSchemes: [] },
+      who: forWhom(r.experts),
+    }));
+  }, [packs, accounts, connections]);
+  const suggested = new Set(recommended.map((r) => slugKey(r.toolkit.slug)));
+  const catalog = q ? visible : visible.filter((t) => !accounts.has(slugKey(t.slug)) && !suggested.has(slugKey(t.slug)) && inGroup(t));
+  const toolOf = (slug: string) => base.find((t) => slugKey(t.slug) === slug) ?? catalogToolkit(slug);
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1.5">
-        <p className="text-[15px] text-ink-2">Connectez les outils de l’entreprise : tous vos Experts peuvent s’en servir.</p>
-        <span className="inline-flex items-center gap-1.5 text-[13px] text-ink-3">
-          <Plug className="h-4 w-4" />
-          Plus de 1 000 applications disponibles
-        </span>
-      </div>
+    <div className="space-y-7">
+      {mine.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-[17px] font-bold text-ink">Vos outils</h2>
+          <div className="flex flex-wrap gap-2.5">
+            {mine.map((t) => (
+              <MyTool
+                key={slugKey(t.slug)}
+                toolkit={t}
+                accounts={accounts.get(slugKey(t.slug)) ?? []}
+                waiting={connecting === slugKey(t.slug) || pending === slugKey(t.slug)}
+                onOpen={() => {
+                  // A red one leads to the banner that names the account to sign in again.
+                  const k = slugKey(t.slug);
+                  if (broken.some((b) => b.slug === k)) bannerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  else setOpen(t);
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Chercher un outil"
-          aria-label="Chercher un outil"
-          className="pl-10 pr-10"
-        />
-        {searching && (
-          <Loader2 className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-ink-3" />
+      {!q && recommended.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-[17px] font-bold text-ink">Conseillés pour vos Experts</h2>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+            {recommended.map(({ toolkit: t, who }) => {
+              const k = slugKey(t.slug);
+              return (
+                <AddTool
+                  key={k}
+                  toolkit={t}
+                  detail={who}
+                  accounts={connections === null ? null : []}
+                  waiting={connecting === k || pending === k}
+                  onConnect={() => connect(t)}
+                  onOpen={() => setOpen(t)}
+                  recommended
+                />
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <section className="space-y-3.5">
+        <h2 className="text-[17px] font-bold text-ink">
+          Tous les outils <span className="ml-1.5 text-[13.5px] font-normal text-ink-3">Plus de 1 000</span>
+        </h2>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" />
+          <Input
+            ref={searchBox}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Chercher un outil"
+            aria-label="Chercher un outil"
+            className="pl-10 pr-10"
+          />
+          {searching && <Loader2 className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-ink-3" />}
+        </div>
+        {!q && (
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5" role="group" aria-label="Filtrer par usage">
+            {[null, ...INTEGRATION_GROUPS.map((g) => g.label)].map((g) => (
+              <button
+                key={g ?? "tous"}
+                type="button"
+                aria-pressed={group === g}
+                onClick={() => setGroup(g)}
+                className={cn(
+                  "h-9 shrink-0 rounded-full px-3.5 text-[13.5px] font-semibold transition-colors",
+                  group === g ? "bg-ink text-surface" : "border bg-card text-ink-2 hover:bg-soft"
+                )}
+              >
+                {g ?? "Tous"}
+              </button>
+            ))}
+          </div>
         )}
-      </div>
 
-      {toFix.length > 0 && (
-        // A calm sentence and one button, never a red block (Leslie, 27/10).
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] border bg-card px-4 py-3">
-          <AlertCircle className="h-4 w-4 shrink-0 text-coral-ink" />
-          <p className="min-w-0 flex-1 text-[14px] text-ink-2">
-            {toFix.length === 1
-              ? `Un compte ${toFix[0].name} est à reconnecter.`
-              : `Des comptes sont à reconnecter : ${toFix.map((t) => t.name).join(", ")}.`}
-          </p>
-          <Button size="sm" variant="outline" onClick={() => setOpen(toFix[0])}>
+        {catalog.length > 0 ? (
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+            {catalog.map((t) => {
+              const k = slugKey(t.slug);
+              const mineToo = accounts.get(k) ?? [];
+              return (
+                <AddTool
+                  key={k}
+                  toolkit={t}
+                  detail={t.description}
+                  accounts={connections === null ? null : mineToo}
+                  waiting={connecting === k || pending === k}
+                  onConnect={() => connect(t)}
+                  onOpen={() => setOpen(t)}
+                />
+              );
+            })}
+            {!q && (
+              <button
+                type="button"
+                onClick={() => searchBox.current?.focus()}
+                className="flex min-h-16 items-center gap-3 rounded-[18px] border border-dashed border-ink-3/40 p-3 text-left text-ink-2 transition-colors hover:bg-soft"
+              >
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-soft">
+                  <Plus className="size-5" />
+                </span>
+                <span className="min-w-0 text-[14px] font-semibold leading-snug">Plus de 1 000 autres outils</span>
+              </button>
+            )}
+          </div>
+        ) : searching ? (
+          <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-16 animate-pulse rounded-[18px] border bg-soft" />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-[22px] border border-dashed px-6 py-12 text-center text-sm text-ink-3">
+            {q && q.length < MIN_SEARCH
+              ? "Tapez au moins 3 lettres pour chercher parmi toutes les applications."
+              : q
+                ? `Aucun outil trouvé pour « ${q} ».`
+                : "Tous les outils de cette liste sont déjà branchés : cherchez-en un autre."}
+          </div>
+        )}
+      </section>
+
+      {!q && broken.length > 0 && (
+        <div ref={bannerRef} id="a-reconnecter" className="flex items-center gap-3 rounded-[18px] bg-coral-pale px-4 py-3.5 max-sm:flex-col max-sm:items-stretch">
+          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#dc2626] text-[14px] font-extrabold text-white max-sm:hidden">!</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[14.5px] font-semibold text-coral-ink">
+              {broken.length > 1 ? `${broken.length} comptes à reconnecter` : "1 compte à reconnecter"} : vos Experts ne peuvent plus s’en servir
+            </p>
+            <p className="mt-0.5 text-[13px] leading-relaxed text-coral-ink/85">
+              {broken.map((b) => `${toolOf(b.slug)?.name ?? b.slug} (${accountTitle(b.account, b.index)})`).join(", ")}
+            </p>
+          </div>
+          <Button onClick={() => setReconnecting(true)} className="shrink-0">
+            <RotateCw />
             Reconnecter
           </Button>
         </div>
       )}
 
-      {visible.length > 0 ? (
-        <div className="space-y-6">
-        {[
-          { title: "Connectés", items: q ? [] : visible.filter((t) => accounts.has(slugKey(t.slug))) },
-          { title: q ? "" : "Les plus utiles à vos Experts", items: q ? visible : visible.filter((t) => !accounts.has(slugKey(t.slug))) },
-        ]
-          .filter((g) => g.items.length > 0)
-          .map((g) => (
-        <div key={g.title || "q"}>
-        {g.title && <h3 className="mb-2.5 px-0.5 text-[12px] font-bold uppercase tracking-[0.06em] text-ink-3">{g.title}</h3>}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {g.items.map((t) => {
-            const k = slugKey(t.slug);
-            return (
-              <ToolTile
-                key={k}
-                toolkit={t}
-                accounts={connections === null ? null : (accounts.get(k) ?? [])}
-                waiting={connecting === k || pending === k}
-                onConnect={() => connect(t)}
-                onOpen={() => setOpen(t)}
-              />
-            );
-          })}
-        </div>
-        </div>
-          ))}
-        </div>
-      ) : searching ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-[76px] animate-pulse rounded-[22px] border bg-soft" />
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-[22px] border border-dashed px-6 py-12 text-center text-sm text-ink-3">
-          {q.length < MIN_SEARCH
-            ? "Tapez au moins 3 lettres pour chercher parmi toutes les applications."
-            : `Aucun outil trouvé pour « ${q} ».`}
-        </div>
+      {reconnecting && (
+        <Dialog open onOpenChange={(o) => !o && setReconnecting(false)}>
+          <DialogContent className="max-w-[560px]">
+            <DialogTitle className="text-[19px] font-bold text-ink">
+              {broken.length > 1 ? `${broken.length} comptes à reconnecter` : "1 compte à reconnecter"}
+            </DialogTitle>
+            <DialogDescription className="text-[13.5px] text-ink-3">
+              Un clic ouvre la page de connexion de l’outil. Revenez ici une fois connecté.
+            </DialogDescription>
+            <ul className="divide-y">
+              {broken.map((b) => {
+                const t = toolOf(b.slug);
+                if (!t) return null;
+                const state = accountState(b.account);
+                return (
+                  <li key={b.account.id} className="flex items-center gap-3 py-3">
+                    <ToolLogo logo={t.logo} name={t.name} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[15px] font-semibold text-ink">{t.name}</p>
+                      <p className="truncate text-[13px] text-ink-2">{accountTitle(b.account, b.index)}</p>
+                      <p className="text-[12.5px] font-semibold text-coral-ink">{state === "disabled" ? "Accès coupé" : "Connexion expirée"}</p>
+                    </div>
+                    <Button size="sm" onClick={() => connect(t)} disabled={connecting === b.slug || pending === b.slug}>
+                      {pending === b.slug ? <Loader2 className="animate-spin" /> : <RotateCw />}
+                      Reconnecter
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          </DialogContent>
+        </Dialog>
       )}
 
       {open && (
@@ -373,103 +527,90 @@ const dateFr = (ms: number | null | undefined): string => {
   return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", ...year });
 };
 
-function ToolTile({
+// The state of a connected tool, on its logo: a green check, or a red « ! » when an account has to be
+// signed in again (Leslie, 03/11: « une icône plutôt, et rouge »).
+function StateBadge({ accounts }: { accounts: IntegrationConnection[] }) {
+  const broken = accounts.some(needsReconnect);
+  return broken ? (
+    <span
+      title="Un compte est à reconnecter"
+      className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-full bg-[#dc2626] text-[12px] font-extrabold leading-none text-white ring-2 ring-card"
+    >
+      !
+    </span>
+  ) : (
+    <span className="absolute -bottom-1 -right-1 grid size-[18px] place-items-center rounded-full bg-ok text-white ring-2 ring-card">
+      <Check className="size-2.5" strokeWidth={4} />
+    </span>
+  );
+}
+
+// One of « Vos outils »: logo, name, state; a click opens its accounts.
+function MyTool({ toolkit, accounts, waiting, onOpen }: { toolkit: IntegrationToolkit; accounts: IntegrationConnection[]; waiting: boolean; onOpen: () => void }) {
+  const broken = accounts.some(needsReconnect);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`${toolkit.name}${broken ? " : un compte à reconnecter" : ""}`}
+      className="inline-flex min-h-12 items-center gap-2.5 rounded-2xl border bg-card py-1.5 pl-1.5 pr-3.5 transition-colors hover:border-ink-3/40"
+    >
+      <span className="relative shrink-0">
+        <ToolLogo logo={toolkit.logo} name={toolkit.name} className="size-9 rounded-[10px]" imgClassName="size-5" />
+        {waiting ? null : <StateBadge accounts={accounts} />}
+      </span>
+      <span className="text-[14px] font-semibold text-ink">{toolkit.name}</span>
+      {waiting && <Loader2 className="size-4 animate-spin text-ink-3" />}
+    </button>
+  );
+}
+
+// A tool of the catalog: the whole card connects it, with a small « Connecter » on the right (Leslie,
+// 03/11: « le petit bouton Connecter »). In a search, a tool already connected opens its accounts instead.
+function AddTool({
   toolkit,
+  detail,
   accounts,
   waiting,
   onConnect,
   onOpen,
+  recommended,
 }: {
   toolkit: IntegrationToolkit;
+  detail?: string | null;
+  recommended?: boolean;
   // null while the connections are still loading
   accounts: IntegrationConnection[] | null;
   waiting: boolean;
   onConnect: () => void;
   onOpen: () => void;
 }) {
-  const head = (
-    <>
-      <ToolLogo logo={toolkit.logo} name={toolkit.name} />
-      <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink">{toolkit.name}</p>
-        {toolkit.description ? (
-          <p className="truncate text-[13px] text-ink-3">{toolkit.description}</p>
-        ) : (
-          accounts && accounts.length > 0 && <p className="truncate text-[13px] text-ink-3">{accountSummary(accounts)}</p>
-        )}
-      </div>
-    </>
-  );
-
-  // A tool with accounts is one button: the card sums them up, the panel lists them.
-  if (accounts && accounts.length > 0) {
-    const broken = accounts.some(needsReconnect) || !accounts.some(isActive);
-    // The default account first; the others in their order.
-    const listed = [...splitAccounts(accounts).accounts].sort((a, b) => Number(!!b.isDefault) - Number(!!a.isDefault));
-    const many = listed.length > 1;
-    return (
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`Comptes ${toolkit.name}`}
-        className="flex min-h-[78px] w-full flex-wrap items-center gap-3 rounded-[22px] border bg-card py-3 pl-4 pr-3 text-left transition-colors hover:border-ink-3/40"
-      >
-        {head}
-        {waiting ? (
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-ink-3" />
-        ) : listed.length > 0 ? null : broken ? (
-          <span title="Un compte est à reconnecter" className="grid size-6 shrink-0 place-items-center rounded-full bg-coral-pale text-coral-ink">
-            <AlertCircle className="h-3.5 w-3.5" />
-          </span>
-        ) : (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-ok-pale px-2.5 py-1 text-xs font-semibold text-ok">
-            <Check className="h-3.5 w-3.5" />
-            Connecté
-          </span>
-        )}
-        <ChevronRight className="h-4 w-4 shrink-0 text-ink-3" />
-        {/* Each account in one line: which one the Experts use by default, which one to sign in again. */}
-        {listed.length > 0 && (
-          <ul className="w-full space-y-1 border-t pt-2.5 text-[13px] text-ink-2">
-            {listed.slice(0, 3).map((a, i) => (
-              <li key={a.id} className="flex min-w-0 items-center gap-2">
-                <span className={cn("size-2 shrink-0 rounded-full", needsReconnect(a) ? "bg-coral" : "bg-ok")} />
-                <span className="min-w-0 truncate">{accountTitle(a, i)}</span>
-                {needsReconnect(a) ? (
-                  <span className="ml-auto shrink-0 font-semibold text-coral-ink">À reconnecter</span>
-                ) : (
-                  many && a.isDefault && (
-                    <span className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-ink-3">
-                      <Star className="h-3 w-3 fill-current" /> par défaut
-                    </span>
-                  )
-                )}
-              </li>
-            ))}
-            {listed.length > 3 && <li className="pl-4 text-ink-3">et {listed.length - 3} autres</li>}
-          </ul>
-        )}
-      </button>
-    );
-  }
-
+  const connected = !!accounts && accounts.length > 0;
   return (
-    <div className="flex min-h-[78px] items-center gap-3 rounded-[22px] border bg-card py-3 pl-4 pr-3">
-      {head}
-      {accounts === null ? (
-        <span className="h-8 w-24 shrink-0 animate-pulse rounded-[10px] bg-soft" />
-      ) : waiting ? (
-        <Button size="sm" variant="outline" disabled className="shrink-0">
-          <Loader2 className="animate-spin" />
-          En attente
-        </Button>
-      ) : (
-        // Quiet: a list of thirty brand buttons shouts and guides nowhere (Leslie, 27/10).
-        <Button size="sm" variant="outline" className="shrink-0" onClick={onConnect}>
-          Connecter
-        </Button>
+    <button
+      type="button"
+      onClick={connected ? onOpen : onConnect}
+      disabled={waiting || accounts === null}
+      aria-label={connected ? `Comptes ${toolkit.name}` : `Connecter ${toolkit.name}`}
+      className={cn(
+        "flex min-h-16 min-w-0 items-center gap-3 rounded-[18px] border p-3 text-left transition-colors hover:border-ink-3/40 disabled:cursor-default",
+        recommended ? "border-primary/25 bg-primary/[0.03]" : "bg-card"
       )}
-    </div>
+    >
+      <span className="relative shrink-0">
+        <ToolLogo logo={toolkit.logo} name={toolkit.name} />
+        {connected && <StateBadge accounts={accounts} />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[14.5px] font-semibold leading-snug text-ink">{toolkit.name}</span>
+        {detail && <span className="block truncate text-[12.5px] text-ink-3">{detail}</span>}
+      </span>
+      {waiting ? (
+        <Loader2 className="size-4 shrink-0 animate-spin text-ink-3" />
+      ) : connected ? null : (
+        <span className="inline-flex h-9 shrink-0 items-center rounded-full border bg-card px-3 text-[13px] font-semibold text-ink">Connecter</span>
+      )}
+    </button>
   );
 }
 

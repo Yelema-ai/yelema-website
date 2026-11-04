@@ -13,6 +13,7 @@ import { isPublicId, type MemoryList, type MemoryNote, type MemoryPatch, type Or
 import { backofficeUrl, resolverToken } from "@/lib/runtime-config";
 import { SIGNALING_METHOD, type CallRecord, type SignalingStep, type VoiceOption } from "@/lib/voice";
 import { pinnedWorkspaceId } from "@/lib/tenant";
+import type { BuzzOverview } from "@/lib/buzz";
 import type { ClaudeAuth, ClaudeAuthStatus, ClaudeLogin, ClaudeUsage } from "@/lib/claude-code-auth";
 
 // The Yelema back office's API for this app (`/api/v1/app/*`, guide: yelema-platform
@@ -78,8 +79,8 @@ export interface BoMe {
   user: { id: string; email: string; firstName: string | null; lastName: string | null; name: string | null; jobTitle: string | null; role: "admin" | "member"; avatarUrl?: string | null; /** Call voice per expert (`*` = all) and language, shared with the mobile app. */ voices?: Record<string, Partial<Record<"fr" | "en", string>>> };
   workspace: { id: string; name: string; logoUrl: string | null; brandColor?: string | null };
   instance: { id: string } | null;
-  /** `entreprise`: company chat only — no Experts, no instance of one's own. Absent on older back offices. */
-  access?: "instance" | "entreprise";
+  /** `entreprise`: company chat only — no Experts, no instance of one's own. `equipe`: Experts on a team instance. */
+  access?: "instance" | "entreprise" | "equipe";
 }
 
 export interface BoInstanceView {
@@ -92,6 +93,8 @@ export interface BoInstanceView {
   ready: boolean;
   /** Which Composio the instance's experts use. */
   tools: "yelema" | "agent37";
+  /** Set when the member has no instance of their own: their agent (enterprise chat) or seat (team instance). */
+  seat?: string;
   /**
    * `profile` is the name to send to the instance; `key` joins the public catalogue. `displayName`
    * and `avatarUrl` are what the member chose for it, null when they kept the catalogue's. `cycle`
@@ -107,7 +110,14 @@ export interface BoInstanceView {
   }[];
   /** Where a channel that receives by webhook is reached: the address to give Microsoft for Teams. */
   channels?: { teams?: { endpoint: string | null } };
+  /** Team instance only: the team, its members (the caller first) and the expert keys open to each. */
+  team?: TeamRoster;
 }
+
+/** A file an expert of a salon put in its `Salons/<id>/` folder; `url` is signed and short-lived. */
+export interface SalonDeliverable { id: string; expertId: string; title: string; kind: string; updatedAt: string; url: string | null; folder: string; auteur: string }
+
+export interface TeamRoster { name: string; members: { name: string | null; email: string; you: boolean; experts: string[] }[] }
 
 /** Where the expert's own name stands on the instance: written in its SOUL.md, or on its way. */
 export type ExpertIdentityState = "pending" | "applied" | "failed";
@@ -647,6 +657,15 @@ export const backoffice = {
   removeLogoImage: (token: string, id: string) => call<CompanyProfile>(ownPath("/app/workspace/logos", id), { method: "DELETE", token }),
   // What the member reads, and where they may deposit. Deposits are sent to the memory in the
   // background: `status` goes from pending to synced.
+  // Members' messaging: where the client's relay is, who is reachable, which devices are admitted.
+  buzz: (token: string) => call<BuzzOverview>("/app/buzz", { token }),
+  buzzAddDevice: (token: string, device: { pubkey: string; label: string }) => call<{ ok: true }>("/app/buzz/devices", { method: "POST", token, body: device }),
+  buzzRemoveDevice: (token: string, pubkey: string) => call<{ ok: true }>("/app/buzz/devices", { method: "DELETE", token, body: { pubkey } }),
+  buzzSalon: (token: string, salon: { nom: string; cles: string[] }) => call<{ id: string; nom: string }>("/app/buzz/salons", { method: "POST", token, body: salon, timeoutMs: 90_000 }),
+  buzzRenameSalon: (token: string, id: string, nom: string) => call<{ id: string; nom: string }>(`/app/buzz/salons/${encodeURIComponent(id)}`, { method: "PATCH", token, body: { nom }, timeoutMs: 60_000 }),
+  buzzAddSalonMembers: (token: string, id: string, cles: string[]) => call<{ ok: true; ajoutes: number }>(`/app/buzz/salons/${encodeURIComponent(id)}/membres`, { method: "POST", token, body: { cles }, timeoutMs: 90_000 }),
+  buzzSalonDeliverables: (token: string, id: string) => call<{ items: SalonDeliverable[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/livrables`, { token, timeoutMs: 30_000 }),
+  buzzSent: (token: string, sent: { kind: string; recipients: string[] }) => call<{ ok: true }>("/app/buzz/outbox", { method: "POST", token, body: sent }),
   memoryItems: (token: string) => call<MemoryList>("/app/memory/items", { token }),
   createMemoryNote: (token: string, note: MemoryNote) => call<{ id: string }>("/app/memory/items", { method: "POST", token, body: note }),
   uploadMemoryDocument: (token: string, form: FormData) => call<{ id: string }>("/app/memory/items", { method: "POST", token, form, timeoutMs: MAIL_SEND_TIMEOUT_MS }),

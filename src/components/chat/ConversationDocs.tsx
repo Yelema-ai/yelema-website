@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ExternalLink, FolderOpen } from "lucide-react";
+import { ExternalLink, FolderOpen, Pin } from "lucide-react";
 import type { TurnDoc } from "@/lib/drive-links";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { FilePreview } from "@/components/files/FilePreview";
@@ -10,7 +10,7 @@ import { DOC_TONE } from "@/components/files/preview-siblings";
 import type { FileEntry } from "@/components/files/types";
 import { cn } from "@/lib/utils";
 import { GOOGLE_LABEL, type GoogleDoc } from "@/lib/google-docs";
-import { GoogleTile } from "./GoogleDocs";
+import { GoogleTile, usePins } from "./GoogleDocs";
 
 const TONE = DOC_TONE;
 
@@ -37,9 +37,23 @@ function usedLabel(ms: number | null): string {
 // The deliverables this discussion produced (Leslie, 28/10): a button in the chat's bar, the Google
 // documents it uses first (31/10, opened in Google), then the files in a list, each opened in place,
 // then the whole folder in Livrables.
-export function ConversationDocs({ agentId, docs, google = [], folderHref }: { agentId: string; docs: TurnDoc[]; google?: (GoogleDoc & { usedAt: number | null })[]; folderHref: string }) {
+export function ConversationDocs({
+  agentId,
+  docs,
+  google = [],
+  folderHref,
+}: {
+  agentId: string;
+  docs: TurnDoc[];
+  google?: (GoogleDoc & { usedAt: number | null })[];
+  folderHref: string;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState<FileEntry | null>(null);
+  // The punaise of a row pins that document above the conversation (Leslie, 03/11): one at a time, the
+  // last used by default.
+  const pins = usePins();
+  const pinnedId = google.find((g) => pins?.pinned.includes(g.id))?.id ?? google[0]?.id ?? null;
   if (!docs.length && !google.length) return null;
   return (
     <>
@@ -57,21 +71,41 @@ export function ConversationDocs({ agentId, docs, google = [], folderHref }: { a
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-80 p-1.5">
           <DropdownMenuLabel className="text-[12.5px] font-semibold text-ink-2">Livrables de cette discussion</DropdownMenuLabel>
-          {google.map((g) => (
-            <DropdownMenuItem key={g.id} asChild className="gap-2.5 rounded-lg py-2">
-              <a href={g.url} target="_blank" rel="noopener noreferrer" aria-label={`Ouvrir ${g.title} dans ${GOOGLE_LABEL[g.kind]}`}>
-                <GoogleTile kind={g.kind} className="size-8 rounded-md" />
-                <span className="min-w-0 grow">
-                  <span className="block truncate text-[13.5px] font-medium text-ink">{g.title}</span>
-                  <span className="block text-[12px] text-ink-3">
-                    {GOOGLE_LABEL[g.kind]}
-                    {usedLabel(g.usedAt)}
-                  </span>
-                </span>
-                <ExternalLink className="size-4 shrink-0 text-ink-3" />
-              </a>
-            </DropdownMenuItem>
-          ))}
+          {google.map((g) => {
+            const isPinned = g.id === pinnedId;
+            return (
+              <div key={g.id} className="flex items-center gap-1">
+                <DropdownMenuItem asChild className="min-w-0 flex-1 gap-2.5 rounded-lg py-2">
+                  <a href={g.url} target="_blank" rel="noopener noreferrer" aria-label={`Ouvrir ${g.title} dans ${GOOGLE_LABEL[g.kind]}`}>
+                    <GoogleTile kind={g.kind} className="size-8 rounded-md" />
+                    <span className="min-w-0 grow">
+                      <span className="block truncate text-[13.5px] font-medium text-ink">{g.title}</span>
+                      <span className="block text-[12px] text-ink-3">
+                        {GOOGLE_LABEL[g.kind]}
+                        {usedLabel(g.usedAt)}
+                      </span>
+                    </span>
+                    <ExternalLink className="size-4 shrink-0 text-ink-3" />
+                  </a>
+                </DropdownMenuItem>
+                {pins && google.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => pins.toggle(g.id)}
+                    aria-pressed={isPinned}
+                    title={isPinned ? "Épinglé en haut de la discussion" : "Épingler en haut de la discussion"}
+                    aria-label={isPinned ? `${g.title} est épinglé en haut de la discussion` : `Épingler ${g.title} en haut de la discussion`}
+                    className={cn(
+                      "grid size-9 shrink-0 place-items-center rounded-lg",
+                      isPinned ? "bg-tint text-brand-ink" : "text-ink-3 hover:bg-soft hover:text-ink"
+                    )}
+                  >
+                    <Pin className={cn("size-4", isPinned && "fill-current")} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
           {docs.map((d) => (
             <DropdownMenuItem
               key={d.path}
