@@ -42,7 +42,7 @@ const SCREEN_TEMPLATE = "yelema-hermes";
 const SCREEN_MIN_REVISION = 5;
 
 
-/** Conversations after which « Faire connaissance » is no longer offered. */
+/** Deliverables after which « Faire connaissance » is no longer offered. */
 const INTRO_MAX = 10;
 export const hasScreen = (instance: { image: { template: string; revision: number | null } | null } | null) =>
   instance?.image?.template === SCREEN_TEMPLATE && (instance.image.revision ?? 0) >= SCREEN_MIN_REVISION;
@@ -210,9 +210,8 @@ export function ChatView({
   const pronoun = expert?.catalogueKey ? voiceExpert(expert.catalogueKey).pronoun : null;
   // Before « Faire connaissance », it is the one action shown: the catalogue's requests wait (Leslie, 31/10).
   const [prepStage, setPrepStage] = useState<Stage | null>(null);
-  // « Faire connaissance » goes once done, or once the member has had INTRO_MAX conversations with the
-  // expert, or INTRO_MAX deliverables from it: by then they know each other (Leslie, 03/11 and 04/11).
-  const conversations = sessions.filter((x) => !x.routine).length;
+  // « Faire connaissance » goes once done, or once the expert has made INTRO_MAX deliverables: a conversation
+  // that counts is one that produced something, and by then they know each other (Leslie, 04/11).
   const [made, setMade] = useState(0);
   const wantsIntro = Boolean(profile) && prepStage === "intro";
   useEffect(() => {
@@ -225,7 +224,7 @@ export function ChatView({
       cancelled = true;
     };
   }, [wantsIntro, agentId, driveFolder]);
-  const showIntro = wantsIntro && conversations < INTRO_MAX && made < INTRO_MAX;
+  const showIntro = wantsIntro && made < INTRO_MAX;
   const instance = useMemo(() => agents.find((x) => x.agent37_id === agentId) ?? null, [agents, agentId]);
   // The expert's name when the chat targets one; the company chat otherwise (never the instance's
   // name, which the back office writes as the list of its Experts).
