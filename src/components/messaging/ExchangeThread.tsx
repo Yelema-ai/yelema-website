@@ -25,6 +25,8 @@ export interface ThreadProps {
   mine: string[];
   labels: Map<string, string>;
   directory: BuzzEntry[];
+  failed: boolean;
+  onRetry: () => void;
   busy: BuzzEntry[];
   candidates: Candidate[];
   sending: boolean;
@@ -64,7 +66,13 @@ export function ExchangeThread(p: ThreadProps) {
       ) : (
         <>
           <ol className="min-h-0 flex-1 overflow-y-auto px-5 py-4" aria-busy={p.thread === null}>
-            {p.thread === null && <li className="flex items-center gap-2 text-sm text-ink-3"><Loader2 className="h-4 w-4 animate-spin" />Chargement…</li>}
+            {p.thread === null && !p.failed && <li className="flex items-center gap-2 text-sm text-ink-3"><Loader2 className="h-4 w-4 animate-spin" />Chargement…</li>}
+            {p.thread === null && p.failed && (
+              <li className="flex flex-wrap items-center gap-2 text-sm text-ink-3" role="status">
+                Le fil n’a pas pu être chargé : la connexion au relais se rétablit.
+                <button type="button" onClick={p.onRetry} className="rounded-md px-2 py-0.5 text-xs font-semibold text-brand-ink hover:bg-soft">Réessayer</button>
+              </li>
+            )}
             {p.thread?.length === 0 && <li className="text-sm text-ink-3">Aucun message pour l’instant.</li>}
             {p.thread?.map((m, i) => {
               const own = p.mine.includes(m.author);

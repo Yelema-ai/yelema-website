@@ -32,6 +32,7 @@ export function Messaging() {
   const [list, setList] = useState<Conversation[] | null>(null);
   const [open, setOpenState] = useState<string | null>(params.get("c"));
   const [thread, setThread] = useState<Message[] | null>(null);
+  const [threadFailed, setThreadFailed] = useState(false);
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [composing, setComposing] = useState<ExchangeKind | null>(null);
@@ -154,6 +155,7 @@ export function Messaging() {
     let stop = false;
     // Relu après une reconnexion : le fil affiché reste en place, sans « Chargement… ».
     if (shown.current !== open) setThread(null);
+    setThreadFailed(false);
     const since = Math.floor(Date.now() / 1000);
     messages(c, open).then(
       (m) => {
@@ -162,7 +164,8 @@ export function Messaging() {
         setThread(m);
         live = c.subscribe({ kinds: MESSAGE_KINDS, "#h": [open], since }, (e) => setThread((t) => (t?.some((x) => x.id === e.id) ? t : [...(t ?? []), toMessage(e)])));
       },
-      (e: unknown) => !stop && toast.error((e as Error).message),
+      // Une connexion muette est rouverte d'elle-même (puis le fil relu) ; d'ici là, « Réessayer ».
+      () => !stop && setThreadFailed(true),
     );
     return () => {
       stop = true;
@@ -291,6 +294,8 @@ export function Messaging() {
           mine={mine}
           labels={labels}
           directory={directory}
+          failed={threadFailed}
+          onRetry={() => void reload()}
           busy={busy}
           candidates={candidates}
           sending={sending}

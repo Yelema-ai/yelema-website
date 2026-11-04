@@ -55,16 +55,32 @@ export class BuzzConnection {
       ws.onerror = () => reject(new Error("Le relais est injoignable."));
       ws.onclose = () => {
         clearTimeout(fail);
-        for (const q of this.queries.values()) q.reject(new Error("Connexion au relais fermée."));
-        this.queries.clear();
-        this.onclose?.();
+        reject(new Error("Le relais est injoignable."));
+        this.drop();
       };
     });
   }
 
   close(): void {
     this.onclose = null;
-    this.ws?.close();
+    this.drop();
+  }
+
+  /**
+   * The socket is gone, or silent (the relay drops a connection whose pongs stop arriving, and the close
+   * does not always reach the browser): everything pending fails now, and `onclose` lets the owner reopen.
+   */
+  private drop(): void {
+    const ws = this.ws;
+    if (!ws) return;
+    this.ws = null;
+    ws.onclose = ws.onmessage = ws.onerror = null;
+    if (ws.readyState <= WebSocket.OPEN) ws.close();
+    for (const q of this.queries.values()) (clearTimeout(q.timer), q.reject(new Error("Connexion au relais perdue.")));
+    this.queries.clear();
+    for (const p of this.publishes.values()) (clearTimeout(p.timer), p.resolve({ ok: false, message: "Connexion au relais perdue." }));
+    this.publishes.clear();
+    this.onclose?.();
   }
 
   sign(template: EventTemplate): Event {
@@ -88,7 +104,11 @@ export class BuzzConnection {
   publish(template: EventTemplate): Promise<{ ok: boolean; message: string; id: string }> {
     const event = this.sign(template);
     return new Promise((resolve) => {
-      const timer = setTimeout(() => (this.publishes.delete(event.id), resolve({ ok: false, message: "Le relais ne répond pas.", id: event.id })), TIMEOUT_MS);
+      const timer = setTimeout(() => {
+        this.publishes.delete(event.id);
+        resolve({ ok: false, message: "Le relais ne répond pas.", id: event.id });
+        this.drop();
+      }, TIMEOUT_MS);
       this.publishes.set(event.id, { resolve: (v) => resolve({ ...v, id: event.id }), timer });
       this.send(["EVENT", event]);
     });
@@ -97,7 +117,11 @@ export class BuzzConnection {
   private req(filter: Filter): Promise<Event[]> {
     const id = `q${++this.serial}`;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => (this.queries.delete(id), reject(new Error("Le relais ne répond pas."))), TIMEOUT_MS);
+      const timer = setTimeout(() => {
+        this.queries.delete(id);
+        reject(new Error("Le relais ne répond pas."));
+        this.drop();
+      }, TIMEOUT_MS);
       this.queries.set(id, { events: [], resolve, reject, timer });
       this.send(["REQ", id, filter]);
     });
