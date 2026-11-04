@@ -24,6 +24,7 @@ import { remember } from "@/lib/client-cache";
 import type { CatalogueResponse, MergedAgent } from "@/lib/types";
 import { AgentsProvider } from "@/components/useMyAgents";
 import { catalogueKey } from "@/components/experts/useCatalogue";
+import { startEffectSentinel } from "@/lib/effect-sentinel";
 
 const COLLAPSE_KEY = "sbmini";
 
@@ -53,6 +54,7 @@ export function AppShell({
 }) {
   // The member's notification and conversation choices, from the back office, before the first notice.
   useEffect(() => void syncPrefs(), []);
+  useEffect(() => startEffectSentinel(), []);
   const { current, userEmail } = useWorkspace();
   const chatOnly = current?.access === "entreprise";
   // The catalogue the server read with the page: every screen that lists it starts from it.

@@ -1,46 +1,38 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, CornerDownRight, Loader2, MessagesSquare, UserPlus } from "lucide-react";
+import { CornerDownRight, Loader2, MessagesSquare } from "lucide-react";
 import type { BuzzEntry } from "@/lib/buzz";
 import type { Conversation, Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import type { Candidate } from "@/lib/buzz-mentions";
 import { MentionComposer } from "@/components/messaging/MentionComposer";
 import { SalonDeliverables } from "@/components/messaging/SalonDeliverables";
 
-// Le fil d'un échange, comme le chat d'un Expert : en-tête (nom, participants, onglets d'un salon), messages,
+// Le fil d'un échange, comme le chat d'un Expert (l'en-tête et ses onglets sont dans ExchangeHeader) : messages,
 // « … travaille » pour vos Experts sollicités, saisie avec « @ ».
 
 const moment = (seconds: number) => new Date(seconds * 1000).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export interface ThreadProps {
   current: Conversation | null;
-  title: string;
-  kind: string;
-  who: string[];
   salon: boolean;
-  canAdd: boolean;
+  pane: "fil" | "livrables";
   thread: Message[] | null;
   mine: string[];
   labels: Map<string, string>;
   busy: BuzzEntry[];
   candidates: Candidate[];
   sending: boolean;
-  onBack: () => void;
-  onAdd: () => void;
   onSend: (text: string, mentions: string[], replyTo: string | null) => Promise<boolean>;
 }
 
 export function ExchangeThread(p: ThreadProps) {
-  const [pane, setPane] = useState<"fil" | "livrables">("fil");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const end = useRef<HTMLLIElement>(null);
   const id = p.current?.id;
 
   useEffect(() => {
-    setPane("fil");
     setReplyTo(null);
   }, [id]);
   useEffect(() => end.current?.scrollIntoView({ block: "end" }), [p.thread?.length, p.busy.length]);
@@ -57,30 +49,7 @@ export function ExchangeThread(p: ThreadProps) {
   const nameOf = (k: string) => (p.mine.includes(k) ? "Vous" : (p.labels.get(k) ?? "Membre inconnu"));
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-start gap-3 border-b border-line px-5 py-3.5">
-        <button type="button" onClick={p.onBack} aria-label="Retour aux échanges" className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg text-ink-2 hover:bg-soft lg:hidden">
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate font-display text-lg font-bold text-ink">{p.title}</h2>
-          <p className="mt-0.5 truncate text-xs text-ink-3">{p.kind} · {p.who.join(", ")}</p>
-          {p.salon && (
-            <div role="tablist" className="mt-2.5 flex w-fit items-center gap-1 rounded-full border border-line p-1">
-              {(["fil", "livrables"] as const).map((t) => (
-                <button key={t} type="button" role="tab" aria-selected={pane === t} onClick={() => setPane(t)} className={cn("rounded-full px-3 py-1 text-xs font-semibold transition-colors", pane === t ? "bg-brand text-on-brand" : "text-ink-2 hover:bg-soft")}>
-                  {t === "fil" ? "Fil" : "Livrables"}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        {p.canAdd && (
-          <Button variant="outline" size="sm" onClick={p.onAdd}>
-            <UserPlus /> Ajouter
-          </Button>
-        )}
-      </header>
-      {pane === "livrables" && p.salon ? (
+      {p.pane === "livrables" && p.salon ? (
         <SalonDeliverables salon={p.current.id} />
       ) : (
         <>

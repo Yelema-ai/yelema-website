@@ -10,6 +10,7 @@ import { BuzzConnection, conversations, messages, MESSAGE_KINDS, openDirect, sen
 import { cn } from "@/lib/utils";
 import { useChatMarks } from "@/components/conversations/useChatMarks";
 import { ExchangeRail } from "@/components/messaging/ExchangeRail";
+import { ExchangeHeader, type ExchangePane } from "@/components/messaging/ExchangeHeader";
 import { ExchangeThread } from "@/components/messaging/ExchangeThread";
 import { candidatesOf } from "@/lib/buzz-mentions";
 import { NewExchange, type ExchangeKind } from "@/components/messaging/NewExchange";
@@ -32,6 +33,7 @@ export function Messaging() {
   const [sending, setSending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [composing, setComposing] = useState<ExchangeKind | null>(null);
+  const [pane, setPane] = useState<ExchangePane>("fil");
   const relay = useRef<BuzzConnection | null>(null);
   const { marks, mark } = useChatMarks();
 
@@ -47,6 +49,7 @@ export function Messaging() {
 
   const setOpen = useCallback((id: string | null) => {
     setOpenState(id);
+    setPane("fil");
     router.replace(id ? `/echanges?c=${id}` : "/echanges", { scroll: false });
   }, [router]);
 
@@ -187,8 +190,20 @@ export function Messaging() {
 
   if (state.kind === "closed") return <p className="m-6 max-w-xl rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{state.reason}</p>;
 
+  const kind = current ? (isUnit(current) ? "unite" : isSalon(current) ? "salon" : "direct") : null;
   return (
-    <div className="flex h-full min-h-0 flex-1">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
+      <ExchangeHeader
+        title={current ? nameOf(current) : null}
+        kind={kind}
+        who={current ? participants(current.members, mine, labels) : []}
+        pane={pane}
+        canAdd={kind === "salon"}
+        onPane={setPane}
+        onBack={() => setOpen(null)}
+        onAdd={() => setComposing("ajout")}
+      />
+      <div className="flex min-h-0 flex-1">
       <div className={cn("w-full shrink-0 flex-col border-r border-line bg-surface px-2.5 py-3 lg:flex lg:w-[300px]", open ? "hidden" : "flex")}>
         <ExchangeRail
           list={list}
@@ -212,22 +227,18 @@ export function Messaging() {
       <section className={cn("min-w-0 flex-1 flex-col bg-surface lg:flex", open ? "flex" : "hidden")}>
         <ExchangeThread
           current={current}
-          title={current ? nameOf(current) : ""}
-          kind={current ? (isUnit(current) ? "Salon d’équipe" : isSalon(current) ? "Salon" : "Conversation directe") : ""}
-          who={current ? participants(current.members, mine, labels) : []}
-          salon={Boolean(current && isSalon(current))}
-          canAdd={Boolean(current && isSalon(current) && !isUnit(current))}
+          salon={kind === "unite" || kind === "salon"}
+          pane={pane}
           thread={thread}
           mine={mine}
           labels={labels}
           busy={busy}
           candidates={candidates}
           sending={sending}
-          onBack={() => setOpen(null)}
-          onAdd={() => setComposing("ajout")}
           onSend={send}
         />
       </section>
+      </div>
       <NewExchange kind={composing} onClose={() => setComposing(null)} directory={directory} mine={mine} onStart={start} />
     </div>
   );
