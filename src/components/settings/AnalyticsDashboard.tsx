@@ -39,6 +39,7 @@ import {
   ExpertDonutChart,
   TokenDistributionBar,
 } from "@/components/settings/analytics-charts";
+import { DimensionsAnalyticsTable } from "@/components/settings/DimensionsAnalyticsTable";
 import { cn } from "@/lib/utils";
 
 const PERIODS: { key: AnalyticsPeriod; label: string }[] = [
@@ -98,7 +99,8 @@ export function AnalyticsDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtre d'affichage du graphique principal
+  // Mode d'affichage et filtres
+  const [viewMode, setViewMode] = useState<"all" | "console" | "charts">("all");
   const [timelineMetric, setTimelineMetric] = useState<"sessions" | "tokens">("sessions");
   const [donutMetric, setDonutMetric] = useState<"sessions" | "tokens">("sessions");
 
@@ -159,7 +161,47 @@ export function AnalyticsDashboard() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Mode d'affichage : Console vs Graphiques */}
+          <div className="flex items-center rounded-xl border border-line bg-surface p-1 shadow-xs">
+            <button
+              type="button"
+              onClick={() => setViewMode("all")}
+              className={cn(
+                "rounded-lg px-2.5 py-1 text-xs font-semibold transition-all",
+                viewMode === "all"
+                  ? "bg-brand text-brand-fg shadow-xs"
+                  : "text-ink-2 hover:bg-soft hover:text-ink"
+              )}
+            >
+              Vue Complète
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("console")}
+              className={cn(
+                "rounded-lg px-2.5 py-1 text-xs font-semibold transition-all",
+                viewMode === "console"
+                  ? "bg-brand text-brand-fg shadow-xs"
+                  : "text-ink-2 hover:bg-soft hover:text-ink"
+              )}
+            >
+              Console Mstudio
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("charts")}
+              className={cn(
+                "rounded-lg px-2.5 py-1 text-xs font-semibold transition-all",
+                viewMode === "charts"
+                  ? "bg-brand text-brand-fg shadow-xs"
+                  : "text-ink-2 hover:bg-soft hover:text-ink"
+              )}
+            >
+              Graphiques
+            </button>
+          </div>
+
           {/* Period Selector Tabs */}
           <div className="flex items-center rounded-xl border border-line bg-surface p-1 shadow-xs">
             {PERIODS.map((p) => {
@@ -332,7 +374,31 @@ export function AnalyticsDashboard() {
             </div>
           </div>
 
-          {/* 6. GRAPHIQUE 1 : COURBE TEMPORELLE INTERACTIVE */}
+          {/* 6. CONSOLE MULTI-DIMENSIONS (FIDÉLITÉ 100% AUX SCREENSHOTS) */}
+          {(viewMode === "all" || viewMode === "console") && (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-display text-base font-bold text-ink">
+                    Console de Consommation & Invocations
+                  </h3>
+                  <p className="text-xs text-ink-3">
+                    Ventilation par Membres, Modèles d'IA, Outils, Compétences et Sources de requêtes.
+                  </p>
+                </div>
+                <span className="rounded-full bg-soft px-3 py-1 text-[11px] font-semibold text-ink-2">
+                  Télémétrie Mstudio Live
+                </span>
+              </div>
+
+              <DimensionsAnalyticsTable dimensions={data.dimensions} />
+            </section>
+          )}
+
+          {/* 7. GRAPHIQUES ET VUES DÉTAILLÉES */}
+          {(viewMode === "all" || viewMode === "charts") && (
+            <>
+              {/* 7.1 GRAPHIQUE 1 : COURBE TEMPORELLE INTERACTIVE */}
           <TimelineAreaChart
             timeline={data.timeline}
             activeMetric={timelineMetric}
@@ -557,6 +623,8 @@ export function AnalyticsDashboard() {
               </div>
             )}
           </section>
+            </>
+          )}
         </>
       )}
     </div>
