@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Plus, Sparkles } from "lucide-react";
-import { ComputerButton, ComputerDialog, ComputerPanel } from "@/components/experts/ExpertComputer";
+import { ArrowRight, Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
+import { ComputerButton, ComputerDialog, ComputerMenuItem, ComputerPanel } from "@/components/experts/ExpertComputer";
+import { ExpertMoreMenu } from "@/components/experts/ExpertMoreMenu";
 import { DashboardProvider } from "@/components/experts/DashboardProvider";
-import { DashboardButton, DashboardPanel, DashboardDialog, OpenDashboardOnMount, ShareDashboardModal, SidePanelSync } from "@/components/experts/ExpertDashboard";
+import { DashboardButton, DashboardMenuItem, DashboardPanel, DashboardDialog, OpenDashboardOnMount, ShareDashboardModal, SidePanelSync } from "@/components/experts/ExpertDashboard";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { expertDisplayName } from "@/lib/experts";
 import { cn } from "@/lib/utils";
 import { agentTabPath } from "@/lib/expert-tabs";
-import { citedFolder, type TurnDoc } from "@/lib/drive-links";
+import { citedFolder, deliverableCount, type TurnDoc } from "@/lib/drive-links";
+import { driveTree } from "@/lib/drive-store";
 import { ConversationDocs } from "./ConversationDocs";
 import { PreviewSiblings } from "@/components/files/preview-siblings";
 import { GoogleDocsRow, PinnedDocsProvider, usePinnedDocs } from "./GoogleDocs";
@@ -41,7 +43,7 @@ const SCREEN_TEMPLATE = "yelema-hermes";
 const SCREEN_MIN_REVISION = 5;
 
 
-/** Conversations after which « Faire connaissance » is no longer offered. */
+/** Deliverables after which « Faire connaissance » is no longer offered. */
 const INTRO_MAX = 10;
 export const hasScreen = (instance: { image: { template: string; revision: number | null } | null } | null) =>
   instance?.image?.template === SCREEN_TEMPLATE && (instance.image.revision ?? 0) >= SCREEN_MIN_REVISION;
@@ -212,10 +214,21 @@ export function ChatView({
   const pronoun = expert?.catalogueKey ? voiceExpert(expert.catalogueKey).pronoun : null;
   // Before « Faire connaissance », it is the one action shown: the catalogue's requests wait (Leslie, 31/10).
   const [prepStage, setPrepStage] = useState<Stage | null>(null);
-  // « Faire connaissance » goes once done, or once the member has had INTRO_MAX conversations with the
-  // expert without it: by then they know each other (Leslie, 03/11: « il doit disparaître après un certain temps »).
-  const conversations = sessions.filter((x) => !x.routine).length;
-  const showIntro = Boolean(profile) && prepStage === "intro" && conversations < INTRO_MAX;
+  // « Faire connaissance » goes once done, or once the expert has made INTRO_MAX deliverables: a conversation
+  // that counts is one that produced something, and by then they know each other (Leslie, 04/11).
+  const [made, setMade] = useState(0);
+  const wantsIntro = Boolean(profile) && prepStage === "intro";
+  useEffect(() => {
+    if (!wantsIntro || !driveFolder) return;
+    let cancelled = false;
+    driveTree(agentId)
+      .then((tree) => !cancelled && setMade(deliverableCount(tree.entries, driveFolder)))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [wantsIntro, agentId, driveFolder]);
+  const showIntro = wantsIntro && made < INTRO_MAX;
   const instance = useMemo(() => agents.find((x) => x.agent37_id === agentId) ?? null, [agents, agentId]);
   // The expert's name when the chat targets one; the company chat otherwise (never the instance's
   // name, which the back office writes as the list of its Experts).
@@ -288,10 +301,10 @@ export function ChatView({
         {profile && messages.length > 0 && <ConversationDocs agentId={agentId} docs={docs} google={google} folderHref={docsHref} />}
         {inHeader && actionsSlot ? (
           createPortal(
-            <span className="contents" onClickCapture={onAction}>
-              {hasComputer && <ComputerButton inHeader />}
-              <DashboardButton inHeader />
-            </span>,
+            <ExpertMoreMenu onAction={onAction}>
+              {hasComputer && <ComputerMenuItem />}
+              <DashboardMenuItem />
+            </ExpertMoreMenu>,
             actionsSlot
           )
         ) : (
@@ -394,16 +407,21 @@ export function ChatView({
 
       {/* Bottom: balances the vertical centering and carries the welcome subtitle. */}
       {showWelcome && (
-        <div className="flex flex-1 flex-col items-center px-4 pt-3">
+        <div className="flex flex-1 flex-col items-center px-4 pt-3 sm:px-6">
           {/* Only « Faire connaissance », and only for a while: the catalogue's requests are gone, and nothing
               takes their place, no help sentence either (Leslie, 03/11: « simplifier au max »). */}
           {showIntro && (
             <button
               type="button"
               onClick={() => void send("/onboarding")}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-brand bg-tint px-3.5 py-1.5 text-[13.5px] font-semibold text-brand-ink transition-colors hover:bg-brand hover:text-on-brand"
+              data-faire-connaissance
+              className="flex w-full max-w-2xl items-center gap-3.5 rounded-[18px] border-[1.5px] border-brand bg-tint p-3.5 text-left text-ink transition-colors hover:bg-brand/15"
             >
-              <Sparkles className="size-4" /> Faire connaissance avec {agentName}
+              {face && <ExpertAvatar expert={face} size="md" />}
+              <span className="min-w-0 flex-1 text-[16px] font-bold leading-snug">Faire connaissance avec {agentName}</span>
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-on-brand">
+                <ArrowRight className="size-[18px]" />
+              </span>
             </button>
           )}
         </div>

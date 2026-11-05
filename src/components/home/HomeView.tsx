@@ -140,12 +140,12 @@ function Installing() {
 const keyOf = (e: Expert) => `${e.agentId}:${e.profileId}`;
 const rankOf = expertRank;
 
-// The four openers follow whoever gets the message: Djénéba's day (mail, agenda), an Expert's own
-// first requests from the catalogue, the chat d'entreprise's files.
-function shortcutsFor(to: Expert | null, hasDjeneba: boolean): readonly { label: string; icon: typeof Sun; prompt: string }[] {
+// The four openers follow whoever is picked (Leslie, 04/11): Djénéba's day (mail, agenda), an Expert's own
+// first requests from the catalogue, and for the chat d'entreprise general ones that belong to no Expert.
+function shortcutsFor(to: Expert | null): readonly { label: string; icon: typeof Sun; prompt: string }[] {
   if (to && !isDjeneba(to) && to.suggestions?.length)
     return to.suggestions.slice(0, 4).map((s) => ({ label: s.length > 34 ? `${s.slice(0, 32).trimEnd()}…` : s, icon: Sparkles, prompt: s }));
-  return to || hasDjeneba ? SHORTCUTS : CHAT_SHORTCUTS;
+  return to && isDjeneba(to) ? SHORTCUTS : CHAT_SHORTCUTS;
 }
 
 /** A member with the company chat only gets its own home; everyone else the Experts' home. */
@@ -161,7 +161,6 @@ function ExpertsHome() {
   // The chat d'entreprise is the member's own instance with no Expert chosen; who has Djénéba may
   // write to her instead.
   const ownAgentId = useOwnAgentId();
-  const djeneba = experts.find(isDjeneba) ?? null;
   // Who gets the message: the chat d'entreprise, or any Expert of the team (Myriel, Leslie 30/10),
   // Djénéba first, then by cycle in the offer's order.
   const team = [...experts].sort((a, b) => rankOf(a) - rankOf(b));
@@ -169,7 +168,7 @@ function ExpertsHome() {
   const [text, setText] = useState("");
   const field = useRef<HTMLTextAreaElement>(null);
   const to = team.find((e) => keyOf(e) === picked) ?? null;
-  const shortcuts = shortcutsFor(to, !!djeneba);
+  const shortcuts = shortcutsFor(to);
 
   // The model and effort of whoever gets the message, as they were last chosen (any screen).
   const { groups, defaultModel, loading: modelsLoading } = useChatModels(to?.agentId ?? ownAgentId ?? "", to?.profileId ?? null);
@@ -318,19 +317,19 @@ function ExpertsHome() {
             )}
           </section>
 
-          <div className="mt-3 flex flex-wrap justify-center gap-2">
+          <div className="mt-3 flex flex-wrap justify-center gap-2 [scrollbar-width:none] max-sm:-mx-4 max-sm:flex-nowrap max-sm:justify-start max-sm:overflow-x-auto max-sm:px-4 [&::-webkit-scrollbar]:hidden">
             {shortcuts.map(({ label, icon: Icon, prompt }) => (
               <button
                 key={label}
                 type="button"
                 onClick={() => fillShortcut(field.current, prompt, setText)}
-                className="inline-flex h-10 items-center gap-2 rounded-full border border-line bg-surface px-3.5 text-[13px] font-semibold text-ink-2 hover:bg-soft hover:text-ink"
+                className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-line bg-surface px-3.5 text-[13px] font-semibold text-ink-2 hover:bg-soft hover:text-ink"
               >
                 <Icon className="size-4" /> {label}
               </button>
             ))}
           </div>
-          <p className="mt-3 text-center text-sm text-ink-3">Plus vous donnez de contexte, meilleure sera la réponse.</p>
+          <p className="mt-3 text-center text-sm text-ink-3 max-sm:hidden">Plus vous donnez de contexte, meilleure sera la réponse.</p>
         </>
       )}
 

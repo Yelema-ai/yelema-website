@@ -2,11 +2,11 @@ import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { useNotifications } from "@/components/activity/ActivityProvider";
 import { useExpertActivity } from "@/components/activity/hooks";
-import { expertKey } from "@/lib/activity";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { expertCycle, isDjeneba } from "@/lib/expert-cycle";
 import { preloadExpert, sparingData } from "@/components/experts/expert-preload";
+import { setChatListHidden } from "@/components/chat/chat-layout";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -41,11 +41,8 @@ export function ExpertItem({
 }) {
   // Never the profile or instance id: a member has no use for either.
   const subtitle = expert.title ?? expert.role ?? expert.agentName ?? "";
-  const { running, unread } = useExpertActivity(expert.agentId, expert.profileId);
+  const { running, unread, waiting } = useExpertActivity(expert.agentId, expert.profileId);
   const bell = useNotifications();
-  const waiting = unread
-    ? bell.items.find((i) => i.unread && expertKey(i.agentId, i.profile) === expertKey(expert.agentId, expert.profileId))
-    : undefined;
   // Not for Djénéba: « Chief of Staff & Direction » under her name says it already (Leslie, 03/11).
   const cycle = showCycle && !compact && !isDjeneba(expert) ? expertCycle(expert) : null;
   const hint = unread ? (unread === 1 ? "1 nouvelle réponse" : `${unread} nouvelles réponses`) : running ? "En cours" : null;
@@ -60,6 +57,8 @@ export function ExpertItem({
       }
       onClick={(e) => {
         onNavigate?.();
+        // A new answer waits: the column of conversations comes back to show it (Leslie, 04/11).
+        if (unread > 0) setChatListHidden(false);
         if (!waiting || e.metaKey || e.ctrlKey || e.shiftKey) return;
         e.preventDefault();
         bell.open(waiting);

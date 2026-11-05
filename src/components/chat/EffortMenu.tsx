@@ -12,11 +12,13 @@ import { REASONING_EFFORTS, REASONING_LABELS, type ReasoningEffort } from "./typ
 
 interface Props {
   value: ReasoningEffort | null; // null => agent default
+  /** The word shown while no effort is chosen. */
+  emptyLabel?: string;
   disabled?: boolean;
   onChange: (value: ReasoningEffort | null) => void;
 }
 
-export function EffortMenu({ value, disabled, onChange }: Props) {
+export function EffortMenu({ value, emptyLabel = "Effort", disabled, onChange }: Props) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -28,7 +30,7 @@ export function EffortMenu({ value, disabled, onChange }: Props) {
           className="inline-flex h-8 items-center gap-1.5 rounded-full bg-secondary/70 px-3 @max-xl:size-9 @max-xl:justify-center @max-xl:px-0 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
         >
           <Zap className="h-3.5 w-3.5 shrink-0" />
-          <span className="@max-xl:hidden">{value ? REASONING_LABELS[value] : "Effort"}</span>
+          <span className="@max-xl:hidden">{value ? REASONING_LABELS[value] : emptyLabel}</span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0 @max-xl:hidden" />
         </button>
       </DropdownMenuTrigger>
