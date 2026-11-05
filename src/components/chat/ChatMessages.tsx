@@ -345,7 +345,7 @@ const MessageRow = memo(function MessageRow({
       const attachments = m.attachments ?? [];
       return (
         <div className="flex justify-end">
-          <div className="flex min-w-0 max-w-[85%] flex-col items-end gap-1.5">
+          <div className="flex min-w-0 max-w-[min(85%,70ch)] flex-col items-end gap-1.5">
             {attachments.length > 0 && <MessageAttachments attachments={attachments} agentId={agentId} />}
             {m.content && (
               <div className={cn("max-w-full whitespace-pre-wrap rounded-[18px] rounded-br-md bg-brand [overflow-wrap:anywhere] px-4 py-2.5 text-[15px] text-on-brand", m.queued && "opacity-60", m.steered && !m.queued && "bg-brand/80")}>

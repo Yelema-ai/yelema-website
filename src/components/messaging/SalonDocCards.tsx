@@ -26,7 +26,7 @@ function stableUrl(d: SalonDeliverable & { url: string }): string {
 export function SalonDocCards({ docs }: { docs: (SalonDeliverable & { url: string })[] }) {
   if (!docs.length) return null;
   return (
-    <ul aria-label="Documents" className="mt-2 flex w-full min-w-0 max-w-[min(680px,90%)] flex-col gap-3">
+    <ul aria-label="Documents" className="mt-2 flex w-full min-w-0 max-w-[min(90%,70ch)] flex-col gap-3">
       {docs.map((d) => {
         const kind = docKind(d.title);
         const url = stableUrl(d);
