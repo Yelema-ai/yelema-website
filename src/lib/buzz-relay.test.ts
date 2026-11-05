@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { generateSecretKey } from "nostr-tools/pure";
-import { BuzzConnection, follow, refusalText, replyTags, sortMessages, toMessage, watchRosters, withMessage } from "./buzz-relay.ts";
+import { BuzzConnection, follow, refusalText, replyTags, sendMessage, sortMessages, threadRoot, toMessage, watchRosters, withMessage, type Message } from "./buzz-relay.ts";
 
 // A relay that authenticates the browser, then goes silent: what a dropped connection looks like here.
 class SilentRelay {
@@ -165,7 +165,8 @@ test("une réponse porte la racine du fil et son parent (NIP-10), même à un me
   const legacy = toMessage(ev("l", [["h", "c"], ["e", "t", "", "reply"]]));
   assert.deepEqual([top.root, top.replyTo], [null, null]);
   assert.deepEqual([mid.root, mid.replyTo], ["t", "t"]);
-  assert.deepEqual([legacy.root, legacy.replyTo], ["t", "t"], "réponse seule : sa racine est son parent");
+  assert.deepEqual([legacy.root, legacy.replyTo], [null, "t"], "réponse seule : pas de marqueur racine, déduite du fil");
+  assert.deepEqual(replyTags(legacy), [["e", "t", "", "root"], ["e", "l", "", "reply"]], "réponse seule : sa racine est son parent");
   assert.deepEqual(replyTags(top), [["e", "t", "", "root"], ["e", "t", "", "reply"]]);
   assert.deepEqual(replyTags(mid), [["e", "t", "", "root"], ["e", "m", "", "reply"]]);
   assert.deepEqual(replyTags({ id: "m", replyTo: "t", root: undefined as unknown as null }), [["e", "t", "", "root"], ["e", "m", "", "reply"]], "copie gardée sans racine");
@@ -176,4 +177,50 @@ test("un refus du relais se lit en français ; un autre reste tel quel", () => {
   assert.match(refusalText("invalid: root tag does not match thread ancestry"), /rattachée/);
   assert.equal(refusalText("blocked: rate"), "rate");
   assert.equal(refusalText(""), "Message refusé.");
+});
+
+const msg = (id: string, replyTo: string | null = null, root: string | null = null): Message => ({ id, author: "a", text: id, at: 1, replyTo, root, mentions: [] });
+
+test("racine d'un fil : message de tête, racine marquée, chaîne de réponses seules à 2 et 3 niveaux, ancêtre absent", () => {
+  assert.equal(threadRoot(msg("t")), "t", "message de tête : lui-même");
+  assert.equal(threadRoot(msg("c", "b", "t"), [msg("b", "t", "faux")]), "t", "le marqueur racine gagne");
+  const two = [msg("t"), msg("b", "t")];
+  assert.equal(threadRoot(msg("c", "b"), two), "t", "profondeur 2");
+  const three = [...two, msg("c", "b")];
+  assert.equal(threadRoot(msg("d", "c"), three), "t", "profondeur 3");
+  assert.deepEqual(replyTags(msg("d", "c"), three), [["e", "t", "", "root"], ["e", "d", "", "reply"]]);
+  assert.equal(threadRoot(msg("d", "c"), [msg("c", "b")]), "b", "ancêtre non chargé : le plus profond connu");
+  assert.equal(threadRoot(msg("d", "c"), [msg("c", "b"), msg("b", "c")]), "c", "boucle : bornée");
+});
+
+test("racine refusée par le relais : un seul nouvel essai, avec la racine lue sur le relais", async () => {
+  const events: Record<string, { id: string; tags: string[][] }> = {
+    c: { id: "c", tags: [["h", "fil"], ["e", "b", "", "reply"]] },
+    b: { id: "b", tags: [["h", "fil"], ["e", "t", "", "root"], ["e", "a", "", "reply"]] },
+  };
+  const sent: string[][][] = [];
+  const queried: unknown[] = [];
+  const relay = {
+    async publish(t: { tags: string[][] }) {
+      sent.push(t.tags);
+      const ok = t.tags.some((x) => x[3] === "root" && x[1] === "t");
+      return { ok, message: ok ? "" : "invalid: root tag does not match thread ancestry", id: String(sent.length) };
+    },
+    async query(f: { ids: string[] }) {
+      queried.push(f);
+      return events[f.ids[0]!] ? [events[f.ids[0]!]] : [];
+    },
+  } as unknown as BuzzConnection;
+  const r = await sendMessage(relay, "fil", "ok", msg("c", "b"), [], [msg("c", "b")]);
+  assert.equal(r.ok, true);
+  assert.deepEqual(sent.map((t) => t.find((x) => x[3] === "root")![1]), ["b", "t"]);
+  assert.deepEqual(queried, [{ ids: ["c"], "#h": ["fil"] }, { ids: ["b"], "#h": ["fil"] }]);
+
+  sent.length = 0;
+  const other = await sendMessage(relay, "fil", "ok", msg("x"), []);
+  assert.equal(other.ok, false, "aucune racine meilleure : pas de second envoi");
+  assert.equal(sent.length, 1);
+  sent.length = 0;
+  await sendMessage(relay, "fil", "tête", null);
+  assert.equal(sent.length, 1, "un message de tête n'est jamais renvoyé");
 });

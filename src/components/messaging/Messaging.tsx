@@ -240,7 +240,7 @@ export function Messaging() {
     if (!c || !open) return false;
     setSending(true);
     try {
-      const r = await sendMessage(c, open, text, replyTo, mentions);
+      const r = await sendMessage(c, open, text, replyTo, mentions, thread ?? []);
       if (!r.ok) throw new Error(refusalText(r.message));
       const recipients = (current?.members ?? []).filter((k) => !mine.includes(k));
       void apiFetch("/api/buzz/sent", { method: "POST", body: JSON.stringify({ kind: replyTo ? "reply" : current && isSalon(current) ? "salon" : "dm", recipients }) }).catch(() => undefined);

@@ -179,7 +179,7 @@ const now = (): number => Math.floor(Date.now() / 1000);
 const tag = (e: Event, name: string): string | undefined => e.tags.find((t) => t[0] === name)?.[1];
 
 export interface Conversation { id: string; name: string; members: string[] }
-/** `root`: the thread's first message (NIP-10 `root` marker; a reply-only message's root is its parent). */
+/** `root`: the event's NIP-10 `root` marker, null when absent (a reply-only message: see threadRoot). */
 export interface Message { id: string; author: string; text: string; at: number; replyTo: string | null; root: string | null; mentions: string[] }
 
 /** The channels (salons and direct messages) the key belongs to, with their name and members. */
@@ -203,7 +203,7 @@ export const toMessage = (e: Event): Message => ({
   text: e.content,
   at: e.created_at,
   replyTo: marked(e, "reply"),
-  root: marked(e, "root") ?? marked(e, "reply"),
+  root: marked(e, "root"),
   mentions: e.tags.filter((t) => t[0] === "p" && typeof t[1] === "string").map((t) => t[1] as string),
 });
 
@@ -238,16 +238,54 @@ export const watchRosters = (c: BuzzConnection, me: string, onChange: () => void
   c.subscribe({ kinds: [39002], "#p": [me], since: now() }, onChange);
 
 /** `mentions` : clés d'Experts interpellés (étiquette `p`) ; un Expert ne travaille que si son propriétaire le mentionne. */
+type Target = Pick<Message, "id" | "root" | "replyTo">;
+type Relay = Pick<BuzzConnection, "publish" | "query">;
+const MAX_HOPS = 64;
+const ROOT_MISMATCH = /root tag does not match/i;
+
+/**
+ * The thread's root, which the relay stores transitively and checks: a `root` marker wins, else the chain of
+ * parents in `thread` is walked; an ancestor not loaded leaves its id, the deepest one known (best effort).
+ */
+export function threadRoot(target: Target, thread: readonly Message[] = []): string {
+  const byId = new Map(thread.map((m) => [m.id, m]));
+  let m: Target = target;
+  for (let hop = 0; !m.root && m.replyTo && hop < MAX_HOPS; hop++) {
+    const parent = byId.get(m.replyTo);
+    if (!parent) return m.replyTo;
+    m = parent;
+  }
+  return m.root ?? m.replyTo ?? m.id;
+}
+
 /** NIP-10 tags of a reply to `target`: the thread's root (the relay checks it against its ancestry), then the parent. */
-export const replyTags = (target: Pick<Message, "id" | "root" | "replyTo">): string[][] => [
-  // A copy kept before `root` was read: its reply-only parent was its root.
-  ["e", target.root ?? target.replyTo ?? target.id, "", "root"],
+export const replyTags = (target: Target, thread: readonly Message[] = [], root = threadRoot(target, thread)): string[][] => [
+  ["e", root, "", "root"],
   ["e", target.id, "", "reply"],
 ];
 
-export function sendMessage(c: BuzzConnection, channel: string, text: string, replyTo: Pick<Message, "id" | "root" | "replyTo"> | null, mentions: string[] = []) {
-  const tags = [["h", channel], ...(replyTo ? replyTags(replyTo) : []), ...mentions.map((k) => ["p", k])];
-  return c.publish({ kind: 9, created_at: now(), tags, content: text });
+/** The root read from the relay itself, parent by parent from `id`, until a `root` marker or a message replying to none. */
+async function relayRoot(c: Relay, channel: string, id: string): Promise<string> {
+  for (let hop = 0; hop < MAX_HOPS; hop++) {
+    const [e] = await c.query({ ids: [id], "#h": [channel] });
+    if (!e) return id;
+    const root = marked(e, "root");
+    if (root) return root;
+    const parent = marked(e, "reply");
+    if (!parent) return id;
+    id = parent;
+  }
+  return id;
+}
+
+export async function sendMessage(c: Relay, channel: string, text: string, replyTo: Target | null, mentions: string[] = [], thread: readonly Message[] = []) {
+  const publish = (root?: string) =>
+    c.publish({ kind: 9, created_at: now(), tags: [["h", channel], ...(replyTo ? replyTags(replyTo, thread, root) : []), ...mentions.map((k) => ["p", k])], content: text });
+  const r = await publish();
+  if (r.ok || !replyTo || !ROOT_MISMATCH.test(r.message)) return r;
+  // The loaded thread missed an ancestor: ask the relay once for the real root.
+  const root = await relayRoot(c, channel, replyTo.id).catch(() => null);
+  return root && root !== threadRoot(replyTo, thread) ? publish(root) : r;
 }
 
 const REFUSALS: [RegExp, string][] = [
