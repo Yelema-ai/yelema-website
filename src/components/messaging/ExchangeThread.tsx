@@ -5,7 +5,8 @@ import { CornerDownRight, Loader2, MessagesSquare, Reply } from "lucide-react";
 import { shortName, startsRun, type BuzzEntry } from "@/lib/buzz";
 import type { Conversation, Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
-import type { Candidate } from "@/lib/buzz-mentions";
+import { replyMention, withReplyMention, type Candidate } from "@/lib/buzz-mentions";
+import { excerpt } from "@/lib/activity";
 import { Markdown } from "@/components/chat/Markdown";
 import { ReplyChoices } from "@/components/chat/ReplyActions";
 import { replyParts } from "@/lib/reply-parts";
@@ -32,7 +33,7 @@ export interface ThreadProps {
   busy: BuzzEntry[];
   candidates: Candidate[];
   sending: boolean;
-  onSend: (text: string, mentions: string[], replyTo: string | null) => Promise<boolean>;
+  onSend: (text: string, mentions: string[], replyTo: Message | null) => Promise<boolean>;
 }
 
 export function ExchangeThread(p: ThreadProps) {
@@ -76,7 +77,7 @@ export function ExchangeThread(p: ThreadProps) {
   const nameOf = (k: string) => (p.mine.includes(k) ? (self?.nom ?? "Vous") : (p.labels.get(k) ?? "Membre inconnu"));
   const entryOf = (k: string) => (p.mine.includes(k) ? self : (byKey.get(k) ?? null));
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {p.pane === "livrables" && p.salon ? (
         <SalonDeliverables salon={p.current.id} directory={p.directory} />
       ) : p.pane === "participants" && p.salon ? (
@@ -137,7 +138,7 @@ export function ExchangeThread(p: ThreadProps) {
                       <ReplyChoices
                         choices={choices.choices}
                         note={choices.choicesNote}
-                        onSend={(text) => !p.sending && void p.onSend(text, p.candidates.some((c) => c.mine && c.entry.cles.includes(m.author)) ? [m.author] : [], m.id)}
+                        onSend={(text) => !p.sending && void p.onSend(text, withReplyMention([], m.author, p.candidates), m)}
                       />
                     )}
                   </div>
@@ -162,11 +163,11 @@ export function ExchangeThread(p: ThreadProps) {
           </ol>
           <MentionComposer
             candidates={p.candidates}
-            replyTo={replyTo ? `Réponse à ${nameOf(replyTo.author)} : « ${replyTo.text} »` : null}
+            replyTo={replyTo ? `Réponse à ${nameOf(replyTo.author)}${replyMention(replyTo.author, p.candidates) ? " — votre Expert sera prévenu" : ""} : « ${excerpt(replyTo.text, 120)} »` : null}
             onCancelReply={() => setReplyTo(null)}
             sending={p.sending}
             onSend={async (text, mentions) => {
-              const ok = await p.onSend(text, mentions, replyTo?.id ?? null);
+              const ok = await p.onSend(text, withReplyMention(mentions, replyTo?.author, p.candidates), replyTo);
               if (ok) setReplyTo(null);
               return ok;
             }}

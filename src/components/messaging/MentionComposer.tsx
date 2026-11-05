@@ -66,11 +66,12 @@ export function MentionComposer({ candidates, replyTo, onCancelReply, sending, o
   }
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="relative space-y-2 border-t border-line px-3 py-3 sm:pl-4 sm:pr-24">
+    <form onSubmit={(e) => void submit(e)} className="relative min-w-0 space-y-2 border-t border-line px-3 py-3 sm:pl-4 sm:pr-24">
       {replyTo && (
-        <div className="flex items-center gap-2 rounded-lg bg-soft px-2.5 py-1.5 text-xs text-ink-2">
+        // w-0 : la ligne ne compte pas dans la largeur du fil, si long que soit le message cité.
+        <div className="flex min-w-0 items-center gap-2 overflow-hidden rounded-lg bg-soft px-2.5 py-1.5 text-xs text-ink-2">
           <CornerDownRight className="h-3.5 w-3.5 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">{replyTo}</span>
+          <span className="w-0 min-w-0 flex-1 truncate">{replyTo}</span>
           <button type="button" aria-label="Annuler la réponse" onClick={onCancelReply}><X className="h-3 w-3" /></button>
         </div>
       )}

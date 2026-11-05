@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BuzzEntry } from "./buzz.ts";
-import { candidatesOf, mentionsIn, TOKEN } from "./buzz-mentions.ts";
+import { candidatesOf, mentionsIn, replyMention, TOKEN, withReplyMention } from "./buzz-mentions.ts";
 
 const k = (c: string) => c.repeat(64);
 const dir: BuzzEntry[] = [
@@ -27,4 +27,15 @@ test("le mot « @… » en cours de saisie est reconnu, pas une adresse e-mail",
   assert.equal(TOKEN.exec("merci @Dj")?.[2], "Dj");
   assert.equal(TOKEN.exec("@")?.[2], "");
   assert.equal(TOKEN.exec("selim@mstudio"), null);
+});
+
+test("répondre à mon Expert le mentionne (sans doublon) ; à l'Expert d'un autre ou à une personne, non", () => {
+  const c = candidatesOf(dir, [k("a"), k("b"), k("c"), k("d")], "21", [k("a")]);
+  assert.equal(replyMention(k("b"), c), k("b"));
+  assert.deepEqual(withReplyMention([], k("b"), c), [k("b")]);
+  assert.deepEqual(withReplyMention([k("b")], k("b"), c), [k("b")]);
+  assert.deepEqual(withReplyMention([k("c")], k("b"), c), [k("c"), k("b")]);
+  assert.deepEqual(withReplyMention([], k("d"), c), [], "l'Expert de Leslie");
+  assert.deepEqual(withReplyMention([], k("c"), c), [], "une personne");
+  assert.deepEqual(withReplyMention([], null, c), []);
 });

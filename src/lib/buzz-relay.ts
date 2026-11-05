@@ -179,7 +179,8 @@ const now = (): number => Math.floor(Date.now() / 1000);
 const tag = (e: Event, name: string): string | undefined => e.tags.find((t) => t[0] === name)?.[1];
 
 export interface Conversation { id: string; name: string; members: string[] }
-export interface Message { id: string; author: string; text: string; at: number; replyTo: string | null; mentions: string[] }
+/** `root`: the thread's first message (NIP-10 `root` marker; a reply-only message's root is its parent). */
+export interface Message { id: string; author: string; text: string; at: number; replyTo: string | null; root: string | null; mentions: string[] }
 
 /** The channels (salons and direct messages) the key belongs to, with their name and members. */
 export async function conversations(c: BuzzConnection, me: string): Promise<Conversation[]> {
@@ -194,12 +195,15 @@ export async function conversations(c: BuzzConnection, me: string): Promise<Conv
   });
 }
 
+const marked = (e: Event, marker: string): string | null => e.tags.find((t) => t[0] === "e" && t[3] === marker)?.[1] ?? null;
+
 export const toMessage = (e: Event): Message => ({
   id: e.id,
   author: e.pubkey,
   text: e.content,
   at: e.created_at,
-  replyTo: e.tags.find((t) => t[0] === "e" && t[3] === "reply")?.[1] ?? null,
+  replyTo: marked(e, "reply"),
+  root: marked(e, "root") ?? marked(e, "reply"),
   mentions: e.tags.filter((t) => t[0] === "p" && typeof t[1] === "string").map((t) => t[1] as string),
 });
 
@@ -234,9 +238,27 @@ export const watchRosters = (c: BuzzConnection, me: string, onChange: () => void
   c.subscribe({ kinds: [39002], "#p": [me], since: now() }, onChange);
 
 /** `mentions` : clés d'Experts interpellés (étiquette `p`) ; un Expert ne travaille que si son propriétaire le mentionne. */
-export function sendMessage(c: BuzzConnection, channel: string, text: string, replyTo: string | null, mentions: string[] = []) {
-  const tags = [["h", channel], ...(replyTo ? [["e", replyTo, "", "reply"]] : []), ...mentions.map((k) => ["p", k])];
+/** NIP-10 tags of a reply to `target`: the thread's root (the relay checks it against its ancestry), then the parent. */
+export const replyTags = (target: Pick<Message, "id" | "root" | "replyTo">): string[][] => [
+  // A copy kept before `root` was read: its reply-only parent was its root.
+  ["e", target.root ?? target.replyTo ?? target.id, "", "root"],
+  ["e", target.id, "", "reply"],
+];
+
+export function sendMessage(c: BuzzConnection, channel: string, text: string, replyTo: Pick<Message, "id" | "root" | "replyTo"> | null, mentions: string[] = []) {
+  const tags = [["h", channel], ...(replyTo ? replyTags(replyTo) : []), ...mentions.map((k) => ["p", k])];
   return c.publish({ kind: 9, created_at: now(), tags, content: text });
+}
+
+const REFUSALS: [RegExp, string][] = [
+  [/thread depth limit/i, "Ce fil est trop long pour y répondre : écrivez un nouveau message."],
+  [/root tag does not match/i, "Cette réponse n’a pas pu être rattachée au fil. Réessayez."],
+];
+
+/** A relay refusal (`invalid: …`) as the member reads it. */
+export function refusalText(message: string): string {
+  const raw = message.replace(/^[a-z-]+: /, "");
+  return REFUSALS.find(([re]) => re.test(raw))?.[1] ?? (raw || "Message refusé.");
 }
 
 /** Opens (or reuses) a direct conversation; Buzz answers with the channel it created. */

@@ -8,7 +8,7 @@ import { remember, whenKept } from "@/lib/client-cache";
 import { optimistic } from "@/lib/optimistic";
 import { conversationName, facesOf, isSalonName, labelsOf, myExpertsIn, myMember, participants, working, type BuzzOverview } from "@/lib/buzz";
 import { deviceKey, rememberedRelay, storedKey } from "@/lib/buzz-keys";
-import { BuzzConnection, conversations, follow, openDirect, sendMessage, watchRosters, withMessage, type Conversation, type Message } from "@/lib/buzz-relay";
+import { BuzzConnection, conversations, follow, openDirect, refusalText, sendMessage, watchRosters, withMessage, type Conversation, type Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
 import { useChatMarks } from "@/components/conversations/useChatMarks";
 import { ExchangeRail } from "@/components/messaging/ExchangeRail";
@@ -234,13 +234,13 @@ export function Messaging() {
     return isSalon(current) ? all : all.map((c) => ({ ...c, mine: false }));
   }, [current, directory, mine, isSalon]);
 
-  async function send(text: string, mentions: string[], replyTo: string | null): Promise<boolean> {
+  async function send(text: string, mentions: string[], replyTo: Message | null): Promise<boolean> {
     const c = relay.current;
     if (!c || !open) return false;
     setSending(true);
     try {
       const r = await sendMessage(c, open, text, replyTo, mentions);
-      if (!r.ok) throw new Error(r.message.replace(/^[a-z-]+: /, "") || "Message refusé.");
+      if (!r.ok) throw new Error(refusalText(r.message));
       const recipients = (current?.members ?? []).filter((k) => !mine.includes(k));
       void apiFetch("/api/buzz/sent", { method: "POST", body: JSON.stringify({ kind: replyTo ? "reply" : current && isSalon(current) ? "salon" : "dm", recipients }) }).catch(() => undefined);
       return true;
@@ -329,7 +329,7 @@ export function Messaging() {
 
   const kind = current ? (isUnit(current) ? "unite" : isSalon(current) ? "salon" : "direct") : null;
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <ExchangeHeader
         title={current ? nameOf(current) : null}
         kind={kind}

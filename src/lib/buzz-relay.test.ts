@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { generateSecretKey } from "nostr-tools/pure";
-import { BuzzConnection, follow, sortMessages, watchRosters, withMessage } from "./buzz-relay.ts";
+import { BuzzConnection, follow, refusalText, replyTags, sortMessages, toMessage, watchRosters, withMessage } from "./buzz-relay.ts";
 
 // A relay that authenticates the browser, then goes silent: what a dropped connection looks like here.
 class SilentRelay {
@@ -136,7 +136,7 @@ test("un relais muet pendant le chargement du fil : échec signalé et connexion
 });
 
 test("les listes : une réponse après son message à la même seconde, pas de doublon", () => {
-  const m = (id: string, at: number, replyTo: string | null = null) => ({ id, author: "a", text: "", at, replyTo, mentions: [] });
+  const m = (id: string, at: number, replyTo: string | null = null) => ({ id, author: "a", text: "", at, replyTo, root: replyTo, mentions: [] });
   assert.deepEqual(sortMessages([m("r", 5, "a"), m("a", 5), m("z", 1)]).map((x) => x.id), ["z", "a", "r"]);
   const t = withMessage(null, m("a", 1));
   assert.equal(withMessage(t, m("a", 1)), t);
@@ -156,4 +156,24 @@ test("la veille des conversations ne lit que les changements à venir et prévie
   StoredRelay.last!.emit(["EVENT", req[1], { id: "x", tags: [["d", "c1"]] }]);
   assert.equal(changes, 1);
   c.close();
+});
+
+test("une réponse porte la racine du fil et son parent (NIP-10), même à un message qui répond déjà", () => {
+  const ev = (id: string, tags: string[][]) => ({ id, pubkey: "a", content: "", created_at: 1, kind: 9, tags, sig: "" });
+  const top = toMessage(ev("t", [["h", "c"]]));
+  const mid = toMessage(ev("m", [["h", "c"], ["e", "t", "", "root"], ["e", "t", "", "reply"]]));
+  const legacy = toMessage(ev("l", [["h", "c"], ["e", "t", "", "reply"]]));
+  assert.deepEqual([top.root, top.replyTo], [null, null]);
+  assert.deepEqual([mid.root, mid.replyTo], ["t", "t"]);
+  assert.deepEqual([legacy.root, legacy.replyTo], ["t", "t"], "réponse seule : sa racine est son parent");
+  assert.deepEqual(replyTags(top), [["e", "t", "", "root"], ["e", "t", "", "reply"]]);
+  assert.deepEqual(replyTags(mid), [["e", "t", "", "root"], ["e", "m", "", "reply"]]);
+  assert.deepEqual(replyTags({ id: "m", replyTo: "t", root: undefined as unknown as null }), [["e", "t", "", "root"], ["e", "m", "", "reply"]], "copie gardée sans racine");
+});
+
+test("un refus du relais se lit en français ; un autre reste tel quel", () => {
+  assert.match(refusalText("invalid: thread depth limit exceeded"), /trop long/);
+  assert.match(refusalText("invalid: root tag does not match thread ancestry"), /rattachée/);
+  assert.equal(refusalText("blocked: rate"), "rate");
+  assert.equal(refusalText(""), "Message refusé.");
 });

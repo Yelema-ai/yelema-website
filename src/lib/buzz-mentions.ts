@@ -21,3 +21,13 @@ export function candidatesOf(directory: BuzzEntry[], members: string[], myMember
 /** Les clés mentionnées : celles des candidats choisis dont « @nom » est encore dans le texte. */
 export const mentionsIn = (text: string, picked: Candidate[]): string[] => [...new Set(picked.filter((c) => text.includes(`@${c.handle}`)).flatMap((c) => c.entry.cles))];
 
+
+/** Répondre à l'un de MES Experts le mentionne, pour qu'il réponde ; l'Expert d'un autre ne m'obéirait pas. */
+export const replyMention = (author: string | null | undefined, candidates: Candidate[]): string | null =>
+  author && candidates.some((c) => c.mine && c.entry.cles.includes(author)) ? author : null;
+
+/** Les mentions tapées, plus l'auteur du message répondu quand c'est l'un de mes Experts (sans doublon). */
+export function withReplyMention(mentions: string[], author: string | null | undefined, candidates: Candidate[]): string[] {
+  const m = replyMention(author, candidates);
+  return m && !mentions.includes(m) ? [...mentions, m] : mentions;
+}
