@@ -7,7 +7,7 @@ export const spaceKey = (agentId: string, profileId: string | null): string => `
 /** How long a server read for a first screen (page, bootstrap, expert screen) waits; past it, the browser reads. */
 export const FIRST_SCREEN_BUDGET_MS = 2_500;
 /** How long the browser waits for that reading to stream in; past it (a stalled stream), it reads itself. */
-export const STREAM_GUARD_MS = 8_000;
+export const STREAM_GUARD_MS = 3_000;
 
 /** `promise`'s value, or null when it fails or takes longer than `ms` (the browser then reads it itself). */
 export function within<T>(promise: Promise<T>, ms: number): Promise<T | null> {

@@ -8,6 +8,7 @@ import { remember, whenKept } from "@/lib/client-cache";
 import { optimistic } from "@/lib/optimistic";
 import { conversationName, facesOf, isSalonName, labelsOf, myExpertsIn, myMember, participants, working, type BuzzOverview } from "@/lib/buzz";
 import { deviceKey, rememberedRelay, storedKey } from "@/lib/buzz-keys";
+import { reconnectDelay } from "@/lib/instance-events";
 import { BuzzConnection, conversations, follow, openDirect, refusalText, sendMessage, watchRosters, withMessage, type Conversation, type Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
 import { useChatMarks } from "@/components/conversations/useChatMarks";
@@ -93,7 +94,7 @@ export function Messaging() {
           await c.connect();
         } catch {
           c.close();
-          if (attempt + 1 < attempts) await pause(Math.min(3000 + attempt * 2000, 30_000));
+          if (attempt + 1 < attempts) await pause(reconnectDelay(attempt));
           continue;
         }
         if (d.stopped) return (c.close(), false);

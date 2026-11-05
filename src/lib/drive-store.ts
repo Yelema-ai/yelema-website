@@ -24,7 +24,7 @@ export const seedDriveTree = (agentId: string, tree: DriveTree): void => seed(ke
 
 onBootstrap((b) => b.agentId && b.tree && seedDriveTree(b.agentId, b.tree));
 
-// The expert writes its files as the turn ends: a burst is given 4 s to settle, a long one is read every 15 s.
+// The expert writes its files as the turn ends: a burst is given 4 s to settle, a long one is read every 10 s.
 /** Something may have written in the drive: once it settles, the next reading goes out and watchers hear it. */
 export const driveChanged = afterBurst(
   (agentId) => {
@@ -32,7 +32,7 @@ export const driveChanged = afterBurst(
     for (const fn of [...(listeners.get(agentId) ?? [])]) fn();
   },
   4_000,
-  15_000
+  10_000
 );
 
 export function onDriveChanged(agentId: string, fn: () => void): () => void {

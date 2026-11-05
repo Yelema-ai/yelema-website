@@ -20,14 +20,14 @@ export interface InstanceEvent {
   resumed?: boolean;
 }
 
-const FIRST_RETRY_MS = 2_000;
-const MAX_RETRY_MS = 5 * 60_000;
+const FIRST_RETRY_MS = 1_500;
+const MAX_RETRY_MS = 10_000;
 const SESSION_RE = /^[\w.:@~-]{1,200}$/;
 
-/** Wait before reconnect attempt `n` (0-based): doubles up to 5 min, ±20 % so tabs do not come back together. */
+/** Wait before reconnect attempt `n` (0-based): doubles up to 10 s, ±20 % so tabs do not come back together. */
 export function reconnectDelay(attempt: number, random: () => number = Math.random): number {
   const base = Math.min(FIRST_RETRY_MS * 2 ** Math.max(0, attempt), MAX_RETRY_MS);
-  return Math.round(base * (0.8 + 0.4 * random()));
+  return Math.min(Math.round(base * (0.8 + 0.4 * random())), MAX_RETRY_MS);
 }
 
 /** EVENT_STREAM (or NEXT_PUBLIC_EVENT_STREAM) "on", and the gateway the stream comes from. */
@@ -155,10 +155,10 @@ export function streamGate(hub: EventHub, minMs = 15_000, agentId: string | read
   return { live: () => (ids ? ids.length > 0 && ids.every((a) => hub.connected(a)) : hub.connected()), onChange: hub.onConnection, minMs, liveMs };
 }
 
-/** Heard on the stream at least this often (the gateway beats every 25 s); past it, the stream is taken as cut. */
-export const STREAM_SILENCE_MS = 90_000;
-/** The same, on a connection that never pinged (a gateway without the beat): longer, so it does not flap. */
-export const UNPINGED_SILENCE_MS = 180_000;
+/** Heard on the stream at least this often (the gateway beats every 4 s); past it, the stream is taken as cut. */
+export const STREAM_SILENCE_MS = 10_000;
+/** The same, on a connection that has not pinged yet: a little longer, for the first beat to arrive. */
+export const UNPINGED_SILENCE_MS = 12_000;
 export const silenceMs = (pinged: boolean): number => (pinged ? STREAM_SILENCE_MS : UNPINGED_SILENCE_MS);
 
 /** The gateway's `: ping` comments, which EventSource hides, as `ping` frames the tab can time. */

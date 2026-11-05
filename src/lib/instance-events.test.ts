@@ -18,11 +18,12 @@ describe("instance event stream", () => {
   });
 
   it("reconnects after 2 s, doubling up to 5 min, with jitter", () => {
-    assert.equal(reconnectDelay(0, () => 0.5), 2_000);
-    assert.equal(reconnectDelay(3, () => 0.5), 16_000);
-    assert.equal(reconnectDelay(30, () => 0.5), 300_000);
-    assert.equal(reconnectDelay(0, () => 0), 1_600);
-    assert.equal(reconnectDelay(0, () => 1), 2_400);
+    assert.equal(reconnectDelay(0, () => 0.5), 1_500);
+    assert.equal(reconnectDelay(2, () => 0.5), 6_000);
+    assert.equal(reconnectDelay(30, () => 0.5), 10_000);
+    assert.equal(reconnectDelay(30, () => 1), 10_000);
+    assert.equal(reconnectDelay(0, () => 0), 1_200);
+    assert.equal(reconnectDelay(0, () => 1), 1_800);
   });
 
   it("hub: events reach the instance's listeners only; connected follows the stream", () => {
@@ -161,9 +162,10 @@ describe("heartbeat", () => {
 });
 
 describe("silence before reconnecting", () => {
-  it("a connection that never pinged waits longer than one that did", () => {
+  it("a connection that never pinged waits a little longer than one that did, both within 12 s", () => {
     assert.equal(silenceMs(true), STREAM_SILENCE_MS);
-    assert.ok(silenceMs(false) >= 2 * STREAM_SILENCE_MS);
+    assert.ok(silenceMs(false) > STREAM_SILENCE_MS);
+    assert.ok(silenceMs(false) <= 12_000);
   });
 });
 

@@ -14,7 +14,7 @@ const REPLAY_MS = 60_000;
 
 // One EventSource per tab on the member's instance, only while the tab is visible. Each event reaches
 // the hub, the conversations and the drive; a reconnect resumes from the last id it saw. Cut, refused
-// (429, 404) or silent past STREAM_SILENCE_MS (a half-open line; longer while it never pinged): closed, retried with backoff; meanwhile
+// (429, 404) or silent past STREAM_SILENCE_MS (a half-open line; a little longer before the first ping): closed, retried with backoff; meanwhile
 // the gated polls run as their safety net.
 export function InstanceEventStream() {
   const { eventStream } = usePublicConfig();
