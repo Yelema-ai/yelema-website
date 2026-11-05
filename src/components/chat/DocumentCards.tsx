@@ -151,10 +151,14 @@ function FormatThumb({ doc, failed }: { doc: TurnDoc; failed?: boolean }) {
  * rows of the first sheet, the whole text, every slide), scrolling.
  */
 export function Preview({ agentId, doc, full }: { agentId: string; doc: TurnDoc; full?: boolean }) {
-  const url = contentUrl(agentId, doc.path, "inline", doc.modified);
+  return <PreviewAt doc={doc} url={contentUrl(agentId, doc.path, "inline", doc.modified)} thumb={thumbUrl(agentId, doc.path, 960, doc.modified)} full={full} />;
+}
+
+/** `Preview` of a document read at `url` (a salon's signed address); `thumb`: a smaller image, when there is one. */
+export function PreviewAt({ doc, url, thumb = url, full }: { doc: TurnDoc; url: string; thumb?: string; full?: boolean }) {
   const e = ext(doc.name);
   if ((doc.size ?? 0) > MAX_PREVIEW_BYTES) return <FormatThumb doc={doc} failed={full} />;
-  if (doc.kind === "image") return <ImagePreview url={url} thumb={thumbUrl(agentId, doc.path, 960, doc.modified)} doc={doc} />;
+  if (doc.kind === "image") return <ImagePreview url={url} thumb={thumb} doc={doc} />;
   if (doc.kind === "pdf") return <Lazy doc={doc} url={url} render={renderPdf} full={full} />;
   if (e === "xlsx" || e === "xlsm" || e === "csv") return <Lazy doc={doc} url={url} render={renderSheet} full={full} />;
   if (e === "docx") return <Lazy doc={doc} url={url} render={renderDocx} full={full} />;

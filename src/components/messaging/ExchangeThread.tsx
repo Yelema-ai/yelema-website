@@ -13,6 +13,9 @@ import { replyParts } from "@/lib/reply-parts";
 import { MentionComposer } from "@/components/messaging/MentionComposer";
 import { ParticipantAvatar } from "@/components/messaging/ParticipantAvatar";
 import { SalonDeliverables } from "@/components/messaging/SalonDeliverables";
+import { SalonDocCards } from "@/components/messaging/SalonDocCards";
+import { readSalonDeliverables, salonReadAt, useSalonDeliverables } from "@/components/messaging/salon-deliverables-store";
+import { linkSalonPaths, salonDeliverableFor, salonPathsIn } from "@/lib/salon-deliverables";
 import { SalonParticipants } from "@/components/messaging/SalonParticipants";
 
 // Le fil d'un échange, comme le chat d'un Expert (l'en-tête et ses onglets sont dans ExchangeHeader) : messages,
@@ -45,6 +48,37 @@ export function ExchangeThread(p: ThreadProps) {
   useEffect(() => {
     setReplyTo(null);
   }, [id]);
+
+  // Les fichiers du salon cités dans le fil : la liste des livrables n'est lue que s'il y en a (ou l'onglet ouvert).
+  const salonId = p.salon ? (id ?? null) : null;
+  const cited = useMemo(() => (salonId ? (p.thread ?? []).flatMap((m) => salonPathsIn(m.text, salonId).map((path) => ({ path, at: m.at }))) : []), [salonId, p.thread]);
+  const livrables = useSalonDeliverables(salonId, p.pane === "livrables" || cited.length > 0);
+  const items = livrables.items;
+  // Un fichier cité après la dernière lecture, absent de la liste : relue une fois.
+  const asked = useRef(new Set<string>());
+  useEffect(() => {
+    if (!salonId || !items) return;
+    const late = cited.find((c) => !salonDeliverableFor(c.path, salonId, items) && c.at * 1000 > salonReadAt(salonId) && !asked.current.has(c.path));
+    if (!late) return;
+    asked.current.add(late.path);
+    void readSalonDeliverables(salonId, 0).catch(() => undefined);
+  }, [salonId, cited, items]);
+  // Le texte de chaque lien vers son adresse ; deux fichiers du même nom gardent leur lien, sans raccourci.
+  const links = useMemo(() => {
+    const out = new Map<string, string | null>();
+    if (!salonId || !items) return out;
+    for (const m of p.thread ?? []) for (const [label, url] of linkSalonPaths(m.text, salonId, items).links) out.set(label, out.has(label) && out.get(label) !== url ? null : url);
+    return out;
+  }, [salonId, items, p.thread]);
+  // Un lien vers un fichier du salon s'ouvre comme dans l'onglet Livrables, sans l'avertissement de site extérieur.
+  const openCited = (e: React.MouseEvent) => {
+    const el = (e.target as Element).closest?.("[data-streamdown=link]");
+    const url = el ? links.get(el.textContent?.trim() ?? "") : undefined;
+    if (!url) return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
   // Le fil descend seul à l'ouverture, à son propre message, ou quand on est déjà en bas ; quelqu'un qui
   // remonte lire un ancien message n'est jamais ramené en bas par un nouveau.
   const list = useRef<HTMLOListElement>(null);
@@ -79,7 +113,7 @@ export function ExchangeThread(p: ThreadProps) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {p.pane === "livrables" && p.salon ? (
-        <SalonDeliverables salon={p.current.id} directory={p.directory} />
+        <SalonDeliverables items={items} error={livrables.error} loading={livrables.loading} onRefresh={livrables.refresh} directory={p.directory} />
       ) : p.pane === "participants" && p.salon ? (
         <SalonParticipants members={p.current.members} directory={p.directory} mine={p.mine} />
       ) : (
@@ -107,6 +141,12 @@ export function ExchangeThread(p: ThreadProps) {
               const parts = !mineMsg && i === (p.thread?.length ?? 0) - 1 ? replyParts(m.text) : null;
               const choices = parts?.choices.length ? parts : null;
               const first = startsRun(p.thread?.[i - 1], m) || Boolean(m.replyTo);
+              const body = choices ? choices.body : m.text;
+              const linked = salonId && items ? linkSalonPaths(body, salonId, items) : null;
+              const docs = salonId && items ? salonPathsIn(m.text, salonId).flatMap((path) => {
+                const d = salonDeliverableFor(path, salonId, items);
+                return d?.url ? [{ ...d, url: d.url }] : [];
+              }) : [];
               return (
                 <li key={m.id} className={cn("group flex gap-2.5", first ? "mt-4 first:mt-0" : "mt-1", m.replyTo && "pl-8")}>
                   {first ? <ParticipantAvatar entry={entryOf(m.author)} name={nameOf(m.author)} className="mt-0.5" /> : <span className="w-7 shrink-0" aria-hidden />}
@@ -121,7 +161,9 @@ export function ExchangeThread(p: ThreadProps) {
                     <div className={cn("flex max-w-full", first && "mt-1")}>
                       <div className={cn("relative min-w-0 max-w-[min(680px,90%)] break-words rounded-2xl px-3.5 py-2.5 text-ink", mineMsg ? "rounded-tl-md bg-tint" : "rounded-tl-md border border-line bg-surface")} title={first ? undefined : moment(m.at)} tabIndex={-1}>
                         {/* Comme le chat d'un Expert : liens cliquables (un site extérieur demande confirmation), listes, gras. */}
-                        <Markdown content={choices ? choices.body : m.text} />
+                        <div onClickCapture={openCited}>
+                          <Markdown content={linked?.text ?? body} />
+                        </div>
                         {/* Répondre, accroché au coin haut de la bulle au survol (comme Slack) : on voit à quel message il répond. */}
                         <button
                           type="button"
@@ -134,6 +176,7 @@ export function ExchangeThread(p: ThreadProps) {
                         </button>
                       </div>
                     </div>
+                    <SalonDocCards docs={docs} />
                     {choices && (
                       <ReplyChoices
                         choices={choices.choices}

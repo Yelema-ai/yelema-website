@@ -16,7 +16,8 @@ import { ExchangeHeader, type ExchangePane } from "@/components/messaging/Exchan
 import { ExchangeThread } from "@/components/messaging/ExchangeThread";
 import { candidatesOf } from "@/lib/buzz-mentions";
 import { NewExchange, type ExchangeKind } from "@/components/messaging/NewExchange";
-import { prefetchSalonDeliverables } from "@/components/messaging/SalonDeliverables";
+import { prefetchSalonDeliverables } from "@/components/messaging/salon-deliverables-store";
+import { whenIdle } from "@/components/usePrefetch";
 
 // Échanges entre membres, présentés comme le chat d'un Expert : la colonne des échanges, le fil à côté. Lus et
 // écrits par ce navigateur sur le relais du client ; le back-office admet la clé de l'appareil et tient les salons.
@@ -222,7 +223,7 @@ export function Messaging() {
   // Les livrables d'un salon lus dès son ouverture : l'onglet s'affiche sans attendre.
   const salonOpen = current && isSalon(current) ? current.id : null;
   useEffect(() => {
-    if (salonOpen) prefetchSalonDeliverables(salonOpen);
+    if (salonOpen) whenIdle(() => prefetchSalonDeliverables(salonOpen));
   }, [salonOpen]);
   const directory = useMemo(() => overview?.annuaire ?? [], [overview]);
   const askable = useMemo(() => (current && isSalon(current) ? myExpertsIn(directory, mine, current.members) : []), [current, isSalon, directory, mine]);
@@ -338,6 +339,7 @@ export function Messaging() {
         onPane={setPane}
         onBack={() => setOpen(null)}
         onAdd={() => setComposing("ajout")}
+        onLivrablesIntent={() => salonOpen && prefetchSalonDeliverables(salonOpen)}
       />
       <div className="flex min-h-0 flex-1">
       <div className={cn("w-full shrink-0 flex-col border-r border-line bg-surface px-2.5 py-3 lg:flex lg:w-[300px]", open ? "hidden" : "flex")}>

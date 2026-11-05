@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { FileText, Folder, RotateCw, Search, X } from "lucide-react";
-import { apiFetch } from "@/lib/api";
-import type { SalonDeliverable } from "@/lib/backoffice";
 import { shortName, type BuzzEntry } from "@/lib/buzz";
-import { cached, cachedFetch } from "@/lib/client-cache";
 import { docKind } from "@/lib/drive-links";
 import { matchesDriveQuery } from "@/lib/drive-order";
+import { relativeFr } from "@/lib/fr-dates";
+import type { SalonDeliverable } from "@/lib/salon-deliverables";
 import { cn } from "@/lib/utils";
 import { DOC_TONE } from "@/components/files/preview-siblings";
 import { formatMtime } from "@/components/files/types";
@@ -15,35 +14,20 @@ import { ParticipantAvatar } from "@/components/messaging/ParticipantAvatar";
 
 // Onglet « Livrables » d'un salon, au format de la page Livrables : recherche, une ligne par fichier, l'Expert qui
 // l'a fait avec son visage, la date. Un lien signé et court, en lecture seule ; le back-office vérifie que vous êtes
-// du salon. Ce qui a déjà été lu s'affiche tout de suite (lu d'avance à l'ouverture du salon) et se relit derrière.
+// du salon. La lecture est celle du fil (salon-deliverables-store) : ce qui a déjà été lu s'affiche tout de suite.
 
-const key = (salon: string) => `echanges:livrables:${salon}`;
-const load = (salon: string) =>
-  apiFetch<{ items: SalonDeliverable[] }>(`/api/buzz/salons/${salon}/livrables`, undefined, "Les livrables du salon sont indisponibles").then((r) => r.items);
+export interface SalonDeliverablesProps {
+  items: SalonDeliverable[] | null;
+  error: string | null;
+  loading: boolean;
+  onRefresh: () => void;
+  directory: BuzzEntry[];
+}
 
-/** Lit les livrables d'un salon d'avance, dès qu'il s'ouvre : l'onglet les montre sans attendre. */
-export const prefetchSalonDeliverables = (salon: string) => void cachedFetch(key(salon), () => load(salon), 60_000).catch(() => undefined);
+const staleHint = (d: SalonDeliverable) => (d.checkedAt ? `mis à jour ${relativeFr(Date.parse(d.checkedAt))}` : "mise à jour en cours");
 
-export function SalonDeliverables({ salon, directory }: { salon: string; directory: BuzzEntry[] }) {
-  const [items, setItems] = useState<SalonDeliverable[] | null>(() => cached<SalonDeliverable[]>(key(salon)) ?? null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [tick, setTick] = useState(0);
+export function SalonDeliverables({ items, error, loading, onRefresh, directory }: SalonDeliverablesProps) {
   const [query, setQuery] = useState("");
-
-  useEffect(() => {
-    let stop = false;
-    setItems(cached<SalonDeliverable[]>(key(salon)) ?? null);
-    setError(null);
-    setLoading(true);
-    cachedFetch(key(salon), () => load(salon), tick ? 0 : 60_000).then(
-      (r) => !stop && setItems(r),
-      (e: unknown) => !stop && setError(e instanceof Error ? e.message : "Les livrables du salon sont indisponibles."),
-    ).finally(() => !stop && setLoading(false));
-    return () => {
-      stop = true;
-    };
-  }, [salon, tick]);
 
   const shown = useMemo(() => [...(items ?? [])].filter((d) => matchesDriveQuery(d.title, query)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [items, query]);
   const maker = (d: SalonDeliverable) => directory.find((e) => e.type === "expert" && (e.profil === d.expertId || shortName(e.nom) === shortName(d.auteur))) ?? null;
@@ -67,7 +51,7 @@ export function SalonDeliverables({ salon, directory }: { salon: string; directo
             </button>
           )}
         </label>
-        <button type="button" onClick={() => setTick((t) => t + 1)} aria-label="Actualiser les livrables" title="Actualiser" className="ml-auto grid size-11 place-items-center rounded-xl border border-line bg-surface text-ink-3 hover:bg-soft hover:text-ink">
+        <button type="button" onClick={onRefresh} aria-label="Actualiser les livrables" title="Actualiser" className="ml-auto grid size-11 place-items-center rounded-xl border border-line bg-surface text-ink-3 hover:bg-soft hover:text-ink">
           <RotateCw className={cn("size-4", loading && "animate-spin")} />
         </button>
       </div>
@@ -108,6 +92,7 @@ export function SalonDeliverables({ salon, directory }: { salon: string; directo
                       <span className="block truncate text-sm font-semibold text-ink">{d.title}</span>
                       <span className="block truncate text-xs text-ink-3 md:hidden">
                         {shortName(d.auteur)}, {formatMtime(Date.parse(d.updatedAt))}
+                        {d.stale && ` · ${staleHint(d)}`}
                       </span>
                     </span>
                   </span>
@@ -115,7 +100,10 @@ export function SalonDeliverables({ salon, directory }: { salon: string; directo
                     <ParticipantAvatar entry={who} name={d.auteur} />
                     <span className="truncate">{shortName(d.auteur)}</span>
                   </span>
-                  <span className="hidden text-sm text-ink-2 md:block">{formatMtime(Date.parse(d.updatedAt))}</span>
+                  <span className="hidden text-sm text-ink-2 md:block">
+                    {formatMtime(Date.parse(d.updatedAt))}
+                    {d.stale && <span className="block text-xs text-ink-3">{staleHint(d)}</span>}
+                  </span>
                 </>
               );
               const cls = "grid min-h-16 w-full grid-cols-[minmax(0,1fr)] items-center gap-x-4 gap-y-1 px-4 py-3 text-left md:grid-cols-[minmax(0,1fr)_180px_150px]";

@@ -115,7 +115,8 @@ export interface BoInstanceView {
 }
 
 /** A file an expert of a salon put in its `Salons/<id>/` folder; `url` is signed and short-lived. */
-export interface SalonDeliverable { id: string; expertId: string; title: string; kind: string; updatedAt: string; url: string | null; folder: string; auteur: string }
+import type { SalonDeliverable } from "@/lib/salon-deliverables";
+export type { SalonDeliverable };
 
 export interface TeamRoster { name: string; members: { name: string | null; email: string; you: boolean; experts: string[] }[] }
 

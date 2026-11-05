@@ -18,6 +18,8 @@ export interface HeaderProps {
   onPane: (p: ExchangePane) => void;
   onBack: () => void;
   onAdd: () => void;
+  /** The pointer or the focus reached the Livrables tab: its list is read ahead. */
+  onLivrablesIntent?: () => void;
 }
 
 export function ExchangeHeader(p: HeaderProps) {
@@ -53,6 +55,7 @@ export function ExchangeHeader(p: HeaderProps) {
                   key={t.id}
                   type="button"
                   onClick={() => p.onPane(t.id)}
+                  {...(t.id === "livrables" && p.onLivrablesIntent ? { onPointerEnter: p.onLivrablesIntent, onFocus: p.onLivrablesIntent, onTouchStart: p.onLivrablesIntent } : {})}
                   aria-current={on ? "page" : undefined}
                   className={cn(
                     "min-h-9 shrink-0 rounded-full px-2 py-1.5 text-[13px] font-semibold sm:px-3 lg:-mb-px lg:inline-flex lg:h-full lg:items-center lg:rounded-none lg:border-b-2 lg:px-0.5 lg:text-[15px]",
