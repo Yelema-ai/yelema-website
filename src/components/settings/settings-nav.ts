@@ -1,4 +1,4 @@
-import { Bell, Building2, CreditCard, Gauge, Mic, Network, Palette, Server, Settings, UserRound, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, Bell, Building2, CreditCard, Gauge, Mic, Network, Palette, Server, Settings, UserRound, Users, type LucideIcon } from "lucide-react";
 
 export interface SettingsEntry {
   href: string;
@@ -27,6 +27,7 @@ export const SETTINGS_GROUPS: { label: string; entries: SettingsEntry[] }[] = [
     label: "Entreprise",
     entries: [
       { href: "/parametres/membres", label: "Membres", icon: Users, adminOnly: true },
+      { href: "/parametres/analytics", label: "Analytics", icon: BarChart3, adminOnly: true },
       { href: "/parametres/organigramme", label: "Organigramme", icon: Network, adminOnly: true, backoffice: true },
       { href: "/parametres/entreprise", label: "Contexte", icon: Building2, backoffice: true },
       { href: "/parametres/facturation", label: "Facturation", icon: CreditCard, adminOnly: true, backoffice: true },
