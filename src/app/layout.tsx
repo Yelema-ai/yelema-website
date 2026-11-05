@@ -7,6 +7,8 @@ import { PublicConfigProvider } from "@/components/PublicConfigProvider";
 import { requestPublicConfig } from "@/lib/tenant";
 import { STRIP_CREDENTIALS_BOOTSTRAP } from "@/lib/site-url";
 import { THEME_BOOTSTRAP } from "@/lib/theme";
+import { RumReporter } from "@/components/RumReporter";
+import { sampleRateOf } from "@/lib/rum";
 
 // Onest for the interface, Bricolage Grotesque for headings, greetings and expert names
 // (`font-display`).
@@ -40,6 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
         <PublicConfigProvider config={config}>{children}</PublicConfigProvider>
+        <RumReporter sampleRate={sampleRateOf(process.env.RUM_SAMPLE_RATE)} />
         {/* Couleurs, police et bouton « Ouvrir » aux couleurs Yelema : globals.css (bloc sonner). */}
         {/* En long, à l'horizontale (Leslie, 19/10) : sonner pose --width en style inline, seul son prop style la remplace. */}
         <Toaster richColors closeButton position="top-center" style={{ "--width": "min(560px, calc(100vw - 32px))" } as React.CSSProperties} />
