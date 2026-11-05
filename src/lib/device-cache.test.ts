@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { accountHash, carriesSecret, CONTENT_MAX_AGE_MS, createDeviceCache, MAX_AGE_MS, memoryBackend, META_KEY, scrubSigned, type CacheRow } from "./device-cache.ts";
+import { accountHash, carriesSecret, CONTENT_MAX_AGE_MS, createDeviceCache, flushOnHide, MAX_AGE_MS, memoryBackend, META_KEY, scrubSigned, type CacheRow } from "./device-cache.ts";
 
 function harness(seed: CacheRow[] = [], maxBytes = 10_000, version = 1) {
   let t = 1000;
@@ -78,6 +78,10 @@ describe("cache de l'appareil", () => {
     h.cache.set("x", { user: { accessToken: "eyJ" } });
     h.cache.set("y", "x".repeat(500));
     h.cache.set("z", { photoUrl: "https://cdn.test/a.png?token=abc", name: "Awa", url: "https://cdn.test/b.png" });
+    assert.equal(h.cache.get("x"), undefined, "refusée dès la lecture, avant le vidage");
+    h.cache.set("x", { user: { accessToken: "eyJ" } });
+    assert.equal(h.cache.keys().includes("x"), false, "une valeur refusée n'est jamais listée");
+    assert.equal(h.cache.keys().includes("y"), false);
     assert.deepEqual(h.cache.get("z"), { photoUrl: null, name: "Awa", url: "https://cdn.test/b.png" });
     await h.settle();
     for (const k of ["x", "y"]) {
@@ -166,5 +170,25 @@ describe("cache de l'appareil — écriture différée", () => {
     h.cache.set("experts:w1", ["nouveau"]);
     await opening;
     assert.deepEqual(h.cache.get("experts:w1"), ["nouveau"]);
+  });
+});
+
+describe("cache de l'appareil — page quittée", () => {
+  it("pagehide ou onglet masqué : ce qui attend est écrit tout de suite", async () => {
+    for (const event of ["pagehide", "visibilitychange"]) {
+      const h = harness([meta("s")]);
+      await h.cache.open("s");
+      const page = new EventTarget();
+      let hidden = false;
+      flushOnHide(h.cache, page, () => hidden);
+      h.cache.set("k", ["dernier"]);
+      page.dispatchEvent(new Event("visibilitychange"));
+      await new Promise((r) => setImmediate(r));
+      assert.equal(h.backend.rows.has("k"), false, "onglet visible : rien n'est forcé");
+      hidden = true;
+      page.dispatchEvent(new Event(event));
+      await new Promise((r) => setImmediate(r));
+      assert.deepEqual(h.backend.rows.get("k")?.value, ["dernier"], event);
+    }
   });
 });

@@ -1,5 +1,5 @@
 import { hydrate, persistTo } from "@/lib/client-cache";
-import { accountHash, createDeviceCache, memoryBackend } from "@/lib/device-cache";
+import { accountHash, createDeviceCache, flushOnHide, memoryBackend } from "@/lib/device-cache";
 import { idbBackend } from "@/lib/device-cache-idb";
 
 // The browser's device cache (lib/device-cache). Its rows start loading as the page's JS runs, but
@@ -82,6 +82,7 @@ function closeDevice(): void {
 
 if (browser) {
   persistTo((key, value) => KEPT.some((p) => key.startsWith(p)) && deviceKeep(key, value));
+  flushOnHide(cache, window, () => document.visibilityState === "hidden");
   // Read ahead after the first paint, when idle; the shell's confirmDevice opens it at once if it comes first.
   const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
   const ahead = () => {

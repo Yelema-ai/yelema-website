@@ -27,7 +27,10 @@ function load(salon: string): Promise<SalonDeliverable[]> {
 }
 
 onDeviceOpen((get, keys) => {
-  for (const k of keys) if (k.startsWith(DEVICE)) hydrate(key(k.slice(DEVICE.length)), get(k));
+  for (const k of keys) {
+    const items = k.startsWith(DEVICE) ? get(k) : undefined;
+    if (items !== undefined) hydrate(key(k.slice(DEVICE.length)), items);
+  }
 });
 
 /** The list, at most `maxAgeMs` old (a reading in flight is shared). */

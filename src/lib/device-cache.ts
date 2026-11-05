@@ -231,7 +231,11 @@ export function createDeviceCache(backend: CacheBackend, { version, maxBytes, no
     },
     /** Another tab took the device: this one forgets what it holds and writes nothing more. */
     close,
-    keys: () => [...new Set([...rows.keys(), ...raw.keys()])],
+    /** Keys of the rows kept: a value just set is checked first, so a refused one is never listed. */
+    keys(): string[] {
+      if (raw.size) commitAll();
+      return [...rows.keys()];
+    },
     /** Bytes of the rows already checked (a value just set counts once the burst is over). */
     bytes: () => bytes,
     flush,
@@ -239,6 +243,13 @@ export function createDeviceCache(backend: CacheBackend, { version, maxBytes, no
 }
 
 export type DeviceCache = ReturnType<typeof createDeviceCache>;
+
+/** The page is left or hidden: what is pending is written now, not after a burst that may never end. */
+export function flushOnHide(cache: Pick<DeviceCache, "flush">, target: EventTarget, hidden: () => boolean): void {
+  const now = () => void cache.flush().catch(() => undefined);
+  target.addEventListener("pagehide", now);
+  target.addEventListener("visibilitychange", () => hidden() && now());
+}
 
 /** A Map in place of IndexedDB (tests, or a browser without it). */
 export function memoryBackend(seed: CacheRow[] = []): CacheBackend & { rows: Map<string, CacheRow> } {
