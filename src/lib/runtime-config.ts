@@ -64,6 +64,11 @@ export function resolverToken(): string | undefined {
   return read("APP_RESOLVER_TOKEN");
 }
 
+// The secret this server shows the back office on an external guest's routes (`/api/v1/guest/*`). Server-only.
+export function siteServerSecret(): string | undefined {
+  return read("SITE_SERVER_SECRET");
+}
+
 // One deployment for every client: no WORKSPACE_ID, and what the resolver needs. The client of a
 // request is then the one its host belongs to (src/lib/tenant.ts). With WORKSPACE_ID the deployment
 // serves that one client, as before, so the same version runs in both set-ups.

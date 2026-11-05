@@ -1,0 +1,175 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { apiFetch } from "@/lib/api";
+import { DEFAULT_GUEST_DAYS, GUEST_DAYS, GUEST_STATUS_LABEL, guestFormError, parseGuestEmails, presentGuests, type GuestDays, type SalonGuest } from "@/lib/salon-guests";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+
+// « Inviter des personnes externes » : des adresses et une durée, puis la liste des invités du salon (prolonger,
+// retirer). Le lien n'est jamais montré ici : chaque invité le reçoit par e-mail ; réinviter le renvoie.
+
+const day = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+
+function DaysPicker({ value, onChange, label }: { value: GuestDays; onChange: (d: GuestDays) => void; label: string }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex gap-1.5">
+      {GUEST_DAYS.map((d) => (
+        <button
+          key={d}
+          type="button"
+          role="radio"
+          aria-checked={value === d}
+          onClick={() => onChange(d)}
+          className={cn("min-h-9 rounded-full border px-3 text-[13px] font-semibold", value === d ? "border-brand bg-tint text-brand-ink" : "border-line text-ink-2 hover:bg-soft")}
+        >
+          {d} jours
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function SalonGuests({ salon, nom, open, onClose, onPresent }: { salon: string; nom: string; open: boolean; onClose: () => void; onPresent: (n: number) => void }) {
+  const [list, setList] = useState<SalonGuest[] | null>(null);
+  const [text, setText] = useState("");
+  const [days, setDays] = useState<GuestDays>(DEFAULT_GUEST_DAYS);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const base = `/api/buzz/salons/${salon}/guests`;
+
+  const tell = useRef(onPresent);
+  tell.current = onPresent;
+  const shown = useCallback((l: SalonGuest[]) => {
+    setList(l);
+    tell.current(presentGuests(l).length);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    let stop = false;
+    apiFetch<{ data: SalonGuest[] }>(base, undefined, "Les invités du salon sont indisponibles").then(
+      (r) => !stop && shown(r.data),
+      (e: Error) => !stop && setError(e.message),
+    );
+    return () => {
+      stop = true;
+    };
+  }, [open, base, shown]);
+
+  async function invite(e: React.FormEvent) {
+    e.preventDefault();
+    const refused = guestFormError(text, days);
+    if (refused) return setError(refused);
+    setBusy("invite");
+    setError(null);
+    try {
+      const r = await apiFetch<{ data: SalonGuest[]; refused: unknown[] }>(base, { method: "POST", body: JSON.stringify({ emails: parseGuestEmails(text).emails, days }) }, "Les invitations n’ont pas pu être envoyées");
+      shown(r.data);
+      setText("");
+      const no = Array.isArray(r.refused) ? r.refused.length : 0;
+      if (no) toast.warning(`${no} adresse${no > 1 ? "s ont été refusées" : " a été refusée"} (domaine non autorisé ou adresse déjà invitée).`);
+      else toast.success("Invitations envoyées par e-mail.");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function act(g: SalonGuest, how: "extend" | "remove", extend: GuestDays = DEFAULT_GUEST_DAYS) {
+    if (how === "remove" && !window.confirm(`Retirer l’accès de ${g.email} ? Ses clés quittent le salon tout de suite.`)) return;
+    setBusy(g.id);
+    try {
+      const url = `${base}/${encodeURIComponent(g.id)}`;
+      if (how === "remove") await apiFetch(url, { method: "DELETE" }, "L’accès n’a pas pu être retiré");
+      else await apiFetch(url, { method: "PATCH", body: JSON.stringify({ days: extend }) }, "L’accès n’a pas pu être prolongé");
+      shown((await apiFetch<{ data: SalonGuest[] }>(base)).data);
+      toast.success(how === "remove" ? "Accès retiré." : `Accès prolongé de ${extend} jours.`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90dvh] max-w-lg overflow-y-auto">
+        <DialogHeader className="text-left">
+          <DialogTitle className="font-display text-xl font-bold text-ink">Inviter des personnes externes</DialogTitle>
+          <DialogDescription>
+            Elles lisent et écrivent dans « {nom} » et voient ses livrables, rien d’autre. Chacune reçoit un lien personnel par e-mail.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={invite} className="flex flex-col gap-3" noValidate>
+          <Label htmlFor="guest-emails">Adresses e-mail</Label>
+          <textarea
+            id="guest-emails"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={3}
+            placeholder="jean.paul@exemple.com, mims@exemple.org"
+            className="w-full rounded-xl border border-line bg-surface px-4 py-2.5 text-[15px] text-ink placeholder:text-ink-3 focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15"
+          />
+          <span className="text-[13px] font-semibold text-ink-2">Durée de l’accès</span>
+          <DaysPicker value={days} onChange={setDays} label="Durée de l’accès" />
+          {error && <p role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{error}</p>}
+          <Button type="submit" disabled={busy !== null} className="self-end">
+            {busy === "invite" && <Loader2 className="animate-spin" />} Inviter
+          </Button>
+        </form>
+        <section aria-label="Invités du salon">
+          <h3 className="text-[13px] font-semibold text-ink-2">Invités du salon</h3>
+          {list === null && !error && <Loader2 className="mt-2 size-4 animate-spin text-ink-3" aria-label="Chargement" />}
+          {list?.length === 0 && <p className="mt-2 text-sm text-ink-3">Aucune personne externe pour l’instant.</p>}
+          {list && list.length > 0 && (
+            <ul className="mt-2 overflow-hidden rounded-card border border-line">
+              {list.map((g) => {
+                const live = g.status === "invited" || g.status === "active";
+                return (
+                  <li key={g.id} className="flex flex-wrap items-center gap-2 border-b border-line px-3.5 py-2.5 last:border-0">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-ink">{g.email}</span>
+                      <span className="block text-xs text-ink-3">
+                        {GUEST_STATUS_LABEL[g.status]}
+                        {live && ` · jusqu’au ${day(g.expiresAt)}`}
+                        {g.invitedBy?.nom && ` · invité par ${g.invitedBy.nom}`}
+                      </span>
+                    </span>
+                    {busy === g.id ? (
+                      <Loader2 className="size-4 animate-spin text-ink-3" />
+                    ) : (
+                      <>
+                        <select
+                          aria-label={`Prolonger l’accès de ${g.email}`}
+                          value=""
+                          onChange={(e) => e.target.value && void act(g, "extend", Number(e.target.value) as GuestDays)}
+                          className="h-9 rounded-lg border border-line bg-surface px-2 text-[13px] text-ink-2"
+                        >
+                          <option value="">Prolonger…</option>
+                          {GUEST_DAYS.map((d) => (
+                            <option key={d} value={d}>{d} jours</option>
+                          ))}
+                        </select>
+                        {g.status !== "revoked" && (
+                          <button type="button" onClick={() => void act(g, "remove")} aria-label={`Retirer l’accès de ${g.email}`} title="Retirer l’accès" className="grid size-9 place-items-center rounded-lg text-ink-3 hover:bg-soft hover:text-ko">
+                            <Trash2 className="size-4" />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -10,10 +10,12 @@ import { vaultPath, type VaultDraft, type VaultEntry, type VaultItem, type Vault
 import { scopePath, type LlmModelChoice, type LlmOverview, type LlmWritten, type SettingScope } from "@/lib/llm";
 import { mailPath, type MailDetail, type MailDraft, type MailInbox, type MailRights, type MailRightsPatch, type MailSummary } from "@/lib/mail";
 import { isPublicId, type MemoryList, type MemoryNote, type MemoryPatch, type OrgAssignmentDraft, type OrgChart, type OrgGrantDraft, type OrgMember, type OrgRole } from "@/lib/memory";
-import { backofficeUrl, resolverToken } from "@/lib/runtime-config";
+import { backofficeUrl, resolverToken, siteServerSecret } from "@/lib/runtime-config";
 import { SIGNALING_METHOD, type CallRecord, type SignalingStep, type VoiceOption } from "@/lib/voice";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 import type { BuzzOverview } from "@/lib/buzz";
+import type { GuestFile, GuestParticipant, GuestView } from "@/lib/guest-access";
+import type { SalonGuest } from "@/lib/salon-guests";
 import type { ClaudeAuth, ClaudeAuthStatus, ClaudeLogin, ClaudeUsage } from "@/lib/claude-code-auth";
 
 // The Yelema back office's API for this app (`/api/v1/app/*`, guide: yelema-platform
@@ -248,6 +250,9 @@ function invoicePath(id: string, rest: string): string {
   return `/app/billing/invoices/${id}${rest}`;
 }
 
+// A guest's invitation link is a credential: never in a log line.
+const logPath = (path: string): string => path.replace(/\/guest\/invites\/[^/]+/, "/guest/invites/…");
+
 // The one way out to the back office: its address, the request's workspace, a deadline, and an
 // outage read as one (503, a sentence for the member).
 async function send(path: string, init: { method?: string; workspace?: string; timeoutMs?: number; headers: Record<string, string>; body?: BodyInit }): Promise<Response> {
@@ -263,7 +268,7 @@ async function send(path: string, init: { method?: string; workspace?: string; t
       signal: AbortSignal.timeout(init.timeoutMs ?? TIMEOUT_MS),
     });
   } catch (e) {
-    console.error(`[backoffice] ${path} unreachable:`, e instanceof Error ? e.message : e);
+    console.error(`[backoffice] ${logPath(path)} unreachable:`, e instanceof Error ? e.message : e);
     throw new BackofficeError(503, "unavailable", "Le service est momentanément indisponible. Réessayez dans un instant.");
   }
 }
@@ -294,7 +299,7 @@ async function call<T>(path: string, init: { method?: string; token?: string | n
   if (!res.ok) {
     const err = (data as { error?: { code?: string; message?: string; suggestions?: unknown } } | null)?.error;
     const retry = Number(res.headers.get("retry-after"));
-    if (!err) console.error(`[backoffice] ${path}: ${res.status}`, text.slice(0, 300));
+    if (!err) console.error(`[backoffice] ${logPath(path)}: ${res.status}`, text.slice(0, 300));
     throw new BackofficeError(
       res.status,
       err?.code ?? (res.status >= 500 ? "unavailable" : "error"),
@@ -304,6 +309,18 @@ async function call<T>(path: string, init: { method?: string; token?: string | n
     );
   }
   return data as T;
+}
+
+// No secret configured: the guest routes answer as an outage, never call without it.
+function guestCall<T>(path: string, init: { ip: string; session?: string; method?: string; body?: unknown; timeoutMs?: number }): Promise<T> {
+  const secret = siteServerSecret();
+  if (!secret) return Promise.reject(new BackofficeError(503, "unavailable", "Le service est momentanément indisponible. Réessayez dans un instant."));
+  return call<T>(path, {
+    method: init.method,
+    body: init.body,
+    timeoutMs: init.timeoutMs,
+    headers: { "X-Yelema-Site-Secret": secret, ...(init.ip ? { "X-Forwarded-For": init.ip } : {}), ...(init.session ? { Authorization: `Guest ${init.session}` } : {}) },
+  });
 }
 
 /** The tool executions of one request through the Composio proxy, as the back office records them. */
@@ -670,6 +687,21 @@ export const backoffice = {
   buzzDeleteSalon: (token: string, id: string) => call<{ ok: true }>(`/app/buzz/salons/${encodeURIComponent(id)}`, { method: "DELETE", token, timeoutMs: 60_000 }),
   buzzAddSalonMembers: (token: string, id: string, cles: string[]) => call<{ ok: true; ajoutes: number }>(`/app/buzz/salons/${encodeURIComponent(id)}/membres`, { method: "POST", token, body: { cles }, timeoutMs: 90_000 }),
   buzzSalonDeliverables: (token: string, id: string) => call<{ items: SalonDeliverable[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/livrables`, { token, timeoutMs: 30_000 }),
+  buzzSalonGuests: (token: string, id: string) => call<{ data: SalonGuest[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/guests`, { token }),
+  buzzInviteGuests: (token: string, id: string, body: { emails: string[]; days: number }) =>
+    call<{ data: SalonGuest[]; refused: unknown[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/guests`, { method: "POST", token, body, timeoutMs: 60_000 }),
+  buzzExtendGuest: (token: string, id: string, guest: string, days: number) =>
+    call<SalonGuest>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}`, { method: "PATCH", token, body: { days } }),
+  buzzRemoveGuest: (token: string, id: string, guest: string) =>
+    call<unknown>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}`, { method: "DELETE", token, timeoutMs: 60_000 }),
+  // An external guest's routes: called by this server only, with its secret and the visitor's address.
+  guestCode: (invite: string, email: string, ip: string) => guestCall<unknown>(`/guest/invites/${encodeURIComponent(invite)}/code`, { ip, method: "POST", body: { email } }),
+  guestVerify: (invite: string, body: { email: string; code: string; pubkey: string }, ip: string) =>
+    guestCall<GuestView & { session: string }>(`/guest/invites/${encodeURIComponent(invite)}/verify`, { ip, method: "POST", body }),
+  guestSession: (session: string, ip: string) => guestCall<GuestView>("/guest/session", { ip, session }),
+  guestDeliverables: (session: string, ip: string) => guestCall<{ data: GuestFile[] }>("/guest/salon/deliverables", { ip, session, timeoutMs: 30_000 }),
+  guestParticipants: (session: string, ip: string) => guestCall<{ data: GuestParticipant[] }>("/guest/salon/participants", { ip, session }),
+  guestLogout: (session: string, ip: string) => guestCall<unknown>("/guest/logout", { ip, session, method: "POST" }),
   // `ajout`: the recipients were just added to the salon `salon` (named `nom`), to be told so.
   buzzSent: (token: string, sent: { kind: string; recipients: string[]; salon?: string; nom?: string }) => call<{ ok: true }>("/app/buzz/outbox", { method: "POST", token, body: sent }),
   memoryItems: (token: string) => call<MemoryList>("/app/memory/items", { token }),

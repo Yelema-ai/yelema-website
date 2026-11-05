@@ -5,6 +5,7 @@ import { backoffice, BackofficeError, type BoOpenedSession } from "@/lib/backoff
 import { memo } from "@/lib/memo";
 import { authViaBackoffice, deploymentWorkspaceId, multiTenant, resolverToken, siteUrl, supabaseAnonKey, supabaseUrl } from "@/lib/runtime-config";
 import { bearerDecision } from "@/lib/bearer-access";
+import { guestCookieApplies, guestCookieName } from "@/lib/guest-access";
 import { decodeSession, encodeSession, LEGACY_SESSION_COOKIE, secondsLeft, SESSION_COOKIE, sessionCookieOptions, sessionCookieValue, verifiedAccessToken } from "@/lib/session";
 import { publicSiteOrigin } from "@/lib/site-url";
 import { sealTenant, writeTenantHeader } from "@/lib/tenant-header";
@@ -13,6 +14,8 @@ import { hostOf, resolveHost, TenantError, type ResolvedTenant } from "@/lib/ten
 export async function updateSession(request: NextRequest) {
   // Only this proxy writes the resolved client: whatever the browser sent is dropped.
   writeTenantHeader(request.headers, null);
+  // An external guest's cookie is for /invite only: no other route ever sees it, even a stray one.
+  if (request.cookies.has(GUEST_COOKIE) && !guestCookieApplies(request.nextUrl.pathname)) request.cookies.delete(GUEST_COOKIE);
   // Health checks come from the back-office, carry no session, and must answer even when the
   // Supabase variables are missing — so they skip the auth client entirely.
   if (request.nextUrl.pathname === "/api/health") return NextResponse.next({ request });
@@ -104,6 +107,8 @@ async function tenantGate(request: NextRequest): Promise<NextResponse | { tenant
   if (tenant.status === "suspended") return refuse(403, "suspended", "Cet espace est suspendu.", "/espace-suspendu");
   return { tenant, host: host! };
 }
+
+const GUEST_COOKIE = guestCookieName(process.env.NODE_ENV === "production");
 
 // Renew the access token this long before it expires, so a request never leaves with a dead one.
 const RENEW_BEFORE_S = 120;

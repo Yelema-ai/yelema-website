@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { salonPeople, shortName, type BuzzEntry } from "@/lib/buzz";
+import { guestsIn, salonPeople, shortName, type BuzzEntry } from "@/lib/buzz";
 import { cn } from "@/lib/utils";
 import { ParticipantAvatar } from "@/components/messaging/ParticipantAvatar";
 
@@ -10,6 +10,7 @@ import { ParticipantAvatar } from "@/components/messaging/ParticipantAvatar";
 // visages ; un clic la déplie pour les nommer. Qui est là se lit d'un coup d'œil, sans tout dérouler.
 export function SalonParticipants({ members, directory, mine }: { members: string[]; directory: BuzzEntry[]; mine: string[] }) {
   const groups = useMemo(() => salonPeople(directory, members, mine), [directory, members, mine]);
+  const guests = useMemo(() => guestsIn(directory, members), [directory, members]);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const people = groups.filter((g) => g.person).length;
   const experts = groups.reduce((n, g) => n + g.experts.length, 0);
@@ -18,8 +19,9 @@ export function SalonParticipants({ members, directory, mine }: { members: strin
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
       <p className="text-[13px] text-ink-3">
         {people} membre{people > 1 ? "s" : ""} de l’équipe, {experts} Expert{experts > 1 ? "s" : ""} IA
+        {guests.length > 0 && `, ${guests.length} invité${guests.length > 1 ? "s" : ""}`}
       </p>
-      {groups.length === 0 && <p className="mt-3 text-sm text-ink-3">Personne d’autre n’est encore dans ce salon.</p>}
+      {groups.length === 0 && guests.length === 0 && <p className="mt-3 text-sm text-ink-3">Personne d’autre n’est encore dans ce salon.</p>}
       <ul className="mt-3 overflow-hidden rounded-card border border-line bg-surface">
         {groups.map((g) => {
           const unfolded = open.has(g.membre);
@@ -65,6 +67,28 @@ export function SalonParticipants({ members, directory, mine }: { members: strin
           );
         })}
       </ul>
+      {guests.length > 0 && (
+        <>
+          <h3 className="mt-5 text-[13px] font-semibold text-ink-2">Personnes externes</h3>
+          <ul className="mt-2 overflow-hidden rounded-card border border-line bg-surface">
+            {guests.map((g) => (
+              <li key={g.cles[0]} className="flex min-h-14 items-center gap-3 border-b border-line px-3.5 py-2.5 last:border-0">
+                <ParticipantAvatar entry={g} name={g.nom} size="sm" />
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+                  {g.nom}
+                  {g.cles.some((k) => mine.includes(k)) && <span className="font-normal text-ink-3"> (vous)</span>}
+                </span>
+                <GuestBadge />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
+}
+
+/** Marks a person from outside the client, in the thread and the participants. */
+export function GuestBadge() {
+  return <span className="shrink-0 rounded-full bg-coral-pale px-2 py-0.5 text-[11px] font-semibold text-coral-ink">Invité</span>;
 }

@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { remember, whenKept } from "@/lib/client-cache";
 import { optimistic } from "@/lib/optimistic";
-import { conversationName, facesOf, isSalonName, labelsOf, myExpertsIn, myMember, participants, working, type BuzzOverview } from "@/lib/buzz";
+import { conversationName, facesOf, guestsIn, isSalonName, labelsOf, myExpertsIn, myMember, participants, working, type BuzzOverview } from "@/lib/buzz";
 import { deviceKey, rememberedRelay, storedKey } from "@/lib/buzz-keys";
 import { reconnectDelay } from "@/lib/instance-events";
 import { BuzzConnection, conversations, follow, openDirect, refusalText, sendMessage, watchRosters, withMessage, type Conversation, type Message } from "@/lib/buzz-relay";
@@ -19,6 +20,10 @@ import { candidatesOf } from "@/lib/buzz-mentions";
 import { NewExchange, type ExchangeKind } from "@/components/messaging/NewExchange";
 import { prefetchSalonDeliverables } from "@/components/messaging/salon-deliverables-store";
 import { whenIdle } from "@/components/usePrefetch";
+import { useWorkspace } from "@/components/WorkspaceProvider";
+
+// Loaded only once a member opens it: the dialog weighs nothing on the page until then.
+const SalonGuests = dynamic(() => import("@/components/messaging/SalonGuests").then((m) => m.SalonGuests), { ssr: false });
 
 // Échanges entre membres, présentés comme le chat d'un Expert : la colonne des échanges, le fil à côté. Lus et
 // écrits par ce navigateur sur le relais du client ; le back-office admet la clé de l'appareil et tient les salons.
@@ -46,6 +51,10 @@ export function Messaging() {
   const [refreshing, setRefreshing] = useState(false);
   const [composing, setComposing] = useState<ExchangeKind | null>(null);
   const [pane, setPane] = useState<ExchangePane>("fil");
+  const [guestsOpen, setGuestsOpen] = useState(false);
+  // Guests counted when the dialog last read a salon's list (the overview may not say it for every salon).
+  const [guestCounts, setGuestCounts] = useState<Record<string, number>>({});
+  const admin = useWorkspace().current?.role === "admin";
   const relay = useRef<BuzzConnection | null>(null);
   // Bumped on each (re)connection and on « Actualiser »: the list and the open thread are read again.
   const [link, setLink] = useState(0);
@@ -330,6 +339,11 @@ export function Messaging() {
   if (state.kind === "closed") return <p className="m-6 max-w-xl rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{state.reason}</p>;
 
   const kind = current ? (isUnit(current) ? "unite" : isSalon(current) ? "salon" : "direct") : null;
+  // The salon's creator or an admin may invite; the back office decides, the app only hides it where it cannot apply.
+  const canInvite = kind === "salon" || (kind === "unite" && admin);
+  const withGuests = Boolean(
+    current && kind !== "direct" && (guestCounts[current.id] ?? (overview?.salons.find((s) => s.id === current.id)?.hasGuests || guestsIn(directory, current.members).length > 0)),
+  );
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <ExchangeHeader
@@ -340,6 +354,7 @@ export function Messaging() {
         onPane={setPane}
         onBack={() => setOpen(null)}
         onAdd={() => setComposing("ajout")}
+        onGuests={canInvite ? () => setGuestsOpen(true) : undefined}
         onLivrablesIntent={() => salonOpen && prefetchSalonDeliverables(salonOpen)}
       />
       <div className="flex min-h-0 flex-1">
@@ -366,6 +381,7 @@ export function Messaging() {
         />
       </div>
       <section className={cn("min-w-0 flex-1 flex-col bg-surface lg:flex", open ? "flex" : "hidden")}>
+        {withGuests && <p role="note" className="shrink-0 border-b border-line bg-coral-pale px-4 py-2 text-[13px] font-semibold text-coral-ink sm:px-5">Personnes externes présentes : ce qui est écrit ici, elles le lisent aussi.</p>}
         <ExchangeThread
           current={current}
           salon={kind === "unite" || kind === "salon"}
@@ -383,6 +399,15 @@ export function Messaging() {
         />
       </section>
       </div>
+      {guestsOpen && current && (
+        <SalonGuests
+          salon={current.id}
+          nom={nameOf(current)}
+          open
+          onClose={() => setGuestsOpen(false)}
+          onPresent={(n) => setGuestCounts((c) => (c[current.id] === n ? c : { ...c, [current.id]: n }))}
+        />
+      )}
       <NewExchange kind={composing} onClose={() => setComposing(null)} directory={directory} mine={mine} onStart={start} onSalon={() => setComposing("salon")} />
     </div>
   );

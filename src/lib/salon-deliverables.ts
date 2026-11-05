@@ -11,6 +11,8 @@ export interface SalonDeliverable {
   url: string | null;
   folder: string;
   auteur: string;
+  /** The drive path, when the answer names it (a guest's list); else read off the signed address. */
+  path?: string;
   /** The back office served its last known answer while it reads again. */
   stale?: boolean;
   checkedAt?: string;
@@ -24,6 +26,7 @@ export function inSalon(path: string, salon: string): boolean {
 
 // The drive path a deliverable's signed address names (its `p`).
 function pathOf(d: SalonDeliverable): string | null {
+  if (d.path) return normDrivePath(d.path);
   if (!d.url) return null;
   try {
     const p = new URL(d.url, "http://x").searchParams.get("p");

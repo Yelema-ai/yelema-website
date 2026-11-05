@@ -16,8 +16,8 @@ import { ParticipantAvatar } from "@/components/messaging/ParticipantAvatar";
 import { SalonDeliverables } from "@/components/messaging/SalonDeliverables";
 import { SalonDocCards } from "@/components/messaging/SalonDocCards";
 import { readSalonDeliverables, salonReadAt, useSalonDeliverables } from "@/components/messaging/salon-deliverables-store";
-import { linkSalonPaths, salonDeliverableFor, salonPathsIn } from "@/lib/salon-deliverables";
-import { SalonParticipants } from "@/components/messaging/SalonParticipants";
+import { linkSalonPaths, salonDeliverableFor, salonPathsIn, type SalonDeliverable } from "@/lib/salon-deliverables";
+import { GuestBadge, SalonParticipants } from "@/components/messaging/SalonParticipants";
 
 // Le fil d'un échange, comme le chat d'un Expert (l'en-tête et ses onglets sont dans ExchangeHeader) : messages,
 // visage de l'auteur en tête de chaque suite, choix du dernier message en boutons (comme le chat d'un Expert), « … travaille » pour vos Experts sollicités, saisie avec « @ ».
@@ -38,6 +38,8 @@ export interface ThreadProps {
   candidates: Candidate[];
   sending: boolean;
   onSend: (text: string, mentions: string[], replyTo: Message | null) => Promise<boolean>;
+  /** The salon's deliverables read elsewhere (an external guest's page); by default, the member's own reading. */
+  deliverables?: { items: SalonDeliverable[] | null; error: string | null; loading: boolean; refresh: () => void };
 }
 
 export function ExchangeThread(p: ThreadProps) {
@@ -53,7 +55,9 @@ export function ExchangeThread(p: ThreadProps) {
   // Les fichiers du salon cités dans le fil : la liste des livrables n'est lue que s'il y en a (ou l'onglet ouvert).
   const salonId = p.salon ? (id ?? null) : null;
   const cited = useMemo(() => (salonId ? (p.thread ?? []).flatMap((m) => salonPathsIn(m.text, salonId).map((path) => ({ path, at: m.at }))) : []), [salonId, p.thread]);
-  const livrables = useSalonDeliverables(salonId, p.pane === "livrables" || cited.length > 0);
+  const own = useSalonDeliverables(p.deliverables ? null : salonId, p.pane === "livrables" || cited.length > 0);
+  const livrables = p.deliverables ?? own;
+  const rereadGuest = p.deliverables?.refresh;
   const items = livrables.items;
   // Un fichier cité après la dernière lecture, absent de la liste : relue une fois.
   const asked = useRef(new Set<string>());
@@ -62,8 +66,9 @@ export function ExchangeThread(p: ThreadProps) {
     const late = cited.find((c) => !salonDeliverableFor(c.path, salonId, items) && c.at * 1000 > salonReadAt(salonId) && !asked.current.has(c.path));
     if (!late) return;
     asked.current.add(late.path);
-    void readSalonDeliverables(salonId, 0).catch(() => undefined);
-  }, [salonId, cited, items]);
+    if (rereadGuest) rereadGuest();
+    else void readSalonDeliverables(salonId, 0).catch(() => undefined);
+  }, [salonId, cited, items, rereadGuest]);
   // Le texte de chaque lien vers son adresse ; deux fichiers du même nom gardent leur lien, sans raccourci.
   const links = useMemo(() => {
     const out = new Map<string, string | null>();
@@ -108,7 +113,7 @@ export function ExchangeThread(p: ThreadProps) {
 
   // Façon Slack : tout le monde à gauche, chacun avec son nom et son visage, soi compris ; le fil se lit pareil
   // pour tous. Son propre message garde seulement un fond teinté pour se repérer.
-  const self = p.directory.find((e) => e.type === "personne" && e.cles.length > 0 && e.cles.every((k) => p.mine.includes(k))) ?? null;
+  const self = p.directory.find((e) => e.type !== "expert" && e.cles.length > 0 && e.cles.every((k) => p.mine.includes(k))) ?? null;
   const nameOf = (k: string) => (p.mine.includes(k) ? (self?.nom ?? "Vous") : (p.labels.get(k) ?? "Membre inconnu"));
   const entryOf = (k: string) => (p.mine.includes(k) ? self : (byKey.get(k) ?? null));
   return (
@@ -156,6 +161,7 @@ export function ExchangeThread(p: ThreadProps) {
                       <div className="flex items-baseline gap-2">
                         {m.replyTo && <CornerDownRight className="h-3.5 w-3.5 shrink-0 self-center text-ink-3" />}
                         <span className="text-[13px] font-semibold text-ink">{nameOf(m.author)}</span>
+                        {entryOf(m.author)?.type === "invite" && <GuestBadge />}
                         <time className="text-[11.5px] text-ink-3">{moment(m.at)}</time>
                       </div>
                     )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Hash, MessagesSquare, User, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, Hash, MailPlus, MessagesSquare, User, UserPlus, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/app/NotificationBell";
@@ -18,6 +18,8 @@ export interface HeaderProps {
   onPane: (p: ExchangePane) => void;
   onBack: () => void;
   onAdd: () => void;
+  /** Shown when the member may invite people from outside the client into this salon. */
+  onGuests?: () => void;
   /** The pointer or the focus reached the Livrables tab: its list is read ahead. */
   onLivrablesIntent?: () => void;
 }
@@ -69,6 +71,11 @@ export function ExchangeHeader(p: HeaderProps) {
           </nav>
         )}
         <div className="order-2 flex shrink-0 items-center gap-2 pr-4 pt-1.5 lg:order-3 lg:ml-auto lg:p-0">
+          {p.onGuests && (
+            <Button variant="outline" size="sm" onClick={p.onGuests} title="Inviter des personnes externes">
+              <MailPlus /> <span className="max-sm:sr-only">Inviter des personnes externes</span>
+            </Button>
+          )}
           {p.canAdd && (
             <Button variant="outline" size="sm" onClick={p.onAdd}>
               <UserPlus /> Ajouter

@@ -2,13 +2,13 @@
 // the member's own devices, the directory (people and their experts) and the team salons. Messages
 // themselves never pass through the back office: the browser reads and writes them on the relay.
 
-/** `profil` (experts): their Hermes profile; `photo`: an expert's from the catalogue (added by this app), a person's profile photo (served by the back office, one's own added by this app). */
-export interface BuzzEntry { nom: string; type: "personne" | "expert"; membre: string; cles: string[]; profil?: string; photo?: string | null }
+/** `profil` (experts): their Hermes profile; `photo`: an expert's from the catalogue (added by this app), a person's profile photo (served by the back office, one's own added by this app). `invite`: a guest from outside the client, in one salon. */
+export interface BuzzEntry { nom: string; type: "personne" | "expert" | "invite"; membre: string; cles: string[]; profil?: string; photo?: string | null }
 export interface BuzzOverview {
   relais: string;
   appareils: { cle: string; nom: string }[];
   annuaire: BuzzEntry[];
-  salons: { id: string; nom: string }[];
+  salons: { id: string; nom: string; hasGuests?: boolean }[];
 }
 
 export const PUBKEY_RE = /^[0-9a-f]{64}$/;
@@ -108,6 +108,9 @@ export function facesOf(directory: BuzzEntry[], members: string[], mine: string[
   const own = (e: BuzzEntry) => e.type === "personne" && e.cles.some((k) => mine.includes(k));
   return [...seen].sort((a, b) => Number(own(a)) - Number(own(b)) || Number(a.type === "expert") - Number(b.type === "expert"));
 }
+
+/** The salon's guests (people from outside the client), in the order the directory lists them. */
+export const guestsIn = (directory: BuzzEntry[], members: string[]): BuzzEntry[] => directory.filter((e) => e.type === "invite" && e.cles.some((k) => members.includes(k)));
 
 /** One's own profile photo on one's own entry, when the back office does not serve it in the directory. */
 export function withOwnPhoto(directory: BuzzEntry[], devices: string[], photo: string | null | undefined): BuzzEntry[] {
