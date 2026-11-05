@@ -37,9 +37,9 @@ export function measured(pathname: string): boolean {
 
 /** Sample rate from the env value: 0 to 1, default 10 %. */
 export function sampleRateOf(raw: string | undefined): number {
-  if (raw === undefined || raw.trim() === "") return 0.1;
+  if (raw === undefined || raw.trim() === "") return 0;
   const n = Number(raw);
-  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.1;
+  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
 }
 
 const ms = (v: unknown): v is number | null => v === null || (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= MAX_MS);

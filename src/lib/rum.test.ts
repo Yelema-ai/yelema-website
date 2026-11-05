@@ -22,11 +22,11 @@ test("login, auth and public dashboards are not measured", () => {
 });
 
 test("sample rate: default 10 %, bounded to 0..1", () => {
-  assert.equal(sampleRateOf(undefined), 0.1);
-  assert.equal(sampleRateOf(""), 0.1);
+  assert.equal(sampleRateOf(undefined), 0);
+  assert.equal(sampleRateOf(""), 0);
   assert.equal(sampleRateOf("0"), 0);
   assert.equal(sampleRateOf("3"), 1);
-  assert.equal(sampleRateOf("abc"), 0.1);
+  assert.equal(sampleRateOf("abc"), 0);
 });
 
 test("a batch is accepted only in the expected shape, and re-normalised", () => {

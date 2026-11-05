@@ -17,7 +17,7 @@ Aucun utilisateur, aucune adresse IP, aucun paramètre d'URL ; les identifiants 
 ## Variables (Vercel, serveur seulement)
 | Variable | Défaut | Rôle |
 |---|---|---|
-| `RUM_SAMPLE_RATE` | `0.1` | part des onglets mesurés (0 coupe la mesure) |
+| `RUM_SAMPLE_RATE` | `0` (coupé) | part des onglets mesurés, par exemple `0.1` pour 10 % |
 | `RUM_OTLP_ENDPOINT` | — | base OTLP/HTTP du collecteur (`…/v1/metrics` ajouté) ; absente : une ligne `[rum] [...]` par lot dans les journaux Vercel |
 | `RUM_OTLP_HEADERS` | — | en-têtes `k=v,k2=v2` (ex. `Authorization=Basic%20…`) si la porte du collecteur est protégée |
 
