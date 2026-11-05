@@ -145,9 +145,9 @@ export function Messaging() {
         if (stop) return;
         dialer.current = { url: o.relais, secret: key.secret, dialing: false, stopped: false };
         if (await dial(8)) setState({ kind: "ready" });
-        else if (!stop) setState({ kind: "closed", reason: "Votre accès aux Échanges est en cours d’activation. Réessayez dans une minute." });
+        else if (!stop) setState({ kind: "closed", reason: "Votre accès aux Salons est en cours d’activation. Réessayez dans une minute." });
       } catch (e) {
-        if (!stop) setState({ kind: "closed", reason: e instanceof Error ? e.message : "Les Échanges ne sont pas disponibles." });
+        if (!stop) setState({ kind: "closed", reason: e instanceof Error ? e.message : "Les Salons ne sont pas disponibles." });
       }
     })();
     return () => {
@@ -321,7 +321,7 @@ export function Messaging() {
   async function copyLink(c: Conversation) {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/echanges?c=${c.id}`);
-      toast.success("Lien copié : il ouvre cet échange pour ses participants.");
+      toast.success("Lien copié : il ouvre cette conversation pour ses participants.");
     } catch {
       toast.error("Le lien n’a pas pu être copié.");
     }

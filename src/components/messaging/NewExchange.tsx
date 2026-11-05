@@ -62,7 +62,7 @@ export function NewExchange({ kind, onClose, directory, mine, onStart, onSalon }
       await onStart(kind ?? "message", keys, name.trim());
       reset();
     } catch (e) {
-      setRefusal(e instanceof Error ? e.message : "Échange non ouvert.");
+      setRefusal(e instanceof Error ? e.message : "Conversation non ouverte.");
     } finally {
       setBusy(false);
     }

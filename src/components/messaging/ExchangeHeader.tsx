@@ -30,7 +30,7 @@ export function ExchangeHeader(p: HeaderProps) {
       <div className="flex flex-wrap items-center lg:h-16 lg:flex-nowrap lg:gap-5 lg:px-6">
         <div className="order-1 flex min-w-0 flex-1 items-center gap-2.5 px-4 pb-1 pt-2.5 lg:w-[272px] lg:flex-none lg:p-0">
           {p.title && (
-            <button type="button" onClick={p.onBack} aria-label="Retour aux échanges" className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-2 hover:bg-soft lg:hidden">
+            <button type="button" onClick={p.onBack} aria-label="Retour aux salons" className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-2 hover:bg-soft lg:hidden">
               <ArrowLeft className="h-4 w-4" />
             </button>
           )}
@@ -39,11 +39,11 @@ export function ExchangeHeader(p: HeaderProps) {
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-ink-3 lg:text-[12.5px]">
-              <button type="button" onClick={p.onBack} className="shrink-0 hover:text-ink">Échanges</button>
+              <button type="button" onClick={p.onBack} className="shrink-0 hover:text-ink">Salons</button>
               {p.title && <span aria-hidden>›</span>}
               {p.title && <span className="truncate">{p.kind === "unite" ? "Salon d’équipe" : p.kind === "salon" ? "Salon" : "Message direct"}</span>}
             </span>
-            <span className="block truncate font-display text-sm font-bold leading-tight text-ink lg:text-[17px]">{p.title ?? "Vos échanges"}</span>
+            <span className="block truncate font-display text-sm font-bold leading-tight text-ink lg:text-[17px]">{p.title ?? "Vos salons"}</span>
           </span>
         </div>
         {tabs.length > 0 && (

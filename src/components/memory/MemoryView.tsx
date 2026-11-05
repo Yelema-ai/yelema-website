@@ -62,11 +62,17 @@ export function MemoryView({ embedded = false, onDeposit }: { embedded?: boolean
 
   // The company's brand book, always on top: the Experts apply it to every deliverable (Leslie, 01/11).
   const charte = list?.items.find((i) => i.kind === "document" && /charte/i.test(i.title)) ?? null;
-  // No brand book yet: Koffi (Design & Création) can make one with his /charte command (Leslie, 01/11).
+  // No brand book yet: Djénéba makes it, she is in every account (Leslie, 05/11: « tous les comptes n'ont pas
+  // Koffi »). She hands it to Koffi when the team has him. The file may land in either one's Livrables.
   const { experts } = useExpertsContext();
-  const designer = experts.find((e) =>
-    [e.catalogueKey, e.driveFolder, e.profileId].some((k) => k && k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes("koffi"))
-  );
+  const plainKey = (k?: string | null) => (k ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const isExpert = (e: (typeof experts)[number], name: string) => [e.catalogueKey, e.driveFolder, e.profileId].some((k) => plainKey(k).includes(name));
+  const koffi = experts.find((e) => isExpert(e, "koffi"));
+  const designer = experts.find((e) => isExpert(e, "djeneba")) ?? koffi;
+  const charteRequest =
+    designer === koffi
+      ? "/charte"
+      : "Prépare la charte graphique de l’entreprise (logo, couleurs, polices, exemples) à partir de notre site et de nos documents, en PDF nommé « Charte graphique ».";
   // Koffi delivers the brand book in his Livrables (a file named « Charte… »); the admin makes it the
   // company's in one click (Leslie, 01/11: Koffi writes nothing in the memory himself). Shown while
   // there is no charte, or when his file is newer than the one deposited.
@@ -75,7 +81,7 @@ export function MemoryView({ embedded = false, onDeposit }: { embedded?: boolean
   useEffect(() => {
     if (!designer) return;
     const plain = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    const folders = [designer.driveFolder, designer.displayName, "koffi"].filter(Boolean).map((f) => plain(String(f)));
+    const folders = [designer.driveFolder, designer.displayName, koffi?.driveFolder, koffi?.displayName, "koffi", "djeneba"].filter(Boolean).map((f) => plain(String(f)));
     driveTree(designer.agentId)
       .then((tree) => {
         const found = tree.entries
@@ -84,7 +90,7 @@ export function MemoryView({ embedded = false, onDeposit }: { embedded?: boolean
         setMade(found ? { path: found.path, name: found.name, modified: found.modified } : null);
       })
       .catch(() => setMade(null));
-  }, [designer]);
+  }, [designer, koffi]);
   const charteAt = charte?.sentAt ? Date.parse(charte.sentAt) / 1000 : 0;
   const offer = made && (!charte || (charteAt > 0 && made.modified > charteAt + 60)) ? made : null;
   async function adoptCharte() {
@@ -235,7 +241,7 @@ export function MemoryView({ embedded = false, onDeposit }: { embedded?: boolean
             )}
             {!charte && !offer && designer && (
               <Button asChild size="sm" className="max-sm:w-full">
-                <Link href={`${expertPath(designer.agentId, designer.profileId)}/chat?q=${encodeURIComponent("/charte")}`}>
+                <Link href={`${expertPath(designer.agentId, designer.profileId)}/chat?q=${encodeURIComponent(charteRequest)}`}>
                   La créer avec {designer.displayName}
                 </Link>
               </Button>

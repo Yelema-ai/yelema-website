@@ -97,7 +97,7 @@ export function ExchangeThread(p: ThreadProps) {
     return (
       <div className="m-auto p-10 text-center">
         <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-soft text-ink-3"><MessagesSquare className="h-6 w-6" /></span>
-        <h2 className="mt-3 text-base font-semibold text-ink">Choisissez un échange</h2>
+        <h2 className="mt-3 text-base font-semibold text-ink">Choisissez une conversation</h2>
         <ul className="mx-auto mt-3 max-w-sm space-y-2 text-left text-sm text-ink-3">
           <li><span className="font-semibold text-ink">Message direct</span> : écrivez à un membre de l’équipe ou à ses Experts IA, 9 personnes au plus.</li>
           <li><span className="font-semibold text-ink">Salon</span> : un espace nommé pour un sujet, jusqu’à 50 participants.</li>
