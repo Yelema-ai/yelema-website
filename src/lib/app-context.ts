@@ -96,7 +96,9 @@ export async function ownExperts(): Promise<{ agentId: string | null; experts: U
     if (!profilesMirrored(agents)) return null;
     const { experts } = await userExperts(agents);
     return { agentId: (authViaBackoffice() ? agents[0]?.agent37_id : null) ?? experts[0]?.agentId ?? null, experts };
-  } catch {
+  } catch (e) {
+    // The message only: no user, address or token reaches the log.
+    console.error("[bootstrap] own experts unreadable:", e instanceof Error ? e.message : typeof e);
     return null;
   }
 }
