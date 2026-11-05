@@ -4,13 +4,13 @@ import { useEffect } from "react";
 import { apiFetch } from "@/lib/api";
 import { cachedFetch } from "@/lib/client-cache";
 import { profileQuery } from "@/lib/profile-id";
+import { sessionsStore } from "@/lib/sessions-client";
 import type { ModelsResponse } from "@/lib/types";
-import type { ChatSession } from "@/components/chat/types";
 
 // An Expert's page opens on two reads: its conversations and its models. The menu reads them ahead,
 // so the page paints them at once; the same call starts the Expert's process on the instance (its
-// first call boots it), which is the wait a member otherwise meets on their first message.
-export const sessionsKey = (agentId: string, profile: string | null) => `sessions:${agentId}${profileQuery(profile)}`;
+// first call boots it), which is the wait a member otherwise meets on their first message. The
+// conversations come from the sessions store, usually already filled by the tab's bootstrap.
 export const modelsKey = (agentId: string, profile: string | null) => `models:${agentId}${profileQuery(profile)}`;
 
 // Read again at most this often: a menu hovered back and forth asks nothing more.
@@ -19,14 +19,14 @@ const last = new Map<string, number>();
 const inFlight = new Map<string, Promise<void>>();
 
 export function preloadExpert(agentId: string, profile: string | null): Promise<void> {
-  const key = sessionsKey(agentId, profile);
+  const key = `${agentId}${profileQuery(profile)}`;
   const running = inFlight.get(key);
   if (running) return running;
   if (Date.now() - (last.get(key) ?? 0) < FRESH_MS) return Promise.resolve();
   const q = profileQuery(profile);
   // Shared with the page's own reads: what it read in the last minute is not asked again.
   const p = Promise.allSettled([
-    cachedFetch(key, () => apiFetch<{ sessions: ChatSession[] }>(`/api/agents/${agentId}/chat/sessions${q}`).then((r) => r.sessions), FRESH_MS),
+    sessionsStore.read(agentId, profile, FRESH_MS),
     cachedFetch(modelsKey(agentId, profile), () => apiFetch<ModelsResponse>(`/api/agents/${agentId}/chat/models${q}`), FRESH_MS),
   ]).then(() => {
     last.set(key, Date.now());

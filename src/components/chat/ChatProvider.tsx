@@ -4,9 +4,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from "sonner";
 import { useChatPresence } from "@/components/activity/hooks";
 import { apiFetch } from "@/lib/api";
-import { cached, cachedFetch, remember } from "@/lib/client-cache";
+import { remember } from "@/lib/client-cache";
+import { instanceEvents, streamGate } from "@/lib/instance-events";
 import { browserPollEnv, startPoll } from "@/lib/poll";
-import { sessionsKey } from "@/components/experts/expert-preload";
+import { sessionsStore } from "@/lib/sessions-client";
 import { mergeRail, movedUpstream } from "@/lib/chat-rail";
 import { profileQuery } from "@/lib/profile-id";
 import type { MergedAgent } from "@/lib/types";
@@ -65,6 +66,8 @@ export function useChatContext() {
 export const railViewKey = (agentId: string, profile: string | null) => `rail-view:${agentId}:${profile ?? ""}`;
 
 const FRESH_RAIL_MS = 15_000;
+// The rail's safety net while the stream is down (off while it is up: a turn's end tells).
+const RAIL_NET_MS = 30_000;
 
 export function ChatProvider({
   agentId,
@@ -91,11 +94,10 @@ export function ChatProvider({
   // Every chat route takes the expert as ?profile=; threads of one expert are invisible to another.
   const q = profileQuery(profile);
   // The rail last read for this expert (or read ahead by the menu, expert-preload): it paints at once.
-  const railKey = sessionsKey(agentId, profile);
-  const [sessions, setSessions] = useState<ChatSession[]>(() => cached<ChatSession[]>(railKey) ?? []);
+  const [sessions, setSessions] = useState<ChatSession[]>(() => sessionsStore.get(agentId, profile)?.sessions ?? []);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(urlSessionId);
   const [composerFocusToken, setComposerFocusToken] = useState(0);
-  const [loadingSessions, setLoadingSessions] = useState(() => cached(railKey) === undefined);
+  const [loadingSessions, setLoadingSessions] = useState(() => sessionsStore.get(agentId, profile) === undefined);
 
   // Adopt the thread from the URL whenever it changes — a rail click, Back/Forward, or a refresh.
   // Done during render (React's "adjust state when a prop changes" pattern) so there's no extra
@@ -119,8 +121,9 @@ export function ChatProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onChatTab]);
 
-  // The rail follows the instance: first load (retried while it wakes up), then every 30 s while the
-  // tab is visible, once on return to it, and on demand. A failed read keeps the rows already shown.
+  // The rail follows the sessions store: first load (retried while the instance wakes up), then every
+  // re-read the stream asks for (a turn ended, a conversation renamed), a 30 s net while the stream is
+  // down, once on return to the tab, and on demand. A failed read keeps the rows already shown.
   const [refreshingSessions, setRefreshingSessions] = useState(false);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [threadVersion, setThreadVersion] = useState(0);
@@ -129,20 +132,21 @@ export function ChatProvider({
   openRef.current = activeSessionId;
   const loadSeq = useRef(0);
 
+  const apply = useCallback((rows: ChatSession[]) => {
+    if (movedUpstream(serverRail.current, rows, openRef.current)) setThreadVersion((v) => v + 1);
+    serverRail.current = rows;
+    setSessions((prev) => mergeRail(rows, prev));
+    setSessionsError(null);
+    setLoadingSessions(false);
+  }, []);
+
   const reloadSessions = useCallback(
-    async (retries = 0, shared = false): Promise<void> => {
+    async (retries = 0, maxAgeMs = 0): Promise<void> => {
       const seq = ++loadSeq.current;
       setRefreshingSessions(true);
       try {
-        const read = () => apiFetch<{ sessions: ChatSession[] }>(`/api/agents/${agentId}/chat/sessions${q}`);
-        // On opening, a read the menu has running or has just made is joined instead of repeated.
-        const res = shared ? { sessions: await cachedFetch(railKey, () => read().then((r) => r.sessions), FRESH_RAIL_MS) } : await read();
-        if (seq !== loadSeq.current) return;
-        if (movedUpstream(serverRail.current, res.sessions, openRef.current)) setThreadVersion((v) => v + 1);
-        serverRail.current = res.sessions;
-        remember(railKey, res.sessions);
-        setSessions((prev) => mergeRail(res.sessions, prev));
-        setSessionsError(null);
+        // The store tells `apply` (subscribed below); on opening, a read the menu just made is joined.
+        await sessionsStore.read(agentId, profile, maxAgeMs);
       } catch (e) {
         if (seq !== loadSeq.current) return;
         if (retries > 0) {
@@ -158,23 +162,24 @@ export function ChatProvider({
         }
       }
     },
-    [agentId, q, railKey]
+    [agentId, profile]
   );
 
   useEffect(() => {
-    const kept = cached<ChatSession[]>(railKey) ?? null;
+    const kept = sessionsStore.get(agentId, profile)?.sessions ?? null;
     serverRail.current = kept;
     setSessions(kept ?? []);
     setLoadingSessions(kept === null);
-    void reloadSessions(3, true);
-    // Every 30 s while visible; hidden, nothing, and one reading on the way back.
-    const poll = startPoll(() => reloadSessions(), { everyMs: 30_000, immediate: false }, browserPollEnv());
+    const off = sessionsStore.subscribe(agentId, profile, (d) => apply(d.sessions));
+    void reloadSessions(3, FRESH_RAIL_MS);
+    // A net only while the stream is down; hidden, nothing, and one reading on the way back.
+    const poll = startPoll(() => reloadSessions(), { everyMs: RAIL_NET_MS, immediate: false, gate: streamGate(instanceEvents, RAIL_NET_MS) }, browserPollEnv());
     return () => {
       loadSeq.current += 1;
+      off();
       poll.stop();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadSessions]);
+  }, [agentId, profile, apply, reloadSessions]);
 
   const requestComposerFocus = useCallback(() => setComposerFocusToken((n) => n + 1), []);
 
@@ -241,6 +246,8 @@ export function ChatProvider({
       if (wasActive) setOpenThread(null);
       try {
         await apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`, { method: "DELETE" });
+        // The other lists of this space (menu, Conversations) read it again.
+        sessionsStore.invalidate(agentId, profile ?? "");
       } catch (e) {
         // Functional rollback: re-insert only the removed row (preserving any threads added
         // concurrently) and restore the open thread.
@@ -249,7 +256,7 @@ export function ChatProvider({
         toast.error((e as Error).message || "La conversation n’a pas pu être supprimée.");
       }
     },
-    [agentId, q, activeSessionId, sessions, setOpenThread]
+    [agentId, profile, q, activeSessionId, sessions, setOpenThread]
   );
 
   const renameSession = useCallback(
@@ -263,12 +270,13 @@ export function ChatProvider({
           method: "PATCH",
           body: JSON.stringify({ title: next }),
         });
+        sessionsStore.invalidate(agentId, profile ?? "");
       } catch (e) {
         setSessions((s) => s.map((x) => (x.session_id === sessionId ? { ...x, title: prev } : x))); // rollback
         toast.error((e as Error).message || "La conversation n’a pas pu être renommée.");
       }
     },
-    [agentId, q, sessions]
+    [agentId, profile, q, sessions]
   );
 
   // Move a thread to the top of the rail, under "Aujourd'hui", on new activity. Upstream ordering

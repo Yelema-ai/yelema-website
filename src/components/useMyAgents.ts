@@ -9,7 +9,7 @@ import type { MergedAgent, Role } from "@/lib/types";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { usePoll } from "@/components/usePoll";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
-import { instanceEvents } from "@/lib/instance-events";
+import { instanceEvents, matches } from "@/lib/instance-events";
 
 // The instances the signed-in user owns in a workspace, with their live state (one per member, so
 // in practice one row). ONE reading for the whole shell, seeded by the server layout; read again
@@ -56,14 +56,15 @@ function useAgentsReading(workspaceId: string | null | undefined, initial: Merge
   // A reading kept for another workspace is not this one's.
   const current = state?.key === key ? state : null;
   const agents = current?.agents ?? EMPTY;
-  usePoll(load, { everyMs: TRANSITION_POLL_MS, immediate: false, enabled: Boolean(workspaceId) && agents.some((a) => isTransitional(a.live_status)) });
+  // Starting or stopping: a net while the stream is down; with it, `instance.changed` says when.
+  usePoll(load, { everyMs: TRANSITION_POLL_MS, immediate: false, enabled: Boolean(workspaceId) && agents.some((a) => isTransitional(a.live_status)), live: true });
 
-  // The back office changed an instance's route (activated, suspended): read the list again (EVENT_STREAM=on).
+  // The back office changed an instance's route (activated, suspended) or its experts: read the list again.
   const { eventStream } = usePublicConfig();
   const ids = agents.map((a) => a.agent37_id).filter((id): id is string => Boolean(id)).join(",");
   useEffect(() => {
     if (!eventStream || !workspaceId || !ids) return;
-    const offs = ids.split(",").map((id) => instanceEvents.on(id, (type) => type === "instance.changed" && void load()));
+    const offs = ids.split(",").map((id) => instanceEvents.on(id, (e) => matches(e, { types: ["instance.changed"] }) || (e.type === "job.done" && e.kind === "experts") ? void load() : undefined));
     return () => offs.forEach((off) => off());
   }, [eventStream, workspaceId, ids, load]);
 

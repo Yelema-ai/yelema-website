@@ -1,5 +1,6 @@
 "use client";
 
+import { listenWake, WAIT_POLL_MS } from "@/components/wake";
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -19,7 +20,6 @@ import { TelegramQrConnect } from "@/components/channels/TelegramQrConnect";
 import { useAsyncAction } from "@/components/useAsyncAction";
 import { DisconnectButton } from "@/components/channels/DisconnectButton";
 
-const OWNER_POLL_MS = 3000;
 
 type Step = "qr" | "token" | "owner" | "connected";
 
@@ -92,10 +92,12 @@ export function TelegramConnect({
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
+    let busy = false;
     const poll = async () => {
-      if (cancelled) return;
-      // Hidden: nothing is asked until the tab shows again.
-      if (document.hidden) return void (timer = setTimeout(() => void poll(), OWNER_POLL_MS));
+      clearTimeout(timer);
+      // Hidden: nothing is asked until the tab shows again (listenWake).
+      if (cancelled || busy || document.hidden) return;
+      busy = true;
       try {
         const result = await post<{ owner: TelegramOwner | null; unavailable: boolean }>({ action: "owner", token });
         if (cancelled) return;
@@ -114,13 +116,17 @@ export function TelegramConnect({
       } catch {
         // A miss is normal here (Telegram rate limits, a slow network): keep waiting rather than
         // throwing the user back to the token field.
+      } finally {
+        busy = false;
       }
-      if (!cancelled) timer = setTimeout(() => void poll(), OWNER_POLL_MS);
+      if (!cancelled) timer = setTimeout(() => void poll(), WAIT_POLL_MS);
     };
 
-    timer = setTimeout(() => void poll(), OWNER_POLL_MS);
+    timer = setTimeout(() => void poll(), WAIT_POLL_MS);
+    const off = listenWake({ types: ["job.done"], kind: "telegram" }, () => void poll());
     return () => {
       cancelled = true;
+      off();
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -10,22 +10,24 @@ import { agentTabPath } from "@/lib/expert-tabs";
 import { readNotifyPrefs, saveNotifyPrefs } from "@/lib/notify-prefs";
 import { useOwnAgentId } from "@/components/conversations/useAllConversations";
 import { usePoll } from "@/components/usePoll";
+import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { systemNotify } from "./system-notify";
 
 // A file of the drive (three levels deep) the page has not seen yet is a new deliverable, announced
 // like a reply (toast, system notification when the tab is hidden) unless switched off in Paramètres.
-// The drive is read when something may have written there: a turn or a routine that ended, the tab
-// shown again, and otherwise every 10 minutes while visible (a deliverable made from Telegram).
-// The first reading is the baseline: nothing already there is announced.
+// The drive is read when something may have written there (the stream's `files.changed`, settled by the
+// drive store), the tab shown again, and every 10 minutes while visible and the stream is down. The
+// first reading (usually the tab's bootstrap) is the baseline: nothing already there is announced.
 const SAFETY_MS = 10 * 60_000;
-// The expert writes its files as the turn ends: give it a moment.
-const AFTER_EVENT_MS = 4_000;
+// What one pop-up lists at most, however long the tab stays open.
+const MAX_SHOWN = 20;
 // Back on the tab after this long away: one look.
 const RETURN_MS = 2 * 60_000;
 const TOAST_ID = "livrables";
 
 export function DeliverableWatcher() {
   const agentId = useOwnAgentId();
+  const { eventStream } = usePublicConfig();
   const router = useRouter();
   const seen = useRef<Set<string> | null>(null);
   const hiddenAt = useRef<number | null>(null);
@@ -47,7 +49,7 @@ export function DeliverableWatcher() {
       // shows, replaced as more comes, swiped away or closed at once, with « Ne plus afficher ».
       const fresh = deliveryNotices(files.filter((f) => !before.has(f.path)));
       if (!fresh.length) return;
-      shown.current = [...shown.current.filter((n) => !fresh.some((f) => f.id === n.id)), ...fresh];
+      shown.current = [...shown.current.filter((n) => !fresh.some((f) => f.id === n.id)), ...fresh].slice(-MAX_SHOWN);
       const all = shown.current;
       const one = all.length === 1 ? all[0] : null;
       const count = all.reduce((n, d) => n + d.docs.length, 0);
@@ -100,35 +102,32 @@ export function DeliverableWatcher() {
   }, [agentId]);
 
   // Mount, the tab shown again, and the safety net; never while hidden.
-  usePoll(() => check(60_000), { everyMs: SAFETY_MS, enabled: Boolean(agentId) });
+  usePoll(() => check(60_000), { everyMs: SAFETY_MS, enabled: Boolean(agentId), live: true, minMs: 60_000 });
 
   useEffect(() => {
     if (!agentId) return;
-    let timer: number | undefined;
-    // Heard while hidden: looked at once the tab shows again.
+    // Heard while hidden: looked at once the tab shows again. The store already forgot its copy.
     let pending = false;
     const off = onDriveChanged(agentId, () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        if (document.hidden) pending = true;
-        else void check(0);
-      }, AFTER_EVENT_MS);
+      if (document.hidden) pending = true;
+      else void check(60_000);
     });
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
         hiddenAt.current = Date.now();
         return;
       }
-      if (pending || (hiddenAt.current !== null && Date.now() - hiddenAt.current >= RETURN_MS)) void check(0);
+      // With the stream, what happened while hidden comes back as events (replayed, or `instance.changed`).
+      if (pending) void check(60_000);
+      else if (!eventStream && hiddenAt.current !== null && Date.now() - hiddenAt.current >= RETURN_MS) void check(0);
       pending = false;
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       off();
-      window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [agentId, check]);
+  }, [agentId, check, eventStream]);
 
   return null;
 }

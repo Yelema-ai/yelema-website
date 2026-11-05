@@ -1,5 +1,6 @@
 "use client";
 
+import { listenWake, WAIT_POLL_MS } from "@/components/wake";
 import { useEffect, useRef, useState } from "react";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -9,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const POLL_MS = 2500;
 const BOT_NAME_MAX = 64;
 
 // Telegram without BotFather: the agent asks Telegram for a new bot, the user scans the QR (or opens
@@ -54,9 +54,12 @@ export function TelegramQrConnect({
     if (!session || session.status !== "waiting") return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
+    let busy = false;
     const poll = async () => {
-      if (cancelled) return;
-      if (document.hidden) return void (timer = setTimeout(() => void poll(), POLL_MS));
+      clearTimeout(timer);
+      // Hidden: nothing is asked until the tab shows again (listenWake).
+      if (cancelled || busy || document.hidden) return;
+      busy = true;
       try {
         const next = await pair({ pairing_id: session.pairing_id });
         if (cancelled) return;
@@ -76,12 +79,16 @@ export function TelegramQrConnect({
         setSession(null);
         setError(e instanceof Error ? e.message : "La connexion à Telegram a échoué. Réessayez.");
         return;
+      } finally {
+        busy = false;
       }
-      if (!cancelled) timer = setTimeout(() => void poll(), POLL_MS);
+      if (!cancelled) timer = setTimeout(() => void poll(), WAIT_POLL_MS);
     };
-    timer = setTimeout(() => void poll(), POLL_MS);
+    timer = setTimeout(() => void poll(), WAIT_POLL_MS);
+    const off = listenWake({ types: ["job.done"], kind: "telegram" }, () => void poll());
     return () => {
       cancelled = true;
+      off();
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

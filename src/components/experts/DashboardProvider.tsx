@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { isTrustedDashboardUrl as isTrustedFrameUrl } from "@/lib/dashboards";
 import { usePoll } from "@/components/usePoll";
-import { instanceEvents, pollDue } from "@/lib/instance-events";
+import { instanceEvents, matches } from "@/lib/instance-events";
 import type { ChatMessage } from "@/components/chat/types";
 import type { DashboardShareMode } from "@/lib/backoffice";
 
@@ -133,8 +133,6 @@ export function DashboardProvider({
   const [loading, setLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const lastRead = useRef(0);
-
   // `fresh`: after an instance event, the server's few-seconds reading is not reused.
   const fetchDashboard = useCallback(async (fresh = false) => {
     if (!agentId || !profile) {
@@ -142,7 +140,6 @@ export function DashboardProvider({
       return;
     }
     setLoading(true);
-    lastRead.current = Date.now();
     try {
       const res = await apiFetch<DashboardData>(`/api/agents/${agentId}/experts/${encodeURIComponent(profile)}/dashboard${fresh ? "?fresh=1" : ""}`);
       setData(res);
@@ -173,24 +170,19 @@ export function DashboardProvider({
     }
   }, [isGenerating, isStreaming, openDashboard, onTriggerTableau]);
 
-  // Pendant la génération, relu à chaque tour fini ou fichier écrit sur l'instance ; sans ce flux (ou en filet,
-  // toutes les 30 s), toutes les 5 s (onglet visible), 10 min au plus, pour voir arriver le lien.
-  usePoll(() => (pollDue(instanceEvents.connected(agentId), Date.now() - lastRead.current) ? fetchDashboard() : undefined), {
-    everyMs: 5_000,
-    deadlineMs: 10 * 60_000,
-    immediate: false,
-    enabled: isGenerating,
-  });
+  // Pendant la génération : relu à chaque tour fini ou fichier écrit sur l'instance (flux branché) ; sans
+  // flux, toutes les 15 s (onglet visible), 10 min au plus, pour voir arriver le lien.
+  usePoll(() => fetchDashboard(), { everyMs: 15_000, deadlineMs: 10 * 60_000, immediate: false, enabled: isGenerating, live: true });
   useEffect(() => {
     if (!isGenerating || !agentId) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const off = instanceEvents.on(agentId, (type) => {
-      if (type !== "turn.ended" && type !== "files.changed") return;
+    const off = instanceEvents.on(agentId, (e) => {
+      if (!matches(e, { types: ["turn.ended", "files.changed", "instance.changed"], profile }) && !(e.type === "job.done" && e.kind === "deliverables")) return;
       clearTimeout(timer);
       timer = setTimeout(() => void fetchDashboard(true), 800);
     });
     return () => (clearTimeout(timer), off());
-  }, [isGenerating, agentId, fetchDashboard]);
+  }, [isGenerating, agentId, profile, fetchDashboard]);
 
   // Detection automatique du lien depuis les messages du chat
   const messageUrl = useMemo(() => {

@@ -1,13 +1,12 @@
 "use client";
 
+import { listenWake, WAIT_POLL_MS } from "@/components/wake";
 import { useEffect, useState } from "react";
 import { Check, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { safeVerificationUrl } from "@/lib/llm";
 import type { LlmAccount } from "@/lib/llm-accounts";
-
-const POLL_MS = 5_000;
 
 // Une connexion en attente : l'adresse à ouvrir et le code à y saisir, avec le compte à ajouter. Le
 // back-office est relu jusqu'à l'approbation ; `onDone` est appelé quand elle aboutit ou échoue.
@@ -17,10 +16,12 @@ export function LoginCode({ account, onDone, compact }: { account: LlmAccount; o
 
   useEffect(() => {
     let stopped = false;
+    let busy = false;
     const tick = async () => {
-      if (stopped) return;
-      // Hidden: nothing is asked until the tab shows again.
-      if (document.hidden) return void (timer = setTimeout(tick, POLL_MS));
+      clearTimeout(timer);
+      // Hidden: nothing is asked until the tab shows again (back from the sign-in tab: at once).
+      if (stopped || busy || document.hidden) return;
+      busy = true;
       try {
         const next = await apiFetch<LlmAccount>(`/api/llm/accounts/${account.id}`);
         if (next.state === "active") toast.success("Compte connecté", { description: "L’installation sur l’instance est en cours." });
@@ -28,12 +29,16 @@ export function LoginCode({ account, onDone, compact }: { account: LlmAccount; o
         if (next.state !== "pending") return void (await onDone());
       } catch {
         // Un échec de lecture ne fait pas perdre la connexion : on relit au tour suivant.
+      } finally {
+        busy = false;
       }
-      if (!stopped) timer = setTimeout(tick, POLL_MS);
+      if (!stopped) timer = setTimeout(tick, WAIT_POLL_MS);
     };
-    let timer = setTimeout(tick, POLL_MS);
+    let timer = setTimeout(tick, WAIT_POLL_MS);
+    const off = listenWake({ types: ["job.done"], kind: "llm" }, () => void tick());
     return () => {
       stopped = true;
+      off();
       clearTimeout(timer);
     };
   }, [account.id, onDone]);

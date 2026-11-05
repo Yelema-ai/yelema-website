@@ -117,3 +117,81 @@ describe("usePoll (logique)", () => {
     await f.flush();
   });
 });
+
+function fakeGate(minMs?: number) {
+  let up = false;
+  const subs = new Set<() => void>();
+  return {
+    gate: { live: () => up, onChange: (fn: () => void) => (subs.add(fn), () => void subs.delete(fn)), minMs },
+    set(v: boolean) {
+      up = v;
+      for (const fn of subs) fn();
+    },
+    subs,
+  };
+}
+
+describe("relecture branchée sur le flux", () => {
+  it("flux branché : rien après la première lecture ; un événement (kick) lit quand même", async () => {
+    const f = fakeEnv();
+    const g = fakeGate();
+    g.set(true);
+    let runs = 0;
+    const p = startPoll(() => void runs++, { everyMs: 1000, gate: g.gate }, f.env);
+    await f.flush();
+    assert.equal(runs, 1, "la première lecture part toujours");
+    await f.advance(60 * 60_000);
+    assert.equal(runs, 1);
+    assert.equal(f.pending(), 0, "aucun minuteur tant que le flux est là");
+    p.kick();
+    await f.flush();
+    assert.equal(runs, 2);
+    p.stop();
+    assert.equal(g.subs.size, 0, "désabonné à l'arrêt");
+  });
+
+  it("flux coupé : filet à 15 s au moins, un délai entier après la coupure ; rebranché : arrêté", async () => {
+    const f = fakeEnv();
+    const g = fakeGate();
+    let runs = 0;
+    startPoll(() => void runs++, { everyMs: 2000, gate: g.gate }, f.env);
+    await f.flush();
+    await f.advance(14_999);
+    assert.equal(runs, 1, "2 s demandées, 15 s au moins");
+    await f.advance(1);
+    assert.equal(runs, 2);
+    g.set(true);
+    await f.advance(120_000);
+    assert.equal(runs, 2);
+    g.set(false);
+    assert.equal(runs, 2, "pas de rafale à la coupure : la prochaine lecture attend son tour");
+    await f.advance(15_000);
+    assert.equal(runs, 3);
+  });
+
+  it("un filet long garde son délai ; jamais onglet caché ; au retour, rien si le flux est là", async () => {
+    const f = fakeEnv();
+    const g = fakeGate(60_000);
+    let runs = 0;
+    startPoll(() => void runs++, { everyMs: 600_000, gate: g.gate }, f.env);
+    await f.flush();
+    await f.advance(599_999);
+    assert.equal(runs, 1);
+    await f.setHidden(true);
+    await f.advance(3_600_000);
+    assert.equal(runs, 1);
+    g.set(true);
+    await f.setHidden(false);
+    assert.equal(runs, 1);
+  });
+
+  it("runOnShow : au retour d'un onglet de connexion, une lecture tout de suite", async () => {
+    const f = fakeEnv();
+    let runs = 0;
+    startPoll(() => void runs++, { everyMs: 30_000, immediate: false, runOnShow: true }, f.env);
+    await f.setHidden(true);
+    await f.advance(1000);
+    await f.setHidden(false);
+    assert.equal(runs, 1);
+  });
+});

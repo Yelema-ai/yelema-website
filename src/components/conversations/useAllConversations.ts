@@ -1,12 +1,10 @@
 "use client";
 
-import { cached, cachedFetch, remember } from "@/lib/client-cache";
-import { sessionsKey } from "@/components/experts/expert-preload";
+import { cached, remember } from "@/lib/client-cache";
 import { useEffect, useMemo, useState } from "react";
 import { useHydrated } from "@/components/useHydrated";
-import { apiFetch } from "@/lib/api";
-import { profileQuery } from "@/lib/profile-id";
 import { driveTree } from "@/lib/drive-store";
+import { sessionsStore } from "@/lib/sessions-client";
 import { isDriveClutter } from "@/lib/drive-order";
 import { agentTabPath } from "@/lib/expert-tabs";
 import type { ChatSession } from "@/components/chat/types";
@@ -48,9 +46,8 @@ const rowsOf = ({ agentId, expert }: Space, sessions: ChatSession[]): Conversati
 const newestFirst = (all: ConversationRow[][]) => all.flat().sort((a, b) => b.at - a.at);
 
 // Every conversation of the member: the chat d'entreprise's (the instance with no profile) and each
-// Expert's, newest first. One read per space, in parallel; a space that does not answer is left out.
-// The list as last read in this tab shows at once, else the one the page read on the server
-// (`initial`, by spaceKey); the fresh reading replaces it behind.
+// Expert's, newest first, from the tab's sessions store: one grouped call per instance, none when the
+// page's server reading (`initial`, by spaceKey) is there, and read again when the stream says so.
 export function useAllConversations(ownAgentId: string | null, experts: Expert[], enabled = true, initial: Record<string, ChatSession[]> | null = null) {
   const key = experts.map((e) => `${e.agentId}:${e.profileId}`).join(",");
   const store = ownAgentId ? `conversations:${ownAgentId}:${key}` : null;
@@ -65,21 +62,33 @@ export function useAllConversations(ownAgentId: string | null, experts: Expert[]
   useEffect(() => {
     if (!enabled || !ownAgentId) return;
     let live = true;
-    void Promise.all(
-      spacesOf(ownAgentId, experts).map((space) =>
-        // Shared with each space's own rail and the menu's read-ahead: read at most every 30 s.
-        cachedFetch(sessionsKey(space.agentId, space.expert?.profileId ?? null), () => apiFetch<{ sessions: ChatSession[] }>(`/api/agents/${space.agentId}/chat/sessions${profileQuery(space.expert?.profileId)}`).then((r) => r.sessions), 30_000).then(
-          (sessions) => rowsOf(space, sessions),
-          () => [] as ConversationRow[]
-        )
-      )
-    ).then((all) => {
-      const sorted = newestFirst(all);
-      if (store) remember(store, sorted);
-      if (live) setRows(sorted);
-    });
+    const spaces = spacesOf(ownAgentId, experts);
+    // What the server read with the page is the store's first reading: no second read of the same.
+    for (const s of spaces) {
+      const got = initial?.[spaceKey(s.agentId, s.expert?.profileId ?? null)];
+      if (got && !sessionsStore.get(s.agentId, s.expert?.profileId ?? null)) sessionsStore.put(s.agentId, s.expert?.profileId ?? null, { sessions: got, runs: null });
+    }
+    const build = () =>
+      Promise.all(spaces.map((space) => sessionsStore.read(space.agentId, space.expert?.profileId ?? null).then((d) => rowsOf(space, d.sessions), () => [] as ConversationRow[]))).then((all) => {
+        const sorted = newestFirst(all);
+        if (store) remember(store, sorted);
+        if (live) setRows(sorted);
+      });
+    void build();
+    // A space read again (an event, another view): the list follows, rebuilt once per burst.
+    let queued = false;
+    const again = () => {
+      if (queued) return;
+      queued = true;
+      setTimeout(() => {
+        queued = false;
+        if (live) void build();
+      }, 0);
+    };
+    const offs = spaces.map((s) => sessionsStore.subscribe(s.agentId, s.expert?.profileId ?? null, again));
     return () => {
       live = false;
+      offs.forEach((off) => off());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownAgentId, key, enabled]);

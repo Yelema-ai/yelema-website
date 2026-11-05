@@ -1,7 +1,7 @@
 import { instanceFetch } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { ApiError, handleError } from "@/lib/http";
-import { eventStreamOn } from "@/lib/instance-events";
+import { eventStreamOn, resumeId } from "@/lib/instance-events";
 import { upstreamErrorMessage } from "../_helpers";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -13,7 +13,10 @@ export async function GET(request: Request, { params }: Ctx) {
     if (!eventStreamOn(process.env)) throw new ApiError(404, "not_found", "Not found");
     const { id } = await params;
     await requireAgentAccess(id);
-    const upstream = await instanceFetch(id, "/v1/events", { headers: { Accept: "text/event-stream" }, signal: request.signal });
+    // A reconnect resumes where it stopped: the browser's own header, or ours (a new EventSource has none).
+    const last = resumeId(request.headers.get("last-event-id") ?? new URL(request.url).searchParams.get("lastEventId"));
+    const headers: Record<string, string> = { Accept: "text/event-stream", ...(last ? { "Last-Event-ID": last } : {}) };
+    const upstream = await instanceFetch(id, "/v1/events", { headers, signal: request.signal });
     if (!upstream.ok || !upstream.body) {
       const message = await upstreamErrorMessage(upstream, "agents/events", "Le fil d’événements n’est pas disponible.");
       throw new ApiError(upstream.status || 502, "upstream_error", message);
@@ -27,5 +30,5 @@ export async function GET(request: Request, { params }: Ctx) {
   }
 }
 
-// The host cuts the function at this length; the tab reconnects.
+// The host cuts the function at this length; the tab reconnects with Last-Event-ID.
 export const maxDuration = 300;

@@ -45,7 +45,8 @@ export function ModelsView() {
   }, [load]);
 
   // Tant qu'une pose est en cours, l'état est relu : l'écran passe seul à « En service » ou à l'échec.
-  usePoll(load, { everyMs: POLL_MS, deadlineMs: POLL_MS * POLL_TRIES, immediate: false, round, enabled: Boolean(data && llmPending(data)) });
+  // Avec le flux, `job.done` (llm) dit quand relire ; sans lui, un filet à 15 s au moins.
+  usePoll(load, { everyMs: POLL_MS, deadlineMs: POLL_MS * POLL_TRIES, immediate: false, round, enabled: Boolean(data && llmPending(data)), live: true, wake: { types: ["job.done"], kind: "llm" } });
 
   const admin = data?.members !== undefined;
   const others = useMemo(() => othersOf(data), [data]);

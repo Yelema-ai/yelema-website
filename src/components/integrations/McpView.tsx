@@ -14,13 +14,13 @@ import { mcpPending, type McpOauthServer, type McpOverview, type McpServer, type
 import { type McpOauthFlow } from "./McpOauthSteps";
 import { McpServerDialog } from "./McpServerDialog";
 import { usePoll } from "@/components/usePoll";
+import { listenWake, WAIT_POLL_MS } from "@/components/wake";
 
 // Une pose prend d'ordinaire moins d'une minute par instance ; au-delà, on cesse de relire seul.
 const POLL_MS = 4_000;
 const POLL_TRIES = 45;
-// Une autorisation attend le fournisseur au plus 10 minutes sur l'instance.
-const OAUTH_POLL_MS = 3_000;
-const OAUTH_POLL_TRIES = 200;
+// Une autorisation attend le fournisseur au plus 10 minutes sur l'instance (relectures à 15 s).
+const OAUTH_POLL_TRIES = 40;
 
 const scopeUrl = (scope: SettingScope) => (scope.kind === "member" ? `/api/mcp/members/${encodeURIComponent(scope.id)}` : `/api/mcp/${scope.kind}`);
 
@@ -256,10 +256,15 @@ export function McpView() {
     }
   }, [data, flow]);
 
-  // Tant que la fenêtre du fournisseur est ouverte, l'accès est relu jusqu'à ce que l'instance l'ait.
+  // Tant que la fenêtre du fournisseur est ouverte, l'accès est relu jusqu'à ce que l'instance l'ait : à sa
+  // fermeture, au `job.done` (mcp), au retour sur l'onglet, sinon toutes les 15 s ; jamais onglet caché.
   useEffect(() => {
     if (flow?.step !== "authorizing" || !flow.url) return;
-    const timer = setTimeout(async () => {
+    let fired = false;
+    const check = async () => {
+      if (fired || document.hidden) return;
+      fired = true;
+      stop();
       const servers = await loadOauth();
       const done = servers?.find((s) => s.id === flow.serverId);
       if (done?.connected) {
@@ -271,12 +276,26 @@ export function McpView() {
         setFlow(null);
         toast.error("L’autorisation n’a pas abouti.", { description: "Relancez-la depuis la carte du serveur." });
       } else setOauthTries((n) => n + 1);
-    }, OAUTH_POLL_MS);
-    return () => clearTimeout(timer);
+    };
+    const timer = setTimeout(() => void check(), WAIT_POLL_MS);
+    // La fenêtre refermée : la réponse est là, relue une fois. Regarder `closed` ne coûte aucun appel.
+    const shut = setInterval(() => {
+      if (!popup.current?.closed) return;
+      popup.current = null;
+      void check();
+    }, 1_000);
+    const off = listenWake({ types: ["job.done"], kind: "mcp" }, () => void check());
+    function stop() {
+      clearTimeout(timer);
+      clearInterval(shut);
+      off();
+    }
+    return stop;
   }, [flow, oauthTries, loadOauth, loadTools, closePopup]);
 
   // Tant qu'une pose est en cours, l'état est relu : l'écran passe seul à « En service » ou à l'échec.
-  usePoll(load, { everyMs: POLL_MS, deadlineMs: POLL_MS * POLL_TRIES, immediate: false, round, enabled: Boolean(data && mcpPending(data)) });
+  // Avec le flux, `job.done` (mcp) dit quand relire ; sans lui, un filet à 15 s au moins.
+  usePoll(load, { everyMs: POLL_MS, deadlineMs: POLL_MS * POLL_TRIES, immediate: false, round, enabled: Boolean(data && mcpPending(data)), live: true, wake: { types: ["job.done"], kind: "mcp" } });
 
   const admin = data?.members !== undefined;
   // Le relevé de l'instance concernée : la sienne, ou celle du membre regardé par l'administrateur.

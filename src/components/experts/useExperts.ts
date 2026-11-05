@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useMyAgents } from "@/components/useMyAgents";
+import { wakeInstance } from "@/components/app/wake";
+import { instanceEvents } from "@/lib/instance-events";
 import type { Companion } from "@/lib/companion";
 import type { Expert } from "@/lib/types";
 
@@ -173,22 +175,32 @@ export function useExperts(workspaceId: string | undefined, initial: InitialExpe
       quiet.current = true;
       setTick((t) => t + 1);
     };
-    // Hidden: the next reading waits for the tab to show again.
+    // Hidden: the next reading waits for the tab to show again. Stream up: the back office's word
+    // (`job.done` experts, `instance.changed`) reads at once and the timer waits for the stream to drop.
     const onShown = () => {
       if (document.visibilityState === "hidden") return;
       document.removeEventListener("visibilitychange", onShown);
       next();
     };
-    const timer = setTimeout(() => (document.hidden ? document.addEventListener("visibilitychange", onShown) : next()), INSTALL_POLL_MS);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(timer);
+      if (!instanceEvents.connected()) timer = setTimeout(() => (document.hidden ? document.addEventListener("visibilitychange", onShown) : next()), INSTALL_POLL_MS);
+    };
+    arm();
+    const offLink = instanceEvents.onConnection(arm);
+    const offEvents = instanceEvents.on(null, (e) => (e.type === "instance.changed" || (e.type === "job.done" && e.kind === "experts")) && next());
     return () => {
       clearTimeout(timer);
+      offLink();
+      offEvents();
       document.removeEventListener("visibilitychange", onShown);
     };
   }, [installing, tick, workspaceId]);
 
   // An instance asleep takes seconds to answer its first request. Asking it something light as soon
   // as the app opens gets that wait over with before the user opens a chat or a folder. Once per
-  // instance and per page load; the answer is not used.
+  // instance and per page load; the answer (the home's conversations) is kept by the sessions store.
   // Not where the page itself asks the instance at once (an expert's space), nor for one running.
   const { agents } = useMyAgents(workspaceId);
   useEffect(() => {
@@ -198,7 +210,7 @@ export function useExperts(workspaceId: string | undefined, initial: InitialExpe
       const state = agents.find((a) => a.agent37_id === agentId)?.live_status;
       if (state === "running") continue;
       woken.add(agentId);
-      fetch(`/api/agents/${agentId}/chat/models`).catch(() => {});
+      wakeInstance(agentId);
     }
   }, [experts, agents]);
 

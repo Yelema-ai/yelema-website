@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
+import { instanceEvents, matches } from "@/lib/instance-events";
 import { toolsOverview, type ExpertTool, type ToolState } from "@/lib/expert-tools";
 import type { McpOverview } from "@/lib/mcp-servers";
 import type { IntegrationConnection, IntegrationConnectionsResult, IntegrationConnectResult } from "@/lib/types";
@@ -18,8 +19,12 @@ interface Loaded {
   mcpNames: string[];
 }
 
+// A focus re-reads the connections at most this often.
+const REFOCUS_MS = 60_000;
+
 // Outils: what this expert needs to work fully (its pack's outils-recommandes.json) against what this
 // member has connected, so they know what is left to connect.
+
 export function ExpertTools({ agentId, profileId, expertName }: { agentId: string; profileId: string; expertName: string }) {
   const viaBackoffice = usePublicConfig().authVia === "backoffice";
   const [data, setData] = useState<Loaded | null>(null);
@@ -46,14 +51,25 @@ export function ExpertTools({ agentId, profileId, expertName }: { agentId: strin
     void load();
   }, [load]);
 
-  // The sign-in happens in another tab: the list is read again when the member comes back.
+  // The sign-in happens in another tab: the list is read again when the member comes back (at most once a
+  // minute: a click back from a frame is a focus too), or when the back office says a connection changed.
   useEffect(() => {
-    const refresh = () => void apiFetch<IntegrationConnectionsResult>(connectionsUrl).then(
-      (r) => setData((d) => d && { ...d, connections: r.connections }),
-      () => undefined
-    );
-    window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
+    let last = Date.now();
+    const refresh = (force = false) => {
+      if (!force && Date.now() - last < REFOCUS_MS) return;
+      last = Date.now();
+      void apiFetch<IntegrationConnectionsResult>(connectionsUrl).then(
+        (r) => setData((d) => d && { ...d, connections: r.connections }),
+        () => undefined
+      );
+    };
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    const off = instanceEvents.on(null, (e) => matches(e, { types: ["job.done"], kind: "connectors" }) && refresh(true));
+    return () => {
+      off();
+      window.removeEventListener("focus", onFocus);
+    };
   }, [connectionsUrl]);
 
   async function connect(t: ToolState) {

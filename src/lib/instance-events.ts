@@ -1,12 +1,24 @@
-// The instance's event stream (yelema-platform runtime gateway, `GET /v1/instances/{id}/events`), heard by
-// one EventSource per tab: a turn ended, the drive changed, the instance's state changed. No content, only
-// the kind. Off (EVENT_STREAM unset) or disconnected, every poll runs as before. Pure, so the rules are tested.
+// The instance's event stream (runtime gateway `GET /v1/instances/{id}/events`, contract
+// docs/plans/performance-instantanee/contrat-evenements.md §1 on the platform), heard by one EventSource
+// per tab. No content, only what changed. Pure, so the rules are tested.
 
-export const INSTANCE_EVENTS = ["turn.ended", "files.changed", "instance.changed"] as const;
+export const INSTANCE_EVENTS = ["turn.ended", "sessions.changed", "files.changed", "instance.changed", "routine.ended", "job.done"] as const;
 export type InstanceEventType = (typeof INSTANCE_EVENTS)[number];
+
+export const JOB_KINDS = ["mcp", "llm", "connectors", "experts", "deploy", "memory", "telegram", "channels", "voice", "deliverables", "notifications"] as const;
+export type JobKind = (typeof JOB_KINDS)[number];
+
+export interface InstanceEvent {
+  type: InstanceEventType;
+  at: number;
+  profile?: string;
+  session?: string;
+  kind?: JobKind;
+}
 
 const FIRST_RETRY_MS = 2_000;
 const MAX_RETRY_MS = 5 * 60_000;
+const ID_RE = /^[\w.:@~-]{1,200}$/;
 
 /** Wait before reconnect attempt `n` (0-based): doubles up to 5 min, ±20 % so tabs do not come back together. */
 export function reconnectDelay(attempt: number, random: () => number = Math.random): number {
@@ -20,27 +32,96 @@ export function eventStreamOn(env: Record<string, string | undefined>): boolean 
   return flag === "on" && Boolean(env.RUNTIME_GATEWAY_URL?.trim() && env.RUNTIME_GATEWAY_TOKEN?.trim());
 }
 
-type Listener = (type: InstanceEventType) => void;
+const isType = (t: string): t is InstanceEventType => (INSTANCE_EVENTS as readonly string[]).includes(t);
+const isKind = (k: unknown): k is JobKind => typeof k === "string" && (JOB_KINDS as readonly string[]).includes(k);
+const idOf = (v: unknown): string | undefined => (typeof v === "string" && ID_RE.test(v) ? v : undefined);
+
+/** One frame (`event:` + `data:`); null for a type this tab does not know. A bad body keeps the type. */
+export function parseInstanceEvent(type: string, data: string | null | undefined, now = Date.now()): InstanceEvent | null {
+  if (!isType(type)) return null;
+  let body: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = data ? JSON.parse(data) : null;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) body = parsed as Record<string, unknown>;
+  } catch {
+    // An unreadable body still says what kind of thing changed.
+  }
+  const out: InstanceEvent = { type, at: typeof body.at === "number" && Number.isFinite(body.at) ? body.at : now };
+  const profile = idOf(body.profile);
+  const session = idOf(body.session);
+  if (profile) out.profile = profile;
+  if (session) out.session = session;
+  if (isKind(body.kind)) out.kind = body.kind;
+  return out;
+}
+
+/** The `Last-Event-ID` a reconnect may carry: short and printable, else nothing. */
+export const resumeId = (raw: string | null | undefined): string | null => (raw && /^[\x21-\x7e]{1,128}$/.test(raw) ? raw : null);
+
+/** What a listener waits for. An event without a profile concerns every profile. */
+export interface EventFilter {
+  types: readonly InstanceEventType[];
+  profile?: string | null;
+  kind?: JobKind;
+}
+
+export function matches(e: InstanceEvent, f: EventFilter): boolean {
+  if (!f.types.includes(e.type)) return false;
+  if (f.kind && e.kind !== f.kind) return false;
+  return !f.profile || !e.profile || e.profile === f.profile;
+}
+
+/** Everything is read again: the gateway could not replay what this tab missed. */
+export const catchUp = (e: InstanceEvent): boolean => e.type === "instance.changed";
+
+/** The conversations of `e.profile` (all when absent) may have changed. */
+export const touchesSessions = (e: InstanceEvent): boolean => e.type === "turn.ended" || e.type === "sessions.changed" || e.type === "routine.ended" || catchUp(e);
+
+/** The drive may have changed. Until this tab has heard one `files.changed`, a turn's end counts as one. */
+export function touchesDrive(e: InstanceEvent, heardFilesChanged: boolean): boolean {
+  if (e.type === "files.changed" || catchUp(e)) return true;
+  return !heardFilesChanged && (e.type === "turn.ended" || e.type === "routine.ended");
+}
+
+type Listener = (e: InstanceEvent, agentId: string) => void;
 
 export function createEventHub() {
   const listeners = new Map<string, Set<Listener>>();
+  const any = new Set<Listener>();
   const live = new Set<string>();
+  const heard = new Map<string, Set<InstanceEventType>>();
+  const onLink = new Set<() => void>();
+  const add = <T>(set: Set<T>, fn: T, empty: () => void) => {
+    set.add(fn);
+    return () => {
+      set.delete(fn);
+      if (!set.size) empty();
+    };
+  };
   return {
-    on(agentId: string, fn: Listener): () => void {
+    /** `agentId` null hears every instance of the tab. */
+    on(agentId: string | null, fn: Listener): () => void {
+      if (agentId === null) return add(any, fn, () => undefined);
       const set = listeners.get(agentId) ?? new Set<Listener>();
-      set.add(fn);
       listeners.set(agentId, set);
-      return () => void set.delete(fn);
+      return add(set, fn, () => listeners.get(agentId) === set && listeners.delete(agentId));
     },
-    emit(agentId: string, type: InstanceEventType): void {
-      for (const fn of [...(listeners.get(agentId) ?? [])]) fn(type);
+    emit(agentId: string, e: InstanceEvent): void {
+      const seen = heard.get(agentId) ?? new Set();
+      seen.add(e.type);
+      heard.set(agentId, seen);
+      for (const fn of [...(listeners.get(agentId) ?? []), ...any]) fn(e, agentId);
     },
+    heard: (agentId: string, type: InstanceEventType): boolean => heard.get(agentId)?.has(type) ?? false,
     setConnected(agentId: string, on: boolean): void {
+      if (on === live.has(agentId)) return;
       if (on) live.add(agentId);
       else live.delete(agentId);
+      for (const fn of [...onLink]) fn();
     },
-    /** The stream is up for this instance: polls may wait for it, at their longest delay. */
-    connected: (agentId: string): boolean => live.has(agentId),
+    /** The stream is up for this instance (or, without one, for any instance of the tab). */
+    connected: (agentId?: string | null): boolean => (agentId ? live.has(agentId) : live.size > 0),
+    onConnection: (fn: () => void): (() => void) => add(onLink, fn, () => undefined),
   };
 }
 
@@ -49,13 +130,24 @@ export type EventHub = ReturnType<typeof createEventHub>;
 /** A poll's turn: always without the stream; with it, only as a safety net once `safetyMs` passed without a reading. */
 export const pollDue = (connected: boolean, sinceLastMs: number, safetyMs = 30_000): boolean => !connected || sinceLastMs >= safetyMs;
 
-/** Resolves on the next `type` event of the instance, or when `signal` aborts. */
-export function nextEvent(hub: EventHub, agentId: string, type: InstanceEventType, signal: AbortSignal): Promise<void> {
+/** Resolves on the next matching event of the instance, or when `signal` aborts; leaves no listener behind. */
+export function nextEvent(hub: EventHub, agentId: string, filter: EventFilter | InstanceEventType, signal: AbortSignal): Promise<void> {
+  const f: EventFilter = typeof filter === "string" ? { types: [filter] } : filter;
   return new Promise((resolve) => {
-    const off = hub.on(agentId, (t) => t === type && done());
-    const done = () => (off(), signal.removeEventListener("abort", done), resolve());
+    if (signal.aborted) return resolve();
+    const done = () => {
+      off();
+      signal.removeEventListener("abort", done);
+      resolve();
+    };
+    const off = hub.on(agentId, (e) => matches(e, f) && done());
     signal.addEventListener("abort", done, { once: true });
   });
+}
+
+/** A poll gated on the tab's stream (lib/poll `gate`): off while it is up, `minMs` apart at least while down. */
+export function streamGate(hub: EventHub, minMs = 15_000, agentId: string | null = null) {
+  return { live: () => hub.connected(agentId), onChange: hub.onConnection, minMs };
 }
 
 /** The tab's one hub. */

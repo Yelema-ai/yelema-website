@@ -3,6 +3,8 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
+import { bootstrap } from "@/lib/bootstrap-client";
+import { instanceEvents, matches, streamGate } from "@/lib/instance-events";
 import { browserPollEnv, startPoll } from "@/lib/poll";
 import { DEPLOY_POLL_MS, deployPhase, parseDeployStatus, type DeployPhase, type DeployStatus } from "@/lib/deploy-status";
 import { cn } from "@/lib/utils";
@@ -29,8 +31,15 @@ export function DeployStatusProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     setForced(forcedPhase());
     let live = true;
+    let first = true;
+    const read = async (): Promise<unknown> => {
+      // The first answer comes with the tab's bootstrap when it has it.
+      const boot = first ? (await bootstrap())?.deploy : null;
+      first = false;
+      return boot ?? apiFetch<unknown>("/api/deploy");
+    };
     const ask = () =>
-      apiFetch<unknown>("/api/deploy").then(
+      read().then(
         (data) => {
           const s = parseDeployStatus(data);
           if (!live || !s) return;
@@ -41,9 +50,12 @@ export function DeployStatusProvider({ children }: { children: React.ReactNode }
         },
         () => undefined
       );
-    const poll = startPoll(ask, { everyMs: DEPLOY_POLL_MS }, browserPollEnv());
+    // A net while the stream is down; with it, the back office's `job.done` (deploy) asks at once.
+    const poll = startPoll(ask, { everyMs: DEPLOY_POLL_MS, gate: streamGate(instanceEvents, DEPLOY_POLL_MS) }, browserPollEnv());
+    const off = instanceEvents.on(null, (e) => (matches(e, { types: ["job.done"], kind: "deploy" }) || e.type === "instance.changed") && poll.kick());
     return () => {
       live = false;
+      off();
       poll.stop();
     };
   }, []);

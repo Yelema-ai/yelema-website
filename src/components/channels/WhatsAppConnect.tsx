@@ -1,5 +1,6 @@
 "use client";
 
+import { listenWake, WAIT_POLL_MS } from "@/components/wake";
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -10,7 +11,6 @@ import { ChannelPanelHeader } from "@/components/channels/ChannelCredentialsForm
 import { useAsyncAction } from "@/components/useAsyncAction";
 import { DisconnectButton } from "@/components/channels/DisconnectButton";
 
-const POLL_MS = 2500;
 
 // WhatsApp links a phone instead of taking a token: the agent opens a WhatsApp session and prints the
 // same QR code the phone app expects, and this panel relays it. The code rotates every few seconds, so
@@ -44,6 +44,8 @@ export function WhatsAppConnect({
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
+    // The pairing the next look is for; null while a look is out or none is due.
+    let waiting: string | null = null;
     setError(null);
 
     const pair = (body: Record<string, unknown>) =>
@@ -60,7 +62,8 @@ export function WhatsAppConnect({
         setError("Ce code a expiré. Recommencez.");
         return;
       }
-      timer = setTimeout(() => void poll(result.pairing_id), POLL_MS);
+      waiting = result.pairing_id;
+      timer = setTimeout(() => void poll(result.pairing_id), WAIT_POLL_MS);
     };
 
     const fail = (cause: unknown) => {
@@ -78,8 +81,10 @@ export function WhatsAppConnect({
 
     const poll = async (pairingId: string, finish = false) => {
       if (cancelled) return;
+      clearTimeout(timer);
+      waiting = null;
       // Hidden: the code is not asked again until the tab shows (the save of a scan still goes out).
-      if (document.hidden && !finish) return void (timer = setTimeout(() => void poll(pairingId), POLL_MS));
+      if (document.hidden && !finish) return void (waiting = pairingId);
       try {
         settle(await pair({ pairing_id: pairingId, ...(finish ? { finish: true } : {}) }));
       } catch (cause) {
@@ -90,8 +95,10 @@ export function WhatsAppConnect({
     if (!started.current) started.current = pair({});
     started.current.then((result) => !cancelled && settle(result)).catch(fail);
 
+    const off = listenWake({ types: ["job.done"], kind: "channels" }, () => waiting && void poll(waiting));
     return () => {
       cancelled = true;
+      off();
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

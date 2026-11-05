@@ -394,6 +394,19 @@ export const agent37 = {
     return (await instanceCall<{ outcomes: Record<string, RunOutcome> }>(id, `/v1/routine-outcomes${q}`)).outcomes ?? {};
   },
 
+  // Several profiles' sessions and routine outcomes in one call (contract §3); `null` direct, or when the
+  // gateway does not have the route yet.
+  sessionsByProfile: async (id: string, profiles: string[]): Promise<unknown> => {
+    if (!runtimeGateway()) return null;
+    const q = profiles.length ? `?profiles=${profiles.map(encodeURIComponent).join(",")}` : "";
+    const res = await instanceFetch(id, `/v1/sessions/by-profile${q}`, withTimeout({ headers: { Accept: "application/json" } }, JSON_TIMEOUT_MS));
+    if (res.status === 404 || res.status === 405) {
+      await res.body?.cancel();
+      return null;
+    }
+    return parseAgent37<unknown>(res);
+  },
+
   // A team member's screen: the tabs of their own experts, through the gateway (which reads their screen token).
   screen: async (id: string): Promise<{ ws: string; kind: "cast" }> =>
     parseAgent37(await gatewayJson(requireGateway(), `/v1/instances/${urlId(id)}/screen`, await asUser({ method: "POST" }))),

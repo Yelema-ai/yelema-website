@@ -53,7 +53,8 @@ export function MemoryView({ embedded = false, onDeposit }: { embedded?: boolean
 
   // A deposit is sent in the background: read again while one is still on its way.
   const waiting = list?.items.some((i) => i.status === "pending") ?? false;
-  usePoll(load, { everyMs: 5_000, immediate: false, enabled: waiting });
+  // With the stream, the back office's `job.done` (memory) says when; without, a 15 s net.
+  usePoll(load, { everyMs: 15_000, immediate: false, enabled: waiting, live: true, wake: { types: ["job.done"], kind: "memory" } });
 
   const targets = [...(list?.canDepositForAll ? [{ id: ALL, name: "Toute l’entreprise" }] : []), ...(list?.units.filter((u) => u.canDeposit) ?? [])];
   // The first compartment the member may deposit in, while none is chosen.

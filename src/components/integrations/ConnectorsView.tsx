@@ -1,5 +1,8 @@
 "use client";
 
+import { WAIT_POLL_MS } from "@/components/wake";
+import { instanceEvents, matches } from "@/lib/instance-events";
+import { browserPollEnv, startPoll } from "@/lib/poll";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Loader2, MoreHorizontal, Pencil, Plus, RotateCw, Search, Star, Trash2, Unplug } from "lucide-react";
 import { toast } from "sonner";
@@ -42,8 +45,7 @@ import { runPool } from "@/lib/bulk";
 
 const SEARCH_DEBOUNCE_MS = 250;
 const MIN_SEARCH = 3; // the toolkits route 400s a non-empty query shorter than this
-const POLL_INTERVAL_MS = 2000;
-const POLL_TIMEOUT_MS = 45000;
+const POLL_TIMEOUT_MS = 3 * 60_000;
 
 function slugKey(slug: string | null | undefined): string {
   return (slug || "").toLowerCase();
@@ -96,7 +98,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
   const [group, setGroup] = useState<string | null>(null);
   const searchBox = useRef<HTMLInputElement>(null);
 
-  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimer = useRef<{ stop(): void } | null>(null);
   const pollDeadline = useRef(0);
 
   const fetchConnections = useCallback(async () => {
@@ -109,10 +111,8 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
   }, [agentId]);
 
   const stopPolling = useCallback(() => {
-    if (pollTimer.current) {
-      clearInterval(pollTimer.current);
-      pollTimer.current = null;
-    }
+    pollTimer.current?.stop();
+    pollTimer.current = null;
     setPending(null);
   }, []);
 
@@ -223,29 +223,26 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
   }, [q, base, remote, accounts]);
 
   // Watch the connections until this tool gains an account (the sign-in happens in another tab) or
-  // the deadline passes.
+  // the deadline passes: at once back on this tab or on the back office's word, else every 15 s.
   function startPolling(toolkit: IntegrationToolkit, baseline: number) {
     setPending(slugKey(toolkit.slug));
     pollDeadline.current = Date.now() + POLL_TIMEOUT_MS;
-    if (pollTimer.current) clearInterval(pollTimer.current);
-    pollTimer.current = setInterval(async () => {
-      // The sign-in tab is in front: asked again once this one shows.
-      if (document.hidden) {
-        if (Date.now() > pollDeadline.current) stopPolling();
-        return;
-      }
+    pollTimer.current?.stop();
+    const look = async () => {
+      if (Date.now() > pollDeadline.current) return stopPolling();
       try {
         const conns = await fetchConnections();
         if (activeCount(conns, toolkit.slug) > baseline) {
           stopPolling();
           toast.success(`${toolkit.name} est connecté`);
-          return;
         }
       } catch {
         // transient; keep polling until the deadline
       }
-      if (Date.now() > pollDeadline.current) stopPolling();
-    }, POLL_INTERVAL_MS);
+    };
+    const poll = startPoll(look, { everyMs: WAIT_POLL_MS, immediate: false, runOnShow: true }, browserPollEnv());
+    const off = instanceEvents.on(null, (e) => matches(e, { types: ["job.done"], kind: "connectors" }) && poll.kick());
+    pollTimer.current = { stop: () => (off(), poll.stop()) };
   }
 
   async function connect(toolkit: IntegrationToolkit) {

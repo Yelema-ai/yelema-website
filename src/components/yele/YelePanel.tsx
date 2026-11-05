@@ -5,8 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowUpRight, BarChart3, Maximize2, Bug, ChevronLeft, History, KeyRound, Loader2, Mic, Plug, Receipt, Repeat, FileSpreadsheet, ShieldCheck, Send, Sparkles, SquarePen, Users, X, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
-import { apiFetch } from "@/lib/api";
-import { profileQuery } from "@/lib/profile-id";
+import { sessionsStore } from "@/lib/sessions-client";
 import { useChat } from "@/components/chat/useChat";
 import { AttachButton, AttachmentTray } from "@/components/chat/Attachments";
 import { DictationBar } from "@/components/chat/ChatComposer";
@@ -151,10 +150,12 @@ export function YelePanel({ companion, folded, onClose }: { companion: Companion
     if (onCall && dictation.state !== "idle") dictation.cancel();
   }, [onCall, dictation]);
 
+  // Yélé's discussions, from the tab's sessions store; a discussion just started is read again.
   useEffect(() => {
-    apiFetch<{ sessions: PastSession[] }>(`/api/agents/${companion.agentId}/chat/sessions${profileQuery(companion.profileId)}`)
-      .then((r) => setRecent([...r.sessions].sort((a, b) => b.last_active - a.last_active)))
-      .catch(() => setRecent([]));
+    const newest = (rows: PastSession[]) => [...rows].sort((a, b) => b.last_active - a.last_active);
+    const off = sessionsStore.subscribe(companion.agentId, companion.profileId, (d) => setRecent(newest(d.sessions)));
+    sessionsStore.read(companion.agentId, companion.profileId, sessionId ? 0 : undefined).then((d) => setRecent(newest(d.sessions)), () => setRecent([]));
+    return off;
   }, [companion.agentId, companion.profileId, sessionId]);
 
   useEffect(() => {
@@ -185,7 +186,8 @@ export function YelePanel({ companion, folded, onClose }: { companion: Companion
   function openPast() {
     setPast("loading");
     // A list closed while it loads stays closed.
-    apiFetch<{ sessions: PastSession[] }>(`/api/agents/${companion.agentId}/chat/sessions${profileQuery(companion.profileId)}`)
+    sessionsStore
+      .read(companion.agentId, companion.profileId, 15_000)
       .then((r) => setPast((p) => (p === "loading" ? [...r.sessions].sort((a, b) => b.last_active - a.last_active) : p)))
       .catch(() => setPast((p) => (p === "loading" ? null : p)));
   }
