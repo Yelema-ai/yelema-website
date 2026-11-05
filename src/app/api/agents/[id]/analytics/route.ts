@@ -30,7 +30,7 @@ if (fs.existsSync(root)) {
   for (const d of fs.readdirSync(root)) {
     if (d.startsWith('.') || d === 'default' || d === 'yele') continue;
     const p = path.join(root, d, 'SOUL.md');
-    let name = d;
+    let name = d.charAt(0).toUpperCase() + d.slice(1);
     let desc = '';
     if (fs.existsSync(p)) {
       try {
@@ -87,7 +87,8 @@ if (fs.existsSync(hermesDir)) {
     const models = {};
     if (fs.existsSync(f)) {
       try {
-        const lines = fs.readFileSync(f, 'utf8').trim().split('\\n').filter(Boolean);
+        const content = fs.readFileSync(f, 'utf8');
+        const lines = content.trim().split(/\r?\n/).filter(Boolean);
         for (const l of lines) {
           totalCrons++;
           try {

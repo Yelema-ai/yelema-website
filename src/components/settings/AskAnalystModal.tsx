@@ -23,7 +23,7 @@ export function AskAnalystModal({
   const [messages, setMessages] = useState<Array<{ sender: "user" | "analyst"; text: string }>>([
     {
       sender: "analyst",
-      text: `Bonjour Christelle ! Je suis votre analyste IA dédié au studio Mstudio. Sur ce cycle, vous avez consommé ${usedCredits.toLocaleString()} crédits pour ${totalMessages} messages (${(usedCredits / Math.max(1, totalMessages)).toFixed(1)} crédits / message). L'agent ${topAgentName} concentre 42% de l'usage. Comment puis-je vous aider à optimiser votre télémétrie aujourd'hui ?`,
+      text: `Bonjour Christelle ! Je suis votre analyste IA dédié au studio Mstudio. Sur ce cycle, vous avez consommé ${usedCredits.toLocaleString("fr-FR")} crédits (~111,7M tokens) pour ${totalMessages} exécutions (${(usedCredits / Math.max(1, totalMessages)).toFixed(1)} crédits / run). L'expert ${topAgentName} est en tête avec 11% de l'usage. Comment puis-je vous éclairer sur la télémétrie de vos 12 experts ?`,
     },
   ]);
 
@@ -38,12 +38,12 @@ export function AskAnalystModal({
 
     setTimeout(() => {
       let reply = "D'après les données d'attribution de ce cycle :";
-      if (userText.toLowerCase().includes("modèle") || userText.toLowerCase().includes("claude") || userText.toLowerCase().includes("gpt")) {
-        reply = "Claude Sonnet 5 absorbe 90% des crédits (10 677 crédits sur 139 requêtes). Le passage de certaines tâches légères de tri vers GPT-5.6 Luna permettrait d'économiser jusqu'à 25% de crédits.";
-      } else if (userText.toLowerCase().includes("coût") || userText.toLowerCase().includes("crédit") || userText.toLowerCase().includes("optimis")) {
-        reply = "Le ratio moyen est de 53.5 crédits par message. Les pics du 29 octobre et 3 novembre correspondent aux générations de rapports hebdomadaires. Vous êtes à 33% de votre plafond de 35 495 crédits, la trajectoire est parfaitement saine.";
+      if (userText.toLowerCase().includes("modèle") || userText.toLowerCase().includes("claude") || userText.toLowerCase().includes("hermes")) {
+        reply = "Hermes (Claude 3.5 Sonnet) absorbe 70.6% des tokens (78,8M tokens sur 661 exécutions). Le modèle Claude Opus 5.5 est mobilisé pour les synthèses stratégiques et livrables denses (32,8M tokens sur 275 exécutions). L'allocation est parfaitement équilibrée.";
+      } else if (userText.toLowerCase().includes("coût") || userText.toLowerCase().includes("crédit") || userText.toLowerCase().includes("optimis") || userText.toLowerCase().includes("trajectoire")) {
+        reply = `Le ratio moyen est de ${(usedCredits / Math.max(1, totalMessages)).toFixed(1)} crédits par session. Les pics des 29 octobre et 3 novembre correspondent aux revues d'équipe et livrables stratégiques. Avec ~${usedCredits.toLocaleString("fr-FR")} crédits consommés sur un plafond de 250 000 crédits (~45%), la trajectoire du studio est parfaitement saine.`;
       } else {
-        reply = `L'agent ${topAgentName} et OssoyaReportGen représentent ensemble 64% de la consommation totale. Les outils 'Files' et 'Web search browse' sont les plus sollicités avec plus de 750 invocations cumulées.`;
+        reply = `Koffi (Design & DA) et Djénéba (Chief of Staff) représentent ensemble 21% de la consommation totale (23,3M tokens), suivis d'Adjoua (Recrutement) et Mamadou (Comptabilité). Les outils Google Workspace (Gmail, Drive) et Exa AI cumulent plus de 820 appels.`;
       }
 
       setMessages((prev) => [...prev, { sender: "analyst", text: reply }]);

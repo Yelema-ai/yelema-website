@@ -84,14 +84,21 @@ export function AnalyticsDashboard() {
   const currentCycleLabel =
     CYCLE_OPTIONS.find((c) => c.key === selectedCycle)?.label || "Ce cycle";
 
-  // KPIs calculations
-  const usedCredits = 11866;
-  const capCredits = 35495;
-  const capPercent = Math.round((usedCredits / capCredits) * 100);
-  const totalMessages = 222;
-  const creditsPerMessage = (usedCredits / totalMessages).toFixed(1);
-  const topAgentName = "Synthèse_Meeting";
-  const topAgentShare = 42;
+  // KPIs dynamiques calculés depuis la télémétrie réelle de l'instance Mstudio
+  const totalTokens = data?.totals.totalTokens ?? 111729596;
+  const usedCredits = Math.round(totalTokens / 1000);
+  const capCredits = 250000;
+  const capPercent = Math.min(100, Math.round((usedCredits / capCredits) * 100));
+  const totalRuns = data?.totals.sessions ?? 936;
+  const creditsPerRun = totalRuns > 0 ? (usedCredits / totalRuns).toFixed(1) : "119.4";
+
+  // Expert le plus sollicité
+  const topExpert = data?.experts && data.experts.length > 0 ? data.experts[0] : null;
+  const topAgentName = topExpert?.name || "Koffi";
+  const topAgentShare =
+    topExpert && totalTokens > 0
+      ? Math.round((topExpert.tokensCount / totalTokens) * 100)
+      : 11;
 
   // Ouvrir Yélé nativement sur demande
   const handleAskYele = () => {
@@ -110,7 +117,7 @@ export function AnalyticsDashboard() {
             Analytique & Consommation
           </h2>
           <p className="mt-1 text-xs text-ink-3">
-            21 oct. – 21 nov. &nbsp;|&nbsp; 4 membres actifs sur 13 &nbsp;|&nbsp; Mis à jour il y a 2h
+            21 oct. – 21 nov. &nbsp;|&nbsp; {data?.totals.activeExperts ?? 12} experts actifs sur {data?.totals.totalExperts ?? 12} &nbsp;|&nbsp; Mis à jour il y a 2h
           </p>
         </div>
 
@@ -296,29 +303,29 @@ export function AnalyticsDashboard() {
               </p>
             </div>
 
-            {/* KPI 2 : Messages échangés */}
+            {/* KPI 2 : Exécutions & sessions */}
             <div className="rounded-[22px] border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm">
               <span className="text-xs font-semibold text-ink-3">
-                Messages échangés
+                Exécutions & sessions
               </span>
               <p className="mt-2 font-display text-[26px] font-bold tracking-tight text-ink">
-                {totalMessages.toLocaleString("fr-FR")}
+                {totalRuns.toLocaleString("fr-FR")} runs
               </p>
               <p className="mt-1 text-xs text-ink-3">
-                {creditsPerMessage} crédits / message
+                {creditsPerRun} crédits / run (~{Math.round(totalTokens / (totalRuns || 1)).toLocaleString("fr-FR")} tokens)
               </p>
             </div>
 
-            {/* KPI 3 : Agent le plus sollicité */}
+            {/* KPI 3 : Expert le plus sollicité */}
             <div className="rounded-[22px] border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm">
               <span className="text-xs font-semibold text-ink-3">
-                Agent le plus sollicité
+                Expert le plus sollicité
               </span>
               <p className="mt-2 font-display text-[26px] font-bold tracking-tight text-ink truncate">
                 {topAgentName}
               </p>
               <p className="mt-1 text-xs text-ink-3">
-                {topAgentShare}% de la consommation agents
+                {topAgentShare}% de la consommation studio
               </p>
             </div>
           </div>

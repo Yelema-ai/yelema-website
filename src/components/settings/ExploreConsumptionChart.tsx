@@ -5,36 +5,36 @@ import { Filter, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface ExploreChartProps {
-  usedCredits: number;
-  capCredits: number;
+  usedCredits?: number;
+  capCredits?: number;
 }
 
 interface DailyPoint {
   date: string;
-  synthese: number;
-  ossoya: number;
+  koffi: number;
+  djeneba: number;
+  adjoua: number;
+  mamadou: number;
+  kouassi: number;
   others: number;
-  router: number;
-  maBrief: number;
-  veille: number;
   activeUsers: number;
   isToday?: boolean;
 }
 
 const DAILY_DATA: DailyPoint[] = [
-  { date: "23 oct.", synthese: 400, ossoya: 250, others: 150, router: 80, maBrief: 60, veille: 40, activeUsers: 3 },
-  { date: "25 oct.", synthese: 650, ossoya: 400, others: 200, router: 120, maBrief: 80, veille: 50, activeUsers: 3 },
-  { date: "28 oct.", synthese: 500, ossoya: 350, others: 180, router: 90, maBrief: 70, veille: 45, activeUsers: 2 },
-  { date: "29 oct.", synthese: 1800, ossoya: 900, others: 350, router: 200, maBrief: 150, veille: 100, activeUsers: 3 },
-  { date: "31 oct.", synthese: 1200, ossoya: 650, others: 280, router: 150, maBrief: 120, veille: 80, activeUsers: 3 },
-  { date: "1 nov.", synthese: 450, ossoya: 300, others: 160, router: 80, maBrief: 50, veille: 35, activeUsers: 3 },
-  { date: "3 nov.", synthese: 1500, ossoya: 750, others: 320, router: 180, maBrief: 140, veille: 90, activeUsers: 4 },
-  { date: "5 nov.", synthese: 750, ossoya: 420, others: 200, router: 110, maBrief: 90, veille: 60, activeUsers: 3, isToday: true },
-  { date: "8 nov.", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
-  { date: "12 nov.", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
-  { date: "15 nov.", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
-  { date: "18 nov.", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
-  { date: "21 nov.", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
+  { date: "23 oct.", koffi: 950, djeneba: 880, adjoua: 780, mamadou: 740, kouassi: 720, others: 4800, activeUsers: 3 },
+  { date: "25 oct.", koffi: 1100, djeneba: 990, adjoua: 870, mamadou: 840, kouassi: 820, others: 5400, activeUsers: 3 },
+  { date: "28 oct.", koffi: 1050, djeneba: 950, adjoua: 820, mamadou: 800, kouassi: 780, others: 5200, activeUsers: 4 },
+  { date: "29 oct.", koffi: 2200, djeneba: 2000, adjoua: 1750, mamadou: 1680, kouassi: 1650, others: 10800, activeUsers: 4 },
+  { date: "31 oct.", koffi: 1450, djeneba: 1300, adjoua: 1150, mamadou: 1100, kouassi: 1080, others: 7100, activeUsers: 4 },
+  { date: "1 nov.", koffi: 800, djeneba: 720, adjoua: 640, mamadou: 610, kouassi: 600, others: 4000, activeUsers: 3 },
+  { date: "3 nov.", koffi: 1850, djeneba: 1680, adjoua: 1480, mamadou: 1420, kouassi: 1400, others: 9200, activeUsers: 4 },
+  { date: "5 nov.", koffi: 1100, djeneba: 990, adjoua: 870, mamadou: 830, kouassi: 820, others: 5400, activeUsers: 4, isToday: true },
+  { date: "8 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, others: 0, activeUsers: 0 },
+  { date: "12 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, others: 0, activeUsers: 0 },
+  { date: "15 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, others: 0, activeUsers: 0 },
+  { date: "18 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, others: 0, activeUsers: 0 },
+  { date: "21 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, others: 0, activeUsers: 0 },
 ];
 
 const CUMULATIVE_DATES = [
@@ -53,8 +53,8 @@ const CUMULATIVE_DATES = [
 ];
 
 export function ExploreConsumptionChart({
-  usedCredits = 11866,
-  capCredits = 35495,
+  usedCredits = 111730,
+  capCredits = 250000,
 }: ExploreChartProps) {
   const [mode, setMode] = useState<"daily" | "cumulative">("daily");
   const [showFilterPopover, setShowFilterPopover] = useState(false);
@@ -70,7 +70,7 @@ export function ExploreConsumptionChart({
   const chartHeight = height - paddingTop - paddingBottom;
 
   // Max scale for Daily credits Y-axis
-  const maxDailyCredits = 3600;
+  const maxDailyCredits = 25000;
   const maxActiveUsers = 5;
 
   // Cumulative points calculation
@@ -148,15 +148,15 @@ export function ExploreConsumptionChart({
                 <div className="space-y-1.5 text-ink-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" defaultChecked className="rounded text-brand" />
-                    <span>Tous les agents actifs</span>
+                    <span>Tous les 12 experts actifs</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" defaultChecked className="rounded text-brand" />
-                    <span>Synthèse_Meeting (Top 1)</span>
+                    <span>Koffi (Top 1 · 11%)</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" defaultChecked className="rounded text-brand" />
-                    <span>Utilisateurs actifs</span>
+                    <span>Membres actifs</span>
                   </label>
                 </div>
               </div>
@@ -275,18 +275,18 @@ export function ExploreConsumptionChart({
               {DAILY_DATA.map((pt, i) => {
                 const x = paddingLeft + (i / (DAILY_DATA.length - 1)) * chartWidth;
                 const barWidth = 24;
-                const total = pt.synthese + pt.ossoya + pt.others + pt.router + pt.maBrief + pt.veille;
+                const total = pt.koffi + pt.djeneba + pt.adjoua + pt.mamadou + pt.kouassi + pt.others;
                 if (total === 0) return null;
 
                 let currentY = paddingTop + chartHeight;
 
                 const segments = [
-                  { val: pt.veille, color: "#E2E8F0" },
-                  { val: pt.maBrief, color: "#93C5FD" },
-                  { val: pt.router, color: "#38BDF8" },
-                  { val: pt.others, color: "#1D4ED8" },
-                  { val: pt.ossoya, color: "#2563EB" },
-                  { val: pt.synthese, color: "#06B6D4" },
+                  { val: pt.others, color: "#CBD5E1" },
+                  { val: pt.kouassi, color: "#6366F1" },
+                  { val: pt.mamadou, color: "#93C5FD" },
+                  { val: pt.adjoua, color: "#38BDF8" },
+                  { val: pt.djeneba, color: "#2563EB" },
+                  { val: pt.koffi, color: "#06B6D4" },
                 ];
 
                 return (
@@ -451,27 +451,27 @@ export function ExploreConsumptionChart({
           <>
             <div className="flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-[#06B6D4]" />
-              <span className="text-[11px] font-medium">Synthèse_Meeting</span>
+              <span className="text-[11px] font-medium">Koffi (Design)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-[#2563EB]" />
-              <span className="text-[11px] font-medium">OssoyaReportGen</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-[#1D4ED8]" />
-              <span className="text-[11px] font-medium">Autres agents</span>
+              <span className="text-[11px] font-medium">Djénéba (Direction)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-[#38BDF8]" />
-              <span className="text-[11px] font-medium">Meeting_Router</span>
+              <span className="text-[11px] font-medium">Adjoua (RH)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-[#93C5FD]" />
-              <span className="text-[11px] font-medium">M&A_brief_hebdo</span>
+              <span className="text-[11px] font-medium">Mamadou (Finance)</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-[#E2E8F0] ring-1 ring-ink-3/20" />
-              <span className="text-[11px] font-medium">VeilleTechIA</span>
+              <span className="size-2.5 rounded-full bg-[#6366F1]" />
+              <span className="text-[11px] font-medium">Kouassi (Ventes)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="size-2.5 rounded-full bg-[#CBD5E1] ring-1 ring-ink-3/20" />
+              <span className="text-[11px] font-medium">Autres experts</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-[#F59E0B]" />
