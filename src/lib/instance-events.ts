@@ -2,6 +2,8 @@
 // docs/plans/performance-instantanee/contrat-evenements.md §1 on the platform), heard by one EventSource
 // per tab. No content, only what changed. Pure, so the rules are tested.
 
+import { isProfileId } from "./profile-id.ts";
+
 export const INSTANCE_EVENTS = ["turn.ended", "sessions.changed", "files.changed", "instance.changed", "routine.ended", "job.done"] as const;
 export type InstanceEventType = (typeof INSTANCE_EVENTS)[number];
 
@@ -18,7 +20,7 @@ export interface InstanceEvent {
 
 const FIRST_RETRY_MS = 2_000;
 const MAX_RETRY_MS = 5 * 60_000;
-const ID_RE = /^[\w.:@~-]{1,200}$/;
+const SESSION_RE = /^[\w.:@~-]{1,200}$/;
 
 /** Wait before reconnect attempt `n` (0-based): doubles up to 5 min, ±20 % so tabs do not come back together. */
 export function reconnectDelay(attempt: number, random: () => number = Math.random): number {
@@ -34,7 +36,7 @@ export function eventStreamOn(env: Record<string, string | undefined>): boolean 
 
 const isType = (t: string): t is InstanceEventType => (INSTANCE_EVENTS as readonly string[]).includes(t);
 const isKind = (k: unknown): k is JobKind => typeof k === "string" && (JOB_KINDS as readonly string[]).includes(k);
-const idOf = (v: unknown): string | undefined => (typeof v === "string" && ID_RE.test(v) ? v : undefined);
+const idOf = (v: unknown, valid: (s: string) => boolean): string | undefined => (typeof v === "string" && valid(v) ? v : undefined);
 
 /** One frame (`event:` + `data:`); null for a type this tab does not know. A bad body keeps the type. */
 export function parseInstanceEvent(type: string, data: string | null | undefined, now = Date.now()): InstanceEvent | null {
@@ -47,8 +49,8 @@ export function parseInstanceEvent(type: string, data: string | null | undefined
     // An unreadable body still says what kind of thing changed.
   }
   const out: InstanceEvent = { type, at: typeof body.at === "number" && Number.isFinite(body.at) ? body.at : now };
-  const profile = idOf(body.profile);
-  const session = idOf(body.session);
+  const profile = idOf(body.profile, isProfileId);
+  const session = idOf(body.session, (s) => SESSION_RE.test(s));
   if (profile) out.profile = profile;
   if (session) out.session = session;
   if (isKind(body.kind)) out.kind = body.kind;

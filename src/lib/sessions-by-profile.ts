@@ -1,7 +1,7 @@
 import "server-only";
 import { agent37 } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
-import { memo } from "@/lib/memo";
+import { optionalRoute } from "@/lib/optional-route";
 import { profileQuery, resolveProfile } from "@/lib/profiles";
 import { DIRECT_READS } from "@/lib/run-outcomes";
 import { parseByProfile, railOf, runsOf, spaceProfile, type ProfileListing } from "@/lib/session-rows";
@@ -12,12 +12,10 @@ import type { ChatSession } from "@/components/chat/types";
 export type Space = { sessions: ChatSession[]; runs: RoutineSession[] };
 
 // A gateway without the grouped read is not asked again for a while.
-const unsupported = memo<boolean>({ ttlMs: 10 * 60_000, maxEntries: 1 });
+const byProfile = optionalRoute((agentId: string, profiles: string[]) => agent37.sessionsByProfile(agentId, profiles));
 
 async function grouped(agentId: string, profiles: string[]): Promise<Map<string, ProfileListing> | null> {
-  if (unsupported.peek("gw")) return null;
-  const body = await agent37.sessionsByProfile(agentId, profiles).catch(() => undefined);
-  if (body === null) unsupported.put("gw", true);
+  const body = await byProfile(agentId, profiles).catch(() => undefined);
   return body ? parseByProfile(body) : null;
 }
 

@@ -1,16 +1,14 @@
 import { agent37 } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { loadCatalogueExpert } from "@/lib/catalogue";
-import { within } from "@/lib/first-screen";
+import { FIRST_SCREEN_BUDGET_MS, within } from "@/lib/first-screen";
 import { handleError, json } from "@/lib/http";
 import { readJourZero } from "@/lib/jour-zero-server";
+import { isProfileId } from "@/lib/profile-id";
 import { DEFAULT_PROFILE, profileQuery, resolveProfile } from "@/lib/profiles";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-// Past this a part is left out (null) and the page reads it by its own route.
-const BUDGET_MS = 2_500;
-const CATALOGUE_KEY = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const refused = async (): Promise<never> => {
   throw new Error("jour-zero unavailable");
 };
@@ -25,9 +23,9 @@ export async function GET(request: Request, { params }: Ctx) {
     const profile = await resolveProfile(row, asked.get("profile"));
     const fiche = asked.get("fiche");
     const [models, jourZero, expert] = await Promise.all([
-      asked.get("models") === "0" ? null : within(agent37.listModels(id, profileQuery(profile)), BUDGET_MS),
-      profile === DEFAULT_PROFILE || asked.get("jz") === "0" ? null : within(readJourZero(id, profile, refused), BUDGET_MS),
-      fiche && CATALOGUE_KEY.test(fiche) ? within(loadCatalogueExpert(fiche), BUDGET_MS) : null,
+      asked.get("models") === "0" ? null : within(agent37.listModels(id, profileQuery(profile)), FIRST_SCREEN_BUDGET_MS),
+      profile === DEFAULT_PROFILE || asked.get("jz") === "0" ? null : within(readJourZero(id, profile, refused), FIRST_SCREEN_BUDGET_MS),
+      fiche && isProfileId(fiche) ? within(loadCatalogueExpert(fiche), FIRST_SCREEN_BUDGET_MS) : null,
     ]);
     return json({ models, jourZero, fiche: expert });
   } catch (e) {

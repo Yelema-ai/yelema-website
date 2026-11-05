@@ -64,8 +64,6 @@ export function preloadExpert(agentId: string, profile: string | null, catalogue
   return p;
 }
 
-export { sparingData };
-
 /** A row on screen: only its conversations, grouped with every other row's into one read. */
 export function preloadSpace(agentId: string, profile: string | null): void {
   void sessionsStore.read(agentId, profile, FRESH_MS).catch(() => undefined);
@@ -94,21 +92,15 @@ export function useReadAhead(experts: { agentId: string; profileId: string; cata
       const item = todo.shift();
       if (!item) return;
       void preloadExpert(item[0], item[1], item[2] || null).then(() => {
-        if (!stop) setTimeout(() => idle(next), STAGGER_MS);
+        if (!stop) setTimeout(() => whenIdle(next), STAGGER_MS);
       });
     };
-    const t = setTimeout(() => idle(next), STAGGER_MS);
+    const t = setTimeout(() => whenIdle(next), STAGGER_MS);
     return () => {
       stop = true;
       clearTimeout(t);
     };
   }, [list]);
-}
-
-function idle(fn: () => void) {
-  const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-  if (ric) ric(fn, { timeout: 5_000 });
-  else setTimeout(fn, 200);
 }
 
 // Once the tab's bootstrap is in, the menu's screens (Conversations, Livrables) are read while idle: every

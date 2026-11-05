@@ -6,8 +6,8 @@ import { expertKey } from "@/lib/activity";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { expertCycle, isDjeneba } from "@/lib/expert-cycle";
-import { preloadExpert, preloadSpace, sparingData } from "@/components/experts/expert-preload";
-import { useInView, useIntent } from "@/components/usePrefetch";
+import { preloadExpert, preloadSpace } from "@/components/experts/expert-preload";
+import { sparingData, useInView, useIntent } from "@/components/usePrefetch";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
 

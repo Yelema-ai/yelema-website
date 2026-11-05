@@ -4,6 +4,9 @@
 /** One space of the member: their own instance (`profileId` null) or an Expert's. */
 export const spaceKey = (agentId: string, profileId: string | null): string => `${agentId}:${profileId ?? ""}`;
 
+/** How long a server read for a first screen (page, bootstrap, expert screen) waits; past it, the browser reads. */
+export const FIRST_SCREEN_BUDGET_MS = 2_500;
+
 /** `promise`'s value, or null when it fails or takes longer than `ms` (the browser then reads it itself). */
 export function within<T>(promise: Promise<T>, ms: number): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
