@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
-import { DEFAULT_GUEST_DAYS, GUEST_DAYS, GUEST_STATUS_LABEL, guestFormError, parseGuestEmails, presentGuests, type GuestDays, type SalonGuest } from "@/lib/salon-guests";
+import { DEFAULT_GUEST_DAYS, GUEST_DAYS, GUEST_STATUS_LABEL, guestFormError, parseGuestEmails, presentGuests, refusalLines, type GuestDays, type GuestRefusal, type SalonGuest } from "@/lib/salon-guests";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -40,6 +40,7 @@ export function SalonGuests({ salon, nom, open, onClose, onPresent }: { salon: s
   const [days, setDays] = useState<GuestDays>(DEFAULT_GUEST_DAYS);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [refused, setRefused] = useState<string[]>([]);
   const base = `/api/buzz/salons/${salon}/guests`;
 
   const tell = useRef(onPresent);
@@ -67,13 +68,16 @@ export function SalonGuests({ salon, nom, open, onClose, onPresent }: { salon: s
     if (refused) return setError(refused);
     setBusy("invite");
     setError(null);
+    setRefused([]);
     try {
-      const r = await apiFetch<{ data: SalonGuest[]; refused: unknown[] }>(base, { method: "POST", body: JSON.stringify({ emails: parseGuestEmails(text).emails, days }) }, "Les invitations n’ont pas pu être envoyées");
+      const r = await apiFetch<{ data: SalonGuest[]; refused: GuestRefusal[] }>(base, { method: "POST", body: JSON.stringify({ emails: parseGuestEmails(text).emails, days }) }, "Les invitations n’ont pas pu être envoyées");
       shown(r.data);
       setText("");
-      const no = Array.isArray(r.refused) ? r.refused.length : 0;
-      if (no) toast.warning(`${no} adresse${no > 1 ? "s ont été refusées" : " a été refusée"} (domaine non autorisé ou adresse déjà invitée).`);
-      else toast.success("Invitations envoyées par e-mail.");
+      const no = refusalLines(Array.isArray(r.refused) ? r.refused : []);
+      setRefused(no);
+      // Only the refused addresses stay in the field, to correct them.
+      setText(Array.isArray(r.refused) ? r.refused.map((x) => x.email).join(", ") : "");
+      if (r.data.length > no.length || !no.length) toast.success("Invitations envoyées par e-mail.");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -119,6 +123,16 @@ export function SalonGuests({ salon, nom, open, onClose, onPresent }: { salon: s
           <span className="text-[13px] font-semibold text-ink-2">Durée de l’accès</span>
           <DaysPicker value={days} onChange={setDays} label="Durée de l’accès" />
           {error && <p role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{error}</p>}
+          {refused.length > 0 && (
+            <div role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">
+              <p className="font-semibold">Non invitées :</p>
+              <ul className="mt-1 list-disc pl-5">
+                {refused.map((l) => (
+                  <li key={l}>{l}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <Button type="submit" disabled={busy !== null} className="self-end">
             {busy === "invite" && <Loader2 className="animate-spin" />} Inviter
           </Button>

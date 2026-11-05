@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { remember, whenKept } from "@/lib/client-cache";
 import { optimistic } from "@/lib/optimistic";
-import { conversationName, facesOf, guestsIn, isSalonName, labelsOf, myExpertsIn, myMember, participants, working, type BuzzOverview } from "@/lib/buzz";
+import { conversationName, facesOf, isSalonName, labelsOf, myExpertsIn, myMember, participants, working, type BuzzOverview } from "@/lib/buzz";
 import { deviceKey, rememberedRelay, storedKey } from "@/lib/buzz-keys";
 import { reconnectDelay } from "@/lib/instance-events";
 import { BuzzConnection, conversations, follow, openDirect, refusalText, sendMessage, watchRosters, withMessage, type Conversation, type Message } from "@/lib/buzz-relay";
@@ -20,7 +20,7 @@ import { candidatesOf } from "@/lib/buzz-mentions";
 import { NewExchange, type ExchangeKind } from "@/components/messaging/NewExchange";
 import { prefetchSalonDeliverables } from "@/components/messaging/salon-deliverables-store";
 import { whenIdle } from "@/components/usePrefetch";
-import { useWorkspace } from "@/components/WorkspaceProvider";
+import { mayInvite } from "@/lib/salon-guests";
 
 // Loaded only once a member opens it: the dialog weighs nothing on the page until then.
 const SalonGuests = dynamic(() => import("@/components/messaging/SalonGuests").then((m) => m.SalonGuests), { ssr: false });
@@ -54,7 +54,6 @@ export function Messaging() {
   const [guestsOpen, setGuestsOpen] = useState(false);
   // Guests counted when the dialog last read a salon's list (the overview may not say it for every salon).
   const [guestCounts, setGuestCounts] = useState<Record<string, number>>({});
-  const admin = useWorkspace().current?.role === "admin";
   const relay = useRef<BuzzConnection | null>(null);
   // Bumped on each (re)connection and on « Actualiser »: the list and the open thread are read again.
   const [link, setLink] = useState(0);
@@ -339,11 +338,9 @@ export function Messaging() {
   if (state.kind === "closed") return <p className="m-6 max-w-xl rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{state.reason}</p>;
 
   const kind = current ? (isUnit(current) ? "unite" : isSalon(current) ? "salon" : "direct") : null;
-  // The salon's creator or an admin may invite; the back office decides, the app only hides it where it cannot apply.
-  const canInvite = kind === "salon" || (kind === "unite" && admin);
-  const withGuests = Boolean(
-    current && kind !== "direct" && (guestCounts[current.id] ?? (overview?.salons.find((s) => s.id === current.id)?.hasGuests || guestsIn(directory, current.members).length > 0)),
-  );
+  // The salon's creator or an admin (`invitations` of the overview); the back office checks again.
+  const canInvite = Boolean(current && kind !== "direct" && mayInvite(overview?.invitations, current.id));
+  const withGuests = Boolean(current && kind !== "direct" && (guestCounts[current.id] ?? overview?.salonsAvecInvites?.includes(current.id)));
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <ExchangeHeader

@@ -22,6 +22,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     return keepGuestCookie(noStore(json(guestView(opened))), opened.session, token, opened.expiresAt);
   } catch (e) {
     if (e instanceof BackofficeError && e.code === "invalid_code") return apiError("Code incorrect ou expiré. Vérifiez-le ou demandez-en un nouveau.", 400, "invalid_code");
+    if (e instanceof BackofficeError && e.status === 400) return apiError("Une erreur est survenue, réessayez.", 400, "bad_request");
+    if (e instanceof BackofficeError && e.status === 429) return apiError("Trop d’essais avec ce code. Demandez un nouveau code.", 429, "rate_limited");
     return guestFailure(e);
   }
 }

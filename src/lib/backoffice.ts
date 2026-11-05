@@ -10,12 +10,12 @@ import { vaultPath, type VaultDraft, type VaultEntry, type VaultItem, type Vault
 import { scopePath, type LlmModelChoice, type LlmOverview, type LlmWritten, type SettingScope } from "@/lib/llm";
 import { mailPath, type MailDetail, type MailDraft, type MailInbox, type MailRights, type MailRightsPatch, type MailSummary } from "@/lib/mail";
 import { isPublicId, type MemoryList, type MemoryNote, type MemoryPatch, type OrgAssignmentDraft, type OrgChart, type OrgGrantDraft, type OrgMember, type OrgRole } from "@/lib/memory";
-import { backofficeUrl, resolverToken, siteServerSecret } from "@/lib/runtime-config";
+import { backofficeUrl, resolverToken } from "@/lib/runtime-config";
 import { SIGNALING_METHOD, type CallRecord, type SignalingStep, type VoiceOption } from "@/lib/voice";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 import type { BuzzOverview } from "@/lib/buzz";
 import type { GuestFile, GuestParticipant, GuestView } from "@/lib/guest-access";
-import type { SalonGuest } from "@/lib/salon-guests";
+import type { GuestRefusal, SalonGuest } from "@/lib/salon-guests";
 import type { ClaudeAuth, ClaudeAuthStatus, ClaudeLogin, ClaudeUsage } from "@/lib/claude-code-auth";
 
 // The Yelema back office's API for this app (`/api/v1/app/*`, guide: yelema-platform
@@ -311,9 +311,9 @@ async function call<T>(path: string, init: { method?: string; token?: string | n
   return data as T;
 }
 
-// No secret configured: the guest routes answer as an outage, never call without it.
+// The guest routes take this server's resolver token as their secret; without it, an outage, never a call.
 function guestCall<T>(path: string, init: { ip: string; session?: string; method?: string; body?: unknown; timeoutMs?: number }): Promise<T> {
-  const secret = siteServerSecret();
+  const secret = resolverToken();
   if (!secret) return Promise.reject(new BackofficeError(503, "unavailable", "Le service est momentanément indisponible. Réessayez dans un instant."));
   return call<T>(path, {
     method: init.method,
@@ -689,9 +689,9 @@ export const backoffice = {
   buzzSalonDeliverables: (token: string, id: string) => call<{ items: SalonDeliverable[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/livrables`, { token, timeoutMs: 30_000 }),
   buzzSalonGuests: (token: string, id: string) => call<{ data: SalonGuest[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/guests`, { token }),
   buzzInviteGuests: (token: string, id: string, body: { emails: string[]; days: number }) =>
-    call<{ data: SalonGuest[]; refused: unknown[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/guests`, { method: "POST", token, body, timeoutMs: 60_000 }),
+    call<{ data: SalonGuest[]; refused: GuestRefusal[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/guests`, { method: "POST", token, body, timeoutMs: 60_000 }),
   buzzExtendGuest: (token: string, id: string, guest: string, days: number) =>
-    call<SalonGuest>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}`, { method: "PATCH", token, body: { days } }),
+    call<{ data: SalonGuest }>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}`, { method: "PATCH", token, body: { days } }),
   buzzRemoveGuest: (token: string, id: string, guest: string) =>
     call<unknown>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}`, { method: "DELETE", token, timeoutMs: 60_000 }),
   // An external guest's routes: called by this server only, with its secret and the visitor's address.

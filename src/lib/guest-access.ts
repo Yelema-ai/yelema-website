@@ -105,19 +105,29 @@ export function guestRefusal(status: number, code: string): "ended" | "signed_ou
 }
 
 export interface GuestParticipant { nom: string; type: "personne" | "expert" | "invite"; cles: string[] }
-export interface GuestFile { name: string; path: string; size: number | null; modifiedAt: string; url: string }
+/** `path` is relative to the salon's folder; the full drive path rides in the signed `url` (`p`). */
+export interface GuestFile { name: string; path: string; size: number | null; modifiedAt: string; url: string | null }
 
 /** The salon's participants as the thread reads a directory; an expert hangs off its owner « X (de Owner) ». */
 export const guestDirectory = (list: readonly GuestParticipant[]): BuzzEntry[] =>
   list.map((p) => ({ nom: p.nom, type: p.type, membre: p.type === "expert" ? (/ \(de (.*)\)$/.exec(p.nom)?.[1] ?? p.nom) : p.nom, cles: p.cles }));
 
-/** The guest's files as the salon's deliverables; the expert is read off `Livrables/<Expert>/…`. */
+function drivePathOf(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const p = new URL(url, "http://x").searchParams.get("p");
+    return p ? normDrivePath(p) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The guest's files as the salon's deliverables; the expert is read off `~/Livrables/<Expert>/…` of the signed address. */
 export function guestDeliverables(list: readonly GuestFile[]): SalonDeliverable[] {
   return list.map((f) => {
-    const norm = normDrivePath(f.path);
-    const path = norm.startsWith("~/") ? norm : `~/${norm.replace(/^\/+/, "")}`;
-    const parts = path.split("/");
+    const full = drivePathOf(f.url);
+    const parts = full?.split("/") ?? [];
     const auteur = parts[1] === "Livrables" ? (parts[2] ?? "") : "";
-    return { id: path, expertId: "", title: f.name, kind: "", updatedAt: f.modifiedAt, url: f.url, folder: parts.slice(0, -1).join("/"), auteur, path };
+    return { id: full ?? f.path, expertId: "", title: f.name, kind: "", updatedAt: f.modifiedAt, url: f.url, folder: parts.slice(0, -1).join("/"), auteur };
   });
 }

@@ -43,6 +43,15 @@ export function guestFormError(text: string, days: unknown): string | null {
   return null;
 }
 
+export interface GuestRefusal { email: string; reason: "domain" | "invalid" | "member" }
+const REFUSAL_LABEL: Record<GuestRefusal["reason"], string> = { domain: "domaine non autorisé", invalid: "adresse invalide", member: "déjà membre" };
+
+/** Each address the back office refused, with why, as the member reads it. */
+export const refusalLines = (list: readonly GuestRefusal[]): string[] => list.map((r) => `${r.email} : ${REFUSAL_LABEL[r.reason] ?? "refusée"}`);
+
+/** Whether the member may invite into `salon` (the back office checks again). */
+export const mayInvite = (rights: { tous: boolean; salons: string[] } | undefined, salon: string): boolean => Boolean(rights && (rights.tous || rights.salons.includes(salon)));
+
 export const GUEST_STATUS_LABEL: Record<SalonGuest["status"], string> = {
   invited: "Invitation envoyée",
   active: "Accès actif",

@@ -86,7 +86,12 @@ test("participants et livrables de l'invité au format des Échanges", () => {
   ]);
   assert.deepEqual(dir.map((e) => [e.type, e.membre]), [["personne", "Leslie"], ["expert", "Leslie"], ["invite", "Jean Paul"]]);
   const chan = "0b6f1c1e-0000-4000-8000-000000000001";
-  const items = guestDeliverables([{ name: "cr.pdf", path: `Livrables/Mamadou/Salons/${chan}/cr.pdf`, size: 10, modifiedAt: "2026-11-05T10:00:00Z", url: "https://x/f?sig=1" }]);
+  const url = `https://bo/api/v1/app/deliverables/file?i=inst_7&p=Livrables%2FMamadou%2FSalons%2F${chan}%2Fcr.pdf&e=1&s=3f`;
+  const items = guestDeliverables([
+    { name: "cr.pdf", path: "cr.pdf", size: null, modifiedAt: "2026-11-05T10:00:00Z", url },
+    { name: "x.md", path: "x.md", size: 3, modifiedAt: "2026-11-05T10:00:00Z", url: null },
+  ]);
   assert.equal(items[0].auteur, "Mamadou");
-  assert.equal(salonDeliverableFor(`~/Livrables/Mamadou/Salons/${chan}/cr.pdf`, chan, items)?.url, "https://x/f?sig=1");
+  assert.equal(salonDeliverableFor(`~/Livrables/Mamadou/Salons/${chan}/cr.pdf`, chan, items)?.url, url);
+  assert.equal(items[1].url, null);
 });

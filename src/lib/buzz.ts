@@ -8,7 +8,11 @@ export interface BuzzOverview {
   relais: string;
   appareils: { cle: string; nom: string }[];
   annuaire: BuzzEntry[];
-  salons: { id: string; nom: string; hasGuests?: boolean }[];
+  salons: { id: string; nom: string; hasGuests?: boolean; canInvite?: boolean }[];
+  /** The member's salons with external guests invited or present. */
+  salonsAvecInvites?: string[];
+  /** Where the member may invite external guests: everywhere (admin) or in the salons they opened. */
+  invitations?: { tous: boolean; salons: string[] };
 }
 
 export const PUBKEY_RE = /^[0-9a-f]{64}$/;
