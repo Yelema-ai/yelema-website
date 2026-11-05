@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { browserPollEnv, startPoll } from "@/lib/poll";
 import { DEPLOY_POLL_MS, deployPhase, parseDeployStatus, type DeployPhase, type DeployStatus } from "@/lib/deploy-status";
@@ -9,7 +8,9 @@ import { cn } from "@/lib/utils";
 
 // While Yelema's team ships an update the member is told, instead of guessing at a bug: a banner in
 // the top bar, « Mise à jour » on the expert's chip, a held reply said to be received. Once it is
-// over and the page runs the previous version, one toast offers to refresh.
+// over and the page runs the previous version, the same strip stays with « Actualiser » until the page
+// is reloaded: a toast could be pushed away by other notifications or closed, and then nothing said
+// the page was out of date (Leslie, 05/11).
 const DeployContext = createContext<DeployPhase>("idle");
 
 export const useDeployPhase = () => useContext(DeployContext);
@@ -50,15 +51,6 @@ export function DeployStatusProvider({ children }: { children: React.ReactNode }
 
   const phase = forced ?? deployPhase(loaded.current, status);
 
-  useEffect(() => {
-    if (phase !== "updated") return;
-    toast("Mise à jour terminée", {
-      id: "mise-a-jour-terminee",
-      action: { label: "Actualiser", onClick: () => window.location.reload() },
-      duration: Infinity,
-    });
-  }, [phase]);
-
   return <DeployContext.Provider value={phase}>{children}</DeployContext.Provider>;
 }
 
@@ -70,9 +62,21 @@ export function UpdateSpinner({ className }: { className?: string }) {
 const UPDATE_TEXT = "Mise à jour en cours. Vos Experts répondent un peu plus lentement.";
 
 /** While an update runs: one thin strip under the top bar, on every screen. No chip beside an Expert's name
- *  nor pill in the header, which squeezed the tabs (Leslie, 03/11: « visuellement pas ouf »). */
+ *  nor pill in the header, which squeezed the tabs (Leslie, 03/11: « visuellement pas ouf »). Once it is
+ *  over, the same strip says so with « Actualiser », and stays until the page is reloaded. */
 export function UpdateStrip() {
-  if (useDeployPhase() !== "maintenance") return null;
+  const phase = useDeployPhase();
+  if (phase === "updated")
+    return (
+      <div role="status" className="flex items-center gap-2.5 border-b border-ok/25 bg-ok-pale px-4 py-1.5 text-[13px] font-semibold leading-snug text-ink md:px-8">
+        <span aria-hidden className="size-2 shrink-0 rounded-full bg-ok" />
+        <span className="min-w-0 flex-1">Mise à jour terminée. Actualisez la page pour en profiter.</span>
+        <button type="button" onClick={() => window.location.reload()} className="inline-flex h-8 shrink-0 items-center rounded-lg bg-ink px-3 text-[12.5px] font-semibold text-bg hover:opacity-90 pointer-coarse:h-10">
+          Actualiser
+        </button>
+      </div>
+    );
+  if (phase !== "maintenance") return null;
   return (
     <div role="status" className="flex items-center gap-2.5 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[13px] font-semibold leading-snug text-amber-800 md:px-8 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
       <UpdateSpinner />
