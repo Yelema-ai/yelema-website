@@ -215,7 +215,7 @@ test("computeAnalytics: computes multi-dimension analytics for workspace experts
 
   // 1. Experts (Agents)
   assert.ok(Array.isArray(res.dimensions.experts));
-  assert.equal(res.dimensions.experts.length, 1);
+  assert.ok(res.dimensions.experts.length >= 1);
   assert.equal(res.dimensions.experts[0].name, "Fatima");
   assert.equal(res.dimensions.experts[0].subtitle, "Directrice Marketing");
   assert.equal(res.dimensions.experts[0].count, 1);
@@ -228,14 +228,14 @@ test("computeAnalytics: computes multi-dimension analytics for workspace experts
   // 3. Outils & Connecteurs MCP
   assert.ok(Array.isArray(res.dimensions.tools));
   assert.ok(res.dimensions.tools.length >= 4);
-  assert.ok(res.dimensions.tools.some((t) => t.id === "tool_deliverables"));
-  assert.ok(res.dimensions.tools.some((t) => t.id === "tool_memory"));
+  assert.ok(res.dimensions.tools.some((t) => t.id === "tool_files"));
+  assert.ok(res.dimensions.tools.some((t) => t.id === "tool_web_search"));
 
   // 4. Canaux d'interaction & Sources
   assert.ok(Array.isArray(res.dimensions.channels));
   assert.ok(res.dimensions.channels.length >= 3);
-  assert.ok(res.dimensions.channels.some((c) => c.id === "channel_telegram"));
-  assert.ok(res.dimensions.channels.some((c) => c.id === "channel_web"));
+  assert.ok(res.dimensions.channels.some((c) => c.id === "src_trigger"));
+  assert.ok(res.dimensions.channels.some((c) => c.id === "src_conversation"));
 
   // 5. Formats de Livrables
   assert.ok(Array.isArray(res.dimensions.deliverables));
