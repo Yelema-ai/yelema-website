@@ -11,23 +11,23 @@ interface ExportDataCardProps {
 }
 
 const PERIOD_OPTIONS = [
-  { key: "7d", label: "7 days" },
-  { key: "14d", label: "14 days" },
-  { key: "30d", label: "30 days" },
-  { key: "90d", label: "90 days" },
+  { key: "7d", label: "7 jours" },
+  { key: "14d", label: "14 jours" },
+  { key: "30d", label: "30 jours" },
+  { key: "90d", label: "90 jours" },
 ];
 
 const METRIC_OPTIONS = [
-  { key: "usage", label: "Usage metrics" },
-  { key: "users", label: "Active users" },
-  { key: "source", label: "Message source" },
-  { key: "agents", label: "Agents" },
-  { key: "members", label: "Users" },
-  { key: "skills", label: "Skills" },
-  { key: "skill_usage", label: "Skill usage" },
-  { key: "tool_usage", label: "Tool usage" },
-  { key: "messages", label: "Messages" },
-  { key: "feedback", label: "Feedback" },
+  { key: "usage", label: "Métriques d'usage global" },
+  { key: "users", label: "Membres actifs" },
+  { key: "source", label: "Sources des messages" },
+  { key: "agents", label: "Agents IA" },
+  { key: "members", label: "Membres de l'équipe" },
+  { key: "skills", label: "Compétences" },
+  { key: "skill_usage", label: "Usage des compétences" },
+  { key: "tool_usage", label: "Usage des outils" },
+  { key: "messages", label: "Volume de messages" },
+  { key: "feedback", label: "Retours utilisateurs" },
 ];
 
 export function ExportDataCard({ dimensions }: ExportDataCardProps) {
@@ -38,12 +38,12 @@ export function ExportDataCard({ dimensions }: ExportDataCardProps) {
   const [metricOpen, setMetricOpen] = useState(false);
 
   const currentPeriodLabel =
-    PERIOD_OPTIONS.find((p) => p.key === selectedPeriod)?.label || "30 days";
+    PERIOD_OPTIONS.find((p) => p.key === selectedPeriod)?.label || "30 jours";
   const currentMetricLabel =
-    METRIC_OPTIONS.find((m) => m.key === selectedMetric)?.label || "Usage metrics";
+    METRIC_OPTIONS.find((m) => m.key === selectedMetric)?.label || "Métriques d'usage global";
 
   const handleDownload = () => {
-    let headers = "Name,ConsumptionShare,Credits,Count,Type\n";
+    let headers = "Nom,Part de consommation,Crédits,Volume,Type\n";
     let rows: string[] = [];
 
     if (selectedMetric === "agents") {
@@ -67,10 +67,10 @@ export function ExportDataCard({ dimensions }: ExportDataCardProps) {
         (s) => `"${s.name}",${s.consumptionShare}%,${s.volume},${s.count},${s.countType}`
       );
     } else {
-      // Default: usage metrics across top agents and members
+      // Vue par défaut : top agents et membres
       rows = [
         ...dimensions.agents.slice(0, 10).map((a) => `"${a.name}",${a.consumptionShare}%,${a.volume},${a.count},Agent`),
-        ...(dimensions.members || []).map((m) => `"${m.name}",${m.consumptionShare}%,${m.volume},${m.count},Member`),
+        ...(dimensions.members || []).map((m) => `"${m.name}",${m.consumptionShare}%,${m.volume},${m.count},Membre`),
       ];
     }
 
@@ -78,30 +78,30 @@ export function ExportDataCard({ dimensions }: ExportDataCardProps) {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `mstudio_analytics_${selectedMetric}_${selectedPeriod}.csv`);
+    link.setAttribute("download", `mstudio_analytique_${selectedMetric}_${selectedPeriod}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
-    toast.success(`Fichier analytics_${selectedMetric}_${selectedPeriod}.csv téléchargé avec succès !`);
+    toast.success(`Fichier ${selectedMetric}_${selectedPeriod}.csv téléchargé avec succès !`);
   };
 
   return (
     <div className="rounded-[22px] border border-line bg-surface p-6 shadow-xs transition-shadow">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        {/* Left: Titles */}
+        {/* Titres en français */}
         <div>
           <h3 className="font-display text-base font-bold text-ink">
-            Export data
+            Exporter les données
           </h3>
           <p className="mt-0.5 text-xs text-ink-3">
-            Download analytics for the selected period as a CSV file.
+            Téléchargez l'historique analytique de la période sélectionnée au format CSV.
           </p>
         </div>
 
-        {/* Right: Controls matching Screenshot 2 & 3 */}
+        {/* Contrôles de sélection */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Dropdown 1: Period */}
+          {/* Menu déroulant Période */}
           <div className="relative">
             <button
               type="button"
@@ -139,7 +139,7 @@ export function ExportDataCard({ dimensions }: ExportDataCardProps) {
             )}
           </div>
 
-          {/* Dropdown 2: Metric Type */}
+          {/* Menu déroulant Dimension / Type de métrique */}
           <div className="relative">
             <button
               type="button"
@@ -154,7 +154,7 @@ export function ExportDataCard({ dimensions }: ExportDataCardProps) {
             </button>
 
             {metricOpen && (
-              <div className="absolute right-0 top-full z-30 mt-1.5 w-48 rounded-xl border border-line bg-surface p-1 shadow-lg max-h-60 overflow-y-auto">
+              <div className="absolute right-0 top-full z-30 mt-1.5 w-52 rounded-xl border border-line bg-surface p-1 shadow-lg max-h-60 overflow-y-auto">
                 {METRIC_OPTIONS.map((opt) => (
                   <button
                     key={opt.key}
@@ -177,12 +177,12 @@ export function ExportDataCard({ dimensions }: ExportDataCardProps) {
             )}
           </div>
 
-          {/* Download Button */}
+          {/* Bouton de téléchargement CSV */}
           <button
             type="button"
             onClick={handleDownload}
-            title="Download CSV"
-            className="inline-flex size-9 items-center justify-center rounded-xl border border-line bg-surface text-ink-2 shadow-2xs transition-colors hover:bg-soft hover:text-ink"
+            title="Télécharger au format CSV"
+            className="inline-flex size-9 items-center justify-center rounded-xl border border-line bg-surface text-ink-2 shadow-2xs transition-colors hover:bg-soft hover:text-ink active:scale-95"
           >
             <Download className="size-4" />
           </button>

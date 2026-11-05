@@ -26,20 +26,19 @@ import { toast } from "sonner";
 import { useOwnAgentId } from "@/components/conversations/useAllConversations";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { apiFetch } from "@/lib/api";
-import type { AnalyticsOverview, AnalyticsPeriod } from "@/lib/analytics";
+import type { AnalyticsOverview } from "@/lib/analytics";
 import { ExploreConsumptionChart } from "@/components/settings/ExploreConsumptionChart";
 import { DimensionsAnalyticsTable } from "@/components/settings/DimensionsAnalyticsTable";
 import { ExportDataCard } from "@/components/settings/ExportDataCard";
-import { AskAnalystModal } from "@/components/settings/AskAnalystModal";
 import { cn } from "@/lib/utils";
 
 type TopTab = "consumption" | "export";
 
 const CYCLE_OPTIONS = [
-  { key: "cycle", label: "This cycle" },
-  { key: "7d", label: "Last 7 days" },
-  { key: "30d", label: "Last 30 days" },
-  { key: "90d", label: "Last 90 days" },
+  { key: "cycle", label: "Ce cycle" },
+  { key: "7d", label: "7 derniers jours" },
+  { key: "30d", label: "30 derniers jours" },
+  { key: "90d", label: "90 derniers jours" },
 ];
 
 export function AnalyticsDashboard() {
@@ -51,7 +50,6 @@ export function AnalyticsDashboard() {
   const [cycleDropdownOpen, setCycleDropdownOpen] = useState(false);
   const [frequency, setFrequency] = useState<"daily" | "weekly">("daily");
   const [freqDropdownOpen, setFreqDropdownOpen] = useState(false);
-  const [analystModalOpen, setAnalystModalOpen] = useState(false);
 
   const [data, setData] = useState<AnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,7 +82,7 @@ export function AnalyticsDashboard() {
   }, [ownAgentId]);
 
   const currentCycleLabel =
-    CYCLE_OPTIONS.find((c) => c.key === selectedCycle)?.label || "This cycle";
+    CYCLE_OPTIONS.find((c) => c.key === selectedCycle)?.label || "Ce cycle";
 
   // KPIs calculations
   const usedCredits = 11866;
@@ -95,22 +93,30 @@ export function AnalyticsDashboard() {
   const topAgentName = "Synthèse_Meeting";
   const topAgentShare = 42;
 
+  // Ouvrir Yélé nativement sur demande
+  const handleAskYele = () => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("yelema:open-yele"));
+      toast.info("Yélé est à votre écoute pour analyser la consommation de votre espace.");
+    }
+  };
+
   return (
     <div className="space-y-6 pb-20 pt-2 text-ink">
-      {/* 1. TOP HEADER MATCHING SCREENSHOT 1 & 4 */}
+      {/* 1. En-tête principal en français avec contrôles de période et Yélé */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="font-display text-[26px] font-bold tracking-tight text-ink sm:text-[30px]">
-            Analytics
+            Analytique & Consommation
           </h2>
           <p className="mt-1 text-xs text-ink-3">
-            Oct 21 to Nov 21 &nbsp;|&nbsp; 4 of 13 members active &nbsp;|&nbsp; Updated 2h ago
+            21 oct. – 21 nov. &nbsp;|&nbsp; 4 membres actifs sur 13 &nbsp;|&nbsp; Mis à jour il y a 2h
           </p>
         </div>
 
-        {/* Top-Right Controls */}
+        {/* Contrôles d'en-tête */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Cycle Dropdown matching Screenshot 4 */}
+          {/* Menu déroulant du Cycle */}
           <div className="relative">
             <button
               type="button"
@@ -125,7 +131,7 @@ export function AnalyticsDashboard() {
             </button>
 
             {cycleDropdownOpen && (
-              <div className="absolute right-0 top-full z-30 mt-1.5 w-44 rounded-2xl border border-line bg-surface p-1.5 shadow-xl">
+              <div className="absolute right-0 top-full z-30 mt-1.5 w-48 rounded-2xl border border-line bg-surface p-1.5 shadow-xl">
                 <div className="space-y-0.5">
                   {CYCLE_OPTIONS.map((c) => {
                     const active = selectedCycle === c.key;
@@ -148,7 +154,7 @@ export function AnalyticsDashboard() {
                           <span
                             className={cn(
                               "size-2 rounded-full",
-                              active ? "bg-white" : "border border-ink-3"
+                              active ? "bg-brand" : "border border-ink-3"
                             )}
                           />
                           <span>{c.label}</span>
@@ -168,13 +174,13 @@ export function AnalyticsDashboard() {
                   }}
                   className="w-full rounded-xl px-3 py-1.5 text-left text-xs text-ink-3 hover:bg-soft hover:text-ink"
                 >
-                  Custom range...
+                  Période personnalisée…
                 </button>
               </div>
             )}
           </div>
 
-          {/* Frequency Dropdown (Daily / Weekly) */}
+          {/* Menu déroulant Fréquence (Quotidien / Hebdomadaire) */}
           <div className="relative">
             <button
               type="button"
@@ -184,12 +190,12 @@ export function AnalyticsDashboard() {
               }}
               className="inline-flex items-center gap-2 rounded-xl border border-line bg-soft/60 px-3 py-1.5 text-xs font-semibold text-ink shadow-2xs transition-colors hover:bg-soft"
             >
-              <span className="capitalize">{frequency}</span>
+              <span>{frequency === "daily" ? "Quotidien" : "Hebdomadaire"}</span>
               <ChevronDown className="size-3.5 text-ink-3" />
             </button>
 
             {freqDropdownOpen && (
-              <div className="absolute right-0 top-full z-30 mt-1.5 w-32 rounded-xl border border-line bg-surface p-1 shadow-lg">
+              <div className="absolute right-0 top-full z-30 mt-1.5 w-36 rounded-xl border border-line bg-surface p-1 shadow-lg">
                 <button
                   type="button"
                   onClick={() => {
@@ -198,7 +204,7 @@ export function AnalyticsDashboard() {
                   }}
                   className="w-full rounded-lg px-3 py-1.5 text-left text-xs text-ink hover:bg-soft"
                 >
-                  Daily
+                  Quotidien
                 </button>
                 <button
                   type="button"
@@ -208,36 +214,36 @@ export function AnalyticsDashboard() {
                   }}
                   className="w-full rounded-lg px-3 py-1.5 text-left text-xs text-ink hover:bg-soft"
                 >
-                  Weekly
+                  Hebdomadaire
                 </button>
               </div>
             )}
           </div>
 
-          {/* Ask Analyst Action Button */}
+          {/* Bouton Demander à Yélé (ouvre la compagne Yélé nativement) */}
           <button
             type="button"
-            onClick={() => setAnalystModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-surface px-3.5 py-1.5 text-xs font-bold text-ink shadow-2xs ring-1 ring-line transition-all hover:bg-soft active:scale-95"
+            onClick={handleAskYele}
+            className="inline-flex items-center gap-2 rounded-xl bg-surface px-3.5 py-1.5 text-xs font-bold text-ink shadow-2xs ring-1 ring-line transition-all hover:bg-soft hover:shadow-xs active:scale-95"
           >
-            <Bot className="size-3.5 text-brand" />
-            <span>Ask analyst</span>
+            <Sparkles className="size-3.5 text-brand animate-pulse" />
+            <span>Demander à Yélé</span>
           </button>
 
-          {/* Refresh Button */}
+          {/* Bouton de rafraîchissement */}
           <button
             type="button"
             onClick={() => loadData(true)}
             disabled={refreshing || loading}
-            title="Rafraîchir"
-            className="inline-flex size-8 items-center justify-center rounded-xl border border-line bg-surface text-ink-3 shadow-2xs hover:bg-soft hover:text-ink disabled:opacity-50"
+            title="Actualiser les métriques"
+            className="inline-flex size-8 items-center justify-center rounded-xl border border-line bg-surface text-ink-3 shadow-2xs hover:bg-soft hover:text-ink disabled:opacity-50 transition-colors"
           >
             <RefreshCw className={cn("size-3.5", refreshing && "animate-spin text-brand")} />
           </button>
         </div>
       </div>
 
-      {/* 2. SUB-NAVIGATION TABS (Consumption vs Export) MATCHING SCREENSHOTS */}
+      {/* 2. Onglets principaux de navigation : Consommation vs Exporter */}
       <div className="flex items-center gap-6 border-b border-line pt-1 text-sm font-medium">
         <button
           type="button"
@@ -249,7 +255,7 @@ export function AnalyticsDashboard() {
               : "text-ink-3 hover:text-ink"
           )}
         >
-          Consumption
+          Consommation
           {activeTab === "consumption" && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-brand" />
           )}
@@ -265,86 +271,77 @@ export function AnalyticsDashboard() {
               : "text-ink-3 hover:text-ink"
           )}
         >
-          Export
+          Exporter
           {activeTab === "export" && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-brand" />
           )}
         </button>
       </div>
 
-      {/* 3. MAIN TAB 1: CONSUMPTION */}
+      {/* 3. Onglet 1 : Consommation */}
       {activeTab === "consumption" && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          {/* 3.1 Three KPI Cards matching Screenshot 1 */}
+          {/* 3.1 Trois fiches KPI */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {/* KPI 1: Used this period */}
+            {/* KPI 1 : Consommation du cycle */}
             <div className="rounded-[22px] border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm">
               <span className="text-xs font-semibold text-ink-3">
-                Used this period
+                Consommation du cycle
               </span>
               <p className="mt-2 font-display text-[26px] font-bold tracking-tight text-ink">
-                {usedCredits.toLocaleString()} credits
+                {usedCredits.toLocaleString("fr-FR")} crédits
               </p>
               <p className="mt-1 text-xs text-ink-3">
-                {capPercent}% of {capCredits.toLocaleString()} cap
+                {capPercent}% du plafond ({capCredits.toLocaleString("fr-FR")})
               </p>
             </div>
 
-            {/* KPI 2: Messages */}
+            {/* KPI 2 : Messages échangés */}
             <div className="rounded-[22px] border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm">
               <span className="text-xs font-semibold text-ink-3">
-                Messages
+                Messages échangés
               </span>
               <p className="mt-2 font-display text-[26px] font-bold tracking-tight text-ink">
-                {totalMessages}
+                {totalMessages.toLocaleString("fr-FR")}
               </p>
               <p className="mt-1 text-xs text-ink-3">
-                {creditsPerMessage} credits / message
+                {creditsPerMessage} crédits / message
               </p>
             </div>
 
-            {/* KPI 3: Top agent */}
+            {/* KPI 3 : Agent le plus sollicité */}
             <div className="rounded-[22px] border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm">
               <span className="text-xs font-semibold text-ink-3">
-                Top agent
+                Agent le plus sollicité
               </span>
               <p className="mt-2 font-display text-[26px] font-bold tracking-tight text-ink truncate">
                 {topAgentName}
               </p>
               <p className="mt-1 text-xs text-ink-3">
-                {topAgentShare}% of agent consumption
+                {topAgentShare}% de la consommation agents
               </p>
             </div>
           </div>
 
-          {/* 3.2 Explore / Consumption Chart (Daily mixed bar + Cumulative line) */}
+          {/* 3.2 Graphique SVG interactif Quotidien / Cumulée */}
           <ExploreConsumptionChart
             usedCredits={usedCredits}
             capCredits={capCredits}
           />
 
-          {/* 3.3 Attribution / 10 Dimension Tabs Table */}
+          {/* 3.3 Tableau de ventilation par dimension */}
           {data && (
             <DimensionsAnalyticsTable dimensions={data.dimensions} />
           )}
         </div>
       )}
 
-      {/* 4. MAIN TAB 2: EXPORT MATCHING SCREENSHOT 2 & 3 */}
+      {/* 4. Onglet 2 : Exporter */}
       {activeTab === "export" && data && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <ExportDataCard dimensions={data.dimensions} />
         </div>
       )}
-
-      {/* 5. AI ANALYST MODAL */}
-      <AskAnalystModal
-        isOpen={analystModalOpen}
-        onClose={() => setAnalystModalOpen(false)}
-        usedCredits={usedCredits}
-        totalMessages={totalMessages}
-        topAgentName={topAgentName}
-      />
     </div>
   );
 }

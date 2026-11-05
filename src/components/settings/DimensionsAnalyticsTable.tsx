@@ -53,15 +53,15 @@ interface TabConfig {
 
 const TABS: TabConfig[] = [
   { key: "agents", label: "Agents" },
-  { key: "members", label: "Members" },
-  { key: "groups", label: "Groups" },
+  { key: "members", label: "Membres" },
+  { key: "groups", label: "Groupes" },
   { key: "pods", label: "Pods" },
-  { key: "models", label: "Models" },
-  { key: "tools", label: "Tools" },
-  { key: "skills", label: "Skills" },
+  { key: "models", label: "Modèles IA" },
+  { key: "tools", label: "Outils" },
+  { key: "skills", label: "Compétences" },
   { key: "sources", label: "Sources" },
-  { key: "triggers", label: "Triggers" },
-  { key: "api_keys", label: "API keys" },
+  { key: "triggers", label: "Déclencheurs" },
+  { key: "api_keys", label: "Clés API" },
 ];
 
 function renderRowIcon(item: AnalyticsItem) {
@@ -118,55 +118,60 @@ function renderRowIcon(item: AnalyticsItem) {
     case "red_money":
     case "red_brief":
     case "red_research":
-    case "red_archive":
+    case "red_recruitment":
       return (
         <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-rose-500/15 text-rose-600 dark:text-rose-400 ring-1 ring-rose-500/20">
-          <Shield className="size-3.5" />
+          <TrendingUp className="size-3.5" />
         </div>
       );
-    case "yellow_heart":
+    case "yellow_plane":
+    case "yellow_calendar":
+    case "yellow_shield":
+      return (
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/20">
+          <Calendar className="size-3.5" />
+        </div>
+      );
+    case "purple_brief":
+    case "purple_notes":
+    case "purple_mail":
+    case "purple_legal":
+      return (
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400 ring-1 ring-purple-500/20">
+          <Mail className="size-3.5" />
+        </div>
+      );
+    case "claude":
       return (
         <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/20">
           <Sparkles className="size-3.5" />
         </div>
       );
-    case "avatar_vc":
-      return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-400 ring-1 ring-purple-500/20">
-          <Users className="size-3.5" />
-        </div>
-      );
-    case "claude":
-      return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-xs font-black text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/20">
-          A
-        </div>
-      );
     case "openai":
       return (
         <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/20">
+          <Cpu className="size-3.5" />
+        </div>
+      );
+    case "gemini":
+      return (
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400 ring-1 ring-blue-500/20">
           <Sparkles className="size-3.5" />
         </div>
       );
-    case "gmail":
+    case "deepseek":
       return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-red-500/15 text-red-600 dark:text-red-400 ring-1 ring-red-500/20">
-          <Mail className="size-3.5" />
-        </div>
-      );
-    case "calendar":
-      return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400 ring-1 ring-blue-500/20">
-          <Calendar className="size-3.5" />
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 ring-1 ring-cyan-500/20">
+          <Zap className="size-3.5" />
         </div>
       );
     case "files":
       return (
         <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400 ring-1 ring-blue-500/20">
-          <FileText className="size-3.5" />
+          <FileCheck className="size-3.5" />
         </div>
       );
-    case "web":
+    case "search":
       return (
         <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400 ring-1 ring-sky-500/20">
           <Globe className="size-3.5" />
@@ -301,7 +306,7 @@ export function DimensionsAnalyticsTable({
   };
 
   const handleDownloadRawData = () => {
-    const headers = "Name,ConsumptionShare,Credits,Count,Type\n";
+    const headers = "Nom,Part de consommation,Crédits,Volume,Type\n";
     const rows = filteredItems.map(
       (item) => `"${item.name}",${item.consumptionShare}%,${item.volume},${item.count},${item.countType}`
     );
@@ -314,21 +319,30 @@ export function DimensionsAnalyticsTable({
     link.click();
     document.body.removeChild(link);
 
-    toast.success(`Données brutes (${activeTab}) exportées en CSV !`);
+    const activeTabLabel = TABS.find((t) => t.key === activeTab)?.label || activeTab;
+    toast.success(`Données brutes (${activeTabLabel}) exportées au format CSV !`);
   };
 
-  const countColumnHeader =
-    activeTab === "tools" || activeTab === "skills" || activeTab === "pods"
-      ? "Invocations"
-      : "Messages";
+  const countColumnHeader = useMemo(() => {
+    if (activeTab === "tools" || activeTab === "skills") return "Invocations";
+    if (activeTab === "triggers") return "Déclenchements";
+    if (activeTab === "pods") return "Sessions";
+    if (activeTab === "api_keys") return "Requêtes";
+    return "Messages";
+  }, [activeTab]);
 
   return (
     <div className="overflow-hidden rounded-[22px] border border-line bg-surface shadow-xs transition-shadow">
-      {/* 1. Header with Title Attribution + Download raw data button */}
+      {/* 1. En-tête avec titre en français + bouton Télécharger les données brutes */}
       <div className="flex flex-col gap-3 border-b border-line px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="font-display text-base font-bold text-ink">
-          Attribution
-        </h3>
+        <div>
+          <h3 className="font-display text-base font-bold text-ink">
+            Ventilation par dimension
+          </h3>
+          <p className="text-xs text-ink-3">
+            Répartition granulaire de la consommation sur l'ensemble de l'espace
+          </p>
+        </div>
 
         <button
           type="button"
@@ -336,11 +350,11 @@ export function DimensionsAnalyticsTable({
           className="inline-flex items-center gap-2 rounded-xl border border-line bg-soft/60 px-3.5 py-1.5 text-xs font-semibold text-ink shadow-2xs transition-colors hover:bg-soft"
         >
           <Download className="size-3.5 text-ink-3" />
-          <span>Download raw data</span>
+          <span>Télécharger les données brutes</span>
         </button>
       </div>
 
-      {/* 2. Sub-tabs bar matching screenshot exactly */}
+      {/* 2. Barre d'onglets de dimensions en français */}
       <div className="flex items-center gap-6 overflow-x-auto border-b border-line bg-soft/30 px-6 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TABS.map((tab) => {
           const active = activeTab === tab.key;
@@ -368,54 +382,54 @@ export function DimensionsAnalyticsTable({
         })}
       </div>
 
-      {/* 3. Search bar matching screenshot */}
+      {/* 3. Barre de recherche avec placeholder en français */}
       <div className="p-4 sm:px-6">
         <div className="relative">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search..."
+            placeholder="Rechercher dans cette dimension…"
             className="w-full rounded-full border border-line bg-soft/60 py-2 pl-4 pr-10 text-xs text-ink placeholder:text-ink-3 transition-colors focus:border-brand/40 focus:bg-surface focus:outline-none"
           />
           <Search className="pointer-events-none absolute right-3.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-3" />
         </div>
       </div>
 
-      {/* 4. Table */}
+      {/* 4. Tableau avec en-têtes en français et tri interactif */}
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs max-sm:min-w-[620px]">
           <thead className="border-b border-line text-[11px] font-semibold text-ink-3">
             <tr>
-              {/* Name */}
+              {/* Nom */}
               <th
                 onClick={() => handleSort("name")}
                 className="cursor-pointer px-6 py-3 font-semibold transition-colors hover:text-ink"
               >
                 <div className="flex items-center gap-1.5">
-                  Name
+                  Nom
                   <ArrowUpDown className="size-3 opacity-60" />
                 </div>
               </th>
 
-              {/* Consumption share */}
+              {/* Part de consommation */}
               <th
                 onClick={() => handleSort("share")}
                 className="cursor-pointer px-6 py-3 font-semibold transition-colors hover:text-ink"
               >
                 <div className="flex items-center gap-1.5">
-                  Consumption share
+                  Part de consommation
                   <ArrowUpDown className="size-3 opacity-60" />
                 </div>
               </th>
 
-              {/* Credits */}
+              {/* Crédits */}
               <th
                 onClick={() => handleSort("credits")}
                 className="cursor-pointer px-6 py-3 font-semibold transition-colors hover:text-ink"
               >
                 <div className="flex items-center gap-1.5">
-                  Credits
+                  Crédits
                   <ChevronDown
                     className={cn(
                       "size-3.5 transition-transform",
@@ -425,7 +439,7 @@ export function DimensionsAnalyticsTable({
                 </div>
               </th>
 
-              {/* Messages / Invocations */}
+              {/* Invocations / Messages / Requêtes */}
               <th
                 onClick={() => handleSort("count")}
                 className="cursor-pointer px-6 py-3 font-semibold transition-colors hover:text-ink"
@@ -436,7 +450,7 @@ export function DimensionsAnalyticsTable({
                 </div>
               </th>
 
-              {/* Action column */}
+              {/* Colonne d'action */}
               <th className="w-16 px-4 py-3" />
             </tr>
           </thead>
@@ -445,7 +459,7 @@ export function DimensionsAnalyticsTable({
             {filteredItems.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-12 text-center text-sm text-ink-3">
-                  No records found matching "{search}"
+                  Aucun résultat trouvé pour « {search} »
                 </td>
               </tr>
             ) : (
@@ -454,7 +468,7 @@ export function DimensionsAnalyticsTable({
                   key={item.id}
                   className="transition-colors hover:bg-soft/40"
                 >
-                  {/* Name cell */}
+                  {/* Cellule Nom */}
                   <td className="px-6 py-3.5">
                     <div className="flex items-center gap-3">
                       {renderRowIcon(item)}
@@ -469,7 +483,7 @@ export function DimensionsAnalyticsTable({
                     </div>
                   </td>
 
-                  {/* Consumption share cell */}
+                  {/* Cellule Part de consommation */}
                   <td className="px-6 py-3.5">
                     <div className="flex items-center gap-3">
                       <div className="h-1.5 w-24 overflow-hidden rounded-full bg-soft ring-1 ring-line/40">
@@ -487,17 +501,17 @@ export function DimensionsAnalyticsTable({
                     </div>
                   </td>
 
-                  {/* Credits cell */}
+                  {/* Cellule Crédits */}
                   <td className="px-6 py-3.5 font-semibold text-ink-2">
-                    {item.volume.toLocaleString("en-US")}
+                    {item.volume.toLocaleString("fr-FR")}
                   </td>
 
-                  {/* Messages / Invocations cell */}
+                  {/* Cellule Volume (Invocations / Messages / Requêtes) */}
                   <td className="px-6 py-3.5 font-medium text-ink-3">
-                    {item.count.toLocaleString("en-US")}
+                    {item.count.toLocaleString("fr-FR")}
                   </td>
 
-                  {/* Actions matching screenshot */}
+                  {/* Actions visuelles conformes au design */}
                   <td className="px-4 py-3.5 text-right">
                     <div className="flex items-center justify-end gap-2 text-ink-3">
                       <ChevronDown className="size-3.5 cursor-pointer transition-colors hover:text-ink" />

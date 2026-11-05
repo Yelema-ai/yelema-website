@@ -22,34 +22,34 @@ interface DailyPoint {
 }
 
 const DAILY_DATA: DailyPoint[] = [
-  { date: "Oct 23", synthese: 400, ossoya: 250, others: 150, router: 80, maBrief: 60, veille: 40, activeUsers: 3 },
-  { date: "Oct 25", synthese: 650, ossoya: 400, others: 200, router: 120, maBrief: 80, veille: 50, activeUsers: 3 },
-  { date: "Oct 28", synthese: 500, ossoya: 350, others: 180, router: 90, maBrief: 70, veille: 45, activeUsers: 2 },
-  { date: "Oct 29", synthese: 1800, ossoya: 900, others: 350, router: 200, maBrief: 150, veille: 100, activeUsers: 3 },
-  { date: "Oct 31", synthese: 1200, ossoya: 650, others: 280, router: 150, maBrief: 120, veille: 80, activeUsers: 3 },
-  { date: "Nov 1", synthese: 450, ossoya: 300, others: 160, router: 80, maBrief: 50, veille: 35, activeUsers: 3 },
-  { date: "Nov 3", synthese: 1500, ossoya: 750, others: 320, router: 180, maBrief: 140, veille: 90, activeUsers: 4 },
-  { date: "Nov 5", synthese: 750, ossoya: 420, others: 200, router: 110, maBrief: 90, veille: 60, activeUsers: 3, isToday: true },
-  { date: "Nov 8", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
-  { date: "Nov 12", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
-  { date: "Nov 15", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
-  { date: "Nov 18", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
-  { date: "Nov 21", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
+  { date: "23 oct.", synthese: 400, ossoya: 250, others: 150, router: 80, maBrief: 60, veille: 40, activeUsers: 3 },
+  { date: "25 oct.", synthese: 650, ossoya: 400, others: 200, router: 120, maBrief: 80, veille: 50, activeUsers: 3 },
+  { date: "28 oct.", synthese: 500, ossoya: 350, others: 180, router: 90, maBrief: 70, veille: 45, activeUsers: 2 },
+  { date: "29 oct.", synthese: 1800, ossoya: 900, others: 350, router: 200, maBrief: 150, veille: 100, activeUsers: 3 },
+  { date: "31 oct.", synthese: 1200, ossoya: 650, others: 280, router: 150, maBrief: 120, veille: 80, activeUsers: 3 },
+  { date: "1 nov.", synthese: 450, ossoya: 300, others: 160, router: 80, maBrief: 50, veille: 35, activeUsers: 3 },
+  { date: "3 nov.", synthese: 1500, ossoya: 750, others: 320, router: 180, maBrief: 140, veille: 90, activeUsers: 4 },
+  { date: "5 nov.", synthese: 750, ossoya: 420, others: 200, router: 110, maBrief: 90, veille: 60, activeUsers: 3, isToday: true },
+  { date: "8 nov.", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
+  { date: "12 nov.", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
+  { date: "15 nov.", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
+  { date: "18 nov.", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
+  { date: "21 nov.", synthese: 0, ossoya: 0, others: 0, router: 0, maBrief: 0, veille: 0, activeUsers: 0 },
 ];
 
 const CUMULATIVE_DATES = [
-  "Oct 23",
-  "Oct 26",
-  "Oct 29",
-  "Nov 1",
-  "Nov 3",
-  "Nov 5",
-  "Nov 7",
-  "Nov 9",
-  "Nov 12",
-  "Nov 15",
-  "Nov 18",
-  "Nov 21",
+  "23 oct.",
+  "26 oct.",
+  "29 oct.",
+  "1 nov.",
+  "3 nov.",
+  "5 nov.",
+  "7 nov.",
+  "9 nov.",
+  "12 nov.",
+  "15 nov.",
+  "18 nov.",
+  "21 nov.",
 ];
 
 export function ExploreConsumptionChart({
@@ -73,10 +73,9 @@ export function ExploreConsumptionChart({
   const maxDailyCredits = 3600;
   const maxActiveUsers = 5;
 
-  // Cumulative points calculation (actual climbs to usedCredits on Nov 5, target climbs linearly to capCredits)
+  // Cumulative points calculation
   const cumulativePoints = useMemo(() => {
-    const todayIndex = 5; // Nov 5
-    const actualStep = usedCredits / todayIndex;
+    const todayIndex = 5; // 5 nov.
     const targetStep = capCredits / (CUMULATIVE_DATES.length - 1);
 
     return CUMULATIVE_DATES.map((date, i) => {
@@ -88,7 +87,6 @@ export function ExploreConsumptionChart({
       let actualVal: number | null = null;
 
       if (i <= todayIndex) {
-        // Curve shape matching Screenshot 5
         const factor = Math.pow(i / todayIndex, 1.3);
         actualVal = Math.round(usedCredits * factor);
         actualY = paddingTop + chartHeight - (actualVal / capCredits) * chartHeight;
@@ -98,7 +96,6 @@ export function ExploreConsumptionChart({
     });
   }, [usedCredits, capCredits, chartWidth, chartHeight]);
 
-  // SVG path for actual cumulative
   const actualPathD = useMemo(() => {
     const pts = cumulativePoints.filter((p) => p.actualY !== null);
     if (pts.length === 0) return "";
@@ -115,7 +112,6 @@ export function ExploreConsumptionChart({
     return d;
   }, [cumulativePoints]);
 
-  // SVG path for target cumulative
   const targetPathD = useMemo(() => {
     if (cumulativePoints.length === 0) return "";
     return `M ${cumulativePoints[0].x} ${cumulativePoints[0].targetY} L ${cumulativePoints[cumulativePoints.length - 1].x} ${cumulativePoints[cumulativePoints.length - 1].targetY}`;
@@ -123,27 +119,27 @@ export function ExploreConsumptionChart({
 
   return (
     <div className="rounded-[22px] border border-line bg-surface p-6 shadow-xs transition-shadow">
-      {/* 1. Header with Title and Mode Switcher */}
+      {/* 1. En-tête avec titre en français et commutateur de mode */}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-xs font-bold uppercase tracking-wider text-ink-3">
-            Explore
+            Explorer
           </h3>
           <h4 className="font-display text-base font-bold text-ink">
-            Consumption
+            Évolution de la consommation
           </h4>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Filters Button */}
+          {/* Bouton Filtres */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowFilterPopover(!showFilterPopover)}
               className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink-2 shadow-xs transition-colors hover:bg-soft hover:text-ink"
             >
-              <Filter className="size-3.5" />
-              <span>Filters</span>
+              <Filter className="size-3.5 text-ink-3" />
+              <span>Filtres</span>
             </button>
 
             {showFilterPopover && (
@@ -167,7 +163,7 @@ export function ExploreConsumptionChart({
             )}
           </div>
 
-          {/* Daily vs Cumulative Toggle matching screenshot */}
+          {/* Commutateur Quotidien / Cumulée */}
           <div className="flex items-center rounded-xl border border-line bg-soft/60 p-1">
             <button
               type="button"
@@ -179,7 +175,7 @@ export function ExploreConsumptionChart({
                   : "text-ink-3 hover:text-ink"
               )}
             >
-              Daily
+              Quotidien
             </button>
             <button
               type="button"
@@ -191,19 +187,19 @@ export function ExploreConsumptionChart({
                   : "text-ink-3 hover:text-ink"
               )}
             >
-              Cumulative
+              Cumulée
             </button>
           </div>
         </div>
       </div>
 
-      {/* 2. Interactive SVG Chart */}
+      {/* 2. Graphique SVG interactif */}
       <div className="w-full overflow-x-auto">
         <svg
           viewBox={`0 0 ${width} ${height}`}
           className="h-60 w-full min-w-[700px] overflow-visible"
         >
-          {/* Horizontal Grid lines */}
+          {/* Lignes de repère horizontales */}
           {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
             const y = paddingTop + ratio * chartHeight;
             const dailyCreditVal = Math.round(maxDailyCredits * (1 - ratio));
@@ -222,7 +218,6 @@ export function ExploreConsumptionChart({
                   className="text-line/40"
                   strokeWidth="1"
                 />
-                {/* Left Y-axis label */}
                 <text
                   x={paddingLeft - 8}
                   y={y + 4}
@@ -231,12 +226,11 @@ export function ExploreConsumptionChart({
                 >
                   {mode === "daily"
                     ? dailyCreditVal >= 1000
-                      ? `${(dailyCreditVal / 1000).toFixed(1)}K`
+                      ? `${(dailyCreditVal / 1000).toFixed(1)}k`
                       : dailyCreditVal
-                    : `${cumCreditVal}K`}
+                    : `${cumCreditVal}k`}
                 </text>
 
-                {/* Right Y-axis label for Daily Active users */}
                 {mode === "daily" && (
                   <text
                     x={width - paddingRight + 8}
@@ -251,7 +245,7 @@ export function ExploreConsumptionChart({
             );
           })}
 
-          {/* Left Y-axis title */}
+          {/* Titre de l'axe vertical gauche */}
           <text
             x={16}
             y={height / 2}
@@ -259,10 +253,10 @@ export function ExploreConsumptionChart({
             transform={`rotate(-90, 16, ${height / 2})`}
             className="fill-ink-3 text-[10px] font-semibold"
           >
-            Credits
+            Crédits
           </text>
 
-          {/* Right Y-axis title for Daily */}
+          {/* Titre de l'axe vertical droit (Quotidien) */}
           {mode === "daily" && (
             <text
               x={width - 14}
@@ -271,14 +265,13 @@ export function ExploreConsumptionChart({
               transform={`rotate(90, ${width - 14}, ${height / 2})`}
               className="fill-ink-3 text-[10px] font-semibold"
             >
-              Active users
+              Membres actifs
             </text>
           )}
 
-          {/* --- MODE 1: DAILY STACKED BARS + ACTIVE USERS LINE --- */}
+          {/* --- VUE 1 : QUOTIDIEN (BARRES EMPILÉES + COURBE MEMBRES ACTIFS) --- */}
           {mode === "daily" && (
             <>
-              {/* Stacked Bars for each day */}
               {DAILY_DATA.map((pt, i) => {
                 const x = paddingLeft + (i / (DAILY_DATA.length - 1)) * chartWidth;
                 const barWidth = 24;
@@ -318,7 +311,7 @@ export function ExploreConsumptionChart({
                 );
               })}
 
-              {/* Vertical Dashed Marker for Today (partial) */}
+              {/* Repère Aujourd'hui (partiel) */}
               {DAILY_DATA.filter((d) => d.isToday).map((todayPt) => {
                 const idx = DAILY_DATA.indexOf(todayPt);
                 const x = paddingLeft + (idx / (DAILY_DATA.length - 1)) * chartWidth;
@@ -334,12 +327,11 @@ export function ExploreConsumptionChart({
                       className="text-ink-2"
                       strokeWidth="1.5"
                     />
-                    {/* Badge Today (partial) */}
                     <g transform={`translate(${x}, ${paddingTop - 12})`}>
                       <rect
-                        x="-40"
+                        x="-52"
                         y="-12"
-                        width="80"
+                        width="104"
                         height="20"
                         rx="10"
                         className="fill-surface stroke-line shadow-xs"
@@ -350,14 +342,14 @@ export function ExploreConsumptionChart({
                         textAnchor="middle"
                         className="fill-ink text-[10px] font-semibold"
                       >
-                        Today (partial)
+                        Aujourd'hui (partiel)
                       </text>
                     </g>
                   </g>
                 );
               })}
 
-              {/* Line overlay for Active Users */}
+              {/* Courbe superposée des membres actifs */}
               {(() => {
                 const pts = DAILY_DATA.filter((d) => d.activeUsers > 0).map((d) => {
                   const idx = DAILY_DATA.indexOf(d);
@@ -398,7 +390,7 @@ export function ExploreConsumptionChart({
                 );
               })()}
 
-              {/* X-axis labels for Daily */}
+              {/* Libellés de l'axe X (dates en français) */}
               {DAILY_DATA.map((d, i) => {
                 const x = paddingLeft + (i / (DAILY_DATA.length - 1)) * chartWidth;
                 return (
@@ -416,10 +408,10 @@ export function ExploreConsumptionChart({
             </>
           )}
 
-          {/* --- MODE 2: CUMULATIVE DUAL LINE (Actual vs Target) --- */}
+          {/* --- VUE 2 : CUMULÉE (RÉELLE VS TRAJECTOIRE CIBLE) --- */}
           {mode === "cumulative" && (
             <>
-              {/* Target consumption: Dashed Line */}
+              {/* Trajectoire cible : pointillés gris */}
               <path
                 d={targetPathD}
                 fill="none"
@@ -428,7 +420,7 @@ export function ExploreConsumptionChart({
                 strokeDasharray="5 5"
               />
 
-              {/* Actual consumption: Blue Solid Curve */}
+              {/* Consommation réelle : courbe bleue */}
               <path
                 d={actualPathD}
                 fill="none"
@@ -437,7 +429,6 @@ export function ExploreConsumptionChart({
                 strokeLinecap="round"
               />
 
-              {/* X-axis labels for Cumulative */}
               {cumulativePoints.map((p) => (
                 <text
                   key={p.date}
@@ -454,7 +445,7 @@ export function ExploreConsumptionChart({
         </svg>
       </div>
 
-      {/* 3. Bottom Legends matching Screenshot 1 & 5 */}
+      {/* 3. Légende en français */}
       <div className="mt-4 flex flex-wrap items-center justify-center gap-4 border-t border-line/60 pt-3 text-xs text-ink-2">
         {mode === "daily" ? (
           <>
@@ -468,7 +459,7 @@ export function ExploreConsumptionChart({
             </div>
             <div className="flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-[#1D4ED8]" />
-              <span className="text-[11px] font-medium">Others</span>
+              <span className="text-[11px] font-medium">Autres agents</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-[#38BDF8]" />
@@ -485,7 +476,7 @@ export function ExploreConsumptionChart({
             <div className="flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-[#F59E0B]" />
               <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
-                Active users
+                Membres actifs
               </span>
             </div>
           </>
@@ -494,13 +485,13 @@ export function ExploreConsumptionChart({
             <div className="flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-[#3B82F6]" />
               <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400">
-                Actual consumption
+                Consommation réelle
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="size-2.5 rounded-full border border-dashed border-zinc-400 bg-transparent" />
               <span className="text-[11px] font-medium text-ink-3">
-                Target consumption
+                Trajectoire cible (plafond)
               </span>
             </div>
           </>
