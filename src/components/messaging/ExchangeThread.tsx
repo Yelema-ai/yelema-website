@@ -5,6 +5,7 @@ import { CornerDownRight, Loader2, MessagesSquare, Reply } from "lucide-react";
 import { shortName, startsRun, type BuzzEntry } from "@/lib/buzz";
 import type { Conversation, Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
+import { BUBBLE, BUBBLE_ROW } from "@/lib/exchange-bubble";
 import { replyMention, withReplyMention, type Candidate } from "@/lib/buzz-mentions";
 import { excerpt } from "@/lib/activity";
 import { Markdown } from "@/components/chat/Markdown";
@@ -158,8 +159,8 @@ export function ExchangeThread(p: ThreadProps) {
                         <time className="text-[11.5px] text-ink-3">{moment(m.at)}</time>
                       </div>
                     )}
-                    <div className={cn("flex max-w-full", first && "mt-1")}>
-                      <div className={cn("relative min-w-0 max-w-[min(680px,90%)] break-words rounded-2xl px-3.5 py-2.5 text-ink", mineMsg ? "rounded-tl-md bg-tint" : "rounded-tl-md border border-line bg-surface")} title={first ? undefined : moment(m.at)} tabIndex={-1}>
+                    <div className={cn(BUBBLE_ROW, first && "mt-1")}>
+                      <div className={cn(BUBBLE, mineMsg ? "rounded-tl-md bg-tint" : "rounded-tl-md border border-line bg-surface")} title={first ? undefined : moment(m.at)} tabIndex={-1}>
                         {/* Comme le chat d'un Expert : liens cliquables (un site extérieur demande confirmation), listes, gras. */}
                         <div onClickCapture={openCited}>
                           <Markdown content={linked?.text ?? body} />
