@@ -472,9 +472,9 @@ export function buildDimensions({
       status: "Actif",
     },
     {
-      id: "mem_mstudio_team",
-      name: "Équipe Mstudio Core",
-      subtitle: "Accès partagé et agents transverses",
+      id: "mem_zuri",
+      name: "Zuri",
+      subtitle: "Ingénieur Core & Développement Mstudio",
       iconKind: "member_m",
       color: "#2563eb",
       consumptionShare: 6,

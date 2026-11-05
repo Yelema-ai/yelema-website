@@ -57,9 +57,6 @@ interface TabConfig {
 const TABS: TabConfig[] = [
   { key: "agents", label: "Agents" },
   { key: "members", label: "Membres" },
-  { key: "channels", label: "Canaux" },
-  { key: "mcp", label: "MCP" },
-  { key: "emails", label: "Email" },
   { key: "models", label: "Modèles IA" },
   { key: "tools", label: "Outils" },
   { key: "skills", label: "Compétences" },
@@ -68,6 +65,9 @@ const TABS: TabConfig[] = [
   { key: "sources", label: "Sources" },
   { key: "triggers", label: "Déclencheurs" },
   { key: "api_keys", label: "Clés API" },
+  { key: "channels", label: "Canaux" },
+  { key: "mcp", label: "MCP" },
+  { key: "emails", label: "Email" },
 ];
 
 function renderRowIcon(item: AnalyticsItem) {
