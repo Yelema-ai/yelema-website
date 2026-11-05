@@ -240,4 +240,20 @@ describe("filet borné et rattrapage", () => {
     await f.flush();
     assert.equal(runs, 2);
   });
+
+  it("un rattrapage relance une lecture récente qui a échoué", async () => {
+    const f = fakeEnv();
+    let runs = 0;
+    const p = startPoll(() => {
+      runs++;
+      if (runs === 1) throw new Error("réseau");
+    }, { everyMs: 600_000 }, f.env);
+    await f.flush();
+    p.catchUp();
+    await f.flush();
+    assert.equal(runs, 2, "l'échec ne compte pas comme une lecture faite");
+    p.catchUp();
+    await f.flush();
+    assert.equal(runs, 2, "la réussite, si");
+  });
 });
