@@ -6,7 +6,8 @@ import { expertKey } from "@/lib/activity";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { expertCycle, isDjeneba } from "@/lib/expert-cycle";
-import { preloadExpert, sparingData } from "@/components/experts/expert-preload";
+import { preloadExpert, preloadSpace, sparingData } from "@/components/experts/expert-preload";
+import { useInView, useIntent } from "@/components/usePrefetch";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +49,9 @@ export function ExpertItem({
     : undefined;
   // Not for Djénéba: « Chief of Staff & Direction » under her name says it already (Leslie, 03/11).
   const cycle = showCycle && !compact && !isDjeneba(expert) ? expertCycle(expert) : null;
+  // On its way (a pointer resting, a finger, the focus): its whole page; on screen: its conversations.
+  const intent = useIntent(() => void preloadExpert(expert.agentId, expert.profileId, expert.catalogueKey));
+  const inView = useInView<HTMLAnchorElement>(() => preloadSpace(expert.agentId, expert.profileId));
   const hint = unread ? (unread === 1 ? "1 nouvelle réponse" : `${unread} nouvelles réponses`) : running ? "En cours" : null;
 
   return (
@@ -64,10 +68,8 @@ export function ExpertItem({
         e.preventDefault();
         bell.open(waiting);
       }}
-      // A finger or a pointer on its way: read the Expert's page now, ahead of the menu's own turn.
-      onPointerEnter={() => void preloadExpert(expert.agentId, expert.profileId)}
-      onTouchStart={() => void preloadExpert(expert.agentId, expert.profileId)}
-      onFocus={() => void preloadExpert(expert.agentId, expert.profileId)}
+      ref={inView}
+      {...intent}
       title={hint ? `${expert.displayName} · ${hint}` : expert.displayName}
       className={cn(
         "flex min-h-12 items-center gap-2.5 rounded-[11px] px-2 text-sm font-semibold transition-colors",

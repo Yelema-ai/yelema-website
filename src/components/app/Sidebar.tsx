@@ -25,7 +25,7 @@ import { AccountMenu } from "@/components/AccountMenu";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { ExpertItem } from "@/components/experts/ExpertItem";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
-import { READ_AHEAD, useReadAhead } from "@/components/experts/expert-preload";
+import { READ_AHEAD, useReadAhead, useWarmMenu } from "@/components/experts/expert-preload";
 import { useOwnAgentId } from "@/components/conversations/useAllConversations";
 import { useChatMarks } from "@/components/conversations/useChatMarks";
 import { arrange } from "@/lib/chat-marks";
@@ -67,6 +67,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   const shown = groupByCycle(experts).flatMap((g) => g.experts);
   const ahead = new Set(shown.slice(0, READ_AHEAD).map((e) => `${e.agentId}:${e.profileId}`));
   useReadAhead(shown);
+  useWarmMenu(ownAgentId, shown);
   // Each cycle the member folded (true) or opened (false), remembered per browser. Past FOLD_FROM Experts,
   // a cycle they never touched starts folded, except the one of the Expert on screen (Leslie, 01/11 : gagner
   // de la place à gauche sans perdre l'accès en un clic).

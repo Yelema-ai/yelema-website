@@ -16,6 +16,8 @@ import { agentTabPath } from "@/lib/expert-tabs";
 import { copyLater } from "@/lib/clipboard";
 import { profileQuery } from "@/lib/profile-id";
 import { useChatContext } from "./ChatProvider";
+import { prefetchThread } from "./useChat";
+import { intentOf, whenIdle } from "@/components/usePrefetch";
 import type { ChatSession } from "./types";
 import { toMs } from "@/lib/activity";
 
@@ -95,6 +97,8 @@ function ConversationBadge({ status }: { status: keyof typeof BADGES }) {
 // (?session=) so refresh/Back/share reopen it. Routine runs repeat the same title every day, so they
 // show their repeat icon and have their own filter, and « Plus ancien » starts folded, so they never drown
 // the conversations people started.
+const TOP_AHEAD = 2;
+
 export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { agentId, profile, sessions, activeSessionId, onChatTab, loadingSessions, reloadSessions, refreshingSessions, sessionsError, selectSession, startNewChat, deleteSession, renameSession } =
     useChatContext();
@@ -119,6 +123,14 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       }
       return next;
     });
+  // A row hovered, touched or focused is read ahead; the two newest threads are read once the rail shows.
+  const rowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const top = sessions.filter((s) => s.session_id !== activeSessionId).slice(0, TOP_AHEAD).map((s) => s.session_id).join(",");
+  useEffect(() => {
+    if (!top) return;
+    const t = setTimeout(() => whenIdle(() => top.split(",").forEach((sid) => prefetchThread(agentId, profile, sid))), 1_500);
+    return () => clearTimeout(t);
+  }, [agentId, profile, top]);
   const unreadIds = sessions.filter((s) => statusOf(s.session_id) === "unread").map((s) => s.session_id);
   const unreadCount = unreadIds.length;
   const { markRead } = useNotifications();
@@ -241,6 +253,7 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       <div key={s.session_id} className="group relative">
         <button
           type="button"
+          {...intentOf(rowTimer, () => prefetchThread(agentId, profile, s.session_id))}
           onClick={() => pick(s.session_id)}
           onDoubleClick={() => startRename(s.session_id, s.title)}
           className={cn(

@@ -26,6 +26,8 @@ export function useChatModels(agentId: string, profile: string | null = null): C
   });
 
   useEffect(() => {
+    // No instance yet (a member without one): nothing to ask.
+    if (!agentId) return setState((s) => (s.loading ? { ...s, loading: false } : s));
     let cancelled = false;
     const kept = cached<ModelsResponse>(key);
     if (kept) setState(toState(kept));

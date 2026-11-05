@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Copy, FolderOpen, Mail, MessageSquare, Pencil, Repeat, Phone } from "lucide-react";
@@ -15,6 +15,7 @@ import { ExpertRoutines } from "@/components/experts/ExpertRoutines";
 import { ExpertReadiness } from "@/components/experts/ExpertReadiness";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { useCatalogueExpert } from "@/components/experts/useCatalogue";
+import { readExpertScreen } from "@/components/experts/expert-preload";
 import { useMailInboxes } from "@/components/experts/useMailInboxes";
 import { expertDisplayName } from "@/lib/experts";
 import { DRIVE_ROOT } from "@/lib/drive-paths";
@@ -82,6 +83,10 @@ export function AgentWorkspace({
   // The expert this page is about, dressed by the catalogue; its own folder is where Livrables opens.
   const { experts } = useExpertsContext();
   const expert = experts.find((e) => e.agentId === agentId && e.profileId === profileId) ?? null;
+  // One call for the page's first reads (models, preparation, catalogue entry), before its parts ask
+  // (layout effects run before theirs); what the menu read ahead is not asked again.
+  const catalogueKey = expert?.catalogueKey ?? null;
+  useLayoutEffect(() => void readExpertScreen(agentId, profileId, catalogueKey), [agentId, profileId, catalogueKey]);
   const driveFolder = expert?.driveFolder ? `${DRIVE_ROOT}/${expert.driveFolder}` : undefined;
   // The expert's own inbox, when the back office gives this member one to read.
   const mail = useMailInboxes();
