@@ -5,8 +5,7 @@ import { toast } from "sonner";
 import { useChatPresence } from "@/components/activity/hooks";
 import { apiFetch } from "@/lib/api";
 import { remember } from "@/lib/client-cache";
-import { instanceEvents, streamGate } from "@/lib/instance-events";
-import { browserPollEnv, startPoll } from "@/lib/poll";
+import { usePoll } from "@/components/usePoll";
 import { sessionsStore } from "@/lib/sessions-client";
 import { mergeRail, movedUpstream } from "@/lib/chat-rail";
 import { profileQuery } from "@/lib/profile-id";
@@ -172,14 +171,13 @@ export function ChatProvider({
     setLoadingSessions(kept === null);
     const off = sessionsStore.subscribe(agentId, profile, (d) => apply(d.sessions));
     void reloadSessions(3, FRESH_RAIL_MS);
-    // A net only while the stream is down; hidden, nothing, and one reading on the way back.
-    const poll = startPoll(() => reloadSessions(), { everyMs: RAIL_NET_MS, immediate: false, gate: streamGate(instanceEvents, RAIL_NET_MS) }, browserPollEnv());
     return () => {
       loadSeq.current += 1;
       off();
-      poll.stop();
     };
   }, [agentId, profile, apply, reloadSessions]);
+  // A net beside this instance's stream; hidden, nothing, and one reading on the way back.
+  usePoll(() => reloadSessions(), { everyMs: RAIL_NET_MS, immediate: false, live: true, minMs: RAIL_NET_MS, agentId });
 
   const requestComposerFocus = useCallback(() => setComposerFocusToken((n) => n + 1), []);
 

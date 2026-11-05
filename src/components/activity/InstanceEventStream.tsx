@@ -5,15 +5,16 @@ import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { useOwnAgentId } from "@/components/conversations/useAllConversations";
 import { bootstrapOwner } from "@/lib/bootstrap-client";
 import { driveChanged } from "@/lib/drive-store";
-import { INSTANCE_EVENTS, instanceEvents, parseInstanceEvent, reconnectDelay, touchesDrive, touchesSessions, type InstanceEvent } from "@/lib/instance-events";
+import { INSTANCE_EVENTS, instanceEvents, parseInstanceEvent, reconnectDelay, STREAM_SILENCE_MS, touchesDrive, touchesSessions, type InstanceEvent } from "@/lib/instance-events";
 import { sessionsStore } from "@/lib/sessions-client";
 
 // Past this, the gateway replays nothing (contract §1): the tab reads everything again itself.
 const REPLAY_MS = 60_000;
 
 // One EventSource per tab on the member's instance, only while the tab is visible. Each event reaches
-// the hub, the conversations and the drive; a reconnect resumes from the last id it saw. Cut or refused
-// (429, 404): closed, retried with backoff; meanwhile the gated polls run as their safety net.
+// the hub, the conversations and the drive; a reconnect resumes from the last id it saw. Cut, refused
+// (429, 404) or silent past STREAM_SILENCE_MS (a half-open line): closed, retried with backoff; meanwhile
+// the gated polls run as their safety net.
 export function InstanceEventStream() {
   const { eventStream } = usePublicConfig();
   const agentId = useOwnAgentId();
@@ -24,6 +25,7 @@ export function InstanceEventStream() {
     if (!eventStream || !agentId) return;
     let source: EventSource | null = null;
     let timer: number | undefined;
+    let silence: number | undefined;
     let attempt = 0;
     let lastId: string | null = null;
     let opened = false;
@@ -35,6 +37,7 @@ export function InstanceEventStream() {
       if (touchesDrive(e, instanceEvents.heard(agentId, "files.changed"))) driveChanged(agentId);
     };
     const close = () => {
+      window.clearTimeout(silence);
       if (source) downAt = Date.now();
       source?.close();
       source = null;
@@ -44,7 +47,14 @@ export function InstanceEventStream() {
       if (source || document.visibilityState === "hidden") return;
       const es = new EventSource(`/api/agents/${agentId}/events${lastId ? `?lastEventId=${encodeURIComponent(lastId)}` : ""}`);
       source = es;
+      const heard = () => {
+        window.clearTimeout(silence);
+        silence = window.setTimeout(retry, STREAM_SILENCE_MS);
+      };
+      heard();
+      es.addEventListener("ping", heard);
       es.addEventListener("ready", () => {
+        heard();
         attempt = 0;
         instanceEvents.setConnected(agentId, true);
         // A gateway that gives no ids cannot replay: what happened while cut is read again.
@@ -53,18 +63,20 @@ export function InstanceEventStream() {
       });
       for (const type of INSTANCE_EVENTS) {
         es.addEventListener(type, (ev) => {
+          heard();
           const m = ev as MessageEvent<string>;
           if (m.lastEventId) lastId = m.lastEventId;
           const e = parseInstanceEvent(type, m.data);
           if (e) dispatch(e);
         });
       }
-      es.onerror = () => {
-        close();
-        window.clearTimeout(timer);
-        timer = window.setTimeout(open, reconnectDelay(attempt++));
-      };
+      es.onerror = retry;
     };
+    function retry() {
+      close();
+      window.clearTimeout(timer);
+      timer = window.setTimeout(open, reconnectDelay(attempt++));
+    }
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
         window.clearTimeout(timer);

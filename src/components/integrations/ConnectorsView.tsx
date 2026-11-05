@@ -1,8 +1,6 @@
 "use client";
 
-import { WAIT_POLL_MS } from "@/components/wake";
-import { instanceEvents, matches } from "@/lib/instance-events";
-import { browserPollEnv, startPoll } from "@/lib/poll";
+import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Loader2, MoreHorizontal, Pencil, Plus, RotateCw, Search, Star, Trash2, Unplug } from "lucide-react";
 import { toast } from "sonner";
@@ -91,15 +89,14 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
   // The connections read last time this visit show at once (Leslie, 28/10); the live list follows.
   const [connections, setConnections] = useState<IntegrationConnection[] | null>(() => cached<IntegrationConnection[]>(`conns:${agentId}`) ?? null);
   const [connecting, setConnecting] = useState<string | null>(null);
-  const [pending, setPending] = useState<string | null>(null);
+  // The tool whose sign-in is awaited, its accounts before it, and when the wait stops.
+  const [watch, setWatch] = useState<{ toolkit: IntegrationToolkit; baseline: number; until: number } | null>(null);
+  const pending = watch ? slugKey(watch.toolkit.slug) : null;
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [open, setOpen] = useState<IntegrationToolkit | null>(null);
   // The catalog's filter by use; « Tous » is null.
   const [group, setGroup] = useState<string | null>(null);
   const searchBox = useRef<HTMLInputElement>(null);
-
-  const pollTimer = useRef<{ stop(): void } | null>(null);
-  const pollDeadline = useRef(0);
 
   const fetchConnections = useCallback(async () => {
     const { connections: list } = await apiFetch<IntegrationConnectionsResult>(
@@ -110,20 +107,12 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
     return list;
   }, [agentId]);
 
-  const stopPolling = useCallback(() => {
-    pollTimer.current?.stop();
-    pollTimer.current = null;
-    setPending(null);
-  }, []);
-
   useEffect(() => {
     fetchConnections().catch((e) => {
       setConnections([]);
       toast.error((e as Error).message);
     });
   }, [fetchConnections]);
-
-  useEffect(() => () => stopPolling(), [stopPolling]);
 
   const q = search.trim();
 
@@ -224,26 +213,17 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
 
   // Watch the connections until this tool gains an account (the sign-in happens in another tab) or
   // the deadline passes: at once back on this tab or on the back office's word, else every 15 s.
-  function startPolling(toolkit: IntegrationToolkit, baseline: number) {
-    setPending(slugKey(toolkit.slug));
-    pollDeadline.current = Date.now() + POLL_TIMEOUT_MS;
-    pollTimer.current?.stop();
-    const look = async () => {
-      if (Date.now() > pollDeadline.current) return stopPolling();
-      try {
-        const conns = await fetchConnections();
-        if (activeCount(conns, toolkit.slug) > baseline) {
-          stopPolling();
-          toast.success(`${toolkit.name} est connecté`);
-        }
-      } catch {
-        // transient; keep polling until the deadline
-      }
-    };
-    const poll = startPoll(look, { everyMs: WAIT_POLL_MS, immediate: false, runOnShow: true }, browserPollEnv());
-    const off = instanceEvents.on(null, (e) => matches(e, { types: ["job.done"], kind: "connectors" }) && poll.kick());
-    pollTimer.current = { stop: () => (off(), poll.stop()) };
-  }
+  usePoll(
+    async () => {
+      if (!watch) return;
+      if (Date.now() > watch.until) return setWatch(null);
+      const conns = await fetchConnections();
+      if (activeCount(conns, watch.toolkit.slug) <= watch.baseline) return;
+      setWatch(null);
+      toast.success(`${watch.toolkit.name} est connecté`);
+    },
+    { enabled: Boolean(watch), round: watch?.until, everyMs: WAIT_POLL_MS, immediate: false, runOnShow: true, wake: { types: ["job.done"], kind: "connectors" } }
+  );
 
   async function connect(toolkit: IntegrationToolkit) {
     setConnecting(slugKey(toolkit.slug));
@@ -253,7 +233,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
         body: JSON.stringify({ toolkit: toolkit.slug }),
       });
       window.open(redirectUrl, "_blank", "noopener,noreferrer");
-      startPolling(toolkit, activeCount(connections ?? [], toolkit.slug));
+      setWatch({ toolkit, baseline: activeCount(connections ?? [], toolkit.slug), until: Date.now() + POLL_TIMEOUT_MS });
     } catch (e) {
       toast.error((e as Error).message);
     } finally {

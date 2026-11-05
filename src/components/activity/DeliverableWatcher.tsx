@@ -102,7 +102,7 @@ export function DeliverableWatcher() {
   }, [agentId]);
 
   // Mount, the tab shown again, and the safety net; never while hidden.
-  usePoll(() => check(60_000), { everyMs: SAFETY_MS, enabled: Boolean(agentId), live: true, minMs: 60_000 });
+  usePoll(() => check(60_000), { everyMs: SAFETY_MS, enabled: Boolean(agentId), live: true, minMs: 60_000, agentId });
 
   useEffect(() => {
     if (!agentId) return;

@@ -1,7 +1,7 @@
 "use client";
 
-import { listenWake, WAIT_POLL_MS } from "@/components/wake";
-import { useEffect, useRef, useState } from "react";
+import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
+import { useRef, useState } from "react";
 import { CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
@@ -87,50 +87,20 @@ export function TelegramConnect({
 
   // Watch the bot's inbox while the screen asks its owner to say hello. The first message connects the
   // agent on its own, so there is no button to press after Telegram.
-  useEffect(() => {
-    if (step !== "owner" || !bot || owner || ownerUnavailable) return;
-
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    let busy = false;
-    const poll = async () => {
-      clearTimeout(timer);
-      // Hidden: nothing is asked until the tab shows again (listenWake).
-      if (cancelled || busy || document.hidden) return;
-      busy = true;
-      try {
-        const result = await post<{ owner: TelegramOwner | null; unavailable: boolean }>({ action: "owner", token });
-        if (cancelled) return;
-        if (result.unavailable) {
-          setOwnerUnavailable(true);
-          return;
-        }
-        if (result.owner) {
-          setOwner(result.owner);
-          if (!connecting.current) {
-            connecting.current = true;
-            void connect(result.owner);
-          }
-          return;
-        }
-      } catch {
-        // A miss is normal here (Telegram rate limits, a slow network): keep waiting rather than
-        // throwing the user back to the token field.
-      } finally {
-        busy = false;
-      }
-      if (!cancelled) timer = setTimeout(() => void poll(), WAIT_POLL_MS);
-    };
-
-    timer = setTimeout(() => void poll(), WAIT_POLL_MS);
-    const off = listenWake({ types: ["job.done"], kind: "telegram" }, () => void poll());
-    return () => {
-      cancelled = true;
-      off();
-      clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, bot, owner, ownerUnavailable, token]);
+  // A miss is normal here (Telegram rate limits, a slow network): the wait goes on rather than throwing
+  // the user back to the token field.
+  usePoll(
+    async () => {
+      const result = await post<{ owner: TelegramOwner | null; unavailable: boolean }>({ action: "owner", token });
+      if (result.unavailable) return setOwnerUnavailable(true);
+      if (!result.owner) return;
+      setOwner(result.owner);
+      if (connecting.current) return;
+      connecting.current = true;
+      void connect(result.owner);
+    },
+    { enabled: step === "owner" && Boolean(bot) && !owner && !ownerUnavailable, everyMs: WAIT_POLL_MS, immediate: false, runOnShow: true, wake: { types: ["job.done"], kind: "telegram" } }
+  );
 
   const disconnect = () =>
     run(async () => {

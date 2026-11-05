@@ -2,15 +2,15 @@
 
 import { useEffect, type MutableRefObject } from "react";
 import { convKey, detectRoutineRuns, expertKey, toMs, type ActivityState, type RoutineSession } from "@/lib/activity";
-import { instanceEvents, streamGate } from "@/lib/instance-events";
-import { browserPollEnv, startPoll } from "@/lib/poll";
+import { usePoll } from "@/components/usePoll";
+import { instanceEvents } from "@/lib/instance-events";
 import { sessionsStore } from "@/lib/sessions-client";
 import type { SpaceData } from "@/lib/sessions-store";
 import type { Expert } from "@/lib/types";
 import type { ActivityActions } from "./ActivityProvider";
 
-// While the stream is down, a look every 60 s at most (visible tab only); with it, none: a routine's
-// or a turn's end re-reads the spaces through the sessions store, and this hears it.
+// An instance without its stream (a team's, or the own one while cut) is looked at every 60 s (visible tab
+// only); with it, a routine's or a turn's end re-reads the spaces through the sessions store, and this hears it.
 const NET_MS = 60_000;
 // Runs finished while the app was closed come back as badges; only the latest few also toast.
 const MAX_TOASTS = 3;
@@ -54,15 +54,20 @@ export function useRoutinePoll(
       }
     };
     const offs = watched.map(([a, p]) => sessionsStore.subscribe(a, p, (d) => heard(a, p, d)));
-    // First look from what the tab already holds (a space read without its runs is asked for them);
-    // then the net, off while the stream is up. A network read reaches `heard` through the store.
-    const first = (): Promise<unknown> => Promise.all(watched.map(([a, p]) => sessionsStore.read(a, p, 30_000, true).then((d) => heard(a, p, d), () => undefined)));
-    const net = (): Promise<unknown> => Promise.all(watched.map(([a, p]) => sessionsStore.read(a, p, 0).catch(() => undefined)));
-    void first();
-    const poll = startPoll(net, { everyMs: NET_MS, immediate: false, gate: streamGate(instanceEvents, NET_MS) }, browserPollEnv());
-    return () => {
-      offs.forEach((off) => off());
-      poll.stop();
-    };
+    // First look from what the tab already holds (a space read without its runs is asked for them).
+    // A network read reaches `heard` through the store.
+    void Promise.all(watched.map(([a, p]) => sessionsStore.read(a, p, 30_000, true).then((d) => heard(a, p, d), () => undefined)));
+    return () => offs.forEach((off) => off());
   }, [signature, routinesRef, load, actions, persist, stateRef]);
+
+  // The net reads the instances without a stream; once every one has it, all of them, slowly.
+  const agentIds = [...new Set(experts.map((e) => e.agentId))].sort();
+  usePoll(
+    () => {
+      const watched: [string, string][] = JSON.parse(signature);
+      const cut = watched.filter(([a]) => !instanceEvents.connected(a));
+      return Promise.all((cut.length ? cut : watched).map(([a, p]) => sessionsStore.read(a, p, 0).catch(() => undefined)));
+    },
+    { everyMs: NET_MS, immediate: false, enabled: agentIds.length > 0, live: true, minMs: NET_MS, agentId: agentIds }
+  );
 }

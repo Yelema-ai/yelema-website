@@ -1,11 +1,10 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { bootstrap } from "@/lib/bootstrap-client";
-import { instanceEvents, matches, streamGate } from "@/lib/instance-events";
-import { browserPollEnv, startPoll } from "@/lib/poll";
+import { usePoll } from "@/components/usePoll";
 import { DEPLOY_POLL_MS, deployPhase, parseDeployStatus, type DeployPhase, type DeployStatus } from "@/lib/deploy-status";
 import { cn } from "@/lib/utils";
 
@@ -28,37 +27,22 @@ export function DeployStatusProvider({ children }: { children: React.ReactNode }
   const [status, setStatus] = useState<DeployStatus | null>(null);
   const [forced, setForced] = useState<DeployPhase | null>(null);
 
-  useEffect(() => {
-    setForced(forcedPhase());
-    let live = true;
-    let first = true;
-    const read = async (): Promise<unknown> => {
-      // The first answer comes with the tab's bootstrap when it has it.
-      const boot = first ? (await bootstrap())?.deploy : null;
-      first = false;
-      return boot ?? apiFetch<unknown>("/api/deploy");
-    };
-    const ask = () =>
-      read().then(
-        (data) => {
-          const s = parseDeployStatus(data);
-          if (!live || !s) return;
-          // The first answer is the version this page runs; a page opened during an update runs the
-          // new one only once the update is over, so the baseline waits for a quiet answer.
-          if (!loaded.current && !s.maintenance) loaded.current = s.version;
-          setStatus(s);
-        },
-        () => undefined
-      );
-    // A net while the stream is down; with it, the back office's `job.done` (deploy) asks at once.
-    const poll = startPoll(ask, { everyMs: DEPLOY_POLL_MS, gate: streamGate(instanceEvents, DEPLOY_POLL_MS) }, browserPollEnv());
-    const off = instanceEvents.on(null, (e) => (matches(e, { types: ["job.done"], kind: "deploy" }) || e.type === "instance.changed") && poll.kick());
-    return () => {
-      live = false;
-      off();
-      poll.stop();
-    };
+  useEffect(() => setForced(forcedPhase()), []);
+
+  const first = useRef(true);
+  const ask = useCallback(async () => {
+    // The first answer comes with the tab's bootstrap when it has it.
+    const boot = first.current ? (await bootstrap())?.deploy : null;
+    first.current = false;
+    const s = parseDeployStatus(boot ?? (await apiFetch<unknown>("/api/deploy")));
+    if (!s) return;
+    // The first answer is the version this page runs; a page opened during an update runs the
+    // new one only once the update is over, so the baseline waits for a quiet answer.
+    if (!loaded.current && !s.maintenance) loaded.current = s.version;
+    setStatus(s);
   }, []);
+  // A net beside the stream; with it, the back office's `job.done` (deploy) asks at once.
+  usePoll(ask, { everyMs: DEPLOY_POLL_MS, live: true, minMs: DEPLOY_POLL_MS, wake: { types: ["job.done"], kind: "deploy" } });
 
   const phase = forced ?? deployPhase(loaded.current, status);
 

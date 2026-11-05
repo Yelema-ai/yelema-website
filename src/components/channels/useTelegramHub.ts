@@ -4,8 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import type { TelegramHubStatus } from "@/lib/agent37";
-import { usePoll } from "@/components/usePoll";
-import { WAIT_POLL_MS } from "@/components/wake";
+import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
 
 // Past this, nothing came from Telegram: the screen says so and puts the QR code and the link forward.
 export const SLOW_START_MS = 2 * 60_000;

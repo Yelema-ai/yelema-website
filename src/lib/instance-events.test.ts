@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createEventHub, eventStreamOn, matches, nextEvent, parseInstanceEvent, pollDue, reconnectDelay, resumeId, streamGate, touchesDrive, touchesSessions, type InstanceEvent, type InstanceEventType } from "./instance-events.ts";
+import { createEventHub, eventStreamOn, matches, nextEvent, namedPings, parseInstanceEvent, reconnectDelay, resumeId, streamGate, touchesDrive, touchesSessions, type InstanceEvent, type InstanceEventType } from "./instance-events.ts";
 
 const ev = (type: InstanceEventType, extra: Partial<InstanceEvent> = {}): InstanceEvent => ({ type, at: 1, ...extra });
 
@@ -56,14 +56,6 @@ describe("instance event stream", () => {
     const q = nextEvent(hub, "a", "turn.ended", aborted.signal);
     aborted.abort();
     await q;
-  });
-});
-
-describe("dashboard poll beside the stream", () => {
-  it("polls as before without the stream; with it, only past the safety delay", () => {
-    assert.equal(pollDue(false, 0), true);
-    assert.equal(pollDue(true, 5_000), false);
-    assert.equal(pollDue(true, 30_000), true);
   });
 });
 
@@ -127,6 +119,12 @@ describe("events carry everything (contract §1)", () => {
     hub.setConnected("a", false);
     assert.equal(gate.live(), false);
     offLink();
+    // A poll of a team's instance keeps its net while the own one's stream is up.
+    hub.setConnected("a", true);
+    assert.equal(streamGate(hub, 15_000, "b").live(), false);
+    assert.equal(streamGate(hub, 15_000, ["a", "b"]).live(), false);
+    assert.equal(streamGate(hub, 15_000, ["a"]).live(), true);
+    hub.setConnected("a", false);
     // A thousand watches come and go: nothing is left behind.
     for (let i = 0; i < 1000; i++) hub.on(`x${i}`, () => undefined)();
     hub.setConnected("a", true);
@@ -142,5 +140,22 @@ describe("events carry everything (contract §1)", () => {
     assert.equal(woke, false);
     hub.emit("a", ev("turn.ended", { profile: "x" }));
     await p;
+  });
+});
+
+describe("heartbeat", () => {
+  it("the gateway's `: ping` comments become `ping` frames, whatever the chunking; the rest passes as is", async () => {
+    const input = ["retry: 5000\nevent: ready\ndata: {}\n\n: pi", "ng\n\nevent: turn.ended\nid: 7\ndata: {}\n\n: ping\r\n\r\n"];
+    const out = await new Response(
+      new ReadableStream<string>({
+        start(c) {
+          input.forEach((x) => c.enqueue(x));
+          c.close();
+        },
+      })
+        .pipeThrough(namedPings())
+        .pipeThrough(new TextEncoderStream())
+    ).text();
+    assert.equal(out, "retry: 5000\nevent: ready\ndata: {}\n\nevent: ping\ndata: {}\n\nevent: turn.ended\nid: 7\ndata: {}\n\nevent: ping\ndata: {}\n\n");
   });
 });

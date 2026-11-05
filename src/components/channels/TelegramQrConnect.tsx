@@ -1,7 +1,7 @@
 "use client";
 
-import { listenWake, WAIT_POLL_MS } from "@/components/wake";
-import { useEffect, useRef, useState } from "react";
+import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
+import { useRef, useState } from "react";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
@@ -50,49 +50,28 @@ export function TelegramQrConnect({
   };
 
   // Watch the pairing until the user confirms the bot in Telegram; that poll also saves it.
-  useEffect(() => {
-    if (!session || session.status !== "waiting") return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    let busy = false;
-    const poll = async () => {
-      clearTimeout(timer);
-      // Hidden: nothing is asked until the tab shows again (listenWake).
-      if (cancelled || busy || document.hidden) return;
-      busy = true;
+  const pairingId = session?.status === "waiting" ? session.pairing_id : null;
+  const poller = usePoll(
+    async () => {
+      if (!pairingId || done.current) return;
       try {
-        const next = await pair({ pairing_id: session.pairing_id });
-        if (cancelled) return;
+        const next = await pair({ pairing_id: pairingId });
         if (next.status === "connected" && !done.current) {
           done.current = true;
+          poller.current?.stop();
           toast.success("Telegram connecté");
           onConnected(next.bot_username ?? null);
-          return;
-        }
-        if (next.status === "expired") {
+        } else if (next.status === "expired") {
           setSession(null);
           setError("Ce code a expiré. Générez-en un nouveau.");
-          return;
         }
       } catch (e) {
-        if (cancelled) return;
         setSession(null);
         setError(e instanceof Error ? e.message : "La connexion à Telegram a échoué. Réessayez.");
-        return;
-      } finally {
-        busy = false;
       }
-      if (!cancelled) timer = setTimeout(() => void poll(), WAIT_POLL_MS);
-    };
-    timer = setTimeout(() => void poll(), WAIT_POLL_MS);
-    const off = listenWake({ types: ["job.done"], kind: "telegram" }, () => void poll());
-    return () => {
-      cancelled = true;
-      off();
-      clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.pairing_id, session?.status]);
+    },
+    { enabled: Boolean(pairingId), everyMs: WAIT_POLL_MS, immediate: false, runOnShow: true, wake: { types: ["job.done"], kind: "telegram" } }
+  );
 
   if (!session) {
     return (

@@ -13,8 +13,7 @@ import type { SettingScope } from "@/lib/llm";
 import { mcpPending, type McpOauthServer, type McpOverview, type McpServer, type McpServerDraft, type McpToolsOverview, type McpToolsReport, type McpWritten } from "@/lib/mcp-servers";
 import { type McpOauthFlow } from "./McpOauthSteps";
 import { McpServerDialog } from "./McpServerDialog";
-import { usePoll } from "@/components/usePoll";
-import { listenWake, WAIT_POLL_MS } from "@/components/wake";
+import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
 
 // Une pose prend d'ordinaire moins d'une minute par instance ; au-delà, on cesse de relire seul.
 const POLL_MS = 4_000;
@@ -258,13 +257,10 @@ export function McpView() {
 
   // Tant que la fenêtre du fournisseur est ouverte, l'accès est relu jusqu'à ce que l'instance l'ait : à sa
   // fermeture, au `job.done` (mcp), au retour sur l'onglet, sinon toutes les 15 s ; jamais onglet caché.
-  useEffect(() => {
-    if (flow?.step !== "authorizing" || !flow.url) return;
-    let fired = false;
-    const check = async () => {
-      if (fired || document.hidden) return;
-      fired = true;
-      stop();
+  const authorizing = flow?.step === "authorizing" && Boolean(flow.url);
+  const oauthPoll = usePoll(
+    async () => {
+      if (flow?.step !== "authorizing") return;
       const servers = await loadOauth();
       const done = servers?.find((s) => s.id === flow.serverId);
       if (done?.connected) {
@@ -276,22 +272,19 @@ export function McpView() {
         setFlow(null);
         toast.error("L’autorisation n’a pas abouti.", { description: "Relancez-la depuis la carte du serveur." });
       } else setOauthTries((n) => n + 1);
-    };
-    const timer = setTimeout(() => void check(), WAIT_POLL_MS);
-    // La fenêtre refermée : la réponse est là, relue une fois. Regarder `closed` ne coûte aucun appel.
+    },
+    { enabled: authorizing, everyMs: WAIT_POLL_MS, immediate: false, runOnShow: true, wake: { types: ["job.done"], kind: "mcp" } }
+  );
+  // La fenêtre refermée : la réponse est là, relue une fois. Regarder `closed` ne coûte aucun appel.
+  useEffect(() => {
+    if (!authorizing) return;
     const shut = setInterval(() => {
       if (!popup.current?.closed) return;
       popup.current = null;
-      void check();
+      oauthPoll.current?.kick();
     }, 1_000);
-    const off = listenWake({ types: ["job.done"], kind: "mcp" }, () => void check());
-    function stop() {
-      clearTimeout(timer);
-      clearInterval(shut);
-      off();
-    }
-    return stop;
-  }, [flow, oauthTries, loadOauth, loadTools, closePopup]);
+    return () => clearInterval(shut);
+  }, [authorizing, oauthPoll]);
 
   // Tant qu'une pose est en cours, l'état est relu : l'écran passe seul à « En service » ou à l'échec.
   // Avec le flux, `job.done` (mcp) dit quand relire ; sans lui, un filet à 15 s au moins.

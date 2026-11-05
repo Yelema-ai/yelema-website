@@ -127,9 +127,6 @@ export function createEventHub() {
 
 export type EventHub = ReturnType<typeof createEventHub>;
 
-/** A poll's turn: always without the stream; with it, only as a safety net once `safetyMs` passed without a reading. */
-export const pollDue = (connected: boolean, sinceLastMs: number, safetyMs = 30_000): boolean => !connected || sinceLastMs >= safetyMs;
-
 /** Resolves on the next matching event of the instance, or when `signal` aborts; leaves no listener behind. */
 export function nextEvent(hub: EventHub, agentId: string, filter: EventFilter | InstanceEventType, signal: AbortSignal): Promise<void> {
   const f: EventFilter = typeof filter === "string" ? { types: [filter] } : filter;
@@ -145,9 +142,31 @@ export function nextEvent(hub: EventHub, agentId: string, filter: EventFilter | 
   });
 }
 
-/** A poll gated on the tab's stream (lib/poll `gate`): off while it is up, `minMs` apart at least while down. */
-export function streamGate(hub: EventHub, minMs = 15_000, agentId: string | null = null) {
-  return { live: () => hub.connected(agentId), onChange: hub.onConnection, minMs };
+/**
+ * A poll gated on the tab's stream (lib/poll `gate`): slow while it is up, `minMs` apart at least while down.
+ * `agentId`: the instance(s) the poll reads, each of which must have its stream; null: the tab's stream.
+ */
+export function streamGate(hub: EventHub, minMs = 15_000, agentId: string | readonly string[] | null = null) {
+  const ids = agentId === null ? null : typeof agentId === "string" ? [agentId] : agentId;
+  return { live: () => (ids ? ids.length > 0 && ids.every((a) => hub.connected(a)) : hub.connected()), onChange: hub.onConnection, minMs };
+}
+
+/** Heard on the stream at least this often (the gateway beats every 25 s); past it, the stream is taken as cut. */
+export const STREAM_SILENCE_MS = 90_000;
+
+/** The gateway's `: ping` comments, which EventSource hides, as `ping` frames the tab can time. */
+export function namedPings(): TransformStream<string, string> {
+  let rest = "";
+  return new TransformStream({
+    transform(chunk, out) {
+      const lines = (rest + chunk).split("\n");
+      rest = lines.pop() ?? "";
+      if (lines.length) out.enqueue(lines.map((l) => (l.replace(/\r$/, "") === ": ping" ? "event: ping\ndata: {}" : l.replace(/\r$/, ""))).join("\n") + "\n");
+    },
+    flush(out) {
+      if (rest) out.enqueue(rest);
+    },
+  });
 }
 
 /** The tab's one hub. */

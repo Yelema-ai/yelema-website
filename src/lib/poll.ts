@@ -20,7 +20,7 @@ export interface PollOptions {
   deadlineMs?: number;
   /** Run at once on start (default true). */
   immediate?: boolean;
-  /** A live stream that makes this poll a safety net: no tick while it is up, `minMs` apart at least while down. */
+  /** A live stream that makes this poll a safety net: LIVE_NET_MS apart while it is up, `minMs` at least while down. */
   gate?: PollGate;
   /** Back on the tab, run at once even if no tick was due (the member comes back from a sign-in tab). */
   runOnShow?: boolean;
@@ -35,6 +35,8 @@ export interface PollGate {
 
 /** The safety net's floor for a gated poll. */
 export const GATE_MIN_MS = 15_000;
+/** While the stream is up, a gated poll still reads this often: a stream can miss what it never sent. */
+export const LIVE_NET_MS = 5 * 60_000;
 
 export interface Poller {
   stop(): void;
@@ -54,8 +56,8 @@ export function startPoll(fn: () => Promise<unknown> | unknown, opts: PollOption
   let lastRun = -Infinity;
   const gate = opts.gate;
   const floor = gate ? Math.max(gate.minMs ?? GATE_MIN_MS, 0) : 0;
-  const wait = () => Math.max(delay, floor);
   const live = () => gate?.live() ?? false;
+  const wait = () => Math.max(delay, floor, live() ? LIVE_NET_MS : 0);
 
   const expired = () => opts.deadlineMs !== undefined && env.now() - started >= opts.deadlineMs;
 
@@ -78,24 +80,20 @@ export function startPoll(fn: () => Promise<unknown> | unknown, opts: PollOption
     }
     if (stopped) return;
     delay = Math.min(delay * (opts.factor ?? 1), maxMs);
-    if (!env.hidden() && !live()) schedule(wait());
+    if (!env.hidden()) schedule(wait());
   }
 
   function tick(): void {
     timer = null;
-    // Hidden: nothing is asked; the page catches up once when it shows again. Stream up: it tells.
-    if (env.hidden() || live()) return;
-    void run();
+    // Hidden: nothing is asked; the page catches up once when it shows again.
+    if (!env.hidden()) void run();
   }
 
-  // The stream went down: a full delay first (it is usually back within seconds); up: the net stops.
+  // The stream went down: a full delay first (it is usually back within seconds); up: the slow net.
   const ungate = gate
     ? gate.onChange(() => {
-        if (stopped || running) return;
-        if (live()) {
-          if (timer !== null) env.clearTimeout(timer);
-          timer = null;
-        } else if (!env.hidden() && timer === null) schedule(wait());
+        if (stopped || running || env.hidden()) return;
+        schedule(live() ? Math.max(0, wait() - (env.now() - lastRun)) : wait());
       })
     : () => undefined;
 
@@ -108,7 +106,6 @@ export function startPoll(fn: () => Promise<unknown> | unknown, opts: PollOption
     }
     if (running || timer !== null) return;
     if (opts.runOnShow) return void run();
-    if (live()) return;
     const due = env.now() - lastRun >= wait();
     if (due) void run();
     else schedule(wait() - (env.now() - lastRun));
@@ -123,7 +120,7 @@ export function startPoll(fn: () => Promise<unknown> | unknown, opts: PollOption
   }
 
   if (opts.immediate === false || env.hidden()) {
-    if (!env.hidden() && !live()) schedule(wait());
+    if (!env.hidden()) schedule(wait());
     lastRun = opts.immediate === false ? env.now() : -Infinity;
   } else {
     void run();
@@ -133,7 +130,7 @@ export function startPoll(fn: () => Promise<unknown> | unknown, opts: PollOption
     stop,
     reset() {
       delay = opts.everyMs;
-      if (!running && !env.hidden() && !stopped && !live()) schedule(wait());
+      if (!running && !env.hidden() && !stopped) schedule(wait());
     },
     // Something happened (an event): read now, stream or not.
     kick() {

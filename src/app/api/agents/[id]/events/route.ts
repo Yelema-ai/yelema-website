@@ -1,13 +1,13 @@
 import { instanceFetch } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { ApiError, handleError } from "@/lib/http";
-import { eventStreamOn, resumeId } from "@/lib/instance-events";
+import { eventStreamOn, namedPings, resumeId } from "@/lib/instance-events";
 import { upstreamErrorMessage } from "../_helpers";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-// The instance's event stream from the runtime gateway (EVENT_STREAM=on), relayed as is: kinds only, no
-// content. Off, or without the gateway, the route does not exist and the tab keeps its polls.
+// The instance's event stream from the runtime gateway (EVENT_STREAM=on), relayed as is (its heartbeat named,
+// so the tab can time it): kinds only, no content. Off, or without the gateway, the route does not exist.
 export async function GET(request: Request, { params }: Ctx) {
   try {
     if (!eventStreamOn(process.env)) throw new ApiError(404, "not_found", "Not found");
@@ -21,7 +21,7 @@ export async function GET(request: Request, { params }: Ctx) {
       const message = await upstreamErrorMessage(upstream, "agents/events", "Le fil d’événements n’est pas disponible.");
       throw new ApiError(upstream.status || 502, "upstream_error", message);
     }
-    return new Response(upstream.body, {
+    return new Response(upstream.body.pipeThrough(new TextDecoderStream()).pipeThrough(namedPings()).pipeThrough(new TextEncoderStream()), {
       status: 200,
       headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no", Connection: "keep-alive" },
     });

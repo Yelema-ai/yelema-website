@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { startPoll, type PollEnv } from "./poll.ts";
+import { LIVE_NET_MS, startPoll, type PollEnv } from "./poll.ts";
 
 function fakeEnv() {
   let t = 0;
@@ -132,7 +132,7 @@ function fakeGate(minMs?: number) {
 }
 
 describe("relecture branchée sur le flux", () => {
-  it("flux branché : rien après la première lecture ; un événement (kick) lit quand même", async () => {
+  it("flux branché : seulement le filet lent après la première lecture ; un événement (kick) lit quand même", async () => {
     const f = fakeEnv();
     const g = fakeGate();
     g.set(true);
@@ -140,12 +140,15 @@ describe("relecture branchée sur le flux", () => {
     const p = startPoll(() => void runs++, { everyMs: 1000, gate: g.gate }, f.env);
     await f.flush();
     assert.equal(runs, 1, "la première lecture part toujours");
-    await f.advance(60 * 60_000);
+    await f.advance(LIVE_NET_MS - 1);
     assert.equal(runs, 1);
-    assert.equal(f.pending(), 0, "aucun minuteur tant que le flux est là");
+    await f.advance(1);
+    assert.equal(runs, 2, "un flux à moitié ouvert ne laisse pas l'écran figé");
+    await f.advance(60 * 60_000);
+    assert.equal(runs, 14);
     p.kick();
     await f.flush();
-    assert.equal(runs, 2);
+    assert.equal(runs, 15);
     p.stop();
     assert.equal(g.subs.size, 0, "désabonné à l'arrêt");
   });
@@ -169,7 +172,7 @@ describe("relecture branchée sur le flux", () => {
     assert.equal(runs, 3);
   });
 
-  it("un filet long garde son délai ; jamais onglet caché ; au retour, rien si le flux est là", async () => {
+  it("un filet long garde son délai ; jamais onglet caché ; au retour, une lecture s'il est dû, flux ou non", async () => {
     const f = fakeEnv();
     const g = fakeGate(60_000);
     let runs = 0;
@@ -182,7 +185,22 @@ describe("relecture branchée sur le flux", () => {
     assert.equal(runs, 1);
     g.set(true);
     await f.setHidden(false);
-    assert.equal(runs, 1);
+    assert.equal(runs, 2);
+  });
+
+  it("flux rebranché : le filet lent compte depuis la dernière lecture", async () => {
+    const f = fakeEnv();
+    const g = fakeGate();
+    let runs = 0;
+    startPoll(() => void runs++, { everyMs: 1000, gate: g.gate }, f.env);
+    await f.flush();
+    await f.advance(60_000);
+    g.set(true);
+    const after = runs;
+    await f.advance(LIVE_NET_MS - 15_000 - 1);
+    assert.equal(runs, after);
+    await f.advance(15_001);
+    assert.equal(runs, after + 1);
   });
 
   it("runOnShow : au retour d'un onglet de connexion, une lecture tout de suite", async () => {

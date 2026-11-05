@@ -172,7 +172,7 @@ export function DashboardProvider({
 
   // Pendant la génération : relu à chaque tour fini ou fichier écrit sur l'instance (flux branché) ; sans
   // flux, toutes les 15 s (onglet visible), 10 min au plus, pour voir arriver le lien.
-  usePoll(() => fetchDashboard(), { everyMs: 15_000, deadlineMs: 10 * 60_000, immediate: false, enabled: isGenerating, live: true });
+  usePoll(() => fetchDashboard(), { everyMs: 15_000, deadlineMs: 10 * 60_000, immediate: false, enabled: isGenerating, live: true, agentId });
   useEffect(() => {
     if (!isGenerating || !agentId) return;
     let timer: ReturnType<typeof setTimeout> | undefined;

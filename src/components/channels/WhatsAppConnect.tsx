@@ -1,6 +1,6 @@
 "use client";
 
-import { listenWake, WAIT_POLL_MS } from "@/components/wake";
+import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -38,12 +38,13 @@ export function WhatsAppConnect({
   const started = useRef<Promise<WhatsappPairingState> | null>(null);
 
   const alreadyConnected = isChannelConnected(channel);
+  // The next look at the pairing under way (usePoll times it); null while none is due.
+  const look = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     if (alreadyConnected) return;
 
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
     // The pairing the next look is for; null while a look is out or none is due.
     let waiting: string | null = null;
     setError(null);
@@ -63,7 +64,6 @@ export function WhatsAppConnect({
         return;
       }
       waiting = result.pairing_id;
-      timer = setTimeout(() => void poll(result.pairing_id), WAIT_POLL_MS);
     };
 
     const fail = (cause: unknown) => {
@@ -81,10 +81,7 @@ export function WhatsAppConnect({
 
     const poll = async (pairingId: string, finish = false) => {
       if (cancelled) return;
-      clearTimeout(timer);
       waiting = null;
-      // Hidden: the code is not asked again until the tab shows (the save of a scan still goes out).
-      if (document.hidden && !finish) return void (waiting = pairingId);
       try {
         settle(await pair({ pairing_id: pairingId, ...(finish ? { finish: true } : {}) }));
       } catch (cause) {
@@ -95,14 +92,16 @@ export function WhatsAppConnect({
     if (!started.current) started.current = pair({});
     started.current.then((result) => !cancelled && settle(result)).catch(fail);
 
-    const off = listenWake({ types: ["job.done"], kind: "channels" }, () => waiting && void poll(waiting));
+    look.current = () => (waiting ? poll(waiting) : Promise.resolve());
     return () => {
       cancelled = true;
-      off();
-      clearTimeout(timer);
+      look.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId, attempt, alreadyConnected]);
+
+  // Hidden: the code is not asked again until the tab shows (the save of a scan still goes out).
+  usePoll(() => look.current?.(), { enabled: !alreadyConnected, everyMs: WAIT_POLL_MS, immediate: false, runOnShow: true, wake: { types: ["job.done"], kind: "channels" } });
 
   const disconnect = () =>
     run(async () => {
