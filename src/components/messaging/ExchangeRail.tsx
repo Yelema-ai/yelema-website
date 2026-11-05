@@ -2,12 +2,14 @@
 
 import { useMemo, useState, type KeyboardEvent } from "react";
 import { Archive, Hash, Link2, MoreHorizontal, Pencil, Pin, PinOff, Plus, RotateCw, Search, Trash2, User, Users, X } from "lucide-react";
+import type { BuzzEntry } from "@/lib/buzz";
 import type { Conversation } from "@/lib/buzz-relay";
 import { fold } from "@/lib/fold";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { ExchangeKind } from "@/components/messaging/NewExchange";
+import { ParticipantAvatar } from "@/components/messaging/ParticipantAvatar";
 
 // La colonne des échanges, sur le modèle de celle des conversations d'un Expert : recherche, filtres, groupes
 // (Épinglés, Salons, Conversations, Archivés replié) et, par ligne, « … » : renommer, épingler, copier, archiver, supprimer.
@@ -30,6 +32,8 @@ export interface RailProps {
   isSalon: (c: Conversation) => boolean;
   isUnit: (c: Conversation) => boolean;
   countOf: (c: Conversation) => number;
+  /** Who is in it, the others first: their faces lead the row. */
+  facesOf: (c: Conversation) => BuzzEntry[];
   onOpen: (id: string) => void;
   onNew: (kind: ExchangeKind) => void;
   onRefresh: () => void;
@@ -54,7 +58,7 @@ export function ExchangeRail(p: RailProps) {
     return [
       { label: "Épinglés", items: live.filter((c) => p.pinned.has(c.id)) },
       { label: "Salons", items: live.filter((c) => !p.pinned.has(c.id) && p.isSalon(c)) },
-      { label: "Conversations", items: live.filter((c) => !p.pinned.has(c.id) && !p.isSalon(c)) },
+      { label: "Messages directs", items: live.filter((c) => !p.pinned.has(c.id) && !p.isSalon(c)) },
     ].filter((g) => g.items.length);
   }, [p, query, filter]);
   const archivedItems = (p.list ?? []).filter((c) => p.archived.has(c.id));
@@ -85,12 +89,10 @@ export function ExchangeRail(p: RailProps) {
           aria-current={p.open === c.id}
           className={cn("flex min-h-11 w-full select-none items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-[13.5px] transition-colors", p.open === c.id ? "bg-soft-2 font-semibold text-ink" : p.pinned.has(c.id) ? "bg-tint text-ink hover:bg-soft" : "text-ink-2 hover:bg-soft")}
         >
-          <span className={cn("grid size-7 shrink-0 place-items-center rounded-lg", salon ? "bg-tint text-brand" : "bg-soft-2 text-ink-2")}>
-            {p.isUnit(c) ? <Users className="h-3.5 w-3.5" /> : salon ? <Hash className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
-          </span>
+          <Faces faces={p.facesOf(c)} salon={salon} unit={p.isUnit(c)} />
           <span className="min-w-0 flex-1">
             <span className="block truncate">{p.nameOf(c)}</span>
-            <span className="block truncate text-[11.5px] font-normal text-ink-3">{p.isUnit(c) ? "Salon d’équipe" : salon ? "Salon" : "Direct"} · {n} participant{n > 1 ? "s" : ""}</span>
+            <span className="block truncate text-[11.5px] font-normal text-ink-3">{p.isUnit(c) ? "Salon d’équipe, " : ""}{n} participant{n > 1 ? "s" : ""}</span>
           </span>
         </button>
         <DropdownMenu>
@@ -135,10 +137,10 @@ export function ExchangeRail(p: RailProps) {
       </div>
       <div className="mx-1 mb-2.5 grid grid-cols-2 gap-1.5">
         <button type="button" disabled={!p.ready} onClick={() => p.onNew("message")} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-brand/60 bg-surface text-[13px] font-semibold text-brand-ink transition-colors hover:bg-tint disabled:opacity-60">
-          <Plus className="h-4 w-4" /> Message
+          <Plus className="h-4 w-4" /> Message direct
         </button>
         <button type="button" disabled={!p.ready} onClick={() => p.onNew("salon")} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-line bg-surface text-[13px] font-semibold text-ink-2 transition-colors hover:bg-soft disabled:opacity-60">
-          <Hash className="h-4 w-4" /> Salon
+          <Hash className="h-4 w-4" /> Nouveau salon
         </button>
       </div>
       <label className="relative mx-1 mb-2 block">
@@ -159,7 +161,7 @@ export function ExchangeRail(p: RailProps) {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto" aria-busy={p.list === null}>
         {p.list === null && [1, 2, 3].map((n) => <div key={n} className="mx-1 mb-1.5 h-11 animate-pulse rounded-[10px] bg-soft" />)}
-        {p.list?.length === 0 && <p className="px-2.5 py-3 text-xs text-ink-3">Aucun échange. « Message » écrit à quelqu’un ou à ses Experts ; « Salon » ouvre un espace nommé à plusieurs.</p>}
+        {p.list?.length === 0 && <p className="px-2.5 py-3 text-xs text-ink-3">Aucun échange pour l’instant.</p>}
         {groups.map((g) => (
           <div key={g.label} className="mb-2">
             <div className="px-2.5 pb-1 pt-2 text-[11.5px] font-semibold uppercase tracking-wide text-ink-3">{g.label}</div>
@@ -189,5 +191,30 @@ export function ExchangeRail(p: RailProps) {
         }}
       />
     </div>
+  );
+}
+
+// Le début d'une ligne : un direct montre la personne (ou l'Expert) à qui l'on parle ; un salon, ses deux premiers
+// visages l'un sur l'autre et le signe du salon en pastille. Même largeur partout : les noms restent alignés.
+function Faces({ faces, salon, unit }: { faces: BuzzEntry[]; salon: boolean; unit: boolean }) {
+  const Sign = unit ? Users : salon ? Hash : User;
+  if (!faces.length)
+    return (
+      <span className="grid w-10 shrink-0 place-items-start">
+        <span className={cn("grid size-7 place-items-center rounded-lg", salon ? "bg-tint text-brand" : "bg-soft-2 text-ink-2")}>
+          <Sign className="h-3.5 w-3.5" />
+        </span>
+      </span>
+    );
+  if (!salon) return <span className="w-10 shrink-0"><ParticipantAvatar entry={faces[0]} name={faces[0].nom} /></span>;
+  const [a, b] = faces;
+  return (
+    <span className="relative h-8 w-10 shrink-0">
+      <ParticipantAvatar entry={a} name={a.nom} size="xxs" className="absolute left-0 top-0 ring-2 ring-surface rounded-full" />
+      {b && <ParticipantAvatar entry={b} name={b.nom} size="xxs" className="absolute left-3.5 top-2 ring-2 ring-surface rounded-full" />}
+      <span className="absolute -bottom-0.5 right-0 grid size-4 place-items-center rounded-full bg-tint text-brand ring-2 ring-surface">
+        <Sign className="size-2.5" strokeWidth={2.4} />
+      </span>
+    </span>
   );
 }
