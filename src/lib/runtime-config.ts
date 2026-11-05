@@ -1,4 +1,5 @@
 import "server-only";
+import { echangesOn } from "@/lib/echanges";
 import { eventStreamOn } from "@/lib/instance-events";
 
 // Deployment configuration, read from the environment AT RUNTIME — never at build time.
@@ -108,6 +109,10 @@ export function missingRequired(): string[] {
 
 // What the browser needs: Supabase Auth runs client-side with the anon key, which is public
 // by design (the tables are granted to the service role only).
+export function echangesVisible(): boolean {
+  return echangesOn(read("ECHANGES"));
+}
+
 export type PublicConfig = {
   // "backoffice": the pages sign in through this app's /api/auth routes, not Supabase.
   authVia: "supabase" | "backoffice";
@@ -117,6 +122,8 @@ export type PublicConfig = {
   logoUrl: string | null;
   /** The instance's event stream is open (EVENT_STREAM=on and the gateway): polls wait for it. */
   eventStream: boolean;
+  /** Échanges (messagerie entre membres) shown: `ECHANGES=on` on the Vercel project (pilot only for now). */
+  echanges: boolean;
 };
 
 // Signed in through the back office, the browser never talks to Supabase: it gets neither value.
@@ -129,5 +136,6 @@ export function publicConfig(): PublicConfig {
     siteUrl: siteUrl() ?? null,
     logoUrl: brandLogoUrl() ?? null,
     eventStream: eventStreamOn(process.env),
+    echanges: echangesVisible(),
   };
 }

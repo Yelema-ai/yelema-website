@@ -36,7 +36,6 @@ import type { Expert } from "@/lib/types";
 import { cycleKind, expertRank, isDjeneba } from "@/lib/expert-cycle";
 import { cn } from "@/lib/utils";
 import { expertPath } from "@/lib/expert-tabs";
-import { ECHANGES_VISIBLE } from "@/lib/features";
 
 // Le haut du menu : « Nouvelle conversation » (l'accueil et sa barre de chat), en couleur, puis
 // Rechercher (Ctrl K) et Intégrations. Recruter n'est plus au menu (Leslie, 23/10) ; sa page reste à
@@ -52,6 +51,7 @@ export function Sidebar(props: SidebarProps) {
 
 function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   const pathname = usePathname();
+  const { echanges } = usePublicConfig();
   // Lit at the click, before the next page is there.
   const here = useShownPath();
   const { current } = useWorkspace();
@@ -166,7 +166,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         <Blocks className="size-5 shrink-0" strokeWidth={1.9} />
         {!collapsed && "Intégrations"}
       </Link>
-      {ECHANGES_VISIBLE && (
+      {echanges && (
         <Link
           href="/echanges"
           onClick={onNavigate}
