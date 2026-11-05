@@ -1,5 +1,6 @@
 // What a screen last showed, kept on the device so it paints at once on the next visit, then refreshes.
-// One account + space at a time: opening another wipes everything. Never tokens, secrets or file contents.
+// One account + space at a time: opening another wipes everything, and a tab of another one stops writing.
+// A row older than MAX_AGE_MS is dropped. Never tokens, secrets or file contents.
 // Pure: the storage comes in (IndexedDB in the browser, a Map in tests).
 
 export interface CacheRow {
@@ -10,14 +11,25 @@ export interface CacheRow {
   size: number;
 }
 
+export interface Meta {
+  scope: string;
+  version: number;
+}
+
 export interface CacheBackend {
   getAll(): Promise<CacheRow[]>;
-  put(rows: CacheRow[]): Promise<void>;
+  /** With `meta`: written only if the stored meta is still that one, in the same transaction; false when refused. */
+  put(rows: CacheRow[], meta?: Meta): Promise<boolean>;
   delete(keys: string[]): Promise<void>;
   clear(): Promise<void>;
 }
 
 export const META_KEY = "__meta";
+export const MAX_AGE_MS = 7 * 24 * 3_600_000;
+export const sameMeta = (stored: unknown, meta: Meta): boolean => {
+  const m = stored as Partial<Meta> | undefined;
+  return m?.scope === meta.scope && m?.version === meta.version;
+};
 const SECRET_FIELD = /^(access_?token|refresh_?token|id_?token|token|secret|password|passwd|api_?key|authorization|cookie|private_?key|nsec)$/i;
 
 /** True when a value carries a field named like a credential anywhere inside it: such a value is never kept. */
@@ -85,7 +97,18 @@ export function createDeviceCache(backend: CacheBackend, { version, maxBytes, no
     const keys = [...dirty];
     dirty.clear();
     const put = keys.map((k) => rows.get(k)).filter((r): r is CacheRow => Boolean(r));
-    if (put.length) await backend.put(put).catch(() => undefined);
+    if (!put.length || !scope) return;
+    // Another tab opened another account or space, or wiped: this one stops writing.
+    if ((await backend.put(put, { scope, version }).catch(() => true)) === false) close();
+  }
+
+  function close(): void {
+    scope = null;
+    loaded = null;
+    rows.clear();
+    dirty.clear();
+    bytes = 0;
+    opened = Promise.resolve();
   }
 
   async function load(next: string): Promise<void> {
@@ -97,21 +120,24 @@ export function createDeviceCache(backend: CacheBackend, { version, maxBytes, no
       return;
     }
     if (scope !== next) return;
-    const meta = all.find((r) => r.key === META_KEY)?.value as { scope?: string; version?: number } | undefined;
     // Another account or space, or an older layout: nothing of it is shown.
-    if (!meta || meta.scope !== next || meta.version !== version) {
+    if (!sameMeta(all.find((r) => r.key === META_KEY)?.value, { scope: next, version })) {
       await backend.clear().catch(() => undefined);
-      await backend.put([{ key: META_KEY, value: { scope: next, version }, at: now(), size: 0 }]).catch(() => undefined);
+      await backend.put([{ key: META_KEY, value: { scope: next, version }, at: now(), size: 0 }]).catch(() => false);
       if (scope === next) loaded = next;
       return;
     }
+    const old: string[] = [];
     for (const r of all) {
       if (r.key === META_KEY || rows.has(r.key)) continue;
-      rows.set(r.key, r);
-      bytes += r.size;
+      if (now() - r.at > MAX_AGE_MS) old.push(r.key);
+      else {
+        rows.set(r.key, r);
+        bytes += r.size;
+      }
     }
     loaded = next;
-    const gone = evict();
+    const gone = [...old, ...evict()];
     if (gone.length) await backend.delete(gone).catch(() => undefined);
   }
 
@@ -163,14 +189,11 @@ export function createDeviceCache(backend: CacheBackend, { version, maxBytes, no
     },
     /** Signing out: nothing is left on the device. */
     async wipe(): Promise<void> {
-      scope = null;
-      loaded = null;
-      rows.clear();
-      dirty.clear();
-      bytes = 0;
-      opened = Promise.resolve();
+      close();
       await backend.clear().catch(() => undefined);
     },
+    /** Another tab took the device: this one forgets what it holds and writes nothing more. */
+    close,
     keys: () => [...rows.keys()],
     bytes: () => bytes,
     flush,
@@ -185,7 +208,11 @@ export function memoryBackend(seed: CacheRow[] = []): CacheBackend & { rows: Map
   return {
     rows: m,
     getAll: async () => [...m.values()].map((r) => ({ ...r })),
-    put: async (rs) => void rs.forEach((r) => m.set(r.key, { ...r })),
+    put: async (rs, meta) => {
+      if (meta && !sameMeta(m.get(META_KEY)?.value, meta)) return false;
+      rs.forEach((r) => m.set(r.key, { ...r }));
+      return true;
+    },
     delete: async (ks) => void ks.forEach((k) => m.delete(k)),
     clear: async () => m.clear(),
   };

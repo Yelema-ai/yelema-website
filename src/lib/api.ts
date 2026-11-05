@@ -1,3 +1,6 @@
+import { wipeDevice } from "@/lib/device-cache-client";
+import { within } from "@/lib/first-screen";
+
 // What the user reads when an answer carries no sentence of its own (a host's error page, a
 // crashed route): never a status code or a raw body.
 const FAILED = "Une erreur est survenue. Réessayez dans un instant.";
@@ -13,7 +16,8 @@ function leaveIfSignedOut(res: Response): boolean {
   if (res.status !== 401 || typeof window === "undefined") return false;
   if (PUBLIC_PAGES.test(window.location.pathname)) return false;
   const here = window.location.pathname + window.location.search;
-  window.location.assign(`/login?expired=1&next=${encodeURIComponent(here)}`);
+  // Nothing of the ended session stays on the device, even if the sign-in page never loads (1 s at most).
+  void within(wipeDevice(), 1_000).finally(() => window.location.assign(`/login?expired=1&next=${encodeURIComponent(here)}`));
   return true;
 }
 

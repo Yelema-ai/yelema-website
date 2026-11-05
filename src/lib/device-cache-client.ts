@@ -17,6 +17,9 @@ const cache = createDeviceCache(browser && typeof indexedDB !== "undefined" ? id
 const openers: ((get: (key: string) => unknown, keys: string[]) => void)[] = [];
 let confirmed: string | null = null;
 let filled: string | null = null;
+// Every tab of the app on this device: one that opens another account or space, or wipes, closes the others'.
+const tabs = browser && typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("yelema-device-cache") : null;
+const tell = (scope: string | null) => tabs?.postMessage({ scope });
 
 function storage(fn: (s: Storage) => string | null | void): string | null {
   try {
@@ -55,21 +58,32 @@ export function confirmDevice(email: string, workspaceId: string): void {
   if (confirmed === scope) return;
   confirmed = scope;
   storage((s) => s.setItem(SCOPE_KEY, scope));
+  tell(scope);
   const loading = cache.open(scope);
   if (cache.ready()) fill(scope);
   else void loading.then(() => fill(scope));
 }
 
-/** Signing out (or the sign-in page): nothing of the account stays on the device. */
+/** Signing out, the sign-in page or an expired session (lib/api): nothing of the account stays on the device. */
 export async function wipeDevice(): Promise<void> {
   confirmed = null;
   filled = null;
   storage((s) => s.removeItem(SCOPE_KEY));
+  tell(null);
   await cache.wipe();
+}
+
+function closeDevice(): void {
+  confirmed = null;
+  filled = null;
+  cache.close();
 }
 
 if (browser) {
   persistTo((key, value) => KEPT.some((p) => key.startsWith(p)) && deviceKeep(key, value));
   const last = storage((s) => s.getItem(SCOPE_KEY));
   if (last) void cache.open(last);
+  tabs?.addEventListener("message", (e: MessageEvent<{ scope?: string | null }>) => {
+    if (e.data?.scope !== confirmed && e.data?.scope !== cache.scope()) closeDevice();
+  });
 }

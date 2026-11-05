@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { accountHash, carriesSecret, createDeviceCache, memoryBackend, META_KEY, scrubSigned, type CacheRow } from "./device-cache.ts";
+import { accountHash, carriesSecret, createDeviceCache, MAX_AGE_MS, memoryBackend, META_KEY, scrubSigned, type CacheRow } from "./device-cache.ts";
 
 function harness(seed: CacheRow[] = [], maxBytes = 10_000, version = 1) {
   let t = 1000;
@@ -87,5 +87,42 @@ describe("cache de l'appareil", () => {
     assert.notEqual(accountHash("a@b.c"), "a@b.c");
     assert.equal(accountHash("a@b.c"), accountHash("a@b.c"));
     assert.notEqual(accountHash("a@b.c"), accountHash("b@b.c"));
+  });
+});
+
+describe("cache de l'appareil — plusieurs onglets, ancienneté", () => {
+  it("un onglet dont l'espace a été remplacé par un autre onglet n'écrit plus rien et se ferme", async () => {
+    const backend = memoryBackend([meta("u1:w1")]);
+    const later: (() => void)[] = [];
+    const a = createDeviceCache(backend, { version: 1, maxBytes: 10_000, defer: (fn) => void later.push(fn) });
+    const b = createDeviceCache(backend, { version: 1, maxBytes: 10_000, defer: (fn) => void later.push(fn) });
+    await a.open("u1:w1");
+    await b.open("u2:w1");
+    a.set("chat:a:s1", [{ id: "compte 1" }]);
+    while (later.length) later.shift()!();
+    await new Promise((r) => setImmediate(r));
+    assert.equal(backend.rows.has("chat:a:s1"), false, "rien du compte 1 sous l'espace du compte 2");
+    assert.equal(a.scope(), null);
+    assert.equal(a.set("chat:a:s2", []), false);
+  });
+
+  it("une déconnexion dans un autre onglet arrête les écritures de celui-ci", async () => {
+    const backend = memoryBackend([meta("u1:w1")]);
+    const a = createDeviceCache(backend, { version: 1, maxBytes: 10_000, defer: (fn) => fn() });
+    await a.open("u1:w1");
+    await backend.clear();
+    a.set("experts:w1", ["Awa"]);
+    await a.flush();
+    assert.equal(backend.rows.size, 0);
+  });
+
+  it("une ligne de plus de 7 jours est retirée à l'ouverture", async () => {
+    const now = MAX_AGE_MS + 10_000;
+    const backend = memoryBackend([meta("u1:w1"), row("chat:old", ["vieux"], 1), row("chat:new", ["récent"], now - 1_000)]);
+    const cache = createDeviceCache(backend, { version: 1, maxBytes: 10_000, now: () => now });
+    await cache.open("u1:w1");
+    assert.equal(cache.get("chat:old"), undefined);
+    assert.deepEqual(cache.get("chat:new"), ["récent"]);
+    assert.equal(backend.rows.has("chat:old"), false);
   });
 });
