@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api";
 import { bootstrapped, onBootstrap } from "@/lib/bootstrap-client";
-import { cached, cachedFetch, forget, remember } from "@/lib/client-cache";
+import { cached, cachedFetch, forget, keptOnly, remember } from "@/lib/client-cache";
 import type { DriveTree } from "@/lib/drive-paths";
 
 // One reading of the drive tree per tab, shared by the deliverable watcher, Livrables, the home's recent
@@ -19,7 +19,7 @@ export async function driveTree(agentId: string, maxAgeMs = 60_000): Promise<Dri
 
 /** A tree the server already read (the page, the bootstrap): the next reading is not asked again. */
 export function seedDriveTree(agentId: string, tree: DriveTree): void {
-  if (cached(key(agentId)) === undefined) remember(key(agentId), tree);
+  if (cached(key(agentId)) === undefined || keptOnly(key(agentId))) remember(key(agentId), tree);
 }
 
 onBootstrap((b) => b.agentId && b.tree && seedDriveTree(b.agentId, b.tree));

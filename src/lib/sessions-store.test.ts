@@ -117,3 +117,31 @@ describe("sessions store", () => {
     assert.equal(h.calls.length, 2);
   });
 });
+
+describe("sessions store — copie de l'appareil", () => {
+  it("se montre aussitôt, n'écrase jamais une lecture, et la première lecture part quand même", async () => {
+    const kept: string[] = [];
+    let t = 1000;
+    const later: (() => void)[] = [];
+    let calls = 0;
+    const store = createSessionsStore({
+      readMany: async (_a, ps) => (calls++, Object.fromEntries(ps.map((p) => [p, space("frais")]))),
+      now: () => t,
+      defer: (fn) => void later.push(fn),
+      persist: (a, p) => void kept.push(`${a}|${p}`),
+    });
+    store.hydrate("a", "x", space("vieux"));
+    assert.equal(store.get("a", "x")?.sessions[0].session_id, "vieux");
+    assert.equal(store.fromDevice("a", "x"), true);
+    assert.deepEqual(kept, []);
+    const read = store.read("a", "x");
+    while (later.length) later.shift()!();
+    assert.equal((await read).sessions[0].session_id, "frais");
+    assert.equal(calls, 1);
+    assert.equal(store.fromDevice("a", "x"), false);
+    assert.deepEqual(kept, ["a|x"]);
+    store.hydrate("a", "x", space("vieux"));
+    assert.equal(store.get("a", "x")?.sessions[0].session_id, "frais");
+    t += 1;
+  });
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { cached, remember } from "@/lib/client-cache";
+import { cached, remember, whenKept } from "@/lib/client-cache";
 import { useEffect, useMemo, useState } from "react";
 import { useHydrated } from "@/components/useHydrated";
 import { driveTree } from "@/lib/drive-store";
@@ -66,7 +66,7 @@ export function useAllConversations(ownAgentId: string | null, experts: Expert[]
     // What the server read with the page is the store's first reading: no second read of the same.
     for (const s of spaces) {
       const got = initial?.[spaceKey(s.agentId, s.expert?.profileId ?? null)];
-      if (got && !sessionsStore.get(s.agentId, s.expert?.profileId ?? null)) sessionsStore.put(s.agentId, s.expert?.profileId ?? null, { sessions: got, runs: null });
+      if (got && (!sessionsStore.get(s.agentId, s.expert?.profileId ?? null) || sessionsStore.fromDevice(s.agentId, s.expert?.profileId ?? null))) sessionsStore.put(s.agentId, s.expert?.profileId ?? null, { sessions: got, runs: null });
     }
     const build = () =>
       Promise.all(spaces.map((space) => sessionsStore.read(space.agentId, space.expert?.profileId ?? null).then((d) => rowsOf(space, d.sessions), () => [] as ConversationRow[]))).then((all) => {
@@ -74,6 +74,8 @@ export function useAllConversations(ownAgentId: string | null, experts: Expert[]
         if (store) remember(store, sorted);
         if (live) setRows(sorted);
       });
+    // Nothing read with the page: the list this device last showed paints while the reads go out.
+    const offKept = store && !seed ? whenKept<ConversationRow[]>(store, (v) => live && setRows((r) => r ?? v)) : () => undefined;
     void build();
     // A space read again (an event, another view): the list follows, rebuilt once per burst.
     let queued = false;
@@ -88,6 +90,7 @@ export function useAllConversations(ownAgentId: string | null, experts: Expert[]
     const offs = spaces.map((s) => sessionsStore.subscribe(s.agentId, s.expert?.profileId ?? null, again));
     return () => {
       live = false;
+      offKept();
       offs.forEach((off) => off());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,6 +108,7 @@ export function useDriveFiles(agentId: string | null, enabled = true) {
   useEffect(() => {
     if (!enabled || !agentId) return;
     let live = true;
+    const offKept = whenKept<FileEntry[]>(`drive-files:${agentId}`, (v) => live && setFiles((f) => f ?? v));
     driveTree(agentId).then(
       (tree) => {
         const all = tree.entries.filter((e) => e.depth <= 1 && e.type === "file" && !e.hidden && !isDriveClutter(e));
@@ -116,6 +120,7 @@ export function useDriveFiles(agentId: string | null, enabled = true) {
     );
     return () => {
       live = false;
+      offKept();
     };
   }, [agentId, enabled]);
   return files;

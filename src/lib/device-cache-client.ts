@@ -1,0 +1,75 @@
+import { hydrate, persistTo } from "@/lib/client-cache";
+import { accountHash, createDeviceCache, memoryBackend } from "@/lib/device-cache";
+import { idbBackend } from "@/lib/device-cache-idb";
+
+// The browser's device cache (lib/device-cache). Its rows start loading as the page's JS runs, but
+// nothing reaches a screen before WorkspaceProvider confirms the account and space they belong to.
+export const CACHE_VERSION = 1;
+const MAX_BYTES = 5 * 1024 * 1024;
+const SCOPE_KEY = "yelema-cache-scope";
+// Only these client-cache answers are kept on the device; the rest live for the tab only.
+const KEPT = ["chat:", "drive-tree:", "drive-files:", "all-deliverables:", "conversations:", "models:", "experts:", "buzz:"];
+// A thread keeps its latest messages, without the model's reasoning.
+const THREAD_TAIL = 40;
+
+const browser = typeof window !== "undefined";
+const cache = createDeviceCache(browser && typeof indexedDB !== "undefined" ? idbBackend() : memoryBackend(), { version: CACHE_VERSION, maxBytes: MAX_BYTES });
+const openers: ((get: (key: string) => unknown, keys: string[]) => void)[] = [];
+let confirmed: string | null = null;
+let filled: string | null = null;
+
+function storage(fn: (s: Storage) => string | null | void): string | null {
+  try {
+    return (fn(localStorage) as string | null | undefined) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const shape = (key: string, value: unknown): unknown =>
+  key.startsWith("chat:") && Array.isArray(value) ? value.slice(-THREAD_TAIL).map((m: Record<string, unknown>) => ({ ...m, thinking: undefined })) : value;
+
+/** Keeps `value` on the device under `key`, once the account and space are confirmed. */
+export function deviceKeep(key: string, value: unknown): void {
+  if (confirmed && cache.scope() === confirmed) cache.set(key, shape(key, value));
+}
+
+/** Registers what fills a store from the device's rows, run once per confirmed account and space. */
+export function onDeviceOpen(fn: (get: (key: string) => unknown, keys: string[]) => void): void {
+  openers.push(fn);
+  if (filled && filled === confirmed) fn((k) => cache.get(k), cache.keys());
+}
+
+function fill(scope: string): void {
+  if (confirmed !== scope) return;
+  filled = scope;
+  const keys = cache.keys();
+  for (const k of keys) if (KEPT.some((p) => k.startsWith(p))) hydrate(k, cache.get(k));
+  for (const fn of openers) fn((k) => cache.get(k), keys);
+}
+
+/** The signed-in account and its space: their rows fill the stores (synchronously when already loaded). */
+export function confirmDevice(email: string, workspaceId: string): void {
+  if (!browser || !email || !workspaceId) return;
+  const scope = `${accountHash(email.toLowerCase())}:${workspaceId}`;
+  if (confirmed === scope) return;
+  confirmed = scope;
+  storage((s) => s.setItem(SCOPE_KEY, scope));
+  const loading = cache.open(scope);
+  if (cache.ready()) fill(scope);
+  else void loading.then(() => fill(scope));
+}
+
+/** Signing out (or the sign-in page): nothing of the account stays on the device. */
+export async function wipeDevice(): Promise<void> {
+  confirmed = null;
+  filled = null;
+  storage((s) => s.removeItem(SCOPE_KEY));
+  await cache.wipe();
+}
+
+if (browser) {
+  persistTo((key, value) => KEPT.some((p) => key.startsWith(p)) && deviceKeep(key, value));
+  const last = storage((s) => s.getItem(SCOPE_KEY));
+  if (last) void cache.open(last);
+}

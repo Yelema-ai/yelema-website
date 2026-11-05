@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { remember, whenKept } from "@/lib/client-cache";
 import { useMyAgents } from "@/components/useMyAgents";
 import { wakeInstance } from "@/components/app/wake";
 import { instanceEvents } from "@/lib/instance-events";
@@ -130,16 +131,33 @@ export function useExperts(workspaceId: string | undefined, initial: InitialExpe
 
   useEffect(() => {
     if (!workspaceId) return;
+    const kept = `experts:${workspaceId}`;
     // The server already read this workspace's experts with the page: nothing to ask until a reload.
-    if (tick === 0 && initial?.workspaceId === workspaceId) return;
+    if (tick === 0 && initial?.workspaceId === workspaceId) {
+      remember(kept, { experts: initial.experts, companion: initial.companion });
+      return;
+    }
     let alive = true;
+    let answered = false;
     if (!quiet.current) setLoading(true);
+    // First reading without the server's: the team this device last showed paints meanwhile.
+    const offKept =
+      tick === 0
+        ? whenKept<{ experts: Expert[]; companion: Companion | null }>(kept, (d) => {
+            if (!alive || answered) return;
+            setExperts(d.experts);
+            setCompanion(d.companion);
+            setLoading(false);
+          })
+        : () => undefined;
     quiet.current = false;
     apiFetch<{ experts: Expert[]; companion?: Companion | null; unreadable: unknown[]; installing?: boolean; failed?: boolean; failedExperts?: string[] }>(
       `/api/experts?workspace=${workspaceId}`
     )
       .then((d) => {
+        answered = true;
         if (!alive) return;
+        remember(kept, { experts: d.experts, companion: d.companion ?? null });
         setExperts(d.experts);
         setCompanion(d.companion ?? null);
         setUnreadable(d.unreadable.length);
@@ -152,6 +170,7 @@ export function useExperts(workspaceId: string | undefined, initial: InitialExpe
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
+      offKept();
     };
     // `initial` is what the page was rendered with; it does not change afterwards.
     // eslint-disable-next-line react-hooks/exhaustive-deps

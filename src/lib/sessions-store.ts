@@ -17,6 +17,8 @@ export interface SessionsDeps {
   now(): number;
   /** Runs `fn` once the current burst of reads or events is over. */
   defer(fn: () => void): void;
+  /** Keeps a fresh reading on the device (lib/device-cache-client). */
+  persist?(agentId: string, profile: string, data: SpaceData): void;
 }
 
 export const BATCH_MAX = 40;
@@ -37,6 +39,10 @@ export function createSessionsStore(deps: SessionsDeps, { maxSpaces = MAX_SPACES
   let flushQueued = false;
 
   function keep(key: string, data: SpaceData, at: number): void {
+    if (at > 0 && deps.persist) {
+      const i = key.indexOf("|");
+      deps.persist(key.slice(0, i), key.slice(i + 1), data);
+    }
     entries.delete(key);
     entries.set(key, { at, data });
     for (const k of entries.keys()) {
@@ -93,7 +99,7 @@ export function createSessionsStore(deps: SessionsDeps, { maxSpaces = MAX_SPACES
     read(agentId: string, profile: string, maxAgeMs = 30_000): Promise<SpaceData> {
       const key = keyOf(agentId, profile);
       const hit = entries.get(key);
-      if (hit && !stale.has(key) && deps.now() - hit.at < maxAgeMs) return Promise.resolve(hit.data);
+      if (hit && hit.at > 0 && !stale.has(key) && deps.now() - hit.at < maxAgeMs) return Promise.resolve(hit.data);
       stale.delete(key);
       return load(agentId, profile);
     },
@@ -102,6 +108,13 @@ export function createSessionsStore(deps: SessionsDeps, { maxSpaces = MAX_SPACES
       stale.delete(keyOf(agentId, profile));
       keep(keyOf(agentId, profile), data, at);
     },
+    /** A copy kept on the device: shown at once but stale, so the first read goes out. Never over a reading. */
+    hydrate(agentId: string, profile: string, data: SpaceData): void {
+      const key = keyOf(agentId, profile);
+      if (!entries.has(key)) keep(key, data, 0);
+    },
+    /** True while the space shown is only the device's copy. */
+    fromDevice: (agentId: string, profile: string): boolean => entries.get(keyOf(agentId, profile))?.at === 0,
     /** Something changed (`profile` undefined: every space of the instance): shown spaces are read again. */
     invalidate(agentId: string, profile?: string): void {
       const prefix = keyOf(agentId, "");

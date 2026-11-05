@@ -1,8 +1,9 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WorkspaceWithRole } from "@/lib/types";
 import { apiFetch } from "@/lib/api";
+import { confirmDevice } from "@/lib/device-cache-client";
 
 const STORAGE_KEY = "agent37wl_workspace";
 
@@ -50,6 +51,23 @@ export function WorkspaceProvider({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The device's copy of this account and space fills the stores before the screens' first reads
+  // (layout effects run before them). Not while the stored space is about to replace the first one.
+  const confirmedOnce = useRef(false);
+  useLayoutEffect(() => {
+    if (!currentId) return;
+    if (!confirmedOnce.current) {
+      let stored: string | null = null;
+      try {
+        stored = localStorage.getItem(STORAGE_KEY);
+      } catch {}
+      if (stored && stored !== currentId && workspaces.some((w) => w.id === stored)) return;
+    }
+    confirmedOnce.current = true;
+    confirmDevice(userEmail, currentId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userEmail, currentId]);
 
   const setCurrentId = useCallback((id: string) => {
     setCurrentIdState(id);

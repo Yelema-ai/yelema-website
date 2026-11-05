@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, readApiError } from "@/lib/api";
-import { cached, remember } from "@/lib/client-cache";
+import { cached, remember, whenKept } from "@/lib/client-cache";
 import { finishTiming, keepLast, mark, startTiming, type TurnTiming } from "@/lib/chat-timing";
 import { chatFailureMessage, OFFLINE } from "@/lib/chat-errors";
 import { batchQueued, insertBefore, isSteer, steerText, unreadSteerCount } from "@/lib/chat-queue";
@@ -199,6 +199,28 @@ function takeUnread(run: LiveRun, pending: string): Queued[] {
 // One thread's history as last read in this tab. The instance belongs to one member, so its id
 // carries the user.
 const historyKey = (agentId: string, q: string, sessionId: string) => `chat:${agentId}${q}:${sessionId}`;
+// A thread read ahead (a row hovered or shown) serves its opening once, if this recent: one read, not two.
+const AHEAD_MS = 8_000;
+const ahead = new Map<string, { at: number; read: Promise<SessionDetail> }>();
+const fetchThread = (agentId: string, q: string, sessionId: string) => apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`);
+function readThread(agentId: string, q: string, sessionId: string): Promise<SessionDetail> {
+  const key = historyKey(agentId, q, sessionId);
+  const hit = ahead.get(key);
+  ahead.delete(key);
+  return hit && Date.now() - hit.at < AHEAD_MS ? hit.read : fetchThread(agentId, q, sessionId);
+}
+
+/** Reads a thread ahead of its click: its messages then paint at once, and the opening asks nothing more. */
+export function prefetchThread(agentId: string, profile: string | null, sessionId: string): void {
+  const q = profileQuery(profile);
+  const key = historyKey(agentId, q, sessionId);
+  const hit = ahead.get(key);
+  if (hit && Date.now() - hit.at < AHEAD_MS) return;
+  const read = fetchThread(agentId, q, sessionId);
+  ahead.set(key, { at: Date.now(), read });
+  read.then((res) => void remember(key, mapHistory(res.history)), () => ahead.get(key)?.read === read && ahead.delete(key));
+  for (const [k, v] of ahead) if (Date.now() - v.at >= AHEAD_MS) ahead.delete(k);
+}
 
 export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessionCreated, onActivity }: UseChatArgs) {
   const q = profileQuery(profile);
@@ -548,8 +570,16 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
     const kept = liveNow ? undefined : cached<ChatMessage[]>(historyKey(agentId, q, sessionId));
     if (kept) setMessages(kept);
     setLoadingHistory(!kept);
-    apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`)
+    // The device's copy of the thread (a reload) may land a moment later: it paints until the read answers.
+    let answered = false;
+    const offKept = kept || liveNow ? () => undefined : whenKept<ChatMessage[]>(historyKey(agentId, q, sessionId), (h) => {
+      if (cancelled || answered) return;
+      setMessages(h);
+      setLoadingHistory(false);
+    });
+    readThread(agentId, q, sessionId)
       .then((res) => {
+        answered = true;
         if (cancelled) return;
         const history = remember(historyKey(agentId, q, sessionId), mapHistory(res.history));
 
@@ -593,6 +623,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
 
     return () => {
       cancelled = true;
+      offKept();
     };
   }, [agentId, q, sessionId, startReattach, forgetRun, refreshHistory]);
 

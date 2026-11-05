@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { createBrowserClient } from "@supabase/ssr";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
+import { wipeDevice } from "@/lib/device-cache-client";
 
 type BrowserClient = ReturnType<typeof createBrowserClient>;
 // The client, loaded on first use: supabase-js stays out of every page's first load.
@@ -22,6 +23,7 @@ export function useSupabase(): SupabaseLoader | null {
 
 // Sign out, whoever owns the sign-in. Shared by every "se déconnecter".
 export async function signOutEverywhere(supabase: SupabaseLoader | null): Promise<void> {
+  await wipeDevice();
   if (supabase) await (await supabase()).auth.signOut();
   else await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
 }

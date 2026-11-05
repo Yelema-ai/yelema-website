@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useHydrated } from "@/components/useHydrated";
-import { cached, remember } from "@/lib/client-cache";
+import { cached, remember, whenKept } from "@/lib/client-cache";
 import { deliverableItems, type DeliverableItem } from "@/lib/deliverable-folders";
 import { splitVersions } from "@/lib/drive-versions";
 import { seatFolderOf, type DriveTree } from "@/lib/drive-paths";
@@ -98,6 +98,8 @@ export function useAllDeliverables(ownAgentId: string | null, experts: Expert[],
   useEffect(() => {
     if (!agentIds.length) return;
     let live = true;
+    // Nothing read with the page: the list this device last showed paints while the trees are read.
+    const offKept = seed ? () => undefined : whenKept<Deliverable[]>(key, (v) => live && setItems((i) => i ?? v));
     void Promise.all(
       agentIds.map((agentId) =>
         // A tree that cannot be read or walked counts as empty: never a list stuck on « Chargement ».
@@ -114,6 +116,7 @@ export function useAllDeliverables(ownAgentId: string | null, experts: Expert[],
     });
     return () => {
       live = false;
+      offKept();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, expertsKey, tick]);
