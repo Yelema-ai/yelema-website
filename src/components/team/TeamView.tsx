@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { MessagesSquare, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ECHANGES_VISIBLE } from "@/lib/features";
 
 export interface TeamMemberView {
   name: string | null;
@@ -26,12 +27,14 @@ export function TeamView({ name, members }: { name: string; members: TeamMemberV
             </p>
           </div>
         </div>
-        <Button asChild>
-          <Link href="/echanges">
-            <MessagesSquare />
-            Écrire à l’équipe
-          </Link>
-        </Button>
+        {ECHANGES_VISIBLE && (
+          <Button asChild>
+            <Link href="/echanges">
+              <MessagesSquare />
+              Écrire à l’équipe
+            </Link>
+          </Button>
+        )}
       </header>
 
       <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">

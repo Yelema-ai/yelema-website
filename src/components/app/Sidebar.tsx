@@ -36,6 +36,7 @@ import type { Expert } from "@/lib/types";
 import { cycleKind, expertRank, isDjeneba } from "@/lib/expert-cycle";
 import { cn } from "@/lib/utils";
 import { expertPath } from "@/lib/expert-tabs";
+import { ECHANGES_VISIBLE } from "@/lib/features";
 
 // Le haut du menu : « Nouvelle conversation » (l'accueil et sa barre de chat), en couleur, puis
 // Rechercher (Ctrl K) et Intégrations. Recruter n'est plus au menu (Leslie, 23/10) ; sa page reste à
@@ -164,18 +165,20 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         <Blocks className="size-5 shrink-0" strokeWidth={1.9} />
         {!collapsed && "Intégrations"}
       </Link>
-      <Link
-        href="/echanges"
-        onClick={onNavigate}
-        className={cn(
-          "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors",
-          here.startsWith("/echanges") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
-          collapsed && RAIL_SQUARE
-        )}
-      >
-        <MessagesSquare className="size-5 shrink-0" strokeWidth={1.9} />
-        {!collapsed && "Échanges"}
-      </Link>
+      {ECHANGES_VISIBLE && (
+        <Link
+          href="/echanges"
+          onClick={onNavigate}
+          className={cn(
+            "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors",
+            here.startsWith("/echanges") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
+            collapsed && RAIL_SQUARE
+          )}
+        >
+          <MessagesSquare className="size-5 shrink-0" strokeWidth={1.9} />
+          {!collapsed && "Échanges"}
+        </Link>
+      )}
       {current?.access === "equipe" && (
         <Link
           href="/equipe"
