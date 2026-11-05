@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clientIp, encodeGuestCookie, guestCookieApplies, guestCookieName, guestCookieOptions, guestDeliverables, guestDirectory, guestRefusal, guestSessionOf, guestView, rateWindow, sameOriginPost } from "./guest-access.ts";
+import { clientIp, encodeGuestCookie, guestCookieApplies, guestCookieName, guestCookieOptions, guestDeliverables, guestDirectory, guestFileHref, guestRefusal, guestSessionOf, guestView, rateWindow, sameOriginPost } from "./guest-access.ts";
 import { salonDeliverableFor } from "./salon-deliverables.ts";
 
 const headers = (h: Record<string, string>) => ({ get: (n: string) => h[n.toLowerCase()] ?? null });
@@ -59,9 +59,13 @@ test("limite par adresse IP : au-delà, refus avec délai, puis une nouvelle fen
   assert.deepEqual(hit("1.2.3.4", 60_000), { ok: true });
 });
 
-test("adresse du visiteur : le premier saut, rien d'autre", () => {
-  assert.equal(clientIp(headers({ "x-forwarded-for": "41.202.1.2, 10.0.0.1" })), "41.202.1.2");
-  assert.equal(clientIp(headers({ "x-forwarded-for": "<script>", "x-real-ip": "41.1.1.1" })), "41.1.1.1");
+test("adresse du visiteur : celle du saut de confiance, jamais l'entrée de gauche écrite par le client", () => {
+  // Vercel : son propre x-real-ip ; un X-Forwarded-For inventé n'y change rien.
+  assert.equal(clientIp(headers({ "x-real-ip": "41.1.1.1", "x-forwarded-for": "6.6.6.6, 41.1.1.1" }), true), "41.1.1.1");
+  assert.equal(clientIp(headers({ "x-forwarded-for": "6.6.6.6" }), true), "");
+  // Ailleurs : l'entrée ajoutée par le mandataire le plus proche.
+  assert.equal(clientIp(headers({ "x-forwarded-for": "6.6.6.6, 41.202.1.2", "x-real-ip": "7.7.7.7" }), false), "41.202.1.2");
+  assert.equal(clientIp(headers({ "x-forwarded-for": "1.1.1.1, <script>" }), false), "");
 });
 
 test("accès terminé (410 access_ended) et session morte (401) font tomber la session", () => {
@@ -86,12 +90,10 @@ test("participants et livrables de l'invité au format des Échanges", () => {
   ]);
   assert.deepEqual(dir.map((e) => [e.type, e.membre]), [["personne", "Leslie"], ["expert", "Leslie"], ["invite", "Jean Paul"]]);
   const chan = "0b6f1c1e-0000-4000-8000-000000000001";
-  const url = `https://bo/api/v1/app/deliverables/file?i=inst_7&p=Livrables%2FMamadou%2FSalons%2F${chan}%2Fcr.pdf&e=1&s=3f`;
-  const items = guestDeliverables([
-    { name: "cr.pdf", path: "cr.pdf", size: null, modifiedAt: "2026-11-05T10:00:00Z", url },
-    { name: "x.md", path: "x.md", size: 3, modifiedAt: "2026-11-05T10:00:00Z", url: null },
-  ]);
+  const drivePath = `Livrables/Mamadou/Salons/${chan}/cr.pdf`;
+  const items = guestDeliverables([{ name: "cr.pdf", path: "cr.pdf", drivePath, expert: "Mamadou", size: null, modifiedAt: "2026-11-05T10:00:00Z" }]);
   assert.equal(items[0].auteur, "Mamadou");
-  assert.equal(salonDeliverableFor(`~/Livrables/Mamadou/Salons/${chan}/cr.pdf`, chan, items)?.url, url);
-  assert.equal(items[1].url, null);
+  assert.equal(items[0].url, `/invite/salon/fichier?p=${encodeURIComponent(drivePath).replace(/%20/g, "+")}`);
+  assert.equal(guestFileHref(drivePath).includes("inst"), false, "jamais l'instance ni une adresse signée");
+  assert.equal(salonDeliverableFor(`~/Livrables/Mamadou/Salons/${chan}/cr.pdf`, chan, items)?.id, `~/${drivePath}`);
 });

@@ -319,7 +319,7 @@ function guestCall<T>(path: string, init: { ip: string; session?: string; method
     method: init.method,
     body: init.body,
     timeoutMs: init.timeoutMs,
-    headers: { "X-Yelema-Site-Secret": secret, ...(init.ip ? { "X-Forwarded-For": init.ip } : {}), ...(init.session ? { Authorization: `Guest ${init.session}` } : {}) },
+    headers: { "X-Yelema-Site-Secret": secret, ...(init.ip ? { "X-Yelema-Client-Ip": init.ip } : {}), ...(init.session ? { Authorization: `Guest ${init.session}` } : {}) },
   });
 }
 
@@ -700,6 +700,8 @@ export const backoffice = {
     guestCall<GuestView & { session: string }>(`/guest/invites/${encodeURIComponent(invite)}/verify`, { ip, method: "POST", body }),
   guestSession: (session: string, ip: string) => guestCall<GuestView>("/guest/session", { ip, session }),
   guestDeliverables: (session: string, ip: string) => guestCall<{ data: GuestFile[] }>("/guest/salon/deliverables", { ip, session, timeoutMs: 30_000 }),
+  guestFile: (session: string, ip: string, drivePath: string) =>
+    guestCall<{ data: { url: string } }>(`/guest/salon/file?${new URLSearchParams({ p: drivePath }).toString()}`, { ip, session, timeoutMs: 30_000 }),
   guestParticipants: (session: string, ip: string) => guestCall<{ data: GuestParticipant[] }>("/guest/salon/participants", { ip, session }),
   guestLogout: (session: string, ip: string) => guestCall<unknown>("/guest/logout", { ip, session, method: "POST" }),
   // `ajout`: the recipients were just added to the salon `salon` (named `nom`), to be told so.

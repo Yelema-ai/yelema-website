@@ -63,10 +63,16 @@ export function sameOriginPost(h: Headers): boolean {
   }
 }
 
-/** The visitor's address as the host saw it (first hop), for rate limits; never logged. */
-export function clientIp(h: Headers): string {
-  const first = (h.get("x-forwarded-for") ?? "").split(",")[0].trim();
-  return /^[0-9a-fA-F:.]{2,45}$/.test(first) ? first : (h.get("x-real-ip")?.trim() ?? "");
+const IP_RE = /^[0-9a-fA-F:.]{2,45}$/;
+
+/**
+ * The visitor's address from the trusted hop, for rate limits; never logged. On Vercel, `x-real-ip` set by its proxy
+ * (`IP_HEADER_NAME` of @vercel/functions; a client's own value is overwritten); elsewhere, the entry the nearest
+ * proxy appended (rightmost of `X-Forwarded-For`). Never a left-hand entry, which the client writes.
+ */
+export function clientIp(h: Headers, onVercel: boolean): string {
+  const ip = onVercel ? (h.get("x-real-ip") ?? "").trim() : ((h.get("x-forwarded-for") ?? "").split(",").pop() ?? "").trim();
+  return IP_RE.test(ip) ? ip : "";
 }
 
 /** At most `limit` hits per key per window, in this server instance (the back office keeps its own limits). */
@@ -105,29 +111,20 @@ export function guestRefusal(status: number, code: string): "ended" | "signed_ou
 }
 
 export interface GuestParticipant { nom: string; type: "personne" | "expert" | "invite"; cles: string[] }
-/** `path` is relative to the salon's folder; the full drive path rides in the signed `url` (`p`). */
-export interface GuestFile { name: string; path: string; size: number | null; modifiedAt: string; url: string | null }
+/** `path` is relative to the salon's folder; `drivePath` is the full one on the Expert's drive. */
+export interface GuestFile { name: string; path: string; drivePath: string; expert: string; size: number | null; modifiedAt: string }
 
 /** The salon's participants as the thread reads a directory; an expert hangs off its owner « X (de Owner) ». */
 export const guestDirectory = (list: readonly GuestParticipant[]): BuzzEntry[] =>
   list.map((p) => ({ nom: p.nom, type: p.type, membre: p.type === "expert" ? (/ \(de (.*)\)$/.exec(p.nom)?.[1] ?? p.nom) : p.nom, cles: p.cles }));
 
-function drivePathOf(url: string | null): string | null {
-  if (!url) return null;
-  try {
-    const p = new URL(url, "http://x").searchParams.get("p");
-    return p ? normDrivePath(p) : null;
-  } catch {
-    return null;
-  }
-}
+/** A guest's file link: its own route, which re-checks the session on each open; never a signed address. */
+export const guestFileHref = (drivePath: string): string => `${GUEST_PATH}/salon/fichier?${new URLSearchParams({ p: drivePath }).toString()}`;
 
-/** The guest's files as the salon's deliverables; the expert is read off `~/Livrables/<Expert>/…` of the signed address. */
+/** The guest's files as the salon's deliverables. */
 export function guestDeliverables(list: readonly GuestFile[]): SalonDeliverable[] {
   return list.map((f) => {
-    const full = drivePathOf(f.url);
-    const parts = full?.split("/") ?? [];
-    const auteur = parts[1] === "Livrables" ? (parts[2] ?? "") : "";
-    return { id: full ?? f.path, expertId: "", title: f.name, kind: "", updatedAt: f.modifiedAt, url: f.url, folder: parts.slice(0, -1).join("/"), auteur };
+    const full = normDrivePath(f.drivePath);
+    return { id: full, expertId: "", title: f.name, kind: "", updatedAt: f.modifiedAt, url: guestFileHref(f.drivePath), folder: full.split("/").slice(0, -1).join("/"), auteur: f.expert };
   });
 }

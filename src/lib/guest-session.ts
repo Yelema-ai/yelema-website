@@ -16,18 +16,18 @@ export const ENDED = "Votre accès à ce salon a pris fin.";
 const codeLimit = rateWindow(5, 10 * 60_000);
 const verifyLimit = rateWindow(10, 10 * 60_000);
 
+export const ipOf = (request: Request): string => clientIp(request.headers, Boolean(process.env.VERCEL));
+
 /** null to go on; otherwise the refusal (cross-site POST, too many tries from this address). */
 export function guardPost(request: Request, kind: "code" | "verify" | "logout"): NextResponse | null {
   if (!sameOriginPost(request.headers)) return apiError("Requête refusée.", 403, "forbidden");
   if (kind === "logout") return null;
-  const limit = (kind === "code" ? codeLimit : verifyLimit)(clientIp(request.headers) || "?", Date.now());
+  const limit = (kind === "code" ? codeLimit : verifyLimit)(ipOf(request) || "?", Date.now());
   if (limit.ok) return null;
   const res = apiError("Trop d’essais. Réessayez dans quelques minutes.", 429, "rate_limited");
   res.headers.set("Retry-After", String(limit.retryAfter));
   return res;
 }
-
-export const ipOf = (request: Request): string => clientIp(request.headers);
 
 export async function guestSession(token?: string): Promise<string | null> {
   return guestSessionOf((await cookies()).get(GUEST_COOKIE)?.value, token);
