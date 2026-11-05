@@ -2,6 +2,7 @@
 // shows as document cards under the reply. Pure: the chat's Markdown (download links) and its
 // cards share these patterns.
 import { isMemoryFolder } from "./drive-order.ts";
+import { isMemberUpload } from "./drive-paths.ts";
 
 const DRIVE_PATH = String.raw`(?:/home/node|~)/Livrables/[^\s)\]\x60]+\.[A-Za-z0-9]{1,6}`;
 // Experts also write the path from the drive itself (« Livrables/Djeneba/Reunions/cr.md », Leslie
@@ -131,6 +132,12 @@ export const isTechnicalFile = (name: string) => TECHNICAL.test(name);
 /** Never a card nor a link in the chat: working files, notes (.md, .txt: Leslie, 27/10) and anything in the memory folder. */
 export const isHiddenInChat = (path: string) =>
   isTechnicalFile(path) || /\.(md|markdown|txt)$/i.test(path) || path.split("/").slice(0, -1).some(isMemoryFolder);
+
+/** How many deliverables an Expert has made in its folder: no folder, nothing the member brought, no working file. */
+export function deliverableCount(entries: readonly { path: string; type: string }[], folder: string): number {
+  const inside = `${folder.replace(/\/+$/, "")}/`;
+  return entries.filter((e) => e.type === "file" && e.path.startsWith(inside) && !isMemberUpload(e.path) && !isHiddenInChat(e.path)).length;
+}
 
 /**
  * A note the Expert names (a meeting report in .md, Leslie 28/10: « dès qu'on clique dessus, on retrouve

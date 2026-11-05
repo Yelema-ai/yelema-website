@@ -1,12 +1,12 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { CornerDownRight, Loader2, MessagesSquare, Send, User, X } from "lucide-react";
+import { AtSign, CornerDownRight, Loader2, Send, X } from "lucide-react";
 import { mentionsIn, TOKEN, type Candidate } from "@/lib/buzz-mentions";
 import { fold } from "@/lib/fold";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { ParticipantAvatar } from "@/components/messaging/ParticipantAvatar";
 
 // La saisie d'un échange : « @ » ouvre la liste des participants. Vos Experts y sont en tête : mentionnés, ils
 // travaillent ; une personne ou l'Expert d'un collègue mentionné est seulement prévenu.
@@ -41,6 +41,20 @@ export function MentionComposer({ candidates, replyTo, onCancelReply, sending, o
     });
   }
 
+  // Le bouton « @ » : le signe posé au curseur, la liste ouverte, comme si on l'avait tapé.
+  function startMention() {
+    const el = area.current;
+    const caret = el?.selectionStart ?? draft.length;
+    const lead = caret > 0 && !/\s/.test(draft[caret - 1]) ? " " : "";
+    const next = draft.slice(0, caret) + lead + "@" + draft.slice(caret);
+    const at = caret + lead.length + 1;
+    track(next, at);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(at, at);
+    });
+  }
+
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
     const text = draft.trim();
@@ -52,7 +66,7 @@ export function MentionComposer({ candidates, replyTo, onCancelReply, sending, o
   }
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="relative space-y-2 border-t border-line p-4">
+    <form onSubmit={(e) => void submit(e)} className="relative space-y-2 border-t border-line px-3 py-3 sm:pl-4 sm:pr-24">
       {replyTo && (
         <div className="flex items-center gap-2 rounded-lg bg-soft px-2.5 py-1.5 text-xs text-ink-2">
           <CornerDownRight className="h-3.5 w-3.5 shrink-0" />
@@ -65,17 +79,15 @@ export function MentionComposer({ candidates, replyTo, onCancelReply, sending, o
           {shown.map((c, i) => (
             <li key={c.handle} role="option" aria-selected={i === active}>
               <button type="button" onMouseDown={(e) => { e.preventDefault(); choose(c); }} className={cn("flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm", i === active ? "bg-soft" : "hover:bg-soft")}>
-                <span className={cn("grid size-7 shrink-0 place-items-center rounded-lg", c.entry.type === "expert" ? "bg-tint text-brand" : "bg-soft-2 text-ink-2")}>
-                  {c.entry.type === "expert" ? <MessagesSquare className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
-                </span>
+                <ParticipantAvatar entry={c.entry} name={c.handle} />
                 <span className="min-w-0 flex-1 truncate font-semibold text-ink">{c.handle}</span>
-                <span className="shrink-0 text-xs text-ink-3">{c.mine ? "Votre Expert" : c.entry.type === "expert" ? "Expert" : "Personne"}</span>
+                <span className="shrink-0 text-xs text-ink-3">{c.mine ? "Votre Expert IA" : c.entry.type === "expert" ? "Expert IA" : "Membre de l’équipe"}</span>
               </button>
             </li>
           ))}
         </ul>
       )}
-      <div className="flex items-end gap-2">
+      <div className="@container rounded-[22px] border border-line bg-surface shadow-[0_8px_30px_rgb(48_22_103_/_0.06)] transition-[border-color,box-shadow] focus-within:border-brand/30">
         <Label htmlFor="echange-message" className="sr-only">Message</Label>
         <textarea
           id="echange-message"
@@ -97,15 +109,35 @@ export function MentionComposer({ candidates, replyTo, onCancelReply, sending, o
               void submit();
             }
           }}
-          rows={2}
+          rows={1}
           maxLength={8000}
-          placeholder={candidates.some((c) => c.mine) ? "Écrire un message · @ pour demander à vos Experts" : "Écrire un message · @ pour mentionner"}
-          className="min-w-0 flex-1 resize-none rounded-xl border border-line bg-surface p-3 text-[15px] text-ink placeholder:text-ink-3 focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15"
+          placeholder="Écrire un message"
+          className="block max-h-[180px] min-h-[44px] w-full resize-none bg-transparent px-5 pb-2 pt-4 text-[15px] leading-relaxed text-ink outline-none [field-sizing:content] placeholder:text-ink-3"
         />
-        <Button type="submit" disabled={!draft.trim() || sending}>
-          {sending ? <Loader2 className="animate-spin" /> : <Send />}
-          Envoyer
-        </Button>
+        <div className="flex items-center gap-2 px-3 pb-3">
+          {/* « @ » : demander à vos Experts (ils travaillent) ou prévenir quelqu'un ; un clic ouvre la liste. */}
+          <button
+            type="button"
+            onClick={startMention}
+            disabled={!candidates.length}
+            title={candidates.some((c) => c.mine) ? "Demander à vos Experts" : "Mentionner quelqu’un"}
+            aria-label={candidates.some((c) => c.mine) ? "Demander à vos Experts" : "Mentionner quelqu’un"}
+            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-line px-3 text-[13px] font-semibold text-ink-2 hover:bg-soft hover:text-ink disabled:opacity-40"
+          >
+            <AtSign className="size-4" />
+            <span className="@max-md:sr-only">{candidates.some((c) => c.mine) ? "Demander à vos Experts" : "Mentionner"}</span>
+          </button>
+          <button
+            type="submit"
+            disabled={!draft.trim() || sending}
+            aria-label="Envoyer"
+            title="Envoyer"
+            className="ml-auto inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-on-brand transition-opacity hover:opacity-90 disabled:opacity-40 @max-xl:w-10 @max-xl:justify-center @max-xl:rounded-full @max-xl:px-0"
+          >
+            {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+            <span className="@max-xl:sr-only">Envoyer</span>
+          </button>
+        </div>
       </div>
     </form>
   );

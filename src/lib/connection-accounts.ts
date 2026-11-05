@@ -96,5 +96,5 @@ export function accountSummary(list: readonly IntegrationConnection[]): string {
   if (accounts.length === 0) return unfinished.length ? ACCOUNT_STATE_LABELS.pending : "";
   const broken = accounts.filter(needsReconnect).length;
   const head = plural(accounts.length, "compte", "comptes");
-  return broken ? `${head} · ${broken} à reconnecter` : head;
+  return broken ? `${head}, ${broken} à reconnecter` : head;
 }

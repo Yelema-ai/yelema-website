@@ -48,47 +48,44 @@ function useToggleDashboard() {
   };
 }
 
-export function DashboardButton({ inHeader = false }: { inHeader?: boolean }) {
+export function DashboardButton() {
   const { profile, panelOpen, isGenerating } = useDashboard();
   const comp = useComputer();
   const toggle = useToggleDashboard();
   if (!profile) return null;
   return (
-    <DashboardButtonFace
-      inHeader={inHeader}
-      highlighted={panelOpen || isGenerating}
-      generating={isGenerating}
-      labelHidden={!inHeader && (panelOpen || Boolean(comp?.panelOpen))}
-      onClick={toggle}
-    />
-  );
-}
-
-// The button alone: also in the expert's header before its chat has ever been opened.
-export function DashboardButtonFace({ inHeader = false, highlighted = false, generating = false, labelHidden = false, onClick }: {
-  inHeader?: boolean;
-  highlighted?: boolean;
-  generating?: boolean;
-  labelHidden?: boolean;
-  onClick: () => void;
-}) {
-  return (
     <button
       type="button"
       title="Tableau de bord"
       aria-label="Tableau de bord"
-      onClick={onClick}
+      onClick={toggle}
       // Same size and weight as « Son ordinateur » and « Nouvelle conversation » beside it.
       className={cn(
         "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border bg-card px-3 text-[13px] font-semibold text-ink transition-colors hover:bg-soft",
-        highlighted && "wide:border-brand/30 wide:bg-soft-2 wide:text-brand-ink"
+        (panelOpen || isGenerating) && "wide:border-brand/30 wide:bg-soft-2 wide:text-brand-ink"
       )}
     >
-      {generating ? <Loader2 className="h-4 w-4 animate-spin text-brand" /> : <BarChart3 className="h-4 w-4" />}
-      <span className={cn(inHeader ? "max-[1439px]:hidden" : "hidden sm:inline", labelHidden && "wide:hidden")}>
-        {generating ? "Génération…" : inHeader ? "Tableau" : "Tableau de bord"}
-      </span>
+      {isGenerating ? <Loader2 className="h-4 w-4 animate-spin text-brand" /> : <BarChart3 className="h-4 w-4" />}
+      <span className={cn("hidden sm:inline", (panelOpen || Boolean(comp?.panelOpen)) && "wide:hidden")}>{isGenerating ? "Génération…" : "Tableau de bord"}</span>
     </button>
+  );
+}
+
+// The same, in the header's « … ».
+export function DashboardMenuItem() {
+  const { profile, isGenerating } = useDashboard();
+  const toggle = useToggleDashboard();
+  if (!profile) return null;
+  return <DashboardMenuFace generating={isGenerating} onSelect={toggle} />;
+}
+
+// The menu line alone: also in the header before the expert's chat has ever been opened.
+export function DashboardMenuFace({ generating = false, onSelect }: { generating?: boolean; onSelect: () => void }) {
+  return (
+    <DropdownMenuItem className="min-h-11 gap-2.5 rounded-[10px] px-2.5 text-sm" onSelect={onSelect}>
+      {generating ? <Loader2 className="h-4 w-4 animate-spin text-brand" /> : <BarChart3 className="h-4 w-4" />}
+      {generating ? "Génération…" : "Tableau de bord"}
+    </DropdownMenuItem>
   );
 }
 

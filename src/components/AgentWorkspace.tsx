@@ -22,8 +22,9 @@ import { DRIVE_ROOT } from "@/lib/drive-paths";
 import { ChatProvider } from "@/components/chat/ChatProvider";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatView, hasScreen } from "@/components/chat/ChatView";
-import { ComputerButton } from "@/components/experts/ExpertComputer";
-import { DashboardButtonFace } from "@/components/experts/ExpertDashboard";
+import { ComputerMenuItem } from "@/components/experts/ExpertComputer";
+import { ExpertMoreMenu } from "@/components/experts/ExpertMoreMenu";
+import { DashboardMenuFace } from "@/components/experts/ExpertDashboard";
 import { setChatFull, useChatFull, useChatListHidden, useChatSidePanel } from "@/components/chat/chat-layout";
 import { FilesTab } from "@/components/files/FilesTab";
 import { cn } from "@/lib/utils";
@@ -180,7 +181,7 @@ export function AgentWorkspace({
   const canEdit = usePublicConfig().authVia === "backoffice" && !!expert?.catalogueKey;
   const [editOpen, setEditOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
-  // The header's place for Ordinateur and Tableau (the chat renders them there).
+  // The header's place for the « … » of Ordinateur and Tableau (the chat renders it there).
   const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
   const [dashboardAsked, setDashboardAsked] = useState(false);
   // The phone's tab pills scroll: the current one is brought into view.
@@ -296,18 +297,14 @@ export function AgentWorkspace({
             </nav>
             {expert && (
               <div className="order-2 flex shrink-0 items-center gap-2 pr-4 pt-1.5 lg:order-3 lg:p-0">
-                {/* Ordinateur and Tableau, placed here by the chat (they open its panels). */}
+                {/* « … » with Ordinateur and Tableau, placed here by the chat (they open its panels). */}
                 <span ref={setActionsSlot} className="flex items-center gap-2">
-                  {/* Until the chat is first opened, the same buttons open it there. */}
+                  {/* Until the chat is first opened, the same menu opens it there. */}
                   {profileId && !chatOpened && (
-                    <>
-                      {hasScreen(agents.find((a) => a.agent37_id === agentId) ?? null) && (
-                        <span className="contents" onClickCapture={() => selectTab("chat")}>
-                          <ComputerButton inHeader />
-                        </span>
-                      )}
-                      <DashboardButtonFace inHeader onClick={() => { setDashboardAsked(true); selectTab("chat"); }} />
-                    </>
+                    <ExpertMoreMenu onAction={() => selectTab("chat")}>
+                      {hasScreen(agents.find((a) => a.agent37_id === agentId) ?? null) && <ComputerMenuItem />}
+                      <DashboardMenuFace onSelect={() => setDashboardAsked(true)} />
+                    </ExpertMoreMenu>
                   )}
                 </span>
                 {callee && <CallButton expert={callee} iconOnly className="size-11 shrink-0 rounded-full lg:hidden" />}

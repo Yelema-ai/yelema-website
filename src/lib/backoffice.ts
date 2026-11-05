@@ -669,7 +669,8 @@ export const backoffice = {
   buzzDeleteSalon: (token: string, id: string) => call<{ ok: true }>(`/app/buzz/salons/${encodeURIComponent(id)}`, { method: "DELETE", token, timeoutMs: 60_000 }),
   buzzAddSalonMembers: (token: string, id: string, cles: string[]) => call<{ ok: true; ajoutes: number }>(`/app/buzz/salons/${encodeURIComponent(id)}/membres`, { method: "POST", token, body: { cles }, timeoutMs: 90_000 }),
   buzzSalonDeliverables: (token: string, id: string) => call<{ items: SalonDeliverable[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/livrables`, { token, timeoutMs: 30_000 }),
-  buzzSent: (token: string, sent: { kind: string; recipients: string[] }) => call<{ ok: true }>("/app/buzz/outbox", { method: "POST", token, body: sent }),
+  // `ajout`: the recipients were just added to the salon `salon` (named `nom`), to be told so.
+  buzzSent: (token: string, sent: { kind: string; recipients: string[]; salon?: string; nom?: string }) => call<{ ok: true }>("/app/buzz/outbox", { method: "POST", token, body: sent }),
   memoryItems: (token: string) => call<MemoryList>("/app/memory/items", { token }),
   createMemoryNote: (token: string, note: MemoryNote) => call<{ id: string }>("/app/memory/items", { method: "POST", token, body: note }),
   uploadMemoryDocument: (token: string, form: FormData) => call<{ id: string }>("/app/memory/items", { method: "POST", token, form, timeoutMs: MAIL_SEND_TIMEOUT_MS }),

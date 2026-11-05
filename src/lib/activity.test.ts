@@ -45,7 +45,8 @@ test("a turn ending in another conversation leaves it unread and toasts", () => 
   s = r.state;
   assert.deepEqual(r.notice && { toast: r.notice.toast, system: r.notice.system, kind: r.notice.kind }, { toast: true, system: false, kind: "reply" });
   assert.equal(conversationStatus(s, K), "unread");
-  assert.deepEqual(expertActivity(s, "a1", "acme__awa"), { running: false, unread: 1 });
+  const seen = expertActivity(s, "a1", "acme__awa");
+  assert.deepEqual({ running: seen.running, unread: seen.unread }, { running: false, unread: 1 });
   assert.equal(conversationStatus(view(s, K), K), null);
 });
 
@@ -212,4 +213,26 @@ test("unread marks stay bounded in memory, the newest kept", () => {
   assert.equal(Object.keys(s.unread).length, MAX_UNREAD);
   assert.ok(s.unread[convKey("a", "p", `s${MAX_UNREAD + 49}`)]);
   assert.equal(s.unread[convKey("a", "p", "s0")], undefined);
+});
+
+test("expertActivity: the badge opens its conversation even when newer notes fill the bell", () => {
+  const notes: ActivityState["notes"] = {};
+  for (let i = 0; i < 40; i++) notes[convKey("a", "koffi", `s${i}`)] = { at: 1000 + i, kind: "reply", text: "", routine: null };
+  const old = convKey("a", "fatima", "ancienne");
+  const s: ActivityState = { ...EMPTY_ACTIVITY, notes, unread: { [old]: { at: 10, kind: "reply" } } };
+  assert.equal(notifications(s).some((i) => i.key === old), false);
+  assert.equal(expertActivity(s, "a", "fatima").waiting?.sessionId, "ancienne");
+});
+
+test("expertActivity: a run with nothing to report is not what the badge opens", () => {
+  const silent = convKey("a", "fatima", "muette");
+  const real = convKey("a", "fatima", "vraie");
+  const s: ActivityState = {
+    ...EMPTY_ACTIVITY,
+    notes: { [silent]: { at: 50, kind: "routine", text: "", routine: "r", silent: true } },
+    unread: { [silent]: { at: 50, kind: "routine" }, [real]: { at: 10, kind: "reply" } },
+  };
+  const { unread, waiting } = expertActivity(s, "a", "fatima");
+  assert.equal(unread, 1);
+  assert.equal(waiting?.sessionId, "vraie");
 });

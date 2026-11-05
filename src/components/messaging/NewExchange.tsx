@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowLeft, Loader2, MessagesSquare, User, Users } from "lucide-react";
-import { MAX_RECIPIENTS, peopleOf, type BuzzEntry, type DirectoryPerson } from "@/lib/buzz";
+import { ArrowLeft, Hash, Loader2 } from "lucide-react";
+import { MAX_RECIPIENTS, peopleOf, shortName, type BuzzEntry, type DirectoryPerson } from "@/lib/buzz";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ParticipantAvatar } from "@/components/messaging/ParticipantAvatar";
 
 // « Nouveau message » et « Nouveau salon » : d'abord les membres, puis, pour chacun, la personne
 // et/ou ses Experts. Une conversation directe tient à 9 ; un salon est nommé et peut être plus grand.
@@ -15,15 +16,15 @@ import { Label } from "@/components/ui/label";
 export type ExchangeKind = "message" | "salon" | "ajout";
 
 const COPY: Record<ExchangeKind, { title: string; first: string; go: string }> = {
-  message: { title: "Nouveau message", first: "Choisissez les membres à qui écrire.", go: "Ouvrir la conversation" },
-  salon: { title: "Nouveau salon", first: "Nommez le salon et choisissez ses membres.", go: "Créer le salon" },
-  ajout: { title: "Ajouter au salon", first: "Choisissez qui ajouter : un de vos Experts, un collègue ou ses Experts.", go: "Ajouter" },
+  message: { title: "Message direct", first: "À qui écrivez-vous ?", go: "Écrire" },
+  salon: { title: "Nouveau salon", first: "Nommez le salon, puis choisissez qui y entre.", go: "Créer le salon" },
+  ajout: { title: "Ajouter au salon", first: "Qui ajoutez-vous ? Ils seront prévenus.", go: "Ajouter" },
 };
 const SALON_MAX_KEYS = 50;
 
 const entryKeys = (e: BuzzEntry | null): string[] => e?.cles ?? [];
 
-export function NewExchange({ kind, onClose, directory, mine, onStart }: { kind: ExchangeKind | null; onClose: () => void; directory: BuzzEntry[]; mine: string[]; onStart: (kind: ExchangeKind, keys: string[], name: string) => Promise<void> }) {
+export function NewExchange({ kind, onClose, directory, mine, onStart, onSalon }: { kind: ExchangeKind | null; onClose: () => void; directory: BuzzEntry[]; mine: string[]; onStart: (kind: ExchangeKind, keys: string[], name: string) => Promise<void>; /** Au-delà de 9 : le même choix part en salon, à nommer. */ onSalon?: () => void }) {
   const people = useMemo(() => peopleOf(directory, mine), [directory, mine]);
   const [members, setMembers] = useState<string[]>([]);
   const [entries, setEntries] = useState<Set<string>>(new Set());
@@ -77,10 +78,7 @@ export function NewExchange({ kind, onClose, directory, mine, onStart }: { kind:
       <DialogContent className="max-w-lg">
         <DialogHeader className="text-left">
           <DialogTitle className="font-display text-xl font-bold text-ink">{copy.title}</DialogTitle>
-          <DialogDescription>
-            {step === 1 ? copy.first : "Pour chaque membre : la personne, un ou plusieurs de ses Experts. Le propriétaire d’un Expert voit toujours la conversation."}
-            {kind === "message" && " 9 participants au plus, vous compris."}
-          </DialogDescription>
+          <DialogDescription>{step === 1 ? copy.first : "Cochez le membre, ses Experts IA, ou les deux."}</DialogDescription>
         </DialogHeader>
 
         {step === 1 && kind === "salon" && (
@@ -94,7 +92,7 @@ export function NewExchange({ kind, onClose, directory, mine, onStart }: { kind:
           <ul className="max-h-80 space-y-1.5 overflow-y-auto pt-1">
             {people.map((p) => (
               <li key={p.membre}>
-                <Choice checked={members.includes(p.membre)} onChange={(on) => setMembers((m) => (on ? [...m, p.membre] : m.filter((x) => x !== p.membre)))} icon={<Users className="h-3.5 w-3.5" />} label={p.self ? "Vous" : p.nom} hint={memberHint(p)} />
+                <Choice checked={members.includes(p.membre)} onChange={(on) => setMembers((m) => (on ? [...m, p.membre] : m.filter((x) => x !== p.membre)))} icon={<ParticipantAvatar entry={p.person ?? directory.find((e) => e.type === "personne" && e.membre === p.membre) ?? null} name={p.nom} />} label={p.self ? "Vous" : p.nom} hint={memberHint(p)} />
               </li>
             ))}
           </ul>
@@ -109,10 +107,9 @@ export function NewExchange({ kind, onClose, directory, mine, onStart }: { kind:
                       <Choice
                         checked={entries.has(entryId(e))}
                         onChange={(on) => setEntries((s) => { const n = new Set(s); if (on) n.add(entryId(e)); else n.delete(entryId(e)); return n; })}
-                        icon={e.type === "expert" ? <MessagesSquare className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
-                        label={e.type === "personne" ? `${e.nom} (la personne)` : e.nom}
-                        hint={e.type === "expert" ? "Expert" : "Personne"}
-                        brand={e.type === "expert"}
+                        icon={<ParticipantAvatar entry={e} name={e.nom} />}
+                        label={e.type === "personne" ? e.nom : shortName(e.nom)}
+                        hint={e.type === "expert" ? "Expert IA" : "Membre de l’équipe"}
                       />
                     </li>
                   ))}
@@ -122,7 +119,33 @@ export function NewExchange({ kind, onClose, directory, mine, onStart }: { kind:
           </div>
         )}
 
-        {tooMany && <p role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{kind !== "message" ? "Trop de participants pour un salon." : "Trop de participants : 9 au plus, vous compris. Retirez quelqu’un, ou créez un salon."}</p>}
+        {kind === "message" && !tooMany && (
+          // La limite se lit avant le choix, sobrement ; le salon est à un clic.
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-3">
+            Un message part à 9 personnes au plus, vous compris. Un salon en accueille 50.
+            {onSalon && (
+              <button type="button" onClick={() => { reset(); onSalon(); }} className="inline-flex items-center gap-1 font-semibold text-brand-ink hover:underline">
+                <Hash className="size-3.5" />
+                Créer un salon
+              </button>
+            )}
+          </p>
+        )}
+        {tooMany &&
+          (kind === "message" ? (
+            // Un message direct tient à 9 (une limite de la messagerie) ; au-delà, le salon prend le relais, sans erreur.
+            <div role="status" className="flex flex-wrap items-center gap-3 rounded-xl bg-tint px-4 py-3 text-sm text-ink">
+              <span className="min-w-0 flex-1">Plus de 9 personnes : passez par un salon, il en accueille 50.</span>
+              {onSalon && (
+                <Button size="sm" onClick={() => { reset(); onSalon(); }}>
+                  <Hash />
+                  Créer un salon
+                </Button>
+              )}
+            </div>
+          ) : (
+            <p role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">Trop de participants pour un salon.</p>
+          ))}
         {refusal && <p role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{refusal}</p>}
         <DialogFooter>
           {step === 1 ? (
@@ -149,15 +172,15 @@ const entryId = (e: BuzzEntry): string => `${e.type}:${e.membre}:${e.nom}`;
 
 function memberHint(p: DirectoryPerson): string {
   const n = p.experts.length;
-  const experts = n ? `${n} Expert${n > 1 ? "s" : ""}` : "";
-  return p.self ? experts : [p.person ? "Personne" : "", experts].filter(Boolean).join(" · ");
+  const experts = n ? `${n} Expert${n > 1 ? "s" : ""} IA` : "";
+  return p.self ? experts : experts || (p.person ? "Membre de l’équipe" : "");
 }
 
-function Choice({ checked, onChange, icon, label, hint, brand = false }: { checked: boolean; onChange: (on: boolean) => void; icon: React.ReactNode; label: string; hint: string; brand?: boolean }) {
+function Choice({ checked, onChange, icon, label, hint }: { checked: boolean; onChange: (on: boolean) => void; icon: React.ReactNode; label: string; hint: string }) {
   return (
     <label className={cn("flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors", checked ? "border-brand/40 bg-tint" : "border-line hover:bg-soft")}>
       <input type="checkbox" className="accent-brand" checked={checked} onChange={(ev) => onChange(ev.target.checked)} />
-      <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg", brand ? "bg-tint text-brand" : "bg-soft-2 text-ink-2")}>{icon}</span>
+      <span className="grid shrink-0 place-items-center">{icon}</span>
       <span className="min-w-0 flex-1 truncate font-semibold text-ink">{label}</span>
       <span className="text-xs text-ink-3">{hint}</span>
     </label>

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { remember, whenKept } from "@/lib/client-cache";
 import { optimistic } from "@/lib/optimistic";
-import { conversationName, isSalonName, labelsOf, myExpertsIn, myMember, participants, working, type BuzzOverview } from "@/lib/buzz";
+import { conversationName, facesOf, isSalonName, labelsOf, myExpertsIn, myMember, participants, working, type BuzzOverview } from "@/lib/buzz";
 import { deviceKey, rememberedRelay, storedKey } from "@/lib/buzz-keys";
 import { BuzzConnection, conversations, follow, openDirect, sendMessage, watchRosters, withMessage, type Conversation, type Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ import { ExchangeHeader, type ExchangePane } from "@/components/messaging/Exchan
 import { ExchangeThread } from "@/components/messaging/ExchangeThread";
 import { candidatesOf } from "@/lib/buzz-mentions";
 import { NewExchange, type ExchangeKind } from "@/components/messaging/NewExchange";
+import { prefetchSalonDeliverables } from "@/components/messaging/SalonDeliverables";
 
 // Échanges entre membres, présentés comme le chat d'un Expert : la colonne des échanges, le fil à côté. Lus et
 // écrits par ce navigateur sur le relais du client ; le back-office admet la clé de l'appareil et tient les salons.
@@ -218,6 +219,11 @@ export function Messaging() {
   }, [open, me, link]);
 
   const current = list?.find((c) => c.id === open) ?? null;
+  // Les livrables d'un salon lus dès son ouverture : l'onglet s'affiche sans attendre.
+  const salonOpen = current && isSalon(current) ? current.id : null;
+  useEffect(() => {
+    if (salonOpen) prefetchSalonDeliverables(salonOpen);
+  }, [salonOpen]);
   const directory = useMemo(() => overview?.annuaire ?? [], [overview]);
   const askable = useMemo(() => (current && isSalon(current) ? myExpertsIn(directory, mine, current.members) : []), [current, isSalon, directory, mine]);
   const busy = useMemo(() => working(thread ?? [], mine, askable), [thread, mine, askable]);
@@ -263,6 +269,9 @@ export function Messaging() {
         refused: (m) => toast.error(m),
       });
       if (!ok) return;
+      // Les personnes ajoutées sont prévenues (« X vous a ajouté au salon Y ») ; jamais bloquant.
+      const named = list?.find((x) => x.id === salon);
+      notifyAdded(keys, salon, named ? nameOf(named) : "");
       toast.success("Participants ajoutés. Leurs Experts écoutent le salon d’ici une minute.");
       await refresh();
       return;
@@ -274,7 +283,14 @@ export function Messaging() {
     setComposing(null);
     await refresh();
     setOpen(id);
+    if (kind === "salon") notifyAdded(keys, id, name);
     if (kind === "message") void apiFetch("/api/buzz/sent", { method: "POST", body: JSON.stringify({ kind: "dm", recipients: keys }) }).catch(() => undefined);
+  }
+
+  // Seules les personnes sont prévenues : un Expert ajouté écoute le salon, il n'a pas de cloche.
+  function notifyAdded(keys: string[], salon: string, nom: string) {
+    const people = keys.filter((k) => directory.some((e) => e.type === "personne" && e.cles.includes(k)));
+    if (people.length) void apiFetch("/api/buzz/sent", { method: "POST", body: JSON.stringify({ kind: "ajout", recipients: people, salon, nom }) }).catch(() => undefined);
   }
 
   async function rename(c: Conversation, nom: string) {
@@ -336,6 +352,7 @@ export function Messaging() {
           isSalon={isSalon}
           isUnit={isUnit}
           countOf={countOf}
+          facesOf={(c) => facesOf(directory, c.members, mine)}
           onOpen={setOpen}
           onNew={setComposing}
           onRefresh={() => void reload()}
@@ -363,7 +380,7 @@ export function Messaging() {
         />
       </section>
       </div>
-      <NewExchange kind={composing} onClose={() => setComposing(null)} directory={directory} mine={mine} onStart={start} />
+      <NewExchange kind={composing} onClose={() => setComposing(null)} directory={directory} mine={mine} onStart={start} onSalon={() => setComposing("salon")} />
     </div>
   );
 }

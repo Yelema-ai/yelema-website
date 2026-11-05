@@ -1,29 +1,46 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import { ChevronDown, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import type { MailRights, MailRightsPatch } from "@/lib/mail";
 import { expertDisplayName } from "@/lib/experts";
 import { useCatalogue } from "@/components/experts/useCatalogue";
 import { useWorkspace } from "@/components/WorkspaceProvider";
+import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { Badge } from "@/components/ui/badge";
+import { Picker } from "@/components/ui/picker";
 import { cn } from "@/lib/utils";
 
-// Who may have each expert write e-mails. One inbox per expert for the whole workspace, and three
-// settings that add up: the expert may send at all, only some members may ask it to, and it may
-// write outside the company. The back office applies them before every sending, whoever asks.
+// Who may have each expert write e-mails: one line per expert, on one page, filtered (Leslie, 04/11).
+// Three settings that add up: the expert may send at all, it may write outside the company, and only
+// some members may ask it to. The back office applies them before every sending, whoever asks.
 
-const STATUS: Record<MailRights["status"], string> = { pending: "En création", active: "Active", suspended: "Suspendue" };
+const STATUS: Record<"pending" | "suspended", string> = { pending: "En création", suspended: "Suspendue" };
+
+type Filter = "all" | "send" | "off" | "external" | "some";
+const FILTERS: { key: Filter; label: string; keep: (i: MailRights) => boolean }[] = [
+  { key: "all", label: "Tous", keep: () => true },
+  { key: "send", label: "Peuvent écrire", keep: (i) => i.sendEnabled },
+  { key: "off", label: "N’écrivent pas", keep: (i) => !i.sendEnabled },
+  { key: "external", label: "Hors de l’entreprise", keep: (i) => i.sendEnabled && i.externalAllowed },
+  { key: "some", label: "Certains membres", keep: (i) => i.senders.length > 0 },
+];
+const ALL_CYCLES = "*";
 
 export function MailRightsView() {
   const [inboxes, setInboxes] = useState<MailRights[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [cycle, setCycle] = useState(ALL_CYCLES);
+  const [query, setQuery] = useState("");
+  const [opened, setOpened] = useState<string | null>(null);
   const { current } = useWorkspace();
   const { catalogue } = useCatalogue(current?.id);
-  const nameOf = (key: string) => catalogue.experts.find((e) => e.key === key)?.name ?? expertDisplayName(key);
+  const entry = (key: string) => catalogue.experts.find((e) => e.key === key);
+  const nameOf = (key: string) => entry(key)?.name ?? expertDisplayName(key);
 
   useEffect(() => {
     apiFetch<{ items: MailRights[] }>("/api/mail/rights")
@@ -43,54 +60,141 @@ export function MailRightsView() {
     }
   }
 
+  const cycles = [...new Map((inboxes ?? []).flatMap((i) => { const c = entry(i.expert)?.category; return c ? [[c.key, c.label] as const] : []; })).entries()];
+  const q = query.trim().toLowerCase();
+  const inCycleAndSearch = (inboxes ?? []).filter(
+    (i) => (cycle === ALL_CYCLES || entry(i.expert)?.category?.key === cycle) && (!q || nameOf(i.expert).toLowerCase().includes(q) || (i.address ?? "").toLowerCase().includes(q))
+  );
+  const keep = FILTERS.find((f) => f.key === filter)!.keep;
+  const shown = inCycleAndSearch.filter(keep);
+
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-5xl">
       <h1 className="sr-only">E-mails des Experts</h1>
-      <p className="mt-1 max-w-2xl text-sm text-ink-2">
-        Chaque Expert a une adresse e-mail pour toute l’entreprise. Vous décidez ici s’il peut écrire, à la demande de qui, et à qui. Ces règles s’appliquent à chaque envoi, que la demande vienne d’un membre ou de l’Expert lui-même.
-      </p>
 
       {error && <p className="mt-4 max-w-xl rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{error}</p>}
       {!inboxes && !error && <Loader2 className="mt-6 h-5 w-5 animate-spin text-ink-3" aria-label="Chargement" />}
-      {inboxes?.length === 0 && <p className="mt-6 rounded-[22px] border border-line bg-surface p-8 text-center text-sm text-ink-3">Aucun expert n’a encore de boîte e-mail.</p>}
+      {inboxes?.length === 0 && <p className="mt-6 rounded-[22px] border border-line bg-surface p-8 text-center text-sm text-ink-3">Aucun Expert n’a encore de boîte e-mail.</p>}
 
-      <div className="mt-5 space-y-4">
-        {inboxes?.map((inbox) => {
-          const locked = saving === inbox.expert || inbox.status === "suspended";
-          return (
-            <section key={inbox.expert} className="rounded-[22px] border border-line bg-surface p-5 sm:p-6" aria-busy={saving === inbox.expert}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <h2 className="text-lg font-bold text-ink">{nameOf(inbox.expert)}</h2>
-                  <p className="break-all font-mono text-[13px] text-ink-3">{inbox.address ?? "adresse en cours de création"}</p>
-                </div>
-                <Badge variant={inbox.status === "active" ? "success" : inbox.status === "suspended" ? "warning" : "muted"}>{STATUS[inbox.status]}</Badge>
-              </div>
-              {inbox.status === "suspended" && <p className="mt-3 text-sm text-ink-3">Cette boîte est suspendue par Yelema : ses réglages ne peuvent pas être modifiés.</p>}
+      {inboxes && inboxes.length > 0 && (
+        <>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <label className="relative block min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" aria-hidden />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Chercher un Expert"
+                aria-label="Chercher un Expert"
+                className="h-11 w-full rounded-[12px] border border-line bg-surface pl-10 pr-3 text-sm text-ink outline-none placeholder:text-ink-3 focus:border-brand/40"
+              />
+            </label>
+            {cycles.length > 1 && (
+              <Picker
+                label="Cycle"
+                placeholder="Tous les cycles"
+                value={cycle}
+                onChange={setCycle}
+                className="sm:w-56"
+                groups={[{ options: [{ value: ALL_CYCLES, label: "Tous les cycles" }, ...cycles.map(([value, label]) => ({ value, label }))] }]}
+              />
+            )}
+          </div>
 
-              <div className="mt-4 grid gap-3">
-                <Toggle
-                  label="Cet Expert peut envoyer des e-mails"
-                  hint="Décoché, il reçoit du courrier mais n’envoie rien."
-                  checked={inbox.sendEnabled}
-                  disabled={locked}
-                  onChange={(sendEnabled) => void save(inbox, { sendEnabled })}
+          <div role="group" aria-label="Filtrer les Experts" className="mt-3 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {FILTERS.map((f) => {
+              const on = filter === f.key;
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setFilter(f.key)}
+                  className={cn("inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold transition-colors", on ? "border-ink bg-ink text-surface" : "border-line bg-surface text-ink-2 hover:bg-soft")}
+                >
+                  {f.label}
+                  <span className={cn("tabular-nums", on ? "opacity-70" : "text-ink-3")}>{inCycleAndSearch.filter(f.keep).length}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 overflow-hidden rounded-[18px] border border-line bg-surface">
+            <div className="hidden grid-cols-[minmax(0,1fr)_72px_110px_190px] gap-4 border-b border-line px-5 py-2.5 text-xs font-semibold text-ink-3 md:grid">
+              <span>Expert</span>
+              <span>Écrit</span>
+              <span>Hors de l’entreprise</span>
+              <span>À la demande de</span>
+            </div>
+            <ul className="divide-y divide-line">
+              {shown.map((inbox) => (
+                <InboxRow
+                  key={inbox.expert}
+                  inbox={inbox}
+                  name={nameOf(inbox.expert)}
+                  photoUrl={entry(inbox.expert)?.avatarUrl ?? null}
+                  saving={saving === inbox.expert}
+                  open={opened === inbox.expert}
+                  onToggle={() => setOpened((o) => (o === inbox.expert ? null : inbox.expert))}
+                  onSave={(patch) => void save(inbox, patch)}
                 />
-                <Toggle
-                  label="Il peut écrire hors de l’entreprise"
-                  hint="Décoché, seuls les membres de votre entreprise sont joignables."
-                  checked={inbox.externalAllowed}
-                  disabled={locked || !inbox.sendEnabled}
-                  onChange={(externalAllowed) => void save(inbox, { externalAllowed })}
-                />
-              </div>
-
-              <MemberAccess inbox={inbox} name={nameOf(inbox.expert)} locked={locked} onSave={(senders) => void save(inbox, { senders })} />
-            </section>
-          );
-        })}
-      </div>
+              ))}
+              {shown.length === 0 && <li className="px-5 py-8 text-center text-sm text-ink-3">Aucun Expert ne correspond.</li>}
+            </ul>
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+function InboxRow({ inbox, name, photoUrl, saving, open, onToggle, onSave }: {
+  inbox: MailRights;
+  name: string;
+  photoUrl: string | null;
+  saving: boolean;
+  open: boolean;
+  onToggle: () => void;
+  onSave: (patch: MailRightsPatch) => void;
+}) {
+  const locked = saving || inbox.status === "suspended";
+  const who = inbox.eligible.length === 0 ? "Aucun membre" : inbox.senders.length > 0 ? `${inbox.senders.length} membres sur ${inbox.eligible.length}`.replace(/^1 membres/, "1 membre") : "Tous les membres";
+  return (
+    <li data-mail-row aria-busy={saving}>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-3 md:grid-cols-[minmax(0,1fr)_72px_110px_190px] md:px-5">
+        <div className="col-span-2 flex min-w-0 items-center gap-3 pb-1 md:col-span-1 md:pb-0">
+          <ExpertAvatar expert={{ displayName: name, gateway: null, photoUrl }} size="sm" />
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <span className="truncate">{name}</span>
+              {inbox.status !== "active" && <Badge variant={inbox.status === "suspended" ? "warning" : "muted"}>{STATUS[inbox.status]}</Badge>}
+            </p>
+            <p className="truncate text-xs text-ink-3">{inbox.address ?? "Adresse en cours de création"}</p>
+          </div>
+        </div>
+        <span className="text-[13px] text-ink-2 md:hidden">Écrit</span>
+        <Switch label={`Écrit : ${name}`} checked={inbox.sendEnabled} disabled={locked} onChange={(sendEnabled) => onSave({ sendEnabled })} />
+        <span className="text-[13px] text-ink-2 md:hidden">Hors de l’entreprise</span>
+        <Switch label={`Hors de l’entreprise : ${name}`} checked={inbox.externalAllowed} disabled={locked || !inbox.sendEnabled} onChange={(externalAllowed) => onSave({ externalAllowed })} />
+        <span className="text-[13px] text-ink-2 md:hidden">À la demande de</span>
+        <button
+          type="button"
+          aria-expanded={open}
+          disabled={locked || inbox.eligible.length === 0}
+          onClick={onToggle}
+          className="inline-flex min-h-11 items-center justify-between gap-2 rounded-[10px] text-left text-[13px] font-semibold text-ink hover:text-brand-ink disabled:font-normal disabled:text-ink-3 md:w-full"
+        >
+          <span className="truncate">{who}</span>
+          {inbox.eligible.length > 0 && <ChevronDown className={cn("h-4 w-4 shrink-0 text-ink-3 transition-transform", open && "rotate-180")} />}
+        </button>
+      </div>
+      {open && (
+        <div className="border-t border-line bg-soft/40 px-4 pb-4 md:px-5">
+          <MemberAccess inbox={inbox} name={name} locked={locked} onSave={(senders) => onSave({ senders })} />
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -106,13 +210,6 @@ function MemberAccess({ inbox, name, locked, onSave }: { inbox: MailRights; name
     const q = query.trim().toLowerCase();
     return q ? inbox.eligible.filter((e) => e.toLowerCase().includes(q)) : inbox.eligible;
   }, [inbox.eligible, query]);
-  if (inbox.eligible.length === 0)
-    return (
-      <div className="mt-5">
-        <p className="text-[13px] font-semibold text-ink-3">Qui peut le faire écrire et lire sa boîte</p>
-        <p className="mt-2 text-sm text-ink-3">Aucun membre n’a cet Expert dans son équipe.</p>
-      </div>
-    );
   const choice = (on: boolean, label: string, hint: string, pick: () => void) => (
     <label className={cn("flex flex-1 cursor-pointer items-start gap-3 rounded-2xl border p-3.5 transition-colors", on ? "border-brand/40 bg-tint/60" : "border-line hover:bg-soft")}>
       <input type="radio" name={`acces-${inbox.expert}`} className="mt-1 h-4 w-4 accent-[var(--brand)]" checked={on} disabled={locked} onChange={pick} />
@@ -123,9 +220,9 @@ function MemberAccess({ inbox, name, locked, onSave }: { inbox: MailRights; name
     </label>
   );
   return (
-    <fieldset className="mt-5" disabled={locked}>
-      <legend className="text-[13px] font-semibold text-ink-3">Qui peut le faire écrire et lire sa boîte</legend>
-      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+    <fieldset className="mt-3" disabled={locked}>
+      <legend className="sr-only">Qui peut le faire écrire et lire sa boîte</legend>
+      <div className="flex flex-col gap-2 sm:flex-row">
         {choice(!some, `Tous les membres qui ont ${name}`, `${inbox.eligible.length} aujourd’hui, et ceux qui l’auront plus tard`, () => {
           setSome(false);
           if (inbox.senders.length > 0) onSave([]);
@@ -175,14 +272,21 @@ function MemberAccess({ inbox, name, locked, onSave }: { inbox: MailRights; name
   );
 }
 
-function Toggle({ label, hint, checked, disabled, onChange }: { label: string; hint: string; checked: boolean; disabled: boolean; onChange: (next: boolean) => void }) {
+function Switch({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled: boolean; onChange: (next: boolean) => void }) {
   return (
-    <label className="flex items-start gap-3">
-      <input type="checkbox" className="mt-1 h-4 w-4 accent-[var(--brand)]" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
-      <span>
-        <span className="block text-sm font-semibold text-ink">{label}</span>
-        <span className="block text-xs text-ink-3">{hint}</span>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      // 44 px to touch, for a smaller switch.
+      className="group inline-flex min-h-11 w-fit items-center justify-self-end disabled:cursor-not-allowed md:justify-self-start"
+    >
+      <span className={cn("relative h-6 w-10 rounded-full transition-colors group-disabled:opacity-40", checked ? "bg-brand" : "bg-line")}>
+        <span className={cn("absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform", checked && "translate-x-4")} />
       </span>
-    </label>
+    </button>
   );
 }

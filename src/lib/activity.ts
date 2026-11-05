@@ -182,8 +182,8 @@ export interface NotificationItem extends Note {
   unread: boolean;
 }
 
-/** What the bell lists, newest first: every note, and every unread mark (one kept from before a reload has no words). */
-export function notifications(s: ActivityState): NotificationItem[] {
+/** Every note and every unread mark (one kept from before a reload has no words), newest first. */
+function allNotifications(s: ActivityState): NotificationItem[] {
   const keys = new Set([...Object.keys(s.notes), ...Object.keys(s.unread)]);
   const out: NotificationItem[] = [];
   for (const key of keys) {
@@ -193,7 +193,12 @@ export function notifications(s: ActivityState): NotificationItem[] {
     const mark = s.unread[key];
     out.push({ ...note, ...(mark && mark.at > note.at ? { at: mark.at, kind: mark.kind } : {}), key, ...ref, unread: Boolean(mark) });
   }
-  return out.sort((a, b) => b.at - a.at).slice(0, MAX_NOTES);
+  return out.sort((a, b) => b.at - a.at);
+}
+
+/** What the bell lists: the newest ones only. */
+export function notifications(s: ActivityState): NotificationItem[] {
+  return allNotifications(s).slice(0, MAX_NOTES);
 }
 
 export type ConversationStatus = "running" | "unread" | "failed" | null;
@@ -206,12 +211,19 @@ export function conversationStatus(s: ActivityState, key: string): ConversationS
   return u ? (u.kind === "failed" ? "failed" : "unread") : null;
 }
 
-export function expertActivity(s: ActivityState, agentId: string, profile: string | null): { running: boolean; unread: number } {
+export function expertActivity(
+  s: ActivityState,
+  agentId: string,
+  profile: string | null
+): { running: boolean; unread: number; waiting: NotificationItem | null } {
   const prefix = `${expertKey(agentId, profile)}|`;
   const running = Object.values(s.turns).some((t) => expertKey(t.agentId, t.profile) === expertKey(agentId, profile));
   // A run with nothing to report is in the bell only: no conversation to point the Expert's badge at.
   const unread = Object.keys(s.unread).filter((k) => k.startsWith(prefix) && !s.notes[k]?.silent).length;
-  return { running, unread };
+  // The newest conversation behind the badge, looked for in everything unread and not only in the bell's
+  // newest ones: an older answer still opens from its badge (Leslie, 04/11: « et non encore nouvelle discussion »).
+  const waiting = unread ? (allNotifications(s).find((i) => i.unread && !i.silent && i.key.startsWith(prefix)) ?? null) : null;
+  return { running, unread, waiting };
 }
 
 // ---- Routines ----

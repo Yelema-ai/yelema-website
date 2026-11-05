@@ -39,7 +39,7 @@ export function ExchangeHeader(p: HeaderProps) {
             <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-ink-3 lg:text-[12.5px]">
               <button type="button" onClick={p.onBack} className="shrink-0 hover:text-ink">Échanges</button>
               {p.title && <span aria-hidden>›</span>}
-              {p.title && <span className="truncate">{p.kind === "unite" ? "Salon d’équipe" : p.kind === "salon" ? "Salon" : "Direct"}</span>}
+              {p.title && <span className="truncate">{p.kind === "unite" ? "Salon d’équipe" : p.kind === "salon" ? "Salon" : "Message direct"}</span>}
             </span>
             <span className="block truncate font-display text-sm font-bold leading-tight text-ink lg:text-[17px]">{p.title ?? "Vos échanges"}</span>
           </span>

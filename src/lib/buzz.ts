@@ -2,7 +2,7 @@
 // the member's own devices, the directory (people and their experts) and the team salons. Messages
 // themselves never pass through the back office: the browser reads and writes them on the relay.
 
-/** `profil` (experts): their Hermes profile; `photo` is added by this app from the catalogue. */
+/** `profil` (experts): their Hermes profile; `photo`: an expert's from the catalogue (added by this app), a person's profile photo (served by the back office, one's own added by this app). */
 export interface BuzzEntry { nom: string; type: "personne" | "expert"; membre: string; cles: string[]; profil?: string; photo?: string | null }
 export interface BuzzOverview {
   relais: string;
@@ -96,4 +96,21 @@ export function salonPeople(directory: BuzzEntry[], members: string[], mine: str
 /** Whether a message opens a run: its author differs from the previous one's, or more than 5 minutes passed. */
 export function startsRun(prev: { author: string; at: number } | undefined, m: { author: string; at: number }): boolean {
   return !prev || prev.author !== m.author || m.at - prev.at > 5 * 60;
+}
+
+/** The faces of a conversation, as its row shows them: the others first (people, then experts), oneself last, each member once. */
+export function facesOf(directory: BuzzEntry[], members: string[], mine: string[]): BuzzEntry[] {
+  const seen = new Set<BuzzEntry>();
+  for (const k of members) {
+    const e = directory.find((d) => d.cles.includes(k));
+    if (e) seen.add(e);
+  }
+  const own = (e: BuzzEntry) => e.type === "personne" && e.cles.some((k) => mine.includes(k));
+  return [...seen].sort((a, b) => Number(own(a)) - Number(own(b)) || Number(a.type === "expert") - Number(b.type === "expert"));
+}
+
+/** One's own profile photo on one's own entry, when the back office does not serve it in the directory. */
+export function withOwnPhoto(directory: BuzzEntry[], devices: string[], photo: string | null | undefined): BuzzEntry[] {
+  const me = myMember(directory, devices);
+  return photo && me ? directory.map((e) => (e.type === "personne" && e.membre === me && !e.photo ? { ...e, photo } : e)) : directory;
 }
