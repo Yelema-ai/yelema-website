@@ -9,7 +9,6 @@ import { runOutcomeOf } from "@/lib/silent-runs";
 import type { RoutineSession } from "@/lib/activity";
 import type { ChatSession } from "@/components/chat/types";
 
-export const MAX_SPACES = 40;
 export type Space = { sessions: ChatSession[]; runs: RoutineSession[] };
 
 // A gateway without the grouped read is not asked again for a while.

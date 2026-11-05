@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { useOwnAgentId } from "@/components/conversations/useAllConversations";
+import { bootstrapOwner } from "@/lib/bootstrap-client";
 import { driveChanged } from "@/lib/drive-store";
 import { INSTANCE_EVENTS, instanceEvents, parseInstanceEvent, reconnectDelay, touchesDrive, touchesSessions, type InstanceEvent } from "@/lib/instance-events";
 import { sessionsStore } from "@/lib/sessions-client";
@@ -16,6 +17,8 @@ const REPLAY_MS = 60_000;
 export function InstanceEventStream() {
   const { eventStream } = usePublicConfig();
   const agentId = useOwnAgentId();
+  // Reads of another instance (a team's expert) need not wait for the bootstrap.
+  useEffect(() => bootstrapOwner(agentId), [agentId]);
 
   useEffect(() => {
     if (!eventStream || !agentId) return;

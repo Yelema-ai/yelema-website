@@ -13,7 +13,7 @@ const store = createSessionsStore({
   readMany: (agentId, profiles) =>
     apiFetch<{ spaces: Record<string, SpaceData> }>(`/api/agents/${agentId}/chat/by-profile?profiles=${profiles.map((p) => encodeURIComponent(p || DEFAULT_PROFILE)).join(",")}`).then((r) => r.spaces),
   now: () => Date.now(),
-  defer: (fn) => void setTimeout(fn, 0),
+  defer: (fn, ms = 0) => void setTimeout(fn, ms),
 });
 
 // The spaces last shown on this device paint at once; the first read still goes out.
@@ -37,12 +37,12 @@ export const sessionsStore = {
   get: (agentId: string, profile: string | null) => store.get(agentId, spaceProfile(profile)),
   // `withRuns`: a space held without its routine runs (a page's first screen) is read again for them.
   read: async (agentId: string, profile: string | null, maxAgeMs?: number, withRuns = false) => {
-    await bootstrapped();
+    await bootstrapped(agentId);
     const p = spaceProfile(profile);
     return store.read(agentId, p, withRuns && !store.get(agentId, p)?.runs ? 0 : maxAgeMs);
   },
   fromDevice: (agentId: string, profile: string | null) => store.fromDevice(agentId, spaceProfile(profile)),
-  put: (agentId: string, profile: string | null, data: SpaceData, at?: number) => store.put(agentId, spaceProfile(profile), data, at),
+  put: (agentId: string, profile: string | null, data: SpaceData) => store.put(agentId, spaceProfile(profile), data),
   invalidate: (agentId: string, profile?: string) => store.invalidate(agentId, profile === undefined ? undefined : spaceProfile(profile)),
   subscribe: (agentId: string, profile: string | null, fn: (d: SpaceData) => void) => store.subscribe(agentId, spaceProfile(profile), fn),
 };

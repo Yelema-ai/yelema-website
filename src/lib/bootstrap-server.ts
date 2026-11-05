@@ -7,7 +7,8 @@ import { instanceDriveTree } from "@/lib/drive-tree-server";
 import { within } from "@/lib/first-screen";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { readSession } from "@/lib/session";
-import { MAX_SPACES, spacesOf, type Space } from "@/lib/sessions-by-profile";
+import { spacesOf, type Space } from "@/lib/sessions-by-profile";
+import { MAX_SPACES } from "@/lib/sessions-store";
 
 // Past this, a part is left out and the browser reads it itself, as before the bootstrap.
 const BUDGET_MS = 2_500;

@@ -1,5 +1,6 @@
 import { ApiError, handleError, json } from "@/lib/http";
-import { MAX_SPACES, spacesOf } from "@/lib/sessions-by-profile";
+import { spacesOf } from "@/lib/sessions-by-profile";
+import { MAX_SPACES } from "@/lib/sessions-store";
 
 type Ctx = { params: Promise<{ id: string }> };
 

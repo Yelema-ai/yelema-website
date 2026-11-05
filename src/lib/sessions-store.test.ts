@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createSessionsStore, type SpaceData } from "./sessions-store.ts";
+import { createSessionsStore, FAIL_MS, type SpaceData } from "./sessions-store.ts";
 
 const space = (id: string): SpaceData => ({ sessions: [{ session_id: id, title: id, last_active: 1 }], runs: [] });
 
@@ -57,13 +57,16 @@ describe("sessions store", () => {
     assert.equal(h.calls.length, 0);
   });
 
-  it("a space missing from the answer fails; a failure is not kept", async () => {
+  it("a space missing from the answer fails; the failure answers for FAIL_MS without a call, then it is read again", async () => {
     let fail = true;
     const h = harness((_a, ps) => (fail ? {} : Object.fromEntries(ps.map((p) => [p, space(p)]))));
     const p = assert.rejects(h.store.read("a", "x"));
     await h.tick();
     await p;
     fail = false;
+    await assert.rejects(h.store.read("a", "x"));
+    assert.equal(h.calls.length, 1);
+    h.advance(FAIL_MS);
     const q = h.store.read("a", "x");
     await h.tick();
     assert.equal((await q).sessions[0].session_id, "x");
@@ -96,9 +99,37 @@ describe("sessions store", () => {
     offY();
   });
 
+  it("an event during a read in flight reads once more: every waiter gets the newer answer", async () => {
+    let n = 0;
+    const h = harness((_a, ps) => Object.fromEntries(ps.map((p) => [p, space(`${p}${++n}`)])));
+    const off = h.store.subscribe("a", "x", () => undefined);
+    const first = h.store.read("a", "x");
+    h.store.invalidate("a", "x");
+    await h.tick();
+    await h.tick();
+    assert.equal((await first).sessions[0].session_id, "x2");
+    assert.equal(h.calls.length, 2);
+    assert.equal(h.store.get("a", "x")?.sessions[0].session_id, "x2");
+    off();
+  });
+
+  it("a space on screen that failed is retried once, after FAIL_MS", async () => {
+    const h = harness(() => ({}));
+    const off = h.store.subscribe("a", "x", () => undefined);
+    const p = assert.rejects(h.store.read("a", "x"));
+    await h.tick();
+    await p;
+    h.advance(FAIL_MS);
+    await h.tick();
+    await h.tick();
+    await h.tick();
+    assert.equal(h.calls.length, 2, "one retry, not a loop");
+    off();
+  });
+
   it("stays bounded: spaces nobody shows go past the cap, listeners leave nothing behind", async () => {
     let t = 0;
-    const store = createSessionsStore({ readMany: async () => ({}), now: () => t++, defer: (fn) => fn() }, { maxSpaces: 10 });
+    const store = createSessionsStore({ readMany: async () => ({}), now: () => t++, defer: (fn) => fn() }, { maxEntries: 10 });
     const off = store.subscribe("a", "kept", () => undefined);
     store.put("a", "kept", space("k"));
     for (let i = 0; i < 100; i++) store.put("a", `p${i}`, space(String(i)));
