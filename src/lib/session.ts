@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { after } from "next/server";
 import { cache } from "react";
 import { backoffice, BackofficeError, type BoInstance, type BoInstanceReading, type BoMe, type BoSession } from "@/lib/backoffice";
-import { tokenKid, verifyEs256, type Jwk } from "@/lib/jwt";
+import { tokenKid, verifyEs256, type Jwk, type VerifiedClaims } from "@/lib/jwt";
 import { memo } from "@/lib/memo";
 import { deployVersion, supabaseAnonKey, supabaseUrl } from "@/lib/runtime-config";
 import { sharedCacheOn, sharedLayer, throughShared, vercelRuntimeCache } from "@/lib/shared-cache";
@@ -184,7 +184,7 @@ async function readJwks(base: string): Promise<Jwk[]> {
 }
 
 /** The account a session's token names, checked against the project's keys; null when it cannot be told here. */
-async function localClaims(token: string): Promise<{ sub: string; email: string | null } | null> {
+export async function verifiedAccessToken(token: string): Promise<VerifiedClaims | null> {
   const base = supabaseUrl()?.replace(/\/+$/, "");
   if (!base) return null;
   const expect = { issuer: `${base}/auth/v1`, audience: "authenticated" };
@@ -198,7 +198,7 @@ async function localClaims(token: string): Promise<{ sub: string; email: string 
       keys = await jwks.get(base, () => readJwks(base));
     }
     const check = verifyEs256(token, keys, expect);
-    return check.ok ? { sub: check.claims.sub, email: check.claims.email } : null;
+    return check.ok ? check.claims : null;
   } catch {
     return null;
   }
@@ -212,7 +212,7 @@ async function localClaims(token: string): Promise<{ sub: string; email: string 
 export const currentUserId = cache(async (): Promise<string | null> => {
   const session = await readSession();
   if (!session) return null;
-  const local = await localClaims(session.accessToken);
+  const local = await verifiedAccessToken(session.accessToken);
   if (local) return local.sub;
   return (await currentPrincipal())?.user.id ?? null;
 });
