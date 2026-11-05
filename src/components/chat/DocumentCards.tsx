@@ -168,7 +168,8 @@ function ImagePreview({ url, thumb, doc }: { url: string; thumb: string; doc: Tu
   return <ReducedImage thumb={thumb} original={url} alt={doc.name} onFail={() => setFailed(true)} className="size-full object-contain" />;
 }
 
-type Render = (data: ArrayBuffer, doc: TurnDoc, width: number, full: boolean) => Promise<ReactNode>;
+// `signal`: the preview left the screen; a renderer holding blob URLs gives them back.
+type Render = (data: ArrayBuffer, doc: TurnDoc, width: number, full: boolean, signal: AbortSignal) => Promise<ReactNode>;
 
 // The body of a preview's response, given up past MAX_PREVIEW_BYTES: on its announced length first,
 // then while it streams in (a response without one).
@@ -216,7 +217,7 @@ function Lazy({ doc, url, render, full = false }: { doc: TurnDoc; url: string; r
       try {
         const res = await fetch(url, { signal: abort.signal });
         if (!res.ok) throw new Error(String(res.status));
-        const out = await render(await readCapped(res, abort), docRef.current, el.clientWidth || 600, full);
+        const out = await render(await readCapped(res, abort), docRef.current, el.clientWidth || 600, full, abort.signal);
         if (alive) setNode(out);
       } catch {
         if (alive) setFailed(true);
@@ -383,16 +384,19 @@ async function readXlsx(data: ArrayBuffer, maxRows = ROWS, maxCols = COLS): Prom
   return { sheet: first?.getAttribute("name") ?? null, rows };
 }
 
-const renderSheet: Render = async (data, doc, _width, full) => {
+const renderSheet: Render = async (data, doc, _width, full, signal) => {
   const [r, c] = full ? [FULL_ROWS, FULL_COLS] : [ROWS, COLS];
   // A workbook as Excel draws it: colours, logos, merged cells, every sheet (Leslie, 03/11). The plain
   // table of its values stays the fallback for a file this reader does not follow.
   if (ext(doc.name) !== "csv") {
     try {
-      const { openBook, readSheet, Workbook } = await import("./xlsx-book");
+      const { openBook, readSheet, releaseSheet, Workbook } = await import("./xlsx-book");
       const book = await openBook(data);
       if (book.sheets.length) {
         const sheet = await readSheet(book, 0, r, c);
+        // Its pictures are blob URLs: given back unless the Workbook that revokes them is drawn.
+        if (signal.aborted || !sheet.rows.length) releaseSheet(sheet);
+        if (signal.aborted) throw new Error("left");
         if (sheet.rows.length) return <Workbook book={book} first={sheet} full={full} maxRows={r} maxCols={c} />;
       }
     } catch (e) {

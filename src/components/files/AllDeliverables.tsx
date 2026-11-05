@@ -298,10 +298,10 @@ function Cover({ d }: { d: Deliverable }) {
   const name = d.cover.split("/").pop()!;
   const kind = docKind(name);
   if (kind === "image")
-    return <ReducedImage thumb={thumbUrl(d.agentId, d.cover, 480, d.modified)} original={thumbUrl(d.agentId, d.cover, 480)} alt="" className="size-full object-cover" onFail={() => setFailed(true)} />;
+    return <ReducedImage thumb={thumbUrl(d.agentId, d.cover, 480, d.coverModified)} original={thumbUrl(d.agentId, d.cover, 480)} alt="" className="size-full object-cover" onFail={() => setFailed(true)} />;
   return (
     <span className="pointer-events-none block size-full">
-      <DocPreview agentId={d.agentId} doc={{ name, path: d.cover, size: null, modified: d.modified, kind }} />
+      <DocPreview agentId={d.agentId} doc={{ name, path: d.cover, size: null, modified: d.coverModified, kind }} />
     </span>
   );
 }

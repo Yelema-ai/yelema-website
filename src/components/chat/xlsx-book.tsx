@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type JSZip from "jszip";
 import { cn } from "@/lib/utils";
 import { isNumberCell, isTotalRow } from "@/lib/sheet-cells";
@@ -203,6 +203,11 @@ async function images(zip: JSZip, sheetPath: string, doc: Document | null, x: (c
   return out;
 }
 
+/** Gives back a sheet's pictures (blob URLs) once nothing draws it. */
+export function releaseSheet(sheet: Sheet): void {
+  for (const i of sheet.images) URL.revokeObjectURL(i.src);
+}
+
 export async function readSheet(book: Book, index: number, maxRows: number, maxCols: number): Promise<Sheet> {
   const { zip, styles, shared } = book;
   const path = book.sheets[index]?.path;
@@ -398,12 +403,19 @@ export function Workbook({ book, first: initial, full, maxRows, maxCols }: { boo
   const [at, setAt] = useState(0);
   const [sheet, setSheet] = useState<Sheet>(initial);
   const [busy, setBusy] = useState(false);
-  useEffect(() => () => sheet.images.forEach((i) => URL.revokeObjectURL(i.src)), [sheet]);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => void (mounted.current = false);
+  }, []);
+  useEffect(() => () => releaseSheet(sheet), [sheet]);
   const open = (i: number) => {
     if (i === at || busy) return;
     setBusy(true);
     readSheet(book, i, maxRows, maxCols)
       .then((s) => {
+        // Closed while it was read: nobody will draw it, its pictures go now.
+        if (!mounted.current) return releaseSheet(s);
         setSheet(s);
         setAt(i);
       })

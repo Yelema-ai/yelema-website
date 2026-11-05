@@ -24,6 +24,8 @@ export interface DeliverableItem {
   modified: number;
   /** A picture or a PDF inside, to show as its cover; the file itself for a loose one. */
   cover: string | null;
+  /** The cover file's own change: its preview's address follows it, not the folder's latest change. */
+  coverModified: number;
 }
 
 const plain = (s: string) =>
@@ -59,19 +61,25 @@ export function deliverableItems(entries: readonly TreeEntry[]): DeliverableItem
       files: folder ? 0 : 1,
       modified: e.modified || 0,
       cover: !folder && COVER.test(e.name) ? e.path : null,
+      coverModified: !folder && COVER.test(e.name) ? e.modified || 0 : 0,
     });
   }
   // What lies inside a subject folder, as deep as the tree went: counted, dated, a cover picked.
   for (const e of entries) {
     if (e.depth < 2 || e.type === "directory" || skipped(e)) continue;
-    const top = [...items.values()].find((i) => i.folder && e.path.startsWith(`${i.path}/`));
-    if (!top) continue;
+    // The subject folder is the ancestor `depth - 1` levels up: one lookup, not a scan per file.
+    const parts = e.path.split("/");
+    const top = items.get(parts.slice(0, parts.length - (e.depth - 1)).join("/"));
+    if (!top?.folder) continue;
     const below = e.path.slice(top.path.length + 1).split("/");
     if (below.slice(0, -1).some((part) => NOT_DELIVERABLE_FOLDER.test(plain(part)))) continue;
     top.files += 1;
     top.modified = Math.max(top.modified, e.modified || 0);
     // A picture beats a PDF for the cover: it is what the folder looks like.
-    if (COVER.test(e.name) && (!top.cover || (/\.pdf$/i.test(top.cover) && !/\.pdf$/i.test(e.name)))) top.cover = e.path;
+    if (COVER.test(e.name) && (!top.cover || (/\.pdf$/i.test(top.cover) && !/\.pdf$/i.test(e.name)))) {
+      top.cover = e.path;
+      top.coverModified = e.modified || 0;
+    }
   }
   return [...items.values()].sort((a, b) => b.modified - a.modified || a.name.localeCompare(b.name, "fr"));
 }

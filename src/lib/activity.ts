@@ -104,7 +104,7 @@ function notice(s: ActivityState, key: string, kind: Unread["kind"], visible: bo
   const ref = parseConvKey(key)!;
   const viewed = s.viewing === key;
   if (viewed && visible) return { state: s, notice: null };
-  const state = viewed ? s : { ...s, unread: { ...s.unread, [key]: { at, kind } } };
+  const state = viewed ? s : { ...s, unread: capUnread({ ...s.unread, [key]: { at, kind } }) };
   return { state, notice: { key, ...ref, kind, toast: !viewed, system: !visible } };
 }
 
@@ -130,6 +130,13 @@ export function finishTurn(
 export function routineFinished(s: ActivityState, key: string, visible: boolean, now: number, silent = false): { state: ActivityState; notice: Notice | null } {
   const r = notice(s, key, "routine", visible, now);
   return silent && r.state.unread[key] && !s.unread[key] ? { ...r, state: { ...r.state, unread: without(r.state.unread, (_, k) => k === key) } } : r;
+}
+
+// A tab open for days keeps the newest marks only, as the saved copy does.
+function capUnread(unread: Record<string, Unread>): Record<string, Unread> {
+  const keys = Object.keys(unread);
+  if (keys.length <= MAX_UNREAD) return unread;
+  return Object.fromEntries(Object.entries(unread).sort((a, b) => b[1].at - a[1].at).slice(0, MAX_UNREAD));
 }
 
 // The conversation on screen changes; opening one reads it.
@@ -246,7 +253,7 @@ export interface Persisted {
   watching: Turn[];
 }
 
-const MAX_UNREAD = 200;
+export const MAX_UNREAD = 200;
 // A turn still unresolved after this long is no longer followed.
 export const WATCH_TTL_MS = 2 * 60 * 60_000;
 

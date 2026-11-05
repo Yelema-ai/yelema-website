@@ -28,6 +28,15 @@ test("one row per subject, newest first, with its owner, files and cover", () =>
   );
   assert.equal(items[1].cover, `${R}/Koffi/Flyers/flyer.png`); // the picture, though the PDF is newer
   assert.equal(items[2].cover, `${R}/Koffi/charte.pdf`);
+  // The cover's own date, not the folder's: a new file beside it does not fetch its preview again.
+  assert.equal(items[1].coverModified, 30);
+  assert.equal(items[2].coverModified, 5);
+});
+
+test("a file deeper than its subject folder counts there; a folder deeper still does not make a subject", () => {
+  const items = deliverableItems([d("Fatima", 0), d("Fatima/Plan", 1, 1), d("Fatima/Plan/v2", 2, 1), f("Fatima/Plan/v2/a.png", 3, 7), f("Fatima/Plan/b.pdf", 2, 9)]);
+  assert.deepEqual(items.map((i) => [i.name, i.files, i.modified, i.cover]), [["Plan", 2, 9, `${R}/Fatima/Plan/v2/a.png`]]);
+  assert.equal(items[0].coverModified, 7);
 });
 
 test("what the member brought, the memory and working files are no deliverables", () => {

@@ -6,8 +6,9 @@ import { cached, remember } from "@/lib/client-cache";
 import { deliverableItems, type DeliverableItem } from "@/lib/deliverable-folders";
 import { splitVersions } from "@/lib/drive-versions";
 import { seatFolderOf, type DriveTree } from "@/lib/drive-paths";
-import { driveTree, onDriveChanged } from "@/lib/drive-store";
+import { driveTree, onDriveChanged, seedDriveTree } from "@/lib/drive-store";
 import { agentTabPath } from "@/lib/expert-tabs";
+import { isNewAt, markSeenAt, parseSeen, type SeenMarks } from "@/lib/seen-deliverables";
 import type { Expert } from "@/lib/types";
 
 /** A deliverable with whoever made it: an Expert, or the chat d'entreprise (`expert` null). */
@@ -42,7 +43,18 @@ function latestOnly(items: DeliverableItem[]): DeliverableItem[] {
   return items.filter((i) => kept.has(i));
 }
 
+// The same tree read again (a stream event that changed nothing) is not rebuilt.
+const built = new WeakMap<DriveTree, { experts: Expert[]; rows: Deliverable[] }>();
+
 function deliverablesOf(agentId: string, tree: DriveTree, experts: Expert[]): Deliverable[] {
+  const kept = built.get(tree);
+  if (kept?.experts === experts) return kept.rows;
+  const rows = buildRows(agentId, tree, experts);
+  built.set(tree, { experts, rows });
+  return rows;
+}
+
+function buildRows(agentId: string, tree: DriveTree, experts: Expert[]): Deliverable[] {
   return latestOnly(deliverableItems(tree.entries ?? [])).flatMap((item): Deliverable[] => {
     const seat = seatFolderOf([item.owner]);
     const expert = seat ? null : ownerOf(experts, agentId, item.owner);
@@ -55,6 +67,8 @@ function deliverablesOf(agentId: string, tree: DriveTree, experts: Expert[]): De
 }
 
 const newestFirst = (all: Deliverable[][]) => all.flat().sort((a, b) => b.modified - a.modified);
+// What the list shows: the same answer again keeps the same array, so nothing on screen is redrawn.
+const signature = (rows: Deliverable[]) => rows.map((d) => `${d.agentId}|${d.path}|${d.modified}|${d.cover}|${d.coverModified}|${d.files}|${d.expert?.profileId ?? ""}`).join("\n");
 
 /**
  * Every deliverable of the member's instances, newest first; null until read. `initial`: the drives the
@@ -74,6 +88,8 @@ export function useAllDeliverables(ownAgentId: string | null, experts: Expert[],
   );
 
   useEffect(() => {
+    // The drives the server read with the page are the store's first reading: not asked again.
+    for (const a of agentIds) if (initial?.[a]) seedDriveTree(a, initial[a]);
     const offs = agentIds.map((a) => onDriveChanged(a, () => setTick((t) => t + 1)));
     return () => offs.forEach((off) => off());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,8 +107,10 @@ export function useAllDeliverables(ownAgentId: string | null, experts: Expert[],
       )
     ).then((all) => {
       const sorted = newestFirst(all);
-      remember(key, sorted);
-      if (live) setItems(sorted);
+      const prev = cached<Deliverable[]>(key);
+      const next = prev && signature(prev) === signature(sorted) ? prev : sorted;
+      remember(key, next);
+      if (live) setItems(next);
     });
     return () => {
       live = false;
@@ -103,28 +121,31 @@ export function useAllDeliverables(ownAgentId: string | null, experts: Expert[],
   return items ?? (hydrated ? seed : null);
 }
 
-// « Nouveau »: changed in the last three days and not opened from this browser since.
+// « Nouveau »: changed in the last three days and not opened from this browser since (lib/seen-deliverables).
+// The marks are read from storage once, not for every row on every render, and pruned when written.
 const SEEN_KEY = "yelema.livrables-vus";
-const FRESH_MS = 3 * 24 * 3600 * 1000;
+let seen: SeenMarks | null = null;
 
-function seenMap(): Record<string, number> {
+function seenMarks(): SeenMarks {
+  if (seen) return seen;
   try {
-    return JSON.parse(localStorage.getItem(SEEN_KEY) ?? "{}");
+    seen = parseSeen(localStorage.getItem(SEEN_KEY), Date.now());
   } catch {
-    return {};
+    seen = {};
   }
+  return seen;
 }
 
+// Another tab opened a deliverable: read the marks again.
+if (typeof window !== "undefined") window.addEventListener("storage", (e) => e.key === SEEN_KEY && (seen = null));
+
 export function isNew(d: Pick<Deliverable, "path" | "modified">): boolean {
-  if (!d.modified || Date.now() - d.modified > FRESH_MS) return false;
-  const seen = seenMap()[d.path];
-  return !seen || seen < d.modified;
+  return isNewAt(seenMarks(), d, Date.now());
 }
 
 export function markSeen(d: Pick<Deliverable, "path">): void {
+  seen = markSeenAt(seenMarks(), d.path, Date.now());
   try {
-    const all = seenMap();
-    all[d.path] = Date.now();
-    localStorage.setItem(SEEN_KEY, JSON.stringify(all));
+    localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
   } catch {}
 }

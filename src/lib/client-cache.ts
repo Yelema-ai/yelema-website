@@ -1,6 +1,8 @@
 // What the browser has already read, kept until the page is reloaded (signing out reloads it).
 // A screen opened again shows this at once and reads anew behind it, instead of starting empty.
-// Keys carry the user when the answer is theirs alone: a tab can outlive a session.
+// Keys carry the user when the answer is theirs alone: a tab can outlive a session. Bounded: a tab left
+// open for days keeps the latest answers only.
+const MAX_ENTRIES = 300;
 const store = new Map<string, { at: number; value: unknown }>();
 const flying = new Map<string, Promise<unknown>>();
 const listeners = new Map<string, Set<(value: unknown) => void>>();
@@ -10,7 +12,9 @@ export function cached<T>(key: string): T | undefined {
 }
 
 export function remember<T>(key: string, value: T): T {
+  store.delete(key);
   store.set(key, { at: Date.now(), value });
+  if (store.size > MAX_ENTRIES) store.delete(store.keys().next().value as string);
   for (const fn of listeners.get(key) ?? []) fn(value);
   return value;
 }
@@ -20,7 +24,10 @@ export function subscribe<T>(key: string, fn: (value: T) => void): () => void {
   const set = listeners.get(key) ?? new Set();
   set.add(fn as (value: unknown) => void);
   listeners.set(key, set);
-  return () => set.delete(fn as (value: unknown) => void);
+  return () => {
+    set.delete(fn as (value: unknown) => void);
+    if (!set.size && listeners.get(key) === set) listeners.delete(key);
+  };
 }
 
 export function forget(key: string): void {

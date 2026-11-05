@@ -23,6 +23,7 @@ import {
   view,
   type ActivityState,
   type Turn,
+  MAX_UNREAD,
 } from "./activity.ts";
 
 const turn = (over: Partial<Turn> = {}): Turn => ({
@@ -203,4 +204,12 @@ test("a quiet run's unread mark saved before is dropped on load, its bell line k
   const p = parsePersisted(raw, "a1", 10);
   assert.deepEqual(p.unread, {});
   assert.equal(p.notes[k]?.silent, true);
+});
+
+test("unread marks stay bounded in memory, the newest kept", () => {
+  let s = EMPTY_ACTIVITY;
+  for (let i = 0; i < MAX_UNREAD + 50; i++) s = routineFinished(s, convKey("a", "p", `s${i}`), true, i).state;
+  assert.equal(Object.keys(s.unread).length, MAX_UNREAD);
+  assert.ok(s.unread[convKey("a", "p", `s${MAX_UNREAD + 49}`)]);
+  assert.equal(s.unread[convKey("a", "p", "s0")], undefined);
 });

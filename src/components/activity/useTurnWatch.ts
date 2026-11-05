@@ -8,27 +8,28 @@ import { profileQuery } from "@/lib/profile-id";
 import type { SessionDetail } from "@/lib/types";
 import type { ActivityActions } from "./ActivityProvider";
 
-// The session is asked again after 8 s, then less and less often, up to every 30 s.
-const POLL_MS = 8000;
+// Without the stream, the session is asked again after 15 s, then less and less often, up to every 30 s;
+// with it, the turn's end says when, and a look every 5 minutes is the net.
+const POLL_MS = 15_000;
 const POLL_MAX_MS = 30_000;
+const LIVE_NET_MS = 5 * 60_000;
 
+// Each wait takes its listeners back whichever way it ends: a turn followed for two hours adds none.
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
-    const t = setTimeout(resolve, ms);
-    signal.addEventListener("abort", () => (clearTimeout(t), resolve()), { once: true });
+    const done = () => (clearTimeout(t), signal.removeEventListener("abort", done), resolve());
+    const t = setTimeout(done, ms);
+    signal.addEventListener("abort", done, { once: true });
   });
 
 // Nothing is asked while the tab is hidden.
 const visible = (signal: AbortSignal) =>
   new Promise<void>((resolve) => {
-    if (document.visibilityState !== "hidden") return resolve();
-    const on = () => {
-      if (document.visibilityState === "hidden") return;
-      document.removeEventListener("visibilitychange", on);
-      resolve();
-    };
+    if (document.visibilityState !== "hidden" || signal.aborted) return resolve();
+    const done = () => (document.removeEventListener("visibilitychange", on), signal.removeEventListener("abort", done), resolve());
+    const on = () => document.visibilityState !== "hidden" && done();
     document.addEventListener("visibilitychange", on);
-    signal.addEventListener("abort", () => (document.removeEventListener("visibilitychange", on), resolve()), { once: true });
+    signal.addEventListener("abort", done, { once: true });
   });
 
 // The terminal event of a reattached stream, or null when it ends without one.
@@ -83,12 +84,12 @@ async function follow(t: Turn, signal: AbortSignal): Promise<{ outcome: Outcome;
     } catch {
       // Try again on the next round.
     }
-    // The instance's stream is up: the end of a turn wakes the watch, the poll is only the safety net.
+    // The instance's stream is up: the end of this session's turn wakes the watch; the poll is the net.
     if (instanceEvents.connected(t.agentId)) {
       const wake = new AbortController();
       const stop = () => wake.abort();
       signal.addEventListener("abort", stop, { once: true });
-      await Promise.race([sleep(POLL_MAX_MS, wake.signal), nextEvent(instanceEvents, t.agentId, "turn.ended", wake.signal)]);
+      await Promise.race([sleep(LIVE_NET_MS, wake.signal), nextEvent(instanceEvents, t.agentId, { types: ["turn.ended", "instance.changed"], profile: t.profile }, wake.signal)]);
       wake.abort();
       signal.removeEventListener("abort", stop);
       continue;
