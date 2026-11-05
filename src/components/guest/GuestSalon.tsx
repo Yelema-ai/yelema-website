@@ -4,8 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Hash, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { labelsOf, type BuzzEntry } from "@/lib/buzz";
-import { forgetGuestKey, storedGuestKey } from "@/lib/buzz-keys";
-import { BuzzConnection, follow, refusalText, sendMessage, withMessage, type Conversation, type Message } from "@/lib/buzz-relay";
+import type { Conversation, Message } from "@/lib/buzz-relay";
 import type { GuestView } from "@/lib/guest-access";
 import { reconnectDelay } from "@/lib/instance-events";
 import type { SalonDeliverable } from "@/lib/salon-deliverables";
@@ -14,8 +13,8 @@ import { Button } from "@/components/ui/button";
 import { ExchangeThread } from "@/components/messaging/ExchangeThread";
 import type { ExchangePane } from "@/components/messaging/ExchangeHeader";
 
-// Le salon tel qu'un invité le voit : le fil (lu et écrit sur le relais avec la clé de ce navigateur), les
-// livrables du salon et ses participants. Les composants sont ceux des Échanges ; les lectures passent par /invite.
+// Le salon tel qu'un invité le voit : le fil, les livrables et les participants, tous par les routes /invite.
+// Le navigateur ne parle jamais au relais : le serveur lit, filtre et signe pour l'invité.
 
 const TABS: { id: ExchangePane; label: string }[] = [
   { id: "fil", label: "Discussion" },
@@ -24,7 +23,10 @@ const TABS: { id: ExchangePane; label: string }[] = [
 ];
 // The back office signs each file for about 15 minutes: read again before.
 const URL_FRESH_MS = 10 * 60_000;
-const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// Le serveur envoie un ping toutes les 9 s : au-delà, le flux est rouvert.
+const SILENCE_MS = 25_000;
+const sorted = (list: Message[]): Message[] => [...new Map(list.map((m) => [m.id, m])).values()].sort((a, b) => a.at - b.at || Number(a.replyTo !== null) - Number(b.replyTo !== null));
+const withMessage = (t: Message[] | null, m: Message): Message[] => (t?.some((x) => x.id === m.id) ? t : [...(t ?? []), m]);
 
 type Refusal = "ended" | "signed_out" | null;
 const refusalOf = (status: number): Refusal => (status === 410 ? "ended" : status === 401 ? "signed_out" : null);
@@ -41,15 +43,13 @@ async function read<T>(url: string): Promise<{ ok: true; data: T } | { ok: false
 }
 
 export function GuestSalon({ view, onEnded, onSignedOut }: { view: GuestView; onEnded: () => void; onSignedOut: () => void }) {
-  const key = useMemo(() => storedGuestKey(), []);
   const [pane, setPane] = useState<ExchangePane>("fil");
   const [directory, setDirectory] = useState<BuzzEntry[]>([]);
   const [thread, setThread] = useState<Message[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [me, setMe] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [link, setLink] = useState(0);
-  const relay = useRef<BuzzConnection | null>(null);
   const channel = view.salon.channel;
 
   // The page's callbacks change with each of its renders; the readings below must not start again for that.
@@ -90,77 +90,97 @@ export function GuestSalon({ view, onEnded, onSignedOut }: { view: GuestView; on
     };
   }, [round, refused, refreshFiles]);
 
-  // Le relais, rouvert seul après une coupure ; une clé tout juste admise attend la synchronisation suivante.
+  // Le fil : l'historique, puis le flux des nouveaux messages, rouvert après une coupure ou un silence.
   useEffect(() => {
-    if (!key) return refused("signed_out");
-    let stopped = false;
-    const open = async () => {
-      for (let attempt = 0; !stopped; attempt++) {
-        const c = new BuzzConnection(view.relay.url, key.secret);
-        try {
-          await c.connect();
-        } catch {
-          c.close();
-          if (attempt >= 2) {
-            setWaiting(true);
-            // Access withdrawn meanwhile: the guest routes say so.
-            const r = await read<unknown>("/invite/salon/participants");
-            if (!r.ok && r.refusal) return refused(r.refusal);
-          }
-          await pause(reconnectDelay(attempt));
-          continue;
-        }
-        if (stopped) return c.close();
-        c.onclose = () => {
-          if (relay.current !== c) return;
-          relay.current = null;
-          void open();
-        };
-        relay.current = c;
-        setWaiting(false);
-        setLink((l) => l + 1);
-        return;
-      }
-    };
-    void open();
-    return () => {
-      stopped = true;
-      relay.current?.close();
-      relay.current = null;
-    };
-  }, [key, view.relay.url, refused]);
-
-  useEffect(() => {
-    const c = relay.current;
-    if (!c) return;
     let stop = false;
-    setFailed(false);
-    const sub = follow(c, channel, {
-      onLoad: (m) => !stop && setThread(m),
-      onLive: (m) => !stop && setThread((t) => withMessage(t, m)),
-      onError: () => !stop && setFailed(true),
-    });
+    let es: EventSource | null = null;
+    let since = 0;
+    let heard = Date.now();
+    let attempt = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const open = () => {
+      if (stop) return;
+      es?.close();
+      const s = new EventSource(`/invite/salon/stream?since=${since}`);
+      es = s;
+      const seen = (ev: MessageEvent) => {
+        heard = Date.now();
+        attempt = 0;
+        const id = Number(ev.lastEventId);
+        if (Number.isInteger(id) && id > since) since = id;
+      };
+      s.addEventListener("ping", seen);
+      s.onmessage = (ev) => {
+        seen(ev);
+        try {
+          const m = JSON.parse(String(ev.data)) as Message;
+          setThread((t) => withMessage(t, m));
+        } catch {
+          /* not a message */
+        }
+      };
+      s.addEventListener("end", (ev) => {
+        s.close();
+        const code = (JSON.parse(String((ev as MessageEvent).data ?? "{}")) as { code?: string }).code;
+        refused(code === "access_ended" ? "ended" : "signed_out");
+      });
+      s.onerror = () => {
+        if (s.readyState !== EventSource.CLOSED || stop) return;
+        // Refused (session over) or the stream could not start: the guest routes say which.
+        void read<unknown>("/invite/salon/participants").then((r) => {
+          if (stop) return;
+          if (!r.ok && r.refusal) return refused(r.refusal);
+          retry = setTimeout(open, reconnectDelay(attempt++));
+        });
+      };
+    };
+    const watch = setInterval(() => {
+      if (es && Date.now() - heard > SILENCE_MS) (heard = Date.now(), open());
+    }, 5_000);
+    // A key just admitted waits for the relay's next sync: the history is asked again until it answers.
+    const load = (): void =>
+      void read<{ messages: Message[]; refs: Message[]; me: string; now: number }>("/invite/salon/messages").then((r) => {
+        if (stop) return;
+        if (!r.ok) {
+          if (r.refusal) return refused(r.refusal);
+          if (attempt >= 1) setWaiting(true);
+          retry = setTimeout(load, reconnectDelay(attempt++));
+          return;
+        }
+        attempt = 0;
+        setWaiting(false);
+        setMe(r.data.me);
+        setThread(sorted([...r.data.refs, ...r.data.messages]));
+        since = r.data.now;
+        open();
+      });
+    load();
     return () => {
       stop = true;
-      sub.close();
+      clearTimeout(retry);
+      clearInterval(watch);
+      es?.close();
     };
-  }, [channel, link]);
+  }, [link, refused]);
 
-  const mine = useMemo(() => (key ? [key.pubkey] : []), [key]);
+  const mine = useMemo(() => (me ? [me] : []), [me]);
   const labels = useMemo(() => labelsOf(directory), [directory]);
   const current: Conversation = useMemo(() => ({ id: channel, name: view.salon.nom, members: [...new Set([...directory.flatMap((e) => e.cles), ...mine])] }), [channel, view.salon.nom, directory, mine]);
   const deliverables = useMemo(() => ({ items, error: filesError, loading: filesLoading, refresh: refreshFiles }), [items, filesError, filesLoading, refreshFiles]);
 
   async function send(text: string, _mentions: string[], replyTo: Message | null): Promise<boolean> {
-    const c = relay.current;
-    if (!c) return (toast.error("Connexion au salon en cours. Réessayez dans un instant."), false);
     setSending(true);
     try {
-      const r = await sendMessage(c, channel, text, replyTo, [], thread ?? []);
-      if (!r.ok) throw new Error(refusalText(r.message));
+      const res = await fetch("/invite/salon/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: text, replyTo: replyTo?.id ?? null }), cache: "no-store" });
+      const data = (await res.json().catch(() => ({}))) as { message?: Message; error?: { message?: string } };
+      const refusal = refusalOf(res.status);
+      if (refusal) return (refused(refusal), false);
+      if (!res.ok || !data.message) throw new Error(data.error?.message ?? "Message non envoyé. Réessayez dans un instant.");
+      const m = data.message;
+      setThread((t) => withMessage(t, m));
       return true;
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(e instanceof TypeError ? "Message non envoyé. Réessayez dans un instant." : (e as Error).message);
       return false;
     } finally {
       setSending(false);
@@ -169,7 +189,6 @@ export function GuestSalon({ view, onEnded, onSignedOut }: { view: GuestView; on
 
   async function logout() {
     await fetch("/invite/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => undefined);
-    forgetGuestKey();
     onSignedOut();
   }
 
@@ -210,7 +229,7 @@ export function GuestSalon({ view, onEnded, onSignedOut }: { view: GuestView; on
           mine={mine}
           labels={labels}
           directory={directory}
-          failed={failed}
+          failed={false}
           onRetry={() => setLink((l) => l + 1)}
           busy={[]}
           candidates={[]}

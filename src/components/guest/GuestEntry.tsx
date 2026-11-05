@@ -11,12 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 // The salon (thread, previews) is the heavy part: fetched in parallel with the session check, never before the code step.
-const loadKeys = () => import("@/lib/buzz-keys");
 const loadSalon = () => import("@/components/guest/GuestSalon").then((m) => m.GuestSalon);
 const GuestSalon = dynamic(loadSalon, { ssr: false, loading: () => <Loader2 className="m-auto size-6 animate-spin text-ink-3" aria-label="Chargement" /> });
 
 // La page d'une personne externe invitée dans un salon : son adresse, le code reçu par e-mail, puis le salon.
-// La clé de messagerie est faite dans ce navigateur ; seule sa moitié publique part. Rien de l'app des membres ici.
+// Le navigateur ne parle jamais au relais : le serveur du site lit et écrit le fil pour l'invité. Rien de l'app des membres ici.
 
 type Step = { kind: "checking" } | { kind: "email" } | { kind: "code"; email: string } | { kind: "salon"; view: GuestView } | { kind: "ended" } | { kind: "invalid" };
 
@@ -36,17 +35,14 @@ export function GuestEntry({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // Retour avec la session de ce navigateur : droit au salon. Sans la clé gardée ici, l'adresse et le code d'abord.
+  // Retour avec la session de ce navigateur : droit au salon ; sinon l'adresse et le code d'abord.
   useEffect(() => {
     let stop = false;
-    const held = loadKeys().then((k) => k.storedGuestKey() !== null);
-    void held.then((h) => (h ? loadSalon().then(() => undefined) : undefined)).catch(() => undefined);
+    void loadSalon().catch(() => undefined);
     fetch("/invite/session", { headers: { "X-Invite-Token": token }, cache: "no-store" })
       .then(async (res) => {
-        // Without the key kept here, a session alone cannot read the salon: address and code again.
-        const hasKey = await held.catch(() => false);
         if (stop) return;
-        if (res.ok && hasKey) return setStep({ kind: "salon", view: (await res.json()) as GuestView });
+        if (res.ok) return setStep({ kind: "salon", view: (await res.json()) as GuestView });
         setStep(res.status === ENDED_STATUS ? { kind: "ended" } : { kind: "email" });
       })
       .catch(() => !stop && setStep({ kind: "email" }));
@@ -84,7 +80,7 @@ export function GuestEntry({ token }: { token: string }) {
     setError(null);
     void loadSalon().catch(() => undefined);
     try {
-      const r = await post(`/invite/${token}/verify`, { email: mail, code: digits, pubkey: (await loadKeys()).guestKey().pubkey });
+      const r = await post(`/invite/${token}/verify`, { email: mail, code: digits });
       if (r.status === ENDED_STATUS) return setStep({ kind: "ended" });
       if (r.status === 404) return setStep({ kind: "invalid" });
       if (r.status !== 200) return setError(r.data.error?.message ?? "Le code n’a pas pu être vérifié. Réessayez dans un instant.");

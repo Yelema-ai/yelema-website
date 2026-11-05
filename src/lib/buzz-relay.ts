@@ -112,7 +112,11 @@ export class BuzzConnection {
 
   /** Signs and sends; resolves with the relay's verdict (`message` carries Buzz's `response:{…}`). */
   publish(template: EventTemplate): Promise<{ ok: boolean; message: string; id: string }> {
-    const event = this.sign(template);
+    return this.publishSigned(this.sign(template));
+  }
+
+  /** Sends an event already signed with this connection's key. */
+  publishSigned(event: Event): Promise<{ ok: boolean; message: string; id: string }> {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.publishes.delete(event.id);
@@ -195,7 +199,7 @@ export async function conversations(c: BuzzConnection, me: string): Promise<Conv
   });
 }
 
-const marked = (e: Event, marker: string): string | null => e.tags.find((t) => t[0] === "e" && t[3] === marker)?.[1] ?? null;
+export const marked = (e: Event, marker: string): string | null => e.tags.find((t) => t[0] === "e" && t[3] === marker)?.[1] ?? null;
 
 export const toMessage = (e: Event): Message => ({
   id: e.id,
@@ -265,7 +269,7 @@ export const replyTags = (target: Target, thread: readonly Message[] = [], root 
 ];
 
 /** The root read from the relay itself, parent by parent from `id`, until a `root` marker or a message replying to none. */
-async function relayRoot(c: Relay, channel: string, id: string): Promise<string> {
+export async function relayRoot(c: Pick<BuzzConnection, "query">, channel: string, id: string): Promise<string> {
   for (let hop = 0; hop < MAX_HOPS; hop++) {
     const [e] = await c.query({ ids: [id], "#h": [channel] });
     if (!e) return id;

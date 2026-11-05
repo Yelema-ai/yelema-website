@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clientIp, encodeGuestCookie, guestCookieApplies, guestCookieName, guestCookieOptions, guestDeliverables, guestDirectory, guestFileHref, guestRefusal, guestSessionOf, guestView, rateWindow, sameOriginPost } from "./guest-access.ts";
+import { clientIp, guestCookieApplies, guestCookieKey, guestCookieName, guestCookieOptions, guestDeliverables, guestDirectory, guestFileHref, guestRefusal, guestView, openGuestCookie, sealGuestCookie, rateWindow, sameOriginPost } from "./guest-access.ts";
 import { salonDeliverableFor } from "./salon-deliverables.ts";
 
 const headers = (h: Record<string, string>) => ({ get: (n: string) => h[n.toLowerCase()] ?? null });
@@ -21,15 +21,37 @@ test("cookie invité : 30 jours glissants, jamais au-delà de la fin de l'accès
   assert.equal(guestCookieOptions("pas une date", NOW, true), null);
 });
 
-test("cookie invité : la session ne vaut que pour l'invitation qui l'a ouverte", () => {
-  const raw = encodeGuestCookie("sess_0123456789abcdef", "tok_AAAAAAAAAAAAAAAAAAAA");
-  assert.equal(guestSessionOf(raw), "sess_0123456789abcdef");
-  assert.equal(guestSessionOf(raw, "tok_AAAAAAAAAAAAAAAAAAAA"), "sess_0123456789abcdef");
-  assert.equal(guestSessionOf(raw, "tok_BBBBBBBBBBBBBBBBBBBB"), null);
-  assert.equal(guestSessionOf("n'importe quoi"), null);
-  assert.equal(guestSessionOf(undefined), null);
-  // The link itself never sits in the cookie.
-  assert.ok(!Buffer.from(raw, "base64url").toString().includes("tok_AAAA"));
+const KEY = guestCookieKey("resolver-token-0123456789abcdef")!;
+const SECRET = "ab".repeat(32);
+const SESSION = "sess_0123456789abcdef";
+
+test("cookie invité : scellé (AES-GCM), lié à l'invitation qui l'a ouvert", () => {
+  const raw = sealGuestCookie(KEY, { session: SESSION, secret: SECRET }, "tok_AAAAAAAAAAAAAAAAAAAA");
+  assert.deepEqual(openGuestCookie(KEY, raw), { session: SESSION, secret: SECRET });
+  assert.deepEqual(openGuestCookie(KEY, raw, "tok_AAAAAAAAAAAAAAAAAAAA"), { session: SESSION, secret: SECRET });
+  assert.equal(openGuestCookie(KEY, raw, "tok_BBBBBBBBBBBBBBBBBBBB"), null);
+  assert.equal(openGuestCookie(KEY, "n'importe quoi"), null);
+  assert.equal(openGuestCookie(KEY, undefined), null);
+  // Neither the key, the session nor the link can be read from it.
+  const bytes = Buffer.from(raw, "base64url").toString("latin1");
+  for (const s of [SECRET, SESSION, "tok_AAAA"]) assert.ok(!bytes.includes(s) && !raw.includes(s), s);
+  assert.equal(guestCookieKey(undefined), null);
+  assert.equal(guestCookieKey("court"), null);
+});
+
+test("cookie invité : altéré, ou scellé par une autre clé, il est refusé", () => {
+  const raw = sealGuestCookie(KEY, { session: SESSION, secret: SECRET }, "tok_AAAAAAAAAAAAAAAAAAAA");
+  const buf = Buffer.from(raw, "base64url");
+  for (const i of [0, 13, buf.length - 1]) {
+    const bad = Buffer.from(buf);
+    bad[i] ^= 1;
+    assert.equal(openGuestCookie(KEY, bad.toString("base64url")), null, `octet ${i}`);
+  }
+  assert.equal(openGuestCookie(guestCookieKey("autre-jeton-0123456789abcdef")!, raw), null);
+  // The old, readable format is no longer a session.
+  assert.equal(openGuestCookie(KEY, Buffer.from(JSON.stringify({ s: SESSION, t: "x" })).toString("base64url")), null);
+  // Two seals of the same content differ (fresh IV).
+  assert.notEqual(raw, sealGuestCookie(KEY, { session: SESSION, secret: SECRET }, "tok_AAAAAAAAAAAAAAAAAAAA"));
 });
 
 test("le cookie invité n'atteint aucune route des membres", () => {
@@ -76,9 +98,10 @@ test("accès terminé (410 access_ended) et session morte (401) font tomber la s
   assert.equal(guestRefusal(503, "unavailable"), null);
 });
 
-test("la vue de l'invité ne garde que ce que sa page lit (jamais la session)", () => {
+test("la vue de l'invité ne garde que ce que sa page lit (ni la session, ni le relais)", () => {
   const v = guestView({ session: "secret", expiresAt: "2027-01-01T00:00:00Z", guest: { id: "g1", email: "a@b.c", nom: "Jean Paul" }, salon: { id: "s1", nom: "Projet", channel: "c1" }, relay: { url: "wss://r" } } as never);
   assert.equal("session" in v, false);
+  assert.equal("relay" in v, false);
   assert.deepEqual(v.salon, { id: "s1", nom: "Projet", channel: "c1" });
 });
 

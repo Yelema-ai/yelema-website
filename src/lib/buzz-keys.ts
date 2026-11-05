@@ -7,8 +7,6 @@ import { apiFetch } from "@/lib/api";
 // a new key; the old one is removed from the back office by the member or ages out with the device.
 
 const STORE = "yelema.buzz.key";
-// An external guest's key, apart from a member's on the same browser: it is admitted in one salon only.
-const GUEST_STORE = "yelema.buzz.guest.key";
 
 function stored(store = STORE): Uint8Array | null {
   try {
@@ -62,25 +60,4 @@ export async function deviceKey(admitted: string[]): Promise<{ secret: Uint8Arra
     await apiFetch("/api/buzz/devices", { method: "POST", body: JSON.stringify({ pubkey, label: label() }) });
   }
   return { secret, pubkey };
-}
-
-/** The guest key this browser already holds: without it, a session cookie alone cannot read the salon. */
-export function storedGuestKey(): { secret: Uint8Array; pubkey: string } | null {
-  const secret = stored(GUEST_STORE);
-  return secret ? { secret, pubkey: getPublicKey(secret) } : null;
-}
-
-/** The guest's key on this browser, made on first use; only its public half is sent (`/invite/<token>/verify`). */
-export function guestKey(): { secret: Uint8Array; pubkey: string } {
-  const secret = stored(GUEST_STORE) ?? fresh(GUEST_STORE);
-  return { secret, pubkey: getPublicKey(secret) };
-}
-
-/** « Se déconnecter » as a guest: this browser's guest key goes too (a shared computer keeps nothing). */
-export function forgetGuestKey(): void {
-  try {
-    localStorage.removeItem(GUEST_STORE);
-  } catch {
-    /* nothing kept */
-  }
 }

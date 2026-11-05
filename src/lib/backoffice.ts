@@ -14,7 +14,7 @@ import { backofficeUrl, resolverToken } from "@/lib/runtime-config";
 import { SIGNALING_METHOD, type CallRecord, type SignalingStep, type VoiceOption } from "@/lib/voice";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 import type { BuzzOverview } from "@/lib/buzz";
-import type { GuestFile, GuestParticipant, GuestView } from "@/lib/guest-access";
+import type { GuestFile, GuestParticipant, GuestSessionView } from "@/lib/guest-access";
 import type { GuestRefusal, SalonGuest } from "@/lib/salon-guests";
 import type { ClaudeAuth, ClaudeAuthStatus, ClaudeLogin, ClaudeUsage } from "@/lib/claude-code-auth";
 
@@ -697,8 +697,8 @@ export const backoffice = {
   // An external guest's routes: called by this server only, with its secret and the visitor's address.
   guestCode: (invite: string, email: string, ip: string) => guestCall<unknown>(`/guest/invites/${encodeURIComponent(invite)}/code`, { ip, method: "POST", body: { email } }),
   guestVerify: (invite: string, body: { email: string; code: string; pubkey: string }, ip: string) =>
-    guestCall<GuestView & { session: string }>(`/guest/invites/${encodeURIComponent(invite)}/verify`, { ip, method: "POST", body }),
-  guestSession: (session: string, ip: string) => guestCall<GuestView>("/guest/session", { ip, session }),
+    guestCall<GuestSessionView & { session: string }>(`/guest/invites/${encodeURIComponent(invite)}/verify`, { ip, method: "POST", body }),
+  guestSession: (session: string, ip: string) => guestCall<GuestSessionView>("/guest/session", { ip, session }),
   guestDeliverables: (session: string, ip: string) => guestCall<{ data: GuestFile[] }>("/guest/salon/deliverables", { ip, session, timeoutMs: 30_000 }),
   guestFile: (session: string, ip: string, drivePath: string) =>
     guestCall<{ data: { url: string } }>(`/guest/salon/file?${new URLSearchParams({ p: drivePath }).toString()}`, { ip, session, timeoutMs: 30_000 }),

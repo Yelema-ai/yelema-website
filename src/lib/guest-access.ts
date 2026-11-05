@@ -1,6 +1,6 @@
 // An external guest of one salon (plan yelema-platform docs/plans/salons-invites-externes.md): its session
 // cookie, the checks of its POST routes and what its screens read. Pure: tested.
-import { createHash } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from "node:crypto";
 import type { BuzzEntry } from "./buzz.ts";
 import { normDrivePath } from "./drive-links.ts";
 import type { SalonDeliverable } from "./salon-deliverables.ts";
@@ -26,22 +26,46 @@ export function guestCookieOptions(expiresAt: string, nowMs: number, production:
 
 const tokenTag = (token: string): string => createHash("sha256").update(token).digest("base64url").slice(0, 22);
 
-/** The cookie holds the back office's session and which invitation it was opened from (a digest, never the link). */
-export const encodeGuestCookie = (session: string, token: string): string =>
-  Buffer.from(JSON.stringify({ s: session, t: tokenTag(token) }), "utf8").toString("base64url");
+/** The session the back office opened and the guest's relay key (hex), made and kept by this server only. */
+export interface GuestCookie { session: string; secret: string }
+const AAD = Buffer.from("yelema-guest-cookie-v1");
+const SESSION_RE = /^[\x21-\x7e]{16,4096}$/;
+const SECRET_RE = /^[0-9a-f]{64}$/;
 
-/** The session, when the cookie is well formed and, if `token` is given, was opened from that invitation. */
-export function guestSessionOf(raw: string | undefined, token?: string): string | null {
-  if (!raw) return null;
+/** AES-256-GCM key of the guest cookie, derived from the resolver token (already required by every guest call). */
+export function guestCookieKey(secret: string | undefined): Buffer | null {
+  const s = secret?.trim();
+  if (!s || s.length < 16) return null;
+  return Buffer.from(hkdfSync("sha256", s, "yelema", "guest-cookie-v1", 32));
+}
+
+/** Sealed: the browser holds it but can neither read nor change it. Bound to the invitation it was opened from. */
+export function sealGuestCookie(key: Buffer, c: GuestCookie, token: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv).setAAD(AAD);
+  const body = Buffer.concat([cipher.update(JSON.stringify({ s: c.session, t: tokenTag(token), k: c.secret }), "utf8"), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), body]).toString("base64url");
+}
+
+/** The cookie's content when it is intact and, if `token` is given, was opened from that invitation; else null. */
+export function openGuestCookie(key: Buffer, raw: string | undefined, token?: string): GuestCookie | null {
+  if (!raw || raw.length > 8192) return null;
   try {
-    const v = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as { s?: unknown; t?: unknown };
-    if (typeof v.s !== "string" || !/^[\x21-\x7e]{16,4096}$/.test(v.s)) return null;
+    const buf = Buffer.from(raw, "base64url");
+    if (buf.length < 29) return null;
+    const decipher = createDecipheriv("aes-256-gcm", key, buf.subarray(0, 12)).setAAD(AAD);
+    decipher.setAuthTag(buf.subarray(12, 28));
+    const v = JSON.parse(Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString("utf8")) as { s?: unknown; t?: unknown; k?: unknown };
+    if (typeof v.s !== "string" || !SESSION_RE.test(v.s) || typeof v.k !== "string" || !SECRET_RE.test(v.k)) return null;
     if (token !== undefined && v.t !== tokenTag(token)) return null;
-    return v.s;
+    return { session: v.s, secret: v.k };
   } catch {
     return null;
   }
 }
+
+/** A key for in-memory maps (limits, cache) that is not the session itself. */
+export const sessionTag = (session: string): string => createHash("sha256").update(session).digest("base64url");
 
 type Headers = { get(name: string): string | null };
 
@@ -90,16 +114,26 @@ export function rateWindow(limit: number, windowMs: number, maxKeys = 5000) {
   };
 }
 
-export interface GuestSalon { id: string; nom: string; channel: string }
-export interface GuestView { expiresAt: string; guest: { id: string; email: string; nom: string }; salon: GuestSalon; relay: { url: string } }
+/** Per server instance, in front of the back office's own: per address (code, verify), per session (salon). */
+export const guestLimits = () => ({
+  code: rateWindow(5, 10 * 60_000),
+  verify: rateWindow(10, 10 * 60_000),
+  post: rateWindow(20, 60_000),
+  read: rateWindow(60, 60_000),
+  stream: rateWindow(20, 10 * 60_000),
+});
 
-/** What a guest's screen may hold: the view without anything else the back office sent. */
+export interface GuestSalon { id: string; nom: string; channel: string }
+export interface GuestView { expiresAt: string; guest: { id: string; email: string; nom: string }; salon: GuestSalon }
+/** The back office's answer: the relay's address stays on this server, which alone talks to the relay. */
+export type GuestSessionView = GuestView & { relay: { url: string } };
+
+/** What a guest's screen may hold: the view without anything else the back office sent (no relay). */
 export function guestView(v: GuestView): GuestView {
   return {
     expiresAt: v.expiresAt,
     guest: { id: v.guest.id, email: v.guest.email, nom: v.guest.nom },
     salon: { id: v.salon.id, nom: v.salon.nom, channel: v.salon.channel },
-    relay: { url: v.relay.url },
   };
 }
 
