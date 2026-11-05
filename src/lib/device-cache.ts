@@ -1,6 +1,6 @@
 // What a screen last showed, kept on the device so it paints at once on the next visit, then refreshes.
 // One account + space at a time: opening another wipes everything, and a tab of another one stops writing.
-// A row older than MAX_AGE_MS is dropped. Never tokens, secrets or file contents.
+// A row older than MAX_AGE_MS (a day for message content) is dropped. Never tokens, secrets or file contents.
 // Pure: the storage comes in (IndexedDB in the browser, a Map in tests).
 
 export interface CacheRow {
@@ -26,6 +26,10 @@ export interface CacheBackend {
 
 export const META_KEY = "__meta";
 export const MAX_AGE_MS = 7 * 24 * 3_600_000;
+/** Message content (a thread, a Buzz exchange) is kept a day only. */
+export const CONTENT_MAX_AGE_MS = 24 * 3_600_000;
+const CONTENT = ["chat:", "buzz:thread"];
+export const maxAgeOf = (key: string): number => (CONTENT.some((p) => key.startsWith(p)) ? CONTENT_MAX_AGE_MS : MAX_AGE_MS);
 export const sameMeta = (stored: unknown, meta: Meta): boolean => {
   const m = stored as Partial<Meta> | undefined;
   return m?.scope === meta.scope && m?.version === meta.version;
@@ -57,9 +61,21 @@ export interface DeviceCacheOptions {
   defer?: (fn: () => void) => void;
 }
 
-export function createDeviceCache(backend: CacheBackend, { version, maxBytes, now = Date.now, defer = (fn) => void setTimeout(fn, 250) }: DeviceCacheOptions) {
+type Idle = (fn: () => void, o: { timeout: number }) => number;
+// After the burst, when the page is idle: the copy, the size and the secret check run there, not in `set`.
+function afterBurst(fn: () => void): void {
+  setTimeout(() => {
+    const ric = (globalThis as { requestIdleCallback?: Idle }).requestIdleCallback;
+    if (ric) ric(fn, { timeout: 1_000 });
+    else fn();
+  }, 250);
+}
+
+export function createDeviceCache(backend: CacheBackend, { version, maxBytes, now = Date.now, defer = afterBurst }: DeviceCacheOptions) {
   const rows = new Map<string, CacheRow>();
   const dirty = new Set<string>();
+  // Handed to `set`, not yet copied or checked: the latest value per key, with when it was set.
+  const raw = new Map<string, { value: unknown; at: number }>();
   let scope: string | null = null;
   let loaded: string | null = null;
   let bytes = 0;
@@ -91,9 +107,35 @@ export function createDeviceCache(backend: CacheBackend, { version, maxBytes, no
     defer(() => void flush());
   }
 
+  // A value handed to `set` becomes a row: scrubbed, measured, refused when too large or carrying a secret.
+  function commit(key: string): void {
+    const r = raw.get(key);
+    if (!r) return;
+    raw.delete(key);
+    let size: number;
+    const value = scrubSigned(r.value);
+    try {
+      size = JSON.stringify(value).length * 2;
+    } catch {
+      return;
+    }
+    if (size > maxBytes / 2 || carriesSecret(value)) return;
+    drop(key);
+    rows.set(key, { key, value, at: r.at, size });
+    bytes += size;
+    dirty.add(key);
+  }
+
+  function commitAll(): void {
+    for (const k of [...raw.keys()]) commit(k);
+    const gone = evict();
+    if (gone.length) void backend.delete(gone).catch(() => undefined);
+  }
+
   async function flush(): Promise<void> {
     await opened;
     flushing = false;
+    commitAll();
     const keys = [...dirty];
     dirty.clear();
     const put = keys.map((k) => rows.get(k)).filter((r): r is CacheRow => Boolean(r));
@@ -107,6 +149,7 @@ export function createDeviceCache(backend: CacheBackend, { version, maxBytes, no
     loaded = null;
     rows.clear();
     dirty.clear();
+    raw.clear();
     bytes = 0;
     opened = Promise.resolve();
   }
@@ -129,8 +172,8 @@ export function createDeviceCache(backend: CacheBackend, { version, maxBytes, no
     }
     const old: string[] = [];
     for (const r of all) {
-      if (r.key === META_KEY || rows.has(r.key)) continue;
-      if (now() - r.at > MAX_AGE_MS) old.push(r.key);
+      if (r.key === META_KEY || rows.has(r.key) || raw.has(r.key)) continue;
+      if (now() - r.at > maxAgeOf(r.key)) old.push(r.key);
       else {
         rows.set(r.key, r);
         bytes += r.size;
@@ -149,6 +192,7 @@ export function createDeviceCache(backend: CacheBackend, { version, maxBytes, no
       loaded = null;
       rows.clear();
       dirty.clear();
+      raw.clear();
       bytes = 0;
       opened = load(next);
       return opened;
@@ -157,32 +201,25 @@ export function createDeviceCache(backend: CacheBackend, { version, maxBytes, no
     /** True once the open space's rows are readable. */
     ready: () => scope !== null && loaded === scope,
     get<T>(key: string): T | undefined {
+      if (raw.has(key)) {
+        commit(key);
+        const gone = evict();
+        if (gone.length) void backend.delete(gone).catch(() => undefined);
+      }
       const r = rows.get(key);
       if (!r) return undefined;
       r.at = now();
       return r.value as T;
     },
-    /** Keeps `value` (JSON-able) under `key`; refused when no space is open, too large or carrying a secret. */
-    set(key: string, raw: unknown): boolean {
+    /** Keeps `value` (JSON-able) under `key`, checked once the burst is over; refused when no space is open (false), too large or carrying a secret. */
+    set(key: string, value: unknown): boolean {
       if (!scope || key === META_KEY) return false;
-      let size: number;
-      const value = scrubSigned(raw);
-      try {
-        size = JSON.stringify(value).length * 2;
-      } catch {
-        return false;
-      }
-      if (size > maxBytes / 2 || carriesSecret(value)) return false;
-      drop(key);
-      rows.set(key, { key, value, at: now(), size });
-      bytes += size;
-      dirty.add(key);
-      const gone = evict();
-      if (gone.length) void backend.delete(gone).catch(() => undefined);
+      raw.set(key, { value, at: now() });
       schedule();
       return true;
     },
     remove(key: string): void {
+      raw.delete(key);
       drop(key);
       dirty.delete(key);
       void backend.delete([key]).catch(() => undefined);
@@ -194,7 +231,8 @@ export function createDeviceCache(backend: CacheBackend, { version, maxBytes, no
     },
     /** Another tab took the device: this one forgets what it holds and writes nothing more. */
     close,
-    keys: () => [...rows.keys()],
+    keys: () => [...new Set([...rows.keys(), ...raw.keys()])],
+    /** Bytes of the rows already checked (a value just set counts once the burst is over). */
     bytes: () => bytes,
     flush,
   };

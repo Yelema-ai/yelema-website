@@ -5,7 +5,8 @@ import { idbBackend } from "@/lib/device-cache-idb";
 // The browser's device cache (lib/device-cache). Its rows start loading as the page's JS runs, but
 // nothing reaches a screen before WorkspaceProvider confirms the account and space they belong to.
 export const CACHE_VERSION = 1;
-const MAX_BYTES = 5 * 1024 * 1024;
+// Read whole when the page opens: kept small so that read stays short.
+const MAX_BYTES = 2 * 1024 * 1024;
 const SCOPE_KEY = "yelema-cache-scope";
 // Only these client-cache answers are kept on the device; the rest live for the tab only.
 const KEPT = ["chat:", "drive-tree:", "drive-files:", "all-deliverables:", "conversations:", "models:", "experts:", "buzz:"];
@@ -81,8 +82,13 @@ function closeDevice(): void {
 
 if (browser) {
   persistTo((key, value) => KEPT.some((p) => key.startsWith(p)) && deviceKeep(key, value));
-  const last = storage((s) => s.getItem(SCOPE_KEY));
-  if (last) void cache.open(last);
+  // Read ahead after the first paint, when idle; the shell's confirmDevice opens it at once if it comes first.
+  const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+  const ahead = () => {
+    const last = storage((s) => s.getItem(SCOPE_KEY));
+    if (last && !cache.scope()) void cache.open(last);
+  };
+  if (storage((s) => s.getItem(SCOPE_KEY))) requestAnimationFrame(() => (ric ? ric(ahead, { timeout: 500 }) : setTimeout(ahead, 0)));
   tabs?.addEventListener("message", (e: MessageEvent<{ scope?: string | null }>) => {
     if (e.data?.scope !== confirmed && e.data?.scope !== cache.scope()) closeDevice();
   });

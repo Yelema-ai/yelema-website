@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { accountHash, carriesSecret, createDeviceCache, MAX_AGE_MS, memoryBackend, META_KEY, scrubSigned, type CacheRow } from "./device-cache.ts";
+import { accountHash, carriesSecret, CONTENT_MAX_AGE_MS, createDeviceCache, MAX_AGE_MS, memoryBackend, META_KEY, scrubSigned, type CacheRow } from "./device-cache.ts";
 
 function harness(seed: CacheRow[] = [], maxBytes = 10_000, version = 1) {
   let t = 1000;
@@ -64,6 +64,7 @@ describe("cache de l'appareil", () => {
     h.cache.get("a");
     h.cache.set("c", "x".repeat(40));
     h.cache.set("d", "x".repeat(40));
+    await h.settle();
     assert.equal(h.cache.get("b"), undefined);
     assert.ok(h.cache.get("a"));
     assert.ok(h.cache.bytes() <= 300);
@@ -74,10 +75,16 @@ describe("cache de l'appareil", () => {
   it("refuse une valeur qui porte un secret ou trop grosse ; efface les adresses signées", async () => {
     const h = harness([meta("s")], 1_000);
     await h.cache.open("s");
-    assert.equal(h.cache.set("x", { user: { accessToken: "eyJ" } }), false);
-    assert.equal(h.cache.set("y", "x".repeat(500)), false);
+    h.cache.set("x", { user: { accessToken: "eyJ" } });
+    h.cache.set("y", "x".repeat(500));
     h.cache.set("z", { photoUrl: "https://cdn.test/a.png?token=abc", name: "Awa", url: "https://cdn.test/b.png" });
     assert.deepEqual(h.cache.get("z"), { photoUrl: null, name: "Awa", url: "https://cdn.test/b.png" });
+    await h.settle();
+    for (const k of ["x", "y"]) {
+      assert.equal(h.cache.get(k), undefined);
+      assert.equal(h.backend.rows.has(k), false);
+    }
+    assert.deepEqual(h.backend.rows.get("z")?.value, { photoUrl: null, name: "Awa", url: "https://cdn.test/b.png" });
     assert.equal(carriesSecret({ list: [{ password: "p" }] }), true);
     assert.equal(carriesSecret({ catalogueKey: "awa", token: null }), false);
     assert.equal(scrubSigned("voir ?token=1 dans le texte"), "voir ?token=1 dans le texte");
@@ -124,5 +131,40 @@ describe("cache de l'appareil — plusieurs onglets, ancienneté", () => {
     assert.equal(cache.get("chat:old"), undefined);
     assert.deepEqual(cache.get("chat:new"), ["récent"]);
     assert.equal(backend.rows.has("chat:old"), false);
+  });
+
+  it("un fil de messages est retiré après un jour, le reste après 7 jours", async () => {
+    const now = MAX_AGE_MS;
+    const day = now - CONTENT_MAX_AGE_MS - 1_000;
+    const backend = memoryBackend([meta("u1:w1"), row("chat:a:s1", ["vieux"], day), row("buzz:thread:t1", ["vieux"], day), row("buzz:salons", ["gardé"], day), row("experts:w1", ["gardé"], day)]);
+    const cache = createDeviceCache(backend, { version: 1, maxBytes: 10_000, now: () => now });
+    await cache.open("u1:w1");
+    assert.deepEqual([...backend.rows.keys()].sort(), [META_KEY, "buzz:salons", "experts:w1"].sort());
+  });
+});
+
+describe("cache de l'appareil — écriture différée", () => {
+  it("set ne copie ni ne mesure : une seule copie par clé, au vidage, de la dernière valeur", async () => {
+    const h = harness([meta("s")]);
+    await h.cache.open("s");
+    let reads = 0;
+    const value = (n: number) => ({ get n() {
+      reads++;
+      return n;
+    } });
+    for (let i = 0; i < 5; i++) h.cache.set("k", value(i));
+    assert.equal(reads, 0);
+    assert.ok(h.cache.keys().includes("k"));
+    await h.settle();
+    assert.deepEqual(h.backend.rows.get("k")?.value, { n: 4 });
+    assert.ok(reads <= 3, "une copie, une mesure, un contrôle");
+  });
+
+  it("une ligne lue au chargement ne remplace pas une valeur posée entre-temps", async () => {
+    const h = harness([meta("s"), row("experts:w1", ["ancien"])]);
+    const opening = h.cache.open("s");
+    h.cache.set("experts:w1", ["nouveau"]);
+    await opening;
+    assert.deepEqual(h.cache.get("experts:w1"), ["nouveau"]);
   });
 });
