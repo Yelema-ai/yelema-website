@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { apiFetch, readApiError } from "@/lib/api";
 import { runPool } from "@/lib/bulk";
+import { optimistic } from "@/lib/optimistic";
 import { DRIVE_ABS, DRIVE_ROOT, fileLabel, isDriveRoot } from "@/lib/drive-paths";
 import { driveChanged } from "@/lib/drive-store";
 import { isDriveClutter, matchesDriveQuery, sortDriveEntries, type DriveSort } from "@/lib/drive-order";
@@ -299,15 +300,15 @@ export function useFileBrowser(agentId: string, initialPath?: string, inbox?: st
     async (entry: FileEntry, newName: string) => {
       const clean = newName.trim();
       if (!clean || !path || clean === entry.name) return;
-      try {
-        await apiFetch(`/api/agents/${agentId}/files`, {
-          method: "PATCH",
-          body: JSON.stringify({ from: entry.path, to: joinPath(path, clean) }),
-        });
-        await reload(path);
-      } catch (e) {
-        toast.error((e as Error).message || "Le renommage a échoué.");
-      }
+      // Shown under its new name at once; back to the old one, with the refusal, if the instance says no.
+      const to = joinPath(path, clean);
+      const ok = await optimistic({
+        apply: () => setEntries((list) => list.map((e) => (e.path === entry.path ? { ...e, name: clean, path: to } : e))),
+        run: () => apiFetch(`/api/agents/${agentId}/files`, { method: "PATCH", body: JSON.stringify({ from: entry.path, to }) }, "Le renommage a échoué."),
+        rollback: () => setEntries((list) => list.map((x) => (x.path === to ? entry : x))),
+        refused: (m) => toast.error(m),
+      });
+      if (ok) await reload(path);
     },
     [agentId, path, reload]
   );

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
+import { remember, whenKept } from "@/lib/client-cache";
+import { optimistic } from "@/lib/optimistic";
 import { conversationName, isSalonName, labelsOf, myExpertsIn, myMember, participants, working, type BuzzOverview } from "@/lib/buzz";
 import { deviceKey, rememberedRelay, storedKey } from "@/lib/buzz-keys";
 import { BuzzConnection, conversations, follow, openDirect, sendMessage, watchRosters, withMessage, type Conversation, type Message } from "@/lib/buzz-relay";
@@ -21,6 +23,10 @@ import { NewExchange, type ExchangeKind } from "@/components/messaging/NewExchan
 
 type State = { kind: "loading" } | { kind: "closed"; reason: string } | { kind: "ready" };
 const markKey = (id: string) => `echange:${id}`;
+// What this device last showed (lib/device-cache-client): the rail and the thread paint before the relay answers.
+const OVERVIEW_KEY = "buzz:overview";
+const LIST_KEY = "buzz:list";
+const threadKey = (id: string) => `buzz:thread:${id}`;
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function Messaging() {
@@ -64,7 +70,7 @@ export function Messaging() {
     if (!relay.current || !me) return;
     setRefreshing(true);
     try {
-      setList(await conversations(relay.current, me));
+      setList(remember(LIST_KEY, await conversations(relay.current, me)));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -112,12 +118,16 @@ export function Messaging() {
     const known = rememberedRelay();
     dialer.current = held && known ? { url: known, secret: held.secret, dialing: false, stopped: false } : null;
     const early = dialer.current ? dial(1) : Promise.resolve(false);
+    const offKept = [
+      whenKept<BuzzOverview>(OVERVIEW_KEY, (o) => !stop && setOverview((p) => p ?? o)),
+      whenKept<Conversation[]>(LIST_KEY, (l) => !stop && setList((p) => p ?? l)),
+    ];
     (async () => {
       try {
         const o = await apiFetch<BuzzOverview>("/api/buzz");
         if (stop) return;
         rememberedRelay(o.relais);
-        setOverview(o);
+        setOverview(remember(OVERVIEW_KEY, o));
         const key = await deviceKey(o.appareils.map((d) => d.cle));
         if (stop) return;
         setMe(key.pubkey);
@@ -139,6 +149,7 @@ export function Messaging() {
     })();
     return () => {
       stop = true;
+      offKept.forEach((off) => off());
       if (dialer.current) dialer.current.stopped = true;
       relay.current?.close();
       relay.current = null;
@@ -168,7 +179,7 @@ export function Messaging() {
   async function reload() {
     setRefreshing(true);
     try {
-      const fresh = apiFetch<BuzzOverview>("/api/buzz").then(setOverview, () => undefined);
+      const fresh = apiFetch<BuzzOverview>("/api/buzz").then((o) => setOverview(remember(OVERVIEW_KEY, o)), () => undefined);
       if (relay.current) setLink((l) => l + 1);
       else if (!(await dial(1))) toast.error("Le relais ne répond pas. Nouvel essai dans un instant.");
       await fresh;
@@ -179,17 +190,22 @@ export function Messaging() {
 
   // Le fil ouvert puis chaque nouveau message, dans une seule requête restée ouverte.
   useEffect(() => {
+    if (!open) return;
+    if (shown.current !== open) setThread(null);
+    // Avant le relais : le fil tel que cet appareil l'a vu, remplacé dès que le relais répond.
+    return whenKept<Message[]>(threadKey(open), (m) => shown.current !== open && setThread((t) => t ?? m));
+  }, [open]);
+
+  useEffect(() => {
     const c = relay.current;
     if (!c || !open) return;
     let stop = false;
-    // Relu après une reconnexion : le fil affiché reste en place, sans « Chargement… ».
-    if (shown.current !== open) setThread(null);
     setThreadFailed(false);
     const sub = follow(c, open, {
       onLoad: (m) => {
         if (stop) return;
         shown.current = open;
-        setThread(m);
+        setThread(remember(threadKey(open), m.slice(-40)));
       },
       onLive: (m) => !stop && setThread((t) => withMessage(t, m)),
       // Une connexion muette est rouverte d'elle-même (puis le fil relu) ; d'ici là, « Réessayer ».
@@ -235,8 +251,18 @@ export function Messaging() {
     if (!c) return;
     if (kind === "ajout") {
       if (!open) return;
-      await apiFetch(`/api/buzz/salons/${open}/membres`, { method: "POST", body: JSON.stringify({ cles: keys }) }, "Les participants n’ont pas pu être ajoutés");
+      const salon = open;
+      const before = list?.find((x) => x.id === salon)?.members ?? null;
+      const members = (m: string[] | null) => m && setList((l) => l?.map((x) => (x.id === salon ? { ...x, members: m } : x)) ?? l);
       setComposing(null);
+      // Affichés tout de suite ; retirés, avec le refus, si le back-office ne les admet pas.
+      const ok = await optimistic({
+        apply: () => members(before && [...new Set([...before, ...keys])]),
+        run: () => apiFetch(`/api/buzz/salons/${salon}/membres`, { method: "POST", body: JSON.stringify({ cles: keys }) }, "Les participants n’ont pas pu être ajoutés"),
+        rollback: () => members(before),
+        refused: (m) => toast.error(m),
+      });
+      if (!ok) return;
       toast.success("Participants ajoutés. Leurs Experts écoutent le salon d’ici une minute.");
       await refresh();
       return;
@@ -252,12 +278,18 @@ export function Messaging() {
   }
 
   async function rename(c: Conversation, nom: string) {
-    try {
-      await apiFetch(`/api/buzz/salons/${c.id}`, { method: "PATCH", body: JSON.stringify({ nom }) }, "Le salon n’a pas pu être renommé");
-      await refresh();
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
+    const was = overview?.salons.find((s) => s.id === c.id)?.nom ?? null;
+    const named = (n: string | null) => {
+      setList((l) => l?.map((x) => (x.id === c.id ? { ...x, name: n ?? c.name } : x)) ?? l);
+      setOverview((o) => (o && was !== null ? { ...o, salons: o.salons.map((s) => (s.id === c.id ? { ...s, nom: n ?? was } : s)) } : o));
+    };
+    const ok = await optimistic({
+      apply: () => named(nom),
+      run: () => apiFetch(`/api/buzz/salons/${c.id}`, { method: "PATCH", body: JSON.stringify({ nom }) }, "Le salon n’a pas pu être renommé"),
+      rollback: () => named(was),
+      refused: (m) => toast.error(m),
+    });
+    if (ok) await refresh();
   }
 
   // Lève l'erreur : la fenêtre de confirmation l'affiche et reste ouverte.
