@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 import { currentInstance, currentPrincipal, workspaceOfMe } from "@/lib/session";
-import { catalogueWithInstalled, profilesMirrored, userExperts, visibleAgents } from "@/lib/installed-experts";
+import { catalogueWithInstalled, profilesMirrored, userExperts, visibleAgents, type UserExperts } from "@/lib/installed-experts";
 import { backofficeAgents } from "@/lib/my-agents";
 import type { InitialExperts } from "@/components/experts/useExperts";
 import type { CatalogueResponse, MergedAgent, Role, Workspace, WorkspaceWithRole } from "@/lib/types";
@@ -63,19 +63,40 @@ const loadInitialShell = cache(async (workspaceId: string, userId: string, email
 
 export type InitialShell = { experts: InitialExperts | null; catalogue: CatalogueResponse | null; agents: MergedAgent[] | null };
 
+// Who is signed in and their workspaces, read once per request.
+const signedIn = cache(async () => {
+  // Asked now, alongside "who is this", so the experts below do not wait for it in turn.
+  if (authViaBackoffice()) void currentInstance().catch(() => null);
+  const { user } = await getSession();
+  if (!user) return { user: null, me: null, workspaces: [] as WorkspaceWithRole[] };
+  // Signed in through the back office: it already said which workspace this is and the user's role.
+  // Otherwise table access goes through the privileged client; the user came from the verified session.
+  const me = authViaBackoffice() ? await currentPrincipal() : null;
+  const workspaces: WorkspaceWithRole[] = me ? [workspaceOfMe(me)] : authViaBackoffice() ? [] : await loadWorkspaces(createAdminClient(), user.id);
+  return { user, me, workspaces };
+});
+
 /**
  * Who is signed in, their workspaces and the shell's first data: read once per request, shared by the
  * layout and the pages that load their first screen on the server.
  */
 export const appContext = cache(async () => {
-  // Asked now, alongside "who is this", so the experts below do not wait for it in turn.
-  if (authViaBackoffice()) void currentInstance().catch(() => null);
-  const { user } = await getSession();
+  const { user, me, workspaces } = await signedIn();
   if (!user) return { user: null, me: null, workspaces: [], initial: null } as const;
-  // Signed in through the back office: it already said which workspace this is and the user's role.
-  // Otherwise table access goes through the privileged client; the user came from the verified session.
-  const me = authViaBackoffice() ? await currentPrincipal() : null;
-  const workspaces: WorkspaceWithRole[] = me ? [workspaceOfMe(me)] : authViaBackoffice() ? [] : await loadWorkspaces(createAdminClient(), user.id);
   const initial = workspaces.length ? await loadInitialShell(workspaces[0].id, user.id, user.email) : null;
   return { user, me, workspaces, initial };
 });
+
+/** The own instance and its experts, as `appContext` would find them, without the catalogue (the tab's bootstrap). */
+export async function ownExperts(): Promise<{ agentId: string | null; experts: UserExperts["experts"] } | null> {
+  const { user, workspaces } = await signedIn();
+  if (!user || !workspaces.length) return null;
+  try {
+    const agents = await visibleAgents(createAdminClient(), workspaces[0].id, user.id);
+    if (!profilesMirrored(agents)) return null;
+    const { experts } = await userExperts(agents);
+    return { agentId: (authViaBackoffice() ? agents[0]?.agent37_id : null) ?? experts[0]?.agentId ?? null, experts };
+  } catch {
+    return null;
+  }
+}

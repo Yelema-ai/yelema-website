@@ -14,6 +14,12 @@ export function within<T>(promise: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([promise.catch(() => null), late]).finally(() => clearTimeout(timer));
 }
 
+/** `within` against one deadline `ms` from now: reads started later get only what is left of it. */
+export function byDeadline(ms: number, now: () => number = Date.now): <T>(promise: Promise<T>) => Promise<T | null> {
+  const end = now() + ms;
+  return (promise) => within(promise, Math.max(0, end - now()));
+}
+
 /** Each key's answer; a key that failed is left out, so the view treats it as its own failed read. */
 export async function settledByKey<T>(keys: string[], load: (key: string) => Promise<T>): Promise<Record<string, T>> {
   const all = await Promise.allSettled(keys.map(load));

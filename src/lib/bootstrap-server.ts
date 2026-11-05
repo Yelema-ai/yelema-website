@@ -1,10 +1,10 @@
 import "server-only";
-import { appContext } from "@/lib/app-context";
+import { ownExperts } from "@/lib/app-context";
 import { backoffice, BackofficeError, type MemberPrefs } from "@/lib/backoffice";
 import { deployStatus } from "@/lib/deploy-server";
 import type { DriveTree } from "@/lib/drive-paths";
 import { instanceDriveTree } from "@/lib/drive-tree-server";
-import { FIRST_SCREEN_BUDGET_MS, within } from "@/lib/first-screen";
+import { byDeadline, FIRST_SCREEN_BUDGET_MS } from "@/lib/first-screen";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { readSession } from "@/lib/session";
 import { spacesOf, type Space } from "@/lib/sessions-by-profile";
@@ -32,17 +32,19 @@ async function backofficePart(): Promise<{ preferences: MemberPrefs | null; main
   return { preferences: b.preferences ?? null, maintenance: b.platform ? b.platform.maintenance === true : undefined };
 }
 
-/** What the shell reads when a tab opens, in one call (GET /api/bootstrap, contract §3). */
+/** What the shell reads when a tab opens, in one call (GET /api/bootstrap, contract §3), within one budget. */
 export async function tabBootstrap(): Promise<TabBootstrap> {
-  const { initial } = await appContext();
-  const experts = initial?.experts?.experts ?? [];
-  const agentId = initial?.agents?.[0]?.agent37_id ?? experts[0]?.agentId ?? null;
-  const profiles = ["", ...experts.filter((e) => e.agentId === agentId).map((e) => e.profileId)].slice(0, MAX_SPACES);
-  const [bo, spaces, tree] = await Promise.all([
-    within(backofficePart(), FIRST_SCREEN_BUDGET_MS),
-    agentId ? within(spacesOf(agentId, profiles), FIRST_SCREEN_BUDGET_MS) : null,
-    agentId ? within(instanceDriveTree(agentId), FIRST_SCREEN_BUDGET_MS) : null,
+  const left = byDeadline(FIRST_SCREEN_BUDGET_MS);
+  const boRead = backofficePart();
+  const deploy = left(boRead.then((b) => b.maintenance, () => undefined).then(deployStatus));
+  const own = await left(ownExperts());
+  const agentId = own?.agentId ?? null;
+  const profiles = ["", ...(own?.experts ?? []).filter((e) => e.agentId === agentId).map((e) => e.profileId)].slice(0, MAX_SPACES);
+  const [bo, spaces, tree, deployed] = await Promise.all([
+    left(boRead),
+    agentId ? left(spacesOf(agentId, profiles)) : null,
+    agentId ? left(instanceDriveTree(agentId)) : null,
+    deploy,
   ]);
-  const deploy = await within(deployStatus(bo?.maintenance), FIRST_SCREEN_BUDGET_MS);
-  return { agentId, preferences: bo?.preferences ?? null, deploy, spaces, tree };
+  return { agentId, preferences: bo?.preferences ?? null, deploy: deployed, spaces, tree };
 }
