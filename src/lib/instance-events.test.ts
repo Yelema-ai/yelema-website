@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createEventHub, eventStreamOn, matches, nextEvent, namedPings, parseInstanceEvent, reconnectDelay, resumeId, streamGate, touchesDrive, touchesSessions, type InstanceEvent, type InstanceEventType } from "./instance-events.ts";
+import { createEventHub, eventStreamOn, matches, nextEvent, namedPings, parseInstanceEvent, reconnectDelay, resumeId, silenceMs, STREAM_SILENCE_MS, streamGate, touchesDrive, touchesSessions, type InstanceEvent, type InstanceEventType } from "./instance-events.ts";
 
 const ev = (type: InstanceEventType, extra: Partial<InstanceEvent> = {}): InstanceEvent => ({ type, at: 1, ...extra });
 
@@ -157,5 +157,18 @@ describe("heartbeat", () => {
         .pipeThrough(new TextEncoderStream())
     ).text();
     assert.equal(out, "retry: 5000\nevent: ready\ndata: {}\n\nevent: ping\ndata: {}\n\nevent: turn.ended\nid: 7\ndata: {}\n\nevent: ping\ndata: {}\n\n");
+  });
+});
+
+describe("silence before reconnecting", () => {
+  it("a connection that never pinged waits longer than one that did", () => {
+    assert.equal(silenceMs(true), STREAM_SILENCE_MS);
+    assert.ok(silenceMs(false) >= 2 * STREAM_SILENCE_MS);
+  });
+});
+
+describe("parsing never marks an event as the tab's own catch-up", () => {
+  it("resumed is not read from the wire", () => {
+    assert.equal(parseInstanceEvent("instance.changed", JSON.stringify({ resumed: true }))?.resumed, undefined);
   });
 });

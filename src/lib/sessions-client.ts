@@ -29,7 +29,7 @@ onDeviceOpen((get, keys) => {
 onBootstrap(({ agentId, spaces }) => {
   if (!agentId || !spaces) return;
   // A space the page already seeded without its runs, or only the device's copy, takes the bootstrap's.
-  for (const [profile, data] of Object.entries(spaces)) if (!store.get(agentId, profile)?.runs || store.fromDevice(agentId, profile)) store.put(agentId, profile, data);
+  for (const [profile, data] of Object.entries(spaces)) if (!store.get(agentId, profile)?.runs || store.fromDevice(agentId, profile)) store.seed(agentId, profile, data);
 });
 
 // Callers name a space by its profile (null: the instance's home); the store keys it with `spaceProfile`.
@@ -37,12 +37,14 @@ export const sessionsStore = {
   get: (agentId: string, profile: string | null) => store.get(agentId, spaceProfile(profile)),
   // `withRuns`: a space held without its routine runs (a page's first screen) is read again for them.
   read: async (agentId: string, profile: string | null, maxAgeMs?: number, withRuns = false) => {
-    await bootstrapped(agentId);
     const p = spaceProfile(profile);
-    return store.read(agentId, p, withRuns && !store.get(agentId, p)?.runs ? 0 : maxAgeMs);
+    const age = () => (withRuns && !store.get(agentId, p)?.runs ? 0 : maxAgeMs);
+    // A fresh copy answers at once; only a miss waits for the bootstrap, which may hold it.
+    if (!store.fresh(agentId, p, age())) await bootstrapped(agentId);
+    return store.read(agentId, p, age());
   },
   fromDevice: (agentId: string, profile: string | null) => store.fromDevice(agentId, spaceProfile(profile)),
   put: (agentId: string, profile: string | null, data: SpaceData) => store.put(agentId, spaceProfile(profile), data),
-  invalidate: (agentId: string, profile?: string) => store.invalidate(agentId, profile === undefined ? undefined : spaceProfile(profile)),
+  invalidate: (agentId: string, profile?: string, opts?: { answeredWithinMs?: number }) => store.invalidate(agentId, profile === undefined ? undefined : spaceProfile(profile), opts),
   subscribe: (agentId: string, profile: string | null, fn: (d: SpaceData) => void) => store.subscribe(agentId, spaceProfile(profile), fn),
 };

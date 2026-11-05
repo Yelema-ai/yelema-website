@@ -175,4 +175,32 @@ describe("sessions store — copie de l'appareil", () => {
     assert.equal(store.get("a", "x")?.sessions[0].session_id, "frais");
     t += 1;
   });
+
+  it("the bootstrap's copy never replaces a space marked stale or changed in flight", async () => {
+    const h = harness((_a, ps) => Object.fromEntries(ps.map((p) => [p, space("live")])));
+    h.store.put("a", "x", space("page"));
+    const off = h.store.subscribe("a", "x", () => undefined);
+    h.store.invalidate("a", "x");
+    h.store.seed("a", "x", space("boot"));
+    assert.equal(h.store.get("a", "x")?.sessions[0].session_id, "page");
+    assert.equal(h.store.fresh("a", "x"), false);
+    await h.tick();
+    assert.equal(h.store.get("a", "x")?.sessions[0].session_id, "live");
+    h.store.seed("a", "y", space("boot"));
+    assert.equal(h.store.fresh("a", "y"), true, "an untouched space takes it");
+    off();
+  });
+
+  it("a catch-up skips spaces answered within the window, and reads the others", async () => {
+    const h = harness((_a, ps) => Object.fromEntries(ps.map((p) => [p, space(p)])));
+    h.store.put("a", "x", space("x"));
+    h.store.put("a", "y", space("y"));
+    const offs = [h.store.subscribe("a", "x", () => undefined), h.store.subscribe("a", "y", () => undefined)];
+    h.advance(10_000);
+    h.store.put("a", "y", space("y"));
+    h.store.invalidate("a", undefined, { answeredWithinMs: 5_000 });
+    await h.tick();
+    assert.deepEqual(h.calls, ["a:x"]);
+    offs.forEach((f) => f());
+  });
 });

@@ -16,6 +16,8 @@ export interface InstanceEvent {
   profile?: string;
   session?: string;
   kind?: JobKind;
+  /** Sent by the tab itself after a reconnect the gateway could not replay (never parsed from the wire). */
+  resumed?: boolean;
 }
 
 const FIRST_RETRY_MS = 2_000;
@@ -148,13 +150,16 @@ export function nextEvent(hub: EventHub, agentId: string, filter: EventFilter | 
  * A poll gated on the tab's stream (lib/poll `gate`): slow while it is up, `minMs` apart at least while down.
  * `agentId`: the instance(s) the poll reads, each of which must have its stream; null: the tab's stream.
  */
-export function streamGate(hub: EventHub, minMs = 15_000, agentId: string | readonly string[] | null = null) {
+export function streamGate(hub: EventHub, minMs = 15_000, agentId: string | readonly string[] | null = null, liveMs?: number) {
   const ids = agentId === null ? null : typeof agentId === "string" ? [agentId] : agentId;
-  return { live: () => (ids ? ids.length > 0 && ids.every((a) => hub.connected(a)) : hub.connected()), onChange: hub.onConnection, minMs };
+  return { live: () => (ids ? ids.length > 0 && ids.every((a) => hub.connected(a)) : hub.connected()), onChange: hub.onConnection, minMs, liveMs };
 }
 
 /** Heard on the stream at least this often (the gateway beats every 25 s); past it, the stream is taken as cut. */
 export const STREAM_SILENCE_MS = 90_000;
+/** The same, on a connection that never pinged (a gateway without the beat): longer, so it does not flap. */
+export const UNPINGED_SILENCE_MS = 180_000;
+export const silenceMs = (pinged: boolean): number => (pinged ? STREAM_SILENCE_MS : UNPINGED_SILENCE_MS);
 
 /** The gateway's `: ping` comments, which EventSource hides, as `ping` frames the tab can time. */
 export function namedPings(): TransformStream<string, string> {

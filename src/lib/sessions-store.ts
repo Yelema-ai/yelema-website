@@ -116,14 +116,26 @@ export function createSessionsStore(deps: SessionsDeps, { maxEntries = 200 } = {
       stale.delete(keyOf(agentId, profile));
       cache.remember(keyOf(agentId, profile), data);
     },
+    /** The bootstrap's copy: older than an event heard since, so never over a space marked stale or changed in flight. */
+    seed(agentId: string, profile: string, data: SpaceData): void {
+      const key = keyOf(agentId, profile);
+      if (!stale.has(key) && !dirty.has(key)) cache.remember(key, data);
+    },
+    /** True when `read` would answer from what is held (or join a read under way), without a call. */
+    fresh(agentId: string, profile: string, maxAgeMs = 30_000): boolean {
+      const key = keyOf(agentId, profile);
+      return !stale.has(key) && cache.fresh(key, maxAgeMs);
+    },
     /** A copy kept on the device: shown at once but stale, so the first read goes out. Never over a reading. */
     hydrate: (agentId: string, profile: string, data: SpaceData): void => cache.hydrate(keyOf(agentId, profile), data),
     /** True while the space shown is only the device's copy. */
     fromDevice: (agentId: string, profile: string): boolean => cache.keptOnly(keyOf(agentId, profile)),
     /** Something changed (`profile` undefined: every space of the instance): shown spaces are read again. */
-    invalidate(agentId: string, profile?: string): void {
+    invalidate(agentId: string, profile?: string, { answeredWithinMs = 0 } = {}): void {
       const prefix = keyOf(agentId, "");
-      const hit = cache.keys().filter((k) => (profile === undefined ? k.startsWith(prefix) : k === keyOf(agentId, profile)));
+      // `answeredWithinMs`: a space answered that recently already says what the event would read again.
+      const recent = (k: string) => answeredWithinMs > 0 && !cache.loading(k) && cache.fresh(k, answeredWithinMs);
+      const hit = cache.keys().filter((k) => (profile === undefined ? k.startsWith(prefix) : k === keyOf(agentId, profile)) && !recent(k));
       for (const k of hit) (cache.loading(k) ? dirty : stale).add(k);
       deps.defer(() => {
         for (const k of hit) if (cache.watched(k) && stale.delete(k)) void load(k, 0).catch(() => undefined);

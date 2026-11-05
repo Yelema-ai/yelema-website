@@ -42,8 +42,8 @@ export function DeployStatusProvider({ children }: { children: React.ReactNode }
     if (!loaded.current && !s.maintenance) loaded.current = s.version;
     setStatus(s);
   }, []);
-  // A net beside the stream; with it, the back office's `job.done` (deploy) asks at once.
-  usePoll(ask, { everyMs: DEPLOY_POLL_MS, live: true, minMs: DEPLOY_POLL_MS, wake: { types: ["job.done"], kind: "deploy" } });
+  // A net beside the stream, still every DEPLOY_POLL_MS with it (a missed `job.done` must not hide the banner 5 min).
+  usePoll(ask, { everyMs: DEPLOY_POLL_MS, live: true, minMs: DEPLOY_POLL_MS, liveMs: DEPLOY_POLL_MS, wake: { types: ["job.done"], kind: "deploy" } });
 
   const phase = forced ?? deployPhase(loaded.current, status);
 

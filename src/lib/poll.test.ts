@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { LIVE_NET_MS, startPoll, type PollEnv } from "./poll.ts";
+import { LIVE_NET_MS, RECENT_RUN_MS, startPoll, type PollEnv } from "./poll.ts";
 
 function fakeEnv() {
   let t = 0;
@@ -211,5 +211,33 @@ describe("relecture branchée sur le flux", () => {
     await f.advance(1000);
     await f.setHidden(false);
     assert.equal(runs, 1);
+  });
+});
+
+describe("filet borné et rattrapage", () => {
+  it("liveMs borne le filet pendant que le flux est branché", async () => {
+    const f = fakeEnv();
+    const g = fakeGate(150_000);
+    g.set(true);
+    let runs = 0;
+    startPoll(() => void runs++, { everyMs: 150_000, gate: { ...g.gate, liveMs: 150_000 } }, f.env);
+    await f.flush();
+    assert.equal(runs, 1);
+    await f.advance(150_000);
+    assert.equal(runs, 2, "150 s, pas 5 min");
+  });
+
+  it("un rattrapage ne relance pas une lecture qui vient de partir ; plus tard, si", async () => {
+    const f = fakeEnv();
+    let runs = 0;
+    const p = startPoll(() => void runs++, { everyMs: 600_000 }, f.env);
+    await f.flush();
+    p.catchUp();
+    await f.flush();
+    assert.equal(runs, 1);
+    await f.advance(RECENT_RUN_MS);
+    p.catchUp();
+    await f.flush();
+    assert.equal(runs, 2);
   });
 });

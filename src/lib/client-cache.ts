@@ -123,4 +123,4 @@ export function persistTo(fn: ((key: string, value: unknown) => void) | null): v
 }
 
 const shared = createCache({ persist: (k, v) => sink?.(k, v) });
-export const { cached, remember, hydrate, seed, subscribe, fresh, keptOnly, whenKept, forget, cachedFetch, pending } = shared;
+export const { cached, remember, hydrate, seed, subscribe, fresh, loading, keptOnly, whenKept, forget, cachedFetch, pending } = shared;

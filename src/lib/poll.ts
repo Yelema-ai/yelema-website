@@ -31,12 +31,16 @@ export interface PollGate {
   /** Calls back when `live` may have changed; returns the unsubscribe. */
   onChange(fn: () => void): () => void;
   minMs?: number;
+  /** The net while the stream is up (default LIVE_NET_MS). */
+  liveMs?: number;
 }
 
 /** The safety net's floor for a gated poll. */
 export const GATE_MIN_MS = 15_000;
 /** While the stream is up, a gated poll still reads this often: a stream can miss what it never sent. */
 export const LIVE_NET_MS = 5 * 60_000;
+/** A run this recent already read what a catch-up would ask again. */
+export const RECENT_RUN_MS = 5_000;
 
 export interface Poller {
   stop(): void;
@@ -44,6 +48,8 @@ export interface Poller {
   reset(): void;
   /** Run now, whatever the timer says (not while hidden). */
   kick(): void;
+  /** The stream could not replay: run now, unless a run started within RECENT_RUN_MS. */
+  catchUp(): void;
 }
 
 export function startPoll(fn: () => Promise<unknown> | unknown, opts: PollOptions, env: PollEnv): Poller {
@@ -57,7 +63,7 @@ export function startPoll(fn: () => Promise<unknown> | unknown, opts: PollOption
   const gate = opts.gate;
   const floor = gate ? Math.max(gate.minMs ?? GATE_MIN_MS, 0) : 0;
   const live = () => gate?.live() ?? false;
-  const wait = () => Math.max(delay, floor, live() ? LIVE_NET_MS : 0);
+  const wait = () => Math.max(delay, floor, live() ? (gate?.liveMs ?? LIVE_NET_MS) : 0);
 
   const expired = () => opts.deadlineMs !== undefined && env.now() - started >= opts.deadlineMs;
 
@@ -135,6 +141,9 @@ export function startPoll(fn: () => Promise<unknown> | unknown, opts: PollOption
     // Something happened (an event): read now, stream or not.
     kick() {
       if (!env.hidden()) void run();
+    },
+    catchUp() {
+      if (!env.hidden() && env.now() - lastRun >= RECENT_RUN_MS) void run();
     },
   };
 }

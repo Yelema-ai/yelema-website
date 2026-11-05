@@ -9,10 +9,10 @@ import type { SessionDetail } from "@/lib/types";
 import type { ActivityActions } from "./ActivityProvider";
 
 // Without the stream, the session is asked again after 15 s, then less and less often, up to every 30 s;
-// with it, the turn's end says when, and a look every 5 minutes is the net.
+// with it, the turn's end says when, and a look every minute is the net.
 const POLL_MS = 15_000;
 const POLL_MAX_MS = 30_000;
-const LIVE_NET_MS = 5 * 60_000;
+const LIVE_NET_MS = 60_000;
 
 // Each wait takes its listeners back whichever way it ends: a turn followed for two hours adds none.
 const sleep = (ms: number, signal: AbortSignal) =>
