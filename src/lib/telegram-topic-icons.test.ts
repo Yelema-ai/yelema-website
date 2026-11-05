@@ -9,17 +9,17 @@ import { TOPIC_ICONS, TOPIC_ICONS_PY } from "./telegram-topic-icons.ts";
 // telegram-topics.ts is server-only: its embedded script is read from the source (no other interpolation in it).
 const source = readFileSync(new URL("./telegram-topics.ts", import.meta.url), "utf8");
 const ADD_PROFILE_ROUTE_PY = source.split("ADD_PROFILE_ROUTE_PY = `")[1]!.split("\n`;")[0]!.replace("${TOPIC_ICONS_PY}", TOPIC_ICONS_PY);
-const [christelle, allowed] = TOPIC_ICONS.djeneba!;
+const [christelle] = TOPIC_ICONS.djeneba!;
 const refused = { ok: false, error_code: 400, description: "Bad Request: invalid custom emoji identifier specified" };
 
-test("Christelle's icon then an allowed one per expert (Yélé: allowed only), readable as a Python dict", () => {
+test("Christelle's ExpertYelema icon per expert (Yélé: lightbulb), readable as a Python dict", () => {
   const experts = ["adjoua", "alioune", "awa", "djeneba", "fatima", "fatou", "ibrahim", "koffi", "kouassi", "mamadou", "nadia", "salif", "yele"];
   assert.deepEqual(Object.keys(TOPIC_ICONS).sort(), experts);
   const ids = Object.values(TOPIC_ICONS).flat().filter((id) => id !== null);
-  assert.equal(new Set(ids).size, 25);
+  assert.equal(new Set(ids).size, 13);
   assert.ok(ids.every((id) => /^\d{19}$/.test(id)));
-  assert.deepEqual(JSON.parse(TOPIC_ICONS_PY).djeneba, [christelle, allowed]);
-  assert.deepEqual(JSON.parse(TOPIC_ICONS_PY).yele, [TOPIC_ICONS.yele![1]]);
+  assert.deepEqual(JSON.parse(TOPIC_ICONS_PY).djeneba, [christelle]);
+  assert.deepEqual(JSON.parse(TOPIC_ICONS_PY).yele, [TOPIC_ICONS.yele![0]]);
 });
 
 // Runs the script's create_forum_topic against a stub `requests` answering `replies` in order.
@@ -58,12 +58,8 @@ test("topic created with Christelle's icon", { skip: !python }, () => {
   assert.deepEqual(createTopic([ok]), { icons: [christelle], out: "thread 7" });
 });
 
-test("Christelle's icon refused: the allowed icon", { skip: !python }, () => {
-  assert.deepEqual(createTopic([refused, ok]), { icons: [christelle, allowed], out: "thread 7" });
-});
-
-test("both icons refused: topic without icon", { skip: !python }, () => {
-  assert.deepEqual(createTopic([refused, refused, ok]), { icons: [christelle, allowed, undefined], out: "thread 7" });
+test("Christelle's icon refused: topic created without icon (no fallback generic sticker)", { skip: !python }, () => {
+  assert.deepEqual(createTopic([refused, ok]), { icons: [christelle, undefined], out: "thread 7" });
 });
 
 test("retry later (429): no further attempt, the error surfaces", { skip: !python }, () => {

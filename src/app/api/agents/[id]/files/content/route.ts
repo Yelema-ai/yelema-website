@@ -33,7 +33,55 @@ export async function GET(request: Request, { params }: Ctx) {
     qs.set("path", path);
     if (disposition) qs.set("disposition", disposition);
 
-    const upstream = await instanceFetch(id, `/v1/files/content?${qs.toString()}`);
+    let upstream = await instanceFetch(id, `/v1/files/content?${qs.toString()}`);
+
+    // Fallback défensif si 404 : variations d'arborescence Livrables (ex: Livrables/Videos/ vs Livrables/<Expert>/Videos/)
+    if (upstream.status === 404) {
+      const candidates: string[] = [];
+      const matchExpertVideo = path.match(/^(?:(?:\/home\/node\/|~\/)?Livrables)\/([^/]+)\/Videos\/(.+)$/);
+      if (matchExpertVideo) {
+        const [, expert, file] = matchExpertVideo;
+        candidates.push(
+          `Livrables/Videos/${file}`,
+          `/home/node/Livrables/Videos/${file}`,
+          `Livrables/${expert}/${file}`,
+          `/home/node/Livrables/${expert}/${file}`
+        );
+      }
+      const matchExpertDirect = path.match(/^(?:(?:\/home\/node\/|~\/)?Livrables)\/([^/]+)\/([^/]+\.(?:mp4|webm|mov|m4v))$/);
+      if (matchExpertDirect) {
+        const [, expert, file] = matchExpertDirect;
+        candidates.push(
+          `Livrables/${expert}/Videos/${file}`,
+          `/home/node/Livrables/${expert}/Videos/${file}`,
+          `Livrables/Videos/${file}`,
+          `/home/node/Livrables/Videos/${file}`
+        );
+      }
+      const matchRootVideo = path.match(/^(?:(?:\/home\/node\/|~\/)?Livrables)\/Videos\/(.+)$/);
+      if (matchRootVideo) {
+        const [, file] = matchRootVideo;
+        candidates.push(
+          `Livrables/Fatima/Videos/${file}`,
+          `/home/node/Livrables/Fatima/Videos/${file}`,
+          `Livrables/Fatima/${file}`,
+          `/home/node/Livrables/Fatima/${file}`,
+          `Livrables/Contenu/Videos/${file}`,
+          `Livrables/Mamadou/Videos/${file}`,
+          `Livrables/Koffi/Videos/${file}`
+        );
+      }
+      for (const altPath of candidates) {
+        const altQs = new URLSearchParams(qs);
+        altQs.set("path", altPath);
+        const altUpstream = await instanceFetch(id, `/v1/files/content?${altQs.toString()}`);
+        if (altUpstream.ok) {
+          upstream = altUpstream;
+          break;
+        }
+      }
+    }
+
     await assertUpstreamOk(upstream, "files/content", DOWNLOAD_FAILED, "download_error");
     if (!upstream.body) throw new ApiError(502, "download_error", DOWNLOAD_FAILED);
 

@@ -214,6 +214,26 @@ def main():
         print(f"❌ Échec du téléchargement du fichier vidéo : {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Synchronisation immédiate dans la racine de l'expert et dans Livrables/Videos pour compatibilité maximale
+    home = os.path.expanduser("~")
+    filename = os.path.basename(dest_path)
+    alt_paths = [
+        os.path.join(home, "Livrables", expert, filename),
+        os.path.join(home, "Livrables", "Videos", filename),
+        os.path.join(home, "Livrables", expert, "Videos", filename)
+    ]
+    for alt in alt_paths:
+        try:
+            if alt != dest_path and not os.path.exists(alt):
+                os.makedirs(os.path.dirname(alt), exist_ok=True)
+                try:
+                    os.link(dest_path, alt)
+                except Exception:
+                    import shutil
+                    shutil.copy2(dest_path, alt)
+        except Exception:
+            pass
+
     size_mb = os.path.getsize(dest_path) / (1024 * 1024)
     print(f"✅ Vidéo enregistrée dans vos Livrables !")
     print(f"   Fichier : {dest_path} ({size_mb:.2f} Mo)")
