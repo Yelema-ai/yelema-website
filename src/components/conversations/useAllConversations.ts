@@ -3,6 +3,7 @@
 import { cached, remember, whenKept } from "@/lib/client-cache";
 import { useEffect, useMemo, useState } from "react";
 import { useHydrated } from "@/components/useHydrated";
+import { useServerReading, type ServerReading } from "@/components/useServerReading";
 import { driveTree } from "@/lib/drive-store";
 import { sessionsStore } from "@/lib/sessions-client";
 import { isDriveClutter } from "@/lib/drive-order";
@@ -48,7 +49,8 @@ const newestFirst = (all: ConversationRow[][]) => all.flat().sort((a, b) => b.at
 // Every conversation of the member: the chat d'entreprise's (the instance with no profile) and each
 // Expert's, newest first, from the tab's sessions store: one grouped call per instance, none when the
 // page's server reading (`initial`, by spaceKey) is there, and read again when the stream says so.
-export function useAllConversations(ownAgentId: string | null, experts: Expert[], enabled = true, initial: Record<string, ChatSession[]> | null = null) {
+export function useAllConversations(ownAgentId: string | null, experts: Expert[], enabled = true, reading: ServerReading<Record<string, ChatSession[]>> = null) {
+  const { value: initial, settled } = useServerReading(reading);
   const key = experts.map((e) => `${e.agentId}:${e.profileId}`).join(",");
   const store = ownAgentId ? `conversations:${ownAgentId}:${key}` : null;
   const [rows, setRows] = useState<ConversationRow[] | null>(() => (store && cached<ConversationRow[]>(store)) || null);
@@ -62,6 +64,14 @@ export function useAllConversations(ownAgentId: string | null, experts: Expert[]
   useEffect(() => {
     if (!enabled || !ownAgentId) return;
     let live = true;
+    // The page's server reading still streaming in: the list this device last showed paints, nothing is read twice.
+    if (!settled) {
+      const off = store ? whenKept<ConversationRow[]>(store, (v) => live && setRows((r) => r ?? v)) : () => undefined;
+      return () => {
+        live = false;
+        off();
+      };
+    }
     const spaces = spacesOf(ownAgentId, experts);
     // What the server read with the page is the store's first reading: no second read of the same.
     for (const s of spaces) {
@@ -94,7 +104,7 @@ export function useAllConversations(ownAgentId: string | null, experts: Expert[]
       offs.forEach((off) => off());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownAgentId, key, enabled]);
+  }, [ownAgentId, key, enabled, settled]);
 
   return rows ?? (hydrated ? seed : null);
 }

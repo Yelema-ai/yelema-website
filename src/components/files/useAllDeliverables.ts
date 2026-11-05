@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useHydrated } from "@/components/useHydrated";
+import { useServerReading, type ServerReading } from "@/components/useServerReading";
 import { cached, remember, whenKept } from "@/lib/client-cache";
 import { deliverableItems, type DeliverableItem } from "@/lib/deliverable-folders";
 import { splitVersions } from "@/lib/drive-versions";
@@ -74,7 +75,8 @@ const signature = (rows: Deliverable[]) => rows.map((d) => `${d.agentId}|${d.pat
  * Every deliverable of the member's instances, newest first; null until read. `initial`: the drives the
  * page read on the server, by agent id, shown until the fresh reading replaces them.
  */
-export function useAllDeliverables(ownAgentId: string | null, experts: Expert[], initial: Record<string, DriveTree> | null = null): Deliverable[] | null {
+export function useAllDeliverables(ownAgentId: string | null, experts: Expert[], reading: ServerReading<Record<string, DriveTree>> = null): Deliverable[] | null {
+  const { value: initial, settled } = useServerReading(reading);
   const agentIds = [...new Set([ownAgentId, ...experts.map((e) => e.agentId)].filter((a): a is string => !!a))];
   const key = `all-deliverables:${agentIds.join(",")}`;
   const [items, setItems] = useState<Deliverable[] | null>(() => cached<Deliverable[]>(key) ?? null);
@@ -90,6 +92,9 @@ export function useAllDeliverables(ownAgentId: string | null, experts: Expert[],
   useEffect(() => {
     // The drives the server read with the page are the store's first reading: not asked again.
     for (const a of agentIds) if (initial?.[a]) seedDriveTree(a, initial[a]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, initial]);
+  useEffect(() => {
     const offs = agentIds.map((a) => onDriveChanged(a, () => setTick((t) => t + 1)));
     return () => offs.forEach((off) => off());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -98,8 +103,13 @@ export function useAllDeliverables(ownAgentId: string | null, experts: Expert[],
   useEffect(() => {
     if (!agentIds.length) return;
     let live = true;
-    // Nothing read with the page: the list this device last showed paints while the trees are read.
+    // Nothing read with the page (or its reading still streaming in): the list this device last showed paints meanwhile.
     const offKept = seed ? () => undefined : whenKept<Deliverable[]>(key, (v) => live && setItems((i) => i ?? v));
+    if (!settled)
+      return () => {
+        live = false;
+        offKept();
+      };
     void Promise.all(
       agentIds.map((agentId) =>
         // A tree that cannot be read or walked counts as empty: never a list stuck on « Chargement ».
@@ -119,7 +129,7 @@ export function useAllDeliverables(ownAgentId: string | null, experts: Expert[],
       offKept();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, expertsKey, tick]);
+  }, [key, expertsKey, tick, settled]);
 
   return items ?? (hydrated ? seed : null);
 }

@@ -15,6 +15,7 @@ import { useChatMarks } from "./useChatMarks";
 import { prefetchThread } from "@/components/chat/useChat";
 import { intentOf } from "@/components/usePrefetch";
 import type { ChatSession } from "@/components/chat/types";
+import type { ServerReading } from "@/components/useServerReading";
 
 type Filter = "tout" | "non-lues" | "routines" | "archivees";
 const DAY = 86_400_000;
@@ -44,7 +45,7 @@ const time = (at: number) =>
 // with a search, Tout / Non lues / Routines / Archivées, the Expert and the dates. Pinned ones head
 // the list; archived ones only show under « Archivées », where they can be brought back. A row opens
 // the conversation in its space; « Tout marquer comme lu » clears the bell's marks.
-export function AllConversations({ initial = null }: { initial?: Record<string, ChatSession[]> | null }) {
+export function AllConversations({ initial = null }: { initial?: ServerReading<Record<string, ChatSession[]>> }) {
   const ownAgentId = useOwnAgentId();
   const { experts } = useExpertsContext();
   const rows = useAllConversations(ownAgentId, experts, true, initial);
