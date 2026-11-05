@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { cached, cachedFetch, hydrate, subscribe } from "@/lib/client-cache";
+import { cached, cachedFetch, hydrate, servesKept, subscribe } from "@/lib/client-cache";
 import { deviceKeep, onDeviceOpen } from "@/lib/device-cache-client";
 import { instanceEvents } from "@/lib/instance-events";
 import { withoutUrls, type SalonDeliverable } from "@/lib/salon-deliverables";
@@ -65,7 +65,8 @@ export function useSalonDeliverables(salon: string | null, wanted: boolean) {
     let expiry: ReturnType<typeof setTimeout> | undefined;
     const read = (maxAgeMs: number) => {
       if (document.visibilityState === "hidden") return;
-      setLoading(true);
+      // Served from what is held: no loading state (setLoading(false) below then bails out, no render).
+      if (!servesKept(key(salon), maxAgeMs)) setLoading(true);
       readSalonDeliverables(salon, maxAgeMs)
         .then(() => !stop && setError(null), (e: unknown) => !stop && setError(e instanceof Error ? e.message : "Les livrables du salon sont indisponibles."))
         .finally(() => {

@@ -95,6 +95,8 @@ export function createCache({ maxEntries = 300, now = Date.now, persist }: Cache
     forget(key: string): void {
       store.delete(key);
     },
+    /** True when `cachedFetch(key, …, ttlMs)` would answer from the kept value, with no read. */
+    servesKept: (key: string, ttlMs: number): boolean => young(key, ttlMs),
     /** One read for every component that asks the same thing at once, and none while the kept answer is younger than `ttlMs`. A failure is never kept. */
     cachedFetch<T>(key: string, load: () => Promise<T>, ttlMs = 0): Promise<T> {
       if (young(key, ttlMs)) return Promise.resolve(store.get(key)!.value as T);
@@ -123,4 +125,4 @@ export function persistTo(fn: ((key: string, value: unknown) => void) | null): v
 }
 
 const shared = createCache({ persist: (k, v) => sink?.(k, v) });
-export const { cached, remember, hydrate, seed, subscribe, fresh, loading, keptOnly, whenKept, forget, cachedFetch, pending } = shared;
+export const { cached, remember, hydrate, seed, subscribe, fresh, loading, keptOnly, whenKept, forget, cachedFetch, pending, servesKept } = shared;

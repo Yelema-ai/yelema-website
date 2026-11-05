@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { cached, cachedFetch, remember } from "./client-cache.ts";
+import { cached, cachedFetch, hydrate, remember, servesKept } from "./client-cache.ts";
 
 describe("lectures partagées du navigateur", () => {
   it("une lecture d'avance récente sert la page : aucun second appel dans le délai", async () => {
@@ -11,6 +11,15 @@ describe("lectures partagées du navigateur", () => {
     await cachedFetch("sessions:a", load, 60_000);
     assert.equal(calls, 1);
     assert.deepEqual(cached("sessions:a"), ["s1"]);
+  });
+
+  it("dit d'avance si une lecture sera servie par la valeur gardée", async () => {
+    assert.equal(servesKept("livrables:x", 60_000), false, "rien de gardé");
+    await cachedFetch("livrables:x", async () => 1, 60_000);
+    assert.equal(servesKept("livrables:x", 60_000), true);
+    assert.equal(servesKept("livrables:x", 0), false, "relecture forcée");
+    hydrate("livrables:y", 1);
+    assert.equal(servesKept("livrables:y", 60_000), false, "copie de l'appareil : relue");
   });
 
   it("deux demandes simultanées font un seul appel ; une valeur posée sert la suivante", async () => {
