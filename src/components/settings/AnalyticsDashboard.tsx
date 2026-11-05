@@ -162,7 +162,7 @@ export function AnalyticsDashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Mode d'affichage : Console vs Graphiques */}
+          {/* Mode d'affichage ergonomique */}
           <div className="flex items-center rounded-xl border border-line bg-surface p-1 shadow-xs">
             <button
               type="button"
@@ -186,7 +186,7 @@ export function AnalyticsDashboard() {
                   : "text-ink-2 hover:bg-soft hover:text-ink"
               )}
             >
-              Console Mstudio
+              Ventilation par Dimension
             </button>
             <button
               type="button"
@@ -198,7 +198,7 @@ export function AnalyticsDashboard() {
                   : "text-ink-2 hover:bg-soft hover:text-ink"
               )}
             >
-              Graphiques
+              Courbes & Évolution
             </button>
           </div>
 
@@ -374,20 +374,20 @@ export function AnalyticsDashboard() {
             </div>
           </div>
 
-          {/* 6. CONSOLE MULTI-DIMENSIONS (FIDÉLITÉ 100% AUX SCREENSHOTS) */}
+          {/* 6. VENTILATION MULTI-DIMENSIONS NATIVE DE L'ESPACE */}
           {(viewMode === "all" || viewMode === "console") && (
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-display text-base font-bold text-ink">
-                    Console de Consommation & Invocations
+                    Ventilation Détaillée de l'Espace
                   </h3>
                   <p className="text-xs text-ink-3">
-                    Ventilation par Membres, Modèles d'IA, Outils, Compétences et Sources de requêtes.
+                    Répartition interactive par experts métiers, modèles LLM, outils MCP, canaux d'interaction et formats de livrables.
                   </p>
                 </div>
                 <span className="rounded-full bg-soft px-3 py-1 text-[11px] font-semibold text-ink-2">
-                  Télémétrie Mstudio Live
+                  Télémétrie Espace Yéléma
                 </span>
               </div>
 

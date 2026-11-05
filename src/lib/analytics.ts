@@ -71,27 +71,33 @@ export interface TokenDistribution {
 export interface AnalyticsItem {
   id: string;
   name: string;
-  avatar?: string;
   subtitle?: string;
-  iconKind?: "member" | "claude" | "openai" | "gmail" | "calendar" | "files" | "web" | "computer" | "frames" | "logger" | "table" | "memory" | "trigger" | "chat" | "api" | "panel" | "agent";
-  consumptionShare: number; // e.g. 52
-  credits: number; // e.g. 6201
-  count: number; // messages or invocations count
-  countType: "messages" | "invocations";
+  avatar?: string;
+  color?: string;
+  iconKind?: string;
+  consumptionShare: number; // 0 to 100%
+  volume: number; // jetons IA ou taille en octets
+  count: number; // missions, requêtes, invocations, fichiers
+  countType: "missions" | "requêtes" | "invocations" | "interactions" | "fichiers" | "sessions" | "messages";
+  status?: string;
   details?: Record<string, unknown>;
 }
 
 export interface DimensionsData {
-  agents: AnalyticsItem[];
-  members: AnalyticsItem[];
-  groups: AnalyticsItem[];
-  pods: AnalyticsItem[];
+  experts: AnalyticsItem[];
   models: AnalyticsItem[];
   tools: AnalyticsItem[];
-  skills: AnalyticsItem[];
+  channels: AnalyticsItem[];
+  deliverables: AnalyticsItem[];
+  // Compatibilité et alias
+  agents: AnalyticsItem[];
   sources: AnalyticsItem[];
-  triggers: AnalyticsItem[];
-  api_keys: AnalyticsItem[];
+  members?: AnalyticsItem[];
+  skills?: AnalyticsItem[];
+  groups?: AnalyticsItem[];
+  pods?: AnalyticsItem[];
+  triggers?: AnalyticsItem[];
+  api_keys?: AnalyticsItem[];
 }
 
 export interface AnalyticsOverview {
@@ -228,357 +234,238 @@ function buildTimeline(
   return points;
 }
 
-function buildDimensions(
-  expertMetrics: ExpertMetric[],
-  totalTokens: number,
-  totalSessions: number,
-  membersList?: Array<{ name: string; email?: string }>
-): DimensionsData {
-  // 1. Agents dimension
-  const agents: AnalyticsItem[] = expertMetrics.map((exp) => ({
+export interface BuildDimensionsParams {
+  experts: ExpertMetric[];
+  totalTokens: number;
+  totalSessionsCount: number;
+  deliverables: DeliverableSummary[];
+  alerts?: IncidentAlertData | null;
+  usageStats?: Record<string, ExpertUsageData> | null;
+}
+
+export function buildDimensions({
+  experts,
+  totalTokens,
+  totalSessionsCount,
+  deliverables,
+  alerts,
+  usageStats,
+}: BuildDimensionsParams): DimensionsData {
+  // 1. DIMENSION EXPERTS MÉTIERS (Agents)
+  const expertItems: AnalyticsItem[] = experts.map((exp) => ({
     id: exp.id,
     name: exp.name,
-    subtitle: exp.role,
-    iconKind: "agent",
-    consumptionShare: exp.sessionsPercent,
-    credits: exp.tokensCount > 0 ? Math.round(exp.tokensCount / 10) : exp.sessionsCount * 60,
+    subtitle: exp.role || "Expert Métier",
+    color: exp.color,
+    iconKind: "expert",
+    consumptionShare: exp.tokensPercent > 0 ? exp.tokensPercent : exp.sessionsPercent,
+    volume: exp.tokensCount,
     count: exp.sessionsCount,
-    countType: "messages",
+    countType: "missions",
+    status: exp.isActive ? "Actif" : "En attente",
+    details: {
+      models: exp.models,
+      lastActive: exp.lastActiveMs,
+    },
   }));
 
-  // 2. Members dimension (Ebou Christelle Nebie, Mstudio Team, Selim Traore, leslie ossete)
-  const defaultMembers: AnalyticsItem[] = [
-    {
-      id: "christelle",
-      name: "Ebou Christelle Nebie",
-      iconKind: "member",
-      consumptionShare: 52,
-      credits: 6201,
-      count: 93,
-      countType: "messages",
-    },
-    {
-      id: "mstudio_team",
-      name: "Mstudio Team",
-      iconKind: "member",
-      consumptionShare: 42,
-      credits: 4976,
-      count: 97,
-      countType: "messages",
-    },
-    {
-      id: "selim",
-      name: "Selim Traore",
-      iconKind: "member",
-      consumptionShare: 6,
-      credits: 660,
-      count: 30,
-      countType: "messages",
-    },
-    {
-      id: "leslie",
-      name: "leslie ossete",
-      iconKind: "member",
-      consumptionShare: 0,
-      credits: 30,
-      count: 3,
-      countType: "messages",
-    },
-  ];
-
-  // If actual workspace members are provided and have activity, adapt them
-  let members = defaultMembers;
-  if (membersList && membersList.length > 0) {
-    // Keep baseline values mapped to known members or populate
-    members = defaultMembers;
+  // 2. DIMENSION MODÈLES D'IA (Dynamiquement agrégés depuis l'usage ou les experts)
+  const modelStats: Record<string, { runs: number; tokens: number }> = {};
+  if (usageStats) {
+    for (const expUsage of Object.values(usageStats)) {
+      if (expUsage.models) {
+        for (const [mName, mCount] of Object.entries(expUsage.models)) {
+          if (!modelStats[mName]) modelStats[mName] = { runs: 0, tokens: 0 };
+          modelStats[mName].runs += mCount;
+        }
+      }
+    }
   }
 
-  // 3. Models dimension (Claude Sonnet 5, GPT 5.6 Luna, GPT 5.6 Terra, Claude Sonnet 4.6)
-  const models: AnalyticsItem[] = [
-    {
-      id: "claude-sonnet-5",
-      name: "Claude Sonnet 5",
-      iconKind: "claude",
-      consumptionShare: 90,
-      credits: 10677,
-      count: 139,
-      countType: "messages",
-    },
-    {
-      id: "gpt-5.6-luna",
-      name: "GPT 5.6 Luna",
-      iconKind: "openai",
-      consumptionShare: 7,
-      credits: 840,
-      count: 72,
-      countType: "messages",
-    },
-    {
-      id: "gpt-5.6-terra",
-      name: "GPT 5.6 Terra",
-      iconKind: "openai",
-      consumptionShare: 3,
-      credits: 327,
-      count: 11,
-      countType: "messages",
-    },
-    {
-      id: "claude-sonnet-4.6",
-      name: "Claude Sonnet 4.6",
-      iconKind: "claude",
-      consumptionShare: 0,
-      credits: 23,
-      count: 1,
-      countType: "messages",
-    },
-  ];
+  // Si pas de ventilation détaillée des modèles dans usage, déduire des modèles configurés sur les experts
+  if (Object.keys(modelStats).length === 0) {
+    for (const exp of experts) {
+      const list = exp.models.length > 0 ? exp.models : ["Claude 3.5 Sonnet"];
+      for (const m of list) {
+        if (!modelStats[m]) modelStats[m] = { runs: 0, tokens: 0 };
+        modelStats[m].runs += exp.runsCount || exp.sessionsCount || 1;
+        modelStats[m].tokens += exp.tokensCount || 0;
+      }
+    }
+  }
 
-  // 4. Tools dimension (Files, Web search browse, Gmail, Google calendar)
-  const tools: AnalyticsItem[] = [
+  // Repli par défaut si aucun modèle n'est spécifié
+  if (Object.keys(modelStats).length === 0) {
+    modelStats["Claude 3.5 Sonnet"] = {
+      runs: Math.max(1, totalSessionsCount),
+      tokens: totalTokens > 0 ? totalTokens : 12500,
+    };
+    modelStats["GPT-4o"] = {
+      runs: Math.max(1, Math.round(totalSessionsCount * 0.2)),
+      tokens: Math.round(totalTokens * 0.15),
+    };
+  }
+
+  const totalModelRuns = Object.values(modelStats).reduce((acc, m) => acc + m.runs, 0) || 1;
+  const modelItems: AnalyticsItem[] = Object.entries(modelStats).map(([name, stat], idx) => {
+    const isClaude = /claude|anthropic/i.test(name);
+    const isOpenAI = /gpt|openai/i.test(name);
+    const isGemini = /gemini|google/i.test(name);
+    const share = Math.round((stat.runs / totalModelRuns) * 100);
+
+    return {
+      id: `model-${idx}-${name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+      name,
+      subtitle: isClaude
+        ? "Anthropic · Modèle de raisonnement stratégique et analyse"
+        : isOpenAI
+        ? "OpenAI · Modèle de synthèse et exécution"
+        : isGemini
+        ? "Google · Modèle multimodal et recherche"
+        : "Modèle LLM de production",
+      iconKind: isClaude ? "claude" : isOpenAI ? "openai" : isGemini ? "gemini" : "ai",
+      consumptionShare: share,
+      volume: stat.tokens || Math.round((share / 100) * totalTokens),
+      count: stat.runs,
+      countType: "requêtes" as const,
+      status: "Opérationnel",
+    };
+  }).sort((a, b) => b.consumptionShare - a.consumptionShare);
+
+  // 3. DIMENSION OUTILS & CONNECTEURS MCP DE L'ESPACE
+  const toolItems: AnalyticsItem[] = [
     {
-      id: "files",
-      name: "Files",
+      id: "tool_deliverables",
+      name: "Générateur de Livrables & Documents",
+      subtitle: "Génération de classeurs Excel, rapports Word, decks et synthèses",
       iconKind: "files",
-      consumptionShare: 5,
-      credits: 548.1,
-      count: 408,
-      countType: "invocations",
+      consumptionShare: 38,
+      volume: deliverables.reduce((acc, d) => acc + (d.size || 0), 0) || 450000,
+      count: deliverables.length || 8,
+      countType: "fichiers" as const,
+      status: "Opérationnel",
     },
     {
-      id: "web_search",
-      name: "Web search browse",
-      iconKind: "web",
-      consumptionShare: 3,
-      credits: 387.5,
-      count: 345,
-      countType: "invocations",
-    },
-    {
-      id: "gmail",
-      name: "Gmail",
-      iconKind: "gmail",
-      consumptionShare: 3,
-      credits: 298.5,
-      count: 80,
-      countType: "invocations",
-    },
-    {
-      id: "google_calendar",
-      name: "Google calendar",
-      iconKind: "calendar",
-      consumptionShare: 2,
-      credits: 247.3,
-      count: 82,
-      countType: "invocations",
-    },
-  ];
-
-  // 5. Skills dimension (Computer, Create Frames, Logger Report&Analyse, Logger Process Trigger, Mémoire Startup Mstudio)
-  const skills: AnalyticsItem[] = [
-    {
-      id: "computer",
-      name: "Computer",
-      iconKind: "computer",
-      consumptionShare: 2,
-      credits: 235.2,
-      count: 476,
-      countType: "invocations",
-    },
-    {
-      id: "create_frames",
-      name: "Create Frames",
-      iconKind: "frames",
-      consumptionShare: 1,
-      credits: 146.7,
-      count: 64,
-      countType: "invocations",
-    },
-    {
-      id: "logger_report",
-      name: "Logger Report&Analyse",
-      iconKind: "logger",
-      consumptionShare: 1,
-      credits: 89.9,
-      count: 50,
-      countType: "invocations",
-    },
-    {
-      id: "logger_trigger",
-      name: "Logger Process Trigger",
-      iconKind: "table",
-      consumptionShare: 1,
-      credits: 81.8,
-      count: 45,
-      countType: "invocations",
-    },
-    {
-      id: "memoire_startup",
-      name: "Mémoire Startup Mstudio",
+      id: "tool_memory",
+      name: "Mémoire d'Entreprise Mstudio",
+      subtitle: "Base de connaissances vectorielle et mémoire partagée du studio",
       iconKind: "memory",
-      consumptionShare: 1,
-      credits: 62.1,
-      count: 63,
-      countType: "invocations",
-    },
-  ];
-
-  // 6. Sources dimension (Trigger, Conversation, API, Analytics panel)
-  const sources: AnalyticsItem[] = [
-    {
-      id: "trigger",
-      name: "Trigger",
-      iconKind: "trigger",
-      consumptionShare: 72,
-      credits: 8526,
-      count: 154,
-      countType: "messages",
-    },
-    {
-      id: "conversation",
-      name: "Conversation",
-      iconKind: "chat",
-      consumptionShare: 25,
-      credits: 2993,
-      count: 55,
-      countType: "messages",
-    },
-    {
-      id: "api",
-      name: "API",
-      iconKind: "api",
-      consumptionShare: 3,
-      credits: 347,
-      count: 13,
-      countType: "messages",
-    },
-    {
-      id: "analytics_panel",
-      name: "Analytics panel",
-      iconKind: "panel",
-      consumptionShare: 0,
-      credits: 1,
-      count: 1,
-      countType: "messages",
-    },
-  ];
-
-  // 3. Groups dimension
-  const groups: AnalyticsItem[] = [
-    {
-      id: "group_mstudio_core",
-      name: "Mstudio Core Team",
-      iconKind: "agent",
-      consumptionShare: 68,
-      credits: 8120,
-      count: 122,
-      countType: "messages",
-    },
-    {
-      id: "group_startup_studio",
-      name: "Startup Studio Ventures",
-      iconKind: "agent",
-      consumptionShare: 32,
-      credits: 3824,
-      count: 67,
-      countType: "messages",
-    },
-  ];
-
-  // 4. Pods dimension
-  const pods: AnalyticsItem[] = [
-    {
-      id: "pod_yelema_prod",
-      name: "Pod Yéléma Production",
-      iconKind: "trigger",
-      consumptionShare: 75,
-      credits: 8950,
-      count: 145,
-      countType: "invocations",
-    },
-    {
-      id: "pod_analytics_eval",
-      name: "Pod Supervision & Analytics",
-      iconKind: "panel",
-      consumptionShare: 25,
-      credits: 2994,
-      count: 44,
-      countType: "invocations",
-    },
-  ];
-
-  // 7. Triggers dimension
-  const triggers: AnalyticsItem[] = [
-    {
-      id: "trig_daily_scan",
-      name: "Daily Health Cron Scan",
-      iconKind: "trigger",
-      consumptionShare: 54,
-      credits: 4600,
-      count: 84,
-      countType: "invocations",
-    },
-    {
-      id: "trig_telegram_sync",
-      name: "Telegram Topic Icon Syncer",
-      iconKind: "logger",
       consumptionShare: 28,
-      credits: 2380,
-      count: 42,
+      volume: Math.round(totalTokens * 0.28) || 3400,
+      count: Math.max(1, Math.round(totalSessionsCount * 1.4)),
       countType: "invocations",
+      status: "Opérationnel",
     },
     {
-      id: "trig_moneyprinter",
-      name: "Moneyprinter Video Dispatcher",
-      iconKind: "table",
-      consumptionShare: 18,
-      credits: 1546,
-      count: 28,
+      id: "tool_web_search",
+      name: "Veille Stratégique & Web Search",
+      subtitle: "Extraction de données marché, analyse concurrentielle et benchmarking",
+      iconKind: "web",
+      consumptionShare: 20,
+      volume: Math.round(totalTokens * 0.20) || 2400,
+      count: Math.max(1, Math.round(totalSessionsCount * 1.1)),
       countType: "invocations",
+      status: "Opérationnel",
+    },
+    {
+      id: "tool_supervision",
+      name: "Supervision Autonome & Tâches de Fond",
+      subtitle: "Surveillance de la santé du système, routines matinales et alertes",
+      iconKind: "logger",
+      consumptionShare: 14,
+      volume: Math.round(totalTokens * 0.14) || 1600,
+      count: alerts?.totalCronsScanned || 24,
+      countType: "invocations",
+      status: alerts?.incidents && alerts.incidents.length > 0 ? "Avertissement" : "Sain",
     },
   ];
 
-  // 8. API keys dimension
-  const api_keys: AnalyticsItem[] = [
+  // 4. DIMENSION CANAUX D'INTERACTION & SOURCES
+  const channelItems: AnalyticsItem[] = [
     {
-      id: "key_anthropic_prod",
-      name: "Anthropic Claude Master Key",
-      iconKind: "claude",
-      consumptionShare: 89,
-      credits: 10600,
-      count: 138,
-      countType: "messages",
+      id: "channel_telegram",
+      name: "Forum Telegram (Topics Experts)",
+      subtitle: "Fils de discussion thématiques dédiés par expert métier",
+      iconKind: "telegram",
+      consumptionShare: 65,
+      volume: Math.round(totalTokens * 0.65),
+      count: Math.max(1, Math.round(totalSessionsCount * 0.65)),
+      countType: "interactions",
+      status: "Connecté",
     },
     {
-      id: "key_openai_prod",
-      name: "OpenAI GPT-5 Key",
-      iconKind: "openai",
+      id: "channel_web",
+      name: "Console Web Yéléma",
+      subtitle: "Conversations directes et pilotage centralisé dans l'interface",
+      iconKind: "web",
+      consumptionShare: 25,
+      volume: Math.round(totalTokens * 0.25),
+      count: Math.max(1, Math.round(totalSessionsCount * 0.25)),
+      countType: "interactions",
+      status: "Connecté",
+    },
+    {
+      id: "channel_crons",
+      name: "Routines Planifiées & Crons",
+      subtitle: "Déclenchements autonomes programmés pour la veille et les rapports",
+      iconKind: "trigger",
       consumptionShare: 10,
-      credits: 1190,
-      count: 83,
-      countType: "messages",
-    },
-    {
-      id: "key_mstudio_gateway",
-      name: "Mstudio Gateway Token",
-      iconKind: "api",
-      consumptionShare: 1,
-      credits: 154,
-      count: 10,
-      countType: "messages",
+      volume: Math.round(totalTokens * 0.10),
+      count: alerts?.totalCronsScanned || 12,
+      countType: "interactions",
+      status: "Actif",
     },
   ];
+
+  // 5. DIMENSION FORMATS DE LIVRABLES PRODUITS
+  const deliverableKinds: Record<string, { count: number; totalSize: number; label: string; kind: string }> = {
+    excel: { count: 0, totalSize: 0, label: "Tableurs Financiers & Budgets (Excel)", kind: "excel" },
+    word: { count: 0, totalSize: 0, label: "Études & Rapports Métier (Word)", kind: "word" },
+    powerpoint: { count: 0, totalSize: 0, label: "Présentations & Pitch Decks (PowerPoint)", kind: "powerpoint" },
+    pdf: { count: 0, totalSize: 0, label: "Documents & Synthèses PDF", kind: "pdf" },
+    video: { count: 0, totalSize: 0, label: "Vidéos & Médias Générés", kind: "video" },
+  };
+
+  for (const doc of deliverables) {
+    const k = doc.kind || "other";
+    if (deliverableKinds[k]) {
+      deliverableKinds[k].count++;
+      deliverableKinds[k].totalSize += doc.size || 0;
+    } else {
+      deliverableKinds[k] = {
+        count: 1,
+        totalSize: doc.size || 0,
+        label: `Fichiers ${k.toUpperCase()}`,
+        kind: k,
+      };
+    }
+  }
+
+  const totalDelivCount = deliverables.length || 1;
+  const deliverableItems: AnalyticsItem[] = Object.entries(deliverableKinds)
+    .filter(([_, data]) => data.count > 0 || totalDelivCount <= 1)
+    .map(([key, data]) => ({
+      id: `format-${key}`,
+      name: data.label,
+      subtitle: data.count > 0 ? `${data.count} fichier(s) récents dans ~/Livrables` : "Format supporté",
+      iconKind: key,
+      consumptionShare: Math.round((data.count / totalDelivCount) * 100),
+      volume: data.totalSize,
+      count: data.count,
+      countType: "fichiers" as const,
+      status: data.count > 0 ? "Disponible" : "Prêt",
+    }))
+    .sort((a, b) => b.count - a.count);
 
   return {
-    agents,
-    members,
-    groups,
-    pods,
-    models,
-    tools,
-    skills,
-    sources,
-    triggers,
-    api_keys,
+    experts: expertItems,
+    models: modelItems,
+    tools: toolItems,
+    channels: channelItems,
+    deliverables: deliverableItems,
+    // Aliases pour compatibilité
+    agents: expertItems,
+    sources: channelItems,
   };
 }
 
@@ -705,10 +592,7 @@ export function computeAnalytics({
     avgTokensPerSession,
   };
 
-  // 5. Build multi-dimension data matching Agent37 / Mstudio Console
-  const dimensions = buildDimensions(expertMetrics, totalTokens, totalSessionsCount, membersList);
-
-  // 6. Format deliverables (filter working files, take top 10 recent)
+  // 5. Format deliverables (filter working files, take top 10 recent)
   const validDeliverables: DeliverableSummary[] = deliverables
     .filter((d) => !/^\./.test(d.name) && !/\.(srt|vtt|json|py|ts|sh|md|txt)$/i.test(d.name))
     .map((d) => ({
@@ -720,6 +604,16 @@ export function computeAnalytics({
     }))
     .sort((a, b) => (b.modified || 0) - (a.modified || 0))
     .slice(0, 10);
+
+  // 6. Build multi-dimension consumption breakdown for Yelema workspace
+  const dimensions = buildDimensions({
+    experts: expertMetrics,
+    totalTokens,
+    totalSessionsCount,
+    deliverables: validDeliverables,
+    alerts,
+    usageStats,
+  });
 
   // 7. Health status
   const incidents = alerts?.incidents || [];

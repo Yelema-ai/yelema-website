@@ -5,179 +5,154 @@ import {
   Activity,
   ArrowUpDown,
   ChevronDown,
-  Code2,
-  Clock,
   Cpu,
+  FileCheck,
+  FileSpreadsheet,
   FileText,
   Filter,
   Globe,
-  Layout,
   MessageSquare,
+  Presentation,
   Search,
+  Send,
   Sparkles,
-  Table as TableIcon,
   Terminal,
+  Users,
+  Video,
   Zap,
 } from "lucide-react";
 import type { AnalyticsItem, DimensionsData } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
 export type DimensionTabKey =
-  | "agents"
-  | "members"
-  | "groups"
-  | "pods"
+  | "experts"
   | "models"
   | "tools"
-  | "skills"
-  | "sources"
-  | "triggers"
-  | "api_keys";
+  | "channels"
+  | "deliverables";
 
 interface TabConfig {
   key: DimensionTabKey;
   label: string;
+  icon: typeof Users;
 }
 
 const TABS: TabConfig[] = [
-  { key: "agents", label: "Agents" },
-  { key: "members", label: "Members" },
-  { key: "groups", label: "Groups" },
-  { key: "pods", label: "Pods" },
-  { key: "models", label: "Models" },
-  { key: "tools", label: "Tools" },
-  { key: "skills", label: "Skills" },
-  { key: "sources", label: "Sources" },
-  { key: "triggers", label: "Triggers" },
-  { key: "api_keys", label: "API keys" },
+  { key: "experts", label: "Experts Métiers", icon: Users },
+  { key: "models", label: "Modèles d'IA", icon: Sparkles },
+  { key: "tools", label: "Outils & MCP", icon: Cpu },
+  { key: "channels", label: "Canaux d'Interaction", icon: MessageSquare },
+  { key: "deliverables", label: "Formats de Livrables", icon: FileCheck },
 ];
 
-function renderRowIcon(item: AnalyticsItem) {
+function formatNumber(n: number): string {
+  return n.toLocaleString("fr-FR");
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return "--";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}
+
+function renderItemIcon(item: AnalyticsItem) {
+  if (item.color) {
+    return (
+      <div
+        className="flex size-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white shadow-xs"
+        style={{ backgroundColor: item.color }}
+      >
+        {item.name.charAt(0).toUpperCase()}
+      </div>
+    );
+  }
+
   switch (item.iconKind) {
     case "claude":
       return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-xs font-black text-amber-500 shadow-xs ring-1 ring-white/10">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-xs font-black text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/20">
           A
         </div>
       );
     case "openai":
       return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-emerald-400 shadow-xs ring-1 ring-white/10">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/20">
           <Sparkles className="size-4" />
         </div>
       );
-    case "gmail":
+    case "gemini":
       return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 shadow-xs ring-1 ring-white/10">
-          <svg viewBox="0 0 24 24" className="size-4">
-            <path
-              fill="#EA4335"
-              d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.146C21.69 2.28 24 3.434 24 5.457z"
-            />
-          </svg>
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 ring-1 ring-blue-500/20">
+          <Sparkles className="size-4" />
         </div>
       );
-    case "calendar":
+    case "telegram":
       return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 shadow-xs ring-1 ring-white/10">
-          <svg viewBox="0 0 24 24" className="size-4">
-            <rect width="20" height="20" x="2" y="2" rx="4" fill="#4285F4" />
-            <path
-              fill="#fff"
-              d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"
-            />
-          </svg>
-        </div>
-      );
-    case "files":
-      return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-blue-400 shadow-xs ring-1 ring-white/10">
-          <FileText className="size-3.5" />
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 ring-1 ring-sky-500/20">
+          <Send className="size-4" />
         </div>
       );
     case "web":
       return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-sky-400 shadow-xs ring-1 ring-white/10">
-          <Globe className="size-3.5" />
-        </div>
-      );
-    case "computer":
-      return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-purple-400 shadow-xs ring-1 ring-white/10">
-          <Terminal className="size-3.5" />
-        </div>
-      );
-    case "frames":
-      return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-indigo-400 shadow-xs ring-1 ring-white/10">
-          <Layout className="size-3.5" />
-        </div>
-      );
-    case "logger":
-      return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-cyan-400 shadow-xs ring-1 ring-white/10">
-          <Clock className="size-3.5" />
-        </div>
-      );
-    case "table":
-      return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-teal-400 shadow-xs ring-1 ring-white/10">
-          <TableIcon className="size-3.5" />
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 ring-1 ring-indigo-500/20">
+          <Globe className="size-4" />
         </div>
       );
     case "memory":
       return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-violet-400 shadow-xs ring-1 ring-white/10">
-          <Globe className="size-3.5" />
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 ring-1 ring-purple-500/20">
+          <Cpu className="size-4" />
+        </div>
+      );
+    case "logger":
+      return (
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 ring-1 ring-cyan-500/20">
+          <Activity className="size-4" />
         </div>
       );
     case "trigger":
       return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-amber-400 shadow-xs ring-1 ring-white/10">
-          <Zap className="size-3.5" />
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/20">
+          <Zap className="size-4" />
         </div>
       );
-    case "chat":
+    case "excel":
       return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-emerald-400 shadow-xs ring-1 ring-white/10">
-          <MessageSquare className="size-3.5" />
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/20">
+          <FileSpreadsheet className="size-4" />
         </div>
       );
-    case "api":
+    case "word":
       return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-rose-400 shadow-xs ring-1 ring-white/10">
-          <Code2 className="size-3.5" />
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 ring-1 ring-blue-500/20">
+          <FileText className="size-4" />
         </div>
       );
-    case "panel":
+    case "powerpoint":
       return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-purple-400 shadow-xs ring-1 ring-white/10">
-          <Activity className="size-3.5" />
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 ring-1 ring-orange-500/20">
+          <Presentation className="size-4" />
         </div>
       );
-    case "agent":
+    case "pdf":
       return (
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-purple-600/20 font-bold text-purple-400 ring-1 ring-purple-500/30">
-          {item.name.charAt(0).toUpperCase()}
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 ring-1 ring-rose-500/20">
+          <FileText className="size-4" />
         </div>
       );
-    case "member":
-    default: {
-      // Initials with pastel colors matching screenshot
-      const initial = item.name.charAt(0).toUpperCase();
-      const colorMap: Record<string, string> = {
-        E: "bg-purple-900/60 text-purple-300 ring-purple-500/30",
-        M: "bg-blue-900/60 text-blue-300 ring-blue-500/30",
-        S: "bg-emerald-900/60 text-emerald-300 ring-emerald-500/30",
-        L: "bg-teal-900/60 text-teal-300 ring-teal-500/30",
-      };
-      const classes = colorMap[initial] || "bg-zinc-800 text-zinc-300 ring-white/10";
+    case "video":
       return (
-        <div className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-1", classes)}>
-          {initial}
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 ring-1 ring-purple-500/20">
+          <Video className="size-4" />
         </div>
       );
-    }
+    default:
+      return (
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-soft text-ink-2 ring-1 ring-line">
+          <Terminal className="size-4" />
+        </div>
+      );
   }
 }
 
@@ -186,32 +161,44 @@ export function DimensionsAnalyticsTable({
 }: {
   dimensions: DimensionsData;
 }) {
-  const [activeTab, setActiveTab] = useState<DimensionTabKey>("members");
+  const [activeTab, setActiveTab] = useState<DimensionTabKey>("experts");
   const [search, setSearch] = useState("");
-  const [sortField, setSortField] = useState<"name" | "share" | "credits" | "count">("credits");
+  const [sortField, setSortField] = useState<"name" | "share" | "volume" | "count">("share");
   const [sortAsc, setSortAsc] = useState(false);
 
-  const rawItems = dimensions[activeTab] || [];
+  // Fallback to aliases if available
+  const rawItems: AnalyticsItem[] = useMemo(() => {
+    if (activeTab === "experts") return dimensions.experts || dimensions.agents || [];
+    if (activeTab === "models") return dimensions.models || [];
+    if (activeTab === "tools") return dimensions.tools || [];
+    if (activeTab === "channels") return dimensions.channels || dimensions.sources || [];
+    if (activeTab === "deliverables") return dimensions.deliverables || [];
+    return [];
+  }, [dimensions, activeTab]);
 
   const filteredItems = useMemo(() => {
     let list = rawItems;
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      list = list.filter((item) => item.name.toLowerCase().includes(q));
+      list = list.filter(
+        (item) =>
+          item.name.toLowerCase().includes(q) ||
+          (item.subtitle && item.subtitle.toLowerCase().includes(q))
+      );
     }
 
     return [...list].sort((a, b) => {
       let cmp = 0;
       if (sortField === "name") cmp = a.name.localeCompare(b.name, "fr");
       else if (sortField === "share") cmp = a.consumptionShare - b.consumptionShare;
-      else if (sortField === "credits") cmp = a.credits - b.credits;
+      else if (sortField === "volume") cmp = a.volume - b.volume;
       else if (sortField === "count") cmp = a.count - b.count;
 
       return sortAsc ? cmp : -cmp;
     });
   }, [rawItems, search, sortField, sortAsc]);
 
-  const handleSort = (field: "name" | "share" | "credits" | "count") => {
+  const handleSort = (field: "name" | "share" | "volume" | "count") => {
     if (sortField === field) {
       setSortAsc(!sortAsc);
     } else {
@@ -220,167 +207,236 @@ export function DimensionsAnalyticsTable({
     }
   };
 
-  const countColumnHeader =
-    activeTab === "tools" || activeTab === "skills" || activeTab === "pods" || activeTab === "triggers"
+  const volumeHeader =
+    activeTab === "deliverables" ? "Volume Fichiers" : "Jetons IA Estimés";
+
+  const countHeader =
+    activeTab === "experts"
+      ? "Missions"
+      : activeTab === "models"
+      ? "Requêtes"
+      : activeTab === "tools"
       ? "Invocations"
-      : "Messages";
+      : activeTab === "channels"
+      ? "Interactions"
+      : "Fichiers";
 
   return (
-    <div className="overflow-hidden rounded-[22px] border border-line bg-[#161618] text-white shadow-md">
-      {/* 1. Sub-tabs bar matching screenshot */}
-      <div className="flex items-center gap-6 overflow-x-auto border-b border-white/10 px-6 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {TABS.map((tab) => {
-          const active = activeTab === tab.key;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => {
-                setActiveTab(tab.key);
-                setSearch("");
-              }}
-              className={cn(
-                "relative pb-3 pt-2 text-sm font-medium transition-colors whitespace-nowrap",
-                active
-                  ? "font-semibold text-white"
-                  : "text-zinc-400 hover:text-zinc-200"
-              )}
-            >
-              {tab.label}
-              {active && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-white" />
-              )}
-            </button>
-          );
-        })}
+    <div className="overflow-hidden rounded-[22px] border border-line bg-surface shadow-xs transition-shadow">
+      {/* 1. Navigation par onglets ergonomique inspirée du modèle Dust */}
+      <div className="border-b border-line bg-soft/40 px-6 pt-3">
+        <div className="flex items-center gap-6 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {TABS.map((tab) => {
+            const active = activeTab === tab.key;
+            const items =
+              tab.key === "experts"
+                ? dimensions.experts || dimensions.agents || []
+                : tab.key === "models"
+                ? dimensions.models || []
+                : tab.key === "tools"
+                ? dimensions.tools || []
+                : tab.key === "channels"
+                ? dimensions.channels || dimensions.sources || []
+                : dimensions.deliverables || [];
+
+            const Icon = tab.icon;
+
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => {
+                  setActiveTab(tab.key);
+                  setSearch("");
+                }}
+                className={cn(
+                  "relative flex items-center gap-2 pb-3.5 pt-1 text-xs transition-colors whitespace-nowrap",
+                  active
+                    ? "font-bold text-ink"
+                    : "font-medium text-ink-3 hover:text-ink"
+                )}
+              >
+                <Icon className={cn("size-3.5", active ? "text-brand" : "text-ink-3")} />
+                <span>{tab.label}</span>
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 py-0.2 text-[10px] font-semibold transition-colors",
+                    active
+                      ? "bg-brand/10 text-brand font-bold"
+                      : "bg-soft text-ink-3"
+                  )}
+                >
+                  {items.length}
+                </span>
+
+                {active && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-brand" />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* 2. Search bar matching screenshot */}
-      <div className="p-4 sm:px-6">
-        <div className="relative">
+      {/* 2. Barre de recherche et filtres */}
+      <div className="flex flex-col gap-3 border-b border-line/60 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="relative w-full max-w-sm">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search..."
-            className="w-full rounded-full border border-white/10 bg-[#1e1e21] py-2 pl-4 pr-10 text-xs text-zinc-200 placeholder:text-zinc-500 focus:border-white/30 focus:outline-none"
+            placeholder="Rechercher par nom, rôle ou outil..."
+            className="w-full rounded-full border border-line bg-soft/60 py-2 pl-4 pr-10 text-xs text-ink placeholder:text-ink-3 transition-colors focus:border-brand/40 focus:bg-surface focus:outline-none"
           />
-          <Search className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
+          <Search className="pointer-events-none absolute right-3.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-3" />
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-ink-3">
+          <span>
+            {filteredItems.length} élément{filteredItems.length > 1 ? "s" : ""}
+          </span>
         </div>
       </div>
 
-      {/* 3. Table */}
+      {/* 3. Tableau de ventilation */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm max-sm:min-w-[620px]">
-          <thead className="border-b border-white/10 text-xs text-zinc-400">
+        <table className="w-full text-left text-xs max-sm:min-w-[620px]">
+          <thead className="border-b border-line bg-soft/30 text-[11px] font-semibold uppercase tracking-wider text-ink-3">
             <tr>
-              {/* Name */}
+              {/* Nom & Rôle */}
               <th
                 onClick={() => handleSort("name")}
-                className="cursor-pointer px-6 py-3 font-semibold transition-colors hover:text-white"
+                className="cursor-pointer px-6 py-3.5 transition-colors hover:text-ink"
               >
                 <div className="flex items-center gap-1.5">
-                  Name
+                  Élément
                   <ArrowUpDown className="size-3 opacity-60" />
                 </div>
               </th>
 
-              {/* Consumption share */}
+              {/* Part de consommation */}
               <th
                 onClick={() => handleSort("share")}
-                className="cursor-pointer px-6 py-3 font-semibold transition-colors hover:text-white"
+                className="cursor-pointer px-6 py-3.5 transition-colors hover:text-ink"
               >
                 <div className="flex items-center gap-1.5">
-                  Consumption share
+                  Part de Consommation
                   <ArrowUpDown className="size-3 opacity-60" />
                 </div>
               </th>
 
-              {/* Credits */}
+              {/* Volume */}
               <th
-                onClick={() => handleSort("credits")}
-                className="cursor-pointer px-6 py-3 font-semibold transition-colors hover:text-white"
+                onClick={() => handleSort("volume")}
+                className="cursor-pointer px-6 py-3.5 transition-colors hover:text-ink"
               >
                 <div className="flex items-center gap-1.5">
-                  Credits
-                  <ChevronDown className={cn("size-3.5 transition-transform", sortField === "credits" && sortAsc && "rotate-180")} />
+                  {volumeHeader}
+                  <ChevronDown
+                    className={cn(
+                      "size-3.5 transition-transform",
+                      sortField === "volume" && sortAsc && "rotate-180"
+                    )}
+                  />
                 </div>
               </th>
 
-              {/* Messages / Invocations */}
+              {/* Activité */}
               <th
                 onClick={() => handleSort("count")}
-                className="cursor-pointer px-6 py-3 font-semibold transition-colors hover:text-white"
+                className="cursor-pointer px-6 py-3.5 transition-colors hover:text-ink"
               >
                 <div className="flex items-center gap-1.5">
-                  {countColumnHeader}
+                  {countHeader}
                   <ArrowUpDown className="size-3 opacity-60" />
                 </div>
               </th>
 
-              {/* Actions Header */}
-              <th className="w-16 px-4 py-3" />
+              {/* Statut */}
+              <th className="px-6 py-3.5 text-right">Statut</th>
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-white/5 text-xs text-zinc-300">
+          <tbody className="divide-y divide-line text-xs">
             {filteredItems.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-12 text-center text-zinc-500">
-                  No records found matching "{search}"
+                <td colSpan={5} className="py-12 text-center text-sm text-ink-3">
+                  Aucun élément ne correspond à votre recherche "{search}".
                 </td>
               </tr>
             ) : (
               filteredItems.map((item) => (
                 <tr
                   key={item.id}
-                  className="transition-colors hover:bg-white/[0.03]"
+                  className="transition-colors hover:bg-soft/40"
                 >
-                  {/* Name cell */}
+                  {/* Nom & Métadonnées */}
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      {renderRowIcon(item)}
-                      <div>
-                        <p className="font-semibold text-white">{item.name}</p>
+                    <div className="flex items-center gap-3.5">
+                      {renderItemIcon(item)}
+                      <div className="min-w-0">
+                        <p className="font-bold text-ink truncate">{item.name}</p>
                         {item.subtitle && (
-                          <p className="text-[10px] text-zinc-500">{item.subtitle}</p>
+                          <p className="text-[11px] text-ink-3 truncate">
+                            {item.subtitle}
+                          </p>
                         )}
                       </div>
                     </div>
                   </td>
 
-                  {/* Consumption share cell */}
+                  {/* Barre de part de consommation */}
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      {/* Pill Progress Bar */}
-                      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-zinc-800">
+                      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-soft ring-1 ring-line/40">
                         <div
-                          className="h-full rounded-full bg-zinc-200 transition-all duration-300"
-                          style={{ width: `${Math.min(100, Math.max(3, item.consumptionShare))}%` }}
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{
+                            width: `${Math.min(100, Math.max(4, item.consumptionShare))}%`,
+                            backgroundColor: item.color || "var(--brand, #7c3aed)",
+                          }}
                         />
                       </div>
-                      <span className="w-9 font-medium text-zinc-400">
+                      <span className="w-10 font-bold text-ink text-[11px]">
                         {item.consumptionShare}%
                       </span>
                     </div>
                   </td>
 
-                  {/* Credits cell */}
-                  <td className="px-6 py-4 font-medium text-zinc-200">
-                    {item.credits.toLocaleString("en-US")}
+                  {/* Volume (Tokens / Bytes) */}
+                  <td className="px-6 py-4 font-semibold text-ink-2">
+                    {activeTab === "deliverables"
+                      ? formatBytes(item.volume)
+                      : `${formatNumber(item.volume)} jetons`}
                   </td>
 
-                  {/* Messages / Invocations cell */}
-                  <td className="px-6 py-4 font-medium text-zinc-400">
-                    {item.count.toLocaleString("en-US")}
+                  {/* Nombre d'activités */}
+                  <td className="px-6 py-4 font-medium text-ink-3">
+                    <span className="font-semibold text-ink">
+                      {formatNumber(item.count)}
+                    </span>{" "}
+                    {item.countType}
                   </td>
 
-                  {/* Action Icons matching screenshot */}
-                  <td className="px-4 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2 text-zinc-500">
-                      <ChevronDown className="size-3.5 cursor-pointer transition-colors hover:text-white" />
-                      <Filter className="size-3.5 cursor-pointer transition-colors hover:text-white" />
-                    </div>
+                  {/* Statut */}
+                  <td className="px-6 py-4 text-right">
+                    {item.status ? (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                          item.status === "Actif" || item.status === "Opérationnel" || item.status === "Connecté" || item.status === "Sain" || item.status === "Disponible"
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : "bg-soft text-ink-3"
+                        )}
+                      >
+                        {(item.status === "Actif" || item.status === "Opérationnel" || item.status === "Connecté" || item.status === "Sain") && (
+                          <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        )}
+                        {item.status}
+                      </span>
+                    ) : (
+                      <span className="text-ink-3">--</span>
+                    )}
                   </td>
                 </tr>
               ))

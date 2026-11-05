@@ -202,38 +202,49 @@ test("computeAnalytics: computes timeline points according to period", () => {
   assert.equal(res30.timeline.length, 30);
 });
 
-test("computeAnalytics: computes multi-dimension analytics for members, models, tools, skills, sources", () => {
+test("computeAnalytics: computes multi-dimension analytics for workspace experts, models, tools, channels, deliverables", () => {
   const res = computeAnalytics({
     sessions: [{ id: "s1", profile: "fatima", last_active: Date.now() }],
     usageStats: null,
-    experts: [{ id: "fatima", name: "Fatima", description: "Marketing" }],
-    deliverables: [],
+    experts: [{ id: "fatima", name: "Fatima", description: "Directrice Marketing" }],
+    deliverables: [
+      { name: "Budget_2026.xlsx", size: 1024, modified: Date.now() },
+      { name: "Etude_Marche.docx", size: 2048, modified: Date.now() },
+    ],
   });
 
-  assert.ok(Array.isArray(res.dimensions.members));
-  assert.ok(res.dimensions.members.length >= 4);
-  assert.equal(res.dimensions.members[0].name, "Ebou Christelle Nebie");
-  assert.equal(res.dimensions.members[0].consumptionShare, 52);
+  // 1. Experts (Agents)
+  assert.ok(Array.isArray(res.dimensions.experts));
+  assert.equal(res.dimensions.experts.length, 1);
+  assert.equal(res.dimensions.experts[0].name, "Fatima");
+  assert.equal(res.dimensions.experts[0].subtitle, "Directrice Marketing");
+  assert.equal(res.dimensions.experts[0].count, 1);
 
+  // 2. Modèles d'IA
   assert.ok(Array.isArray(res.dimensions.models));
-  assert.equal(res.dimensions.models[0].name, "Claude Sonnet 5");
-  assert.equal(res.dimensions.models[0].consumptionShare, 90);
+  assert.ok(res.dimensions.models.length >= 1);
+  assert.ok(res.dimensions.models.some((m) => m.name.includes("Claude") || m.name.includes("GPT")));
 
+  // 3. Outils & Connecteurs MCP
   assert.ok(Array.isArray(res.dimensions.tools));
-  assert.equal(res.dimensions.tools[0].name, "Files");
-  assert.equal(res.dimensions.tools[0].countType, "invocations");
+  assert.ok(res.dimensions.tools.length >= 4);
+  assert.ok(res.dimensions.tools.some((t) => t.id === "tool_deliverables"));
+  assert.ok(res.dimensions.tools.some((t) => t.id === "tool_memory"));
 
-  assert.ok(Array.isArray(res.dimensions.skills));
-  assert.equal(res.dimensions.skills[0].name, "Computer");
+  // 4. Canaux d'interaction & Sources
+  assert.ok(Array.isArray(res.dimensions.channels));
+  assert.ok(res.dimensions.channels.length >= 3);
+  assert.ok(res.dimensions.channels.some((c) => c.id === "channel_telegram"));
+  assert.ok(res.dimensions.channels.some((c) => c.id === "channel_web"));
 
-  assert.ok(Array.isArray(res.dimensions.sources));
-  assert.equal(res.dimensions.sources[0].name, "Trigger");
-  assert.equal(res.dimensions.sources[0].consumptionShare, 72);
+  // 5. Formats de Livrables
+  assert.ok(Array.isArray(res.dimensions.deliverables));
+  assert.ok(res.dimensions.deliverables.some((d) => d.id === "format-excel"));
+  assert.ok(res.dimensions.deliverables.some((d) => d.id === "format-word"));
 
-  assert.ok(Array.isArray(res.dimensions.groups));
-  assert.ok(Array.isArray(res.dimensions.pods));
-  assert.ok(Array.isArray(res.dimensions.triggers));
-  assert.ok(Array.isArray(res.dimensions.api_keys));
+  // 6. Aliases de compatibilité
+  assert.equal(res.dimensions.agents, res.dimensions.experts);
+  assert.equal(res.dimensions.sources, res.dimensions.channels);
 });
 
 test("computeAnalytics: computes token distribution and ratios", () => {
@@ -345,6 +356,6 @@ test("computeAnalytics: handles empty inputs gracefully without throwing", () =>
   assert.equal(res.experts.length, 0);
   assert.equal(res.recentDeliverables.length, 0);
   assert.equal(res.timeline.length, 7);
-  assert.ok(res.dimensions.members.length > 0);
+  assert.ok(res.dimensions.tools.length > 0);
   assert.equal(res.health.status, "healthy");
 });
