@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from "sonner";
 import { useChatPresence } from "@/components/activity/hooks";
 import { apiFetch } from "@/lib/api";
+import { optimistic } from "@/lib/optimistic";
 import { remember } from "@/lib/client-cache";
 import { usePoll } from "@/components/usePoll";
 import { sessionsStore } from "@/lib/sessions-client";
@@ -166,10 +167,16 @@ export function ChatProvider({
 
   useEffect(() => {
     const kept = sessionsStore.get(agentId, profile)?.sessions ?? null;
-    serverRail.current = kept;
+    // The device's copy is no baseline for « moved upstream »: the first reading would re-read the thread.
+    serverRail.current = sessionsStore.fromDevice(agentId, profile) ? null : kept;
     setSessions(kept ?? []);
     setLoadingSessions(kept === null);
-    const off = sessionsStore.subscribe(agentId, profile, (d) => apply(d.sessions));
+    const off = sessionsStore.subscribe(agentId, profile, (d) => {
+      if (!sessionsStore.fromDevice(agentId, profile)) return apply(d.sessions);
+      // The device's copy arriving: shown only while nothing is.
+      setSessions((prev) => (prev.length ? prev : d.sessions));
+      setLoadingSessions(false);
+    });
     void reloadSessions(3, FRESH_RAIL_MS);
     return () => {
       loadSeq.current += 1;
@@ -238,21 +245,22 @@ export function ChatProvider({
       const removed = sessions.find((x) => x.session_id === sessionId);
       const wasActive = activeSessionId === sessionId;
       runKillerRef.current?.(sessionId); // stop any in-flight turn before the thread disappears
-      setSessions((s) => s.filter((x) => x.session_id !== sessionId)); // optimistic, functional
-      // Deleting the open thread falls back to a new chat (the rail can delete the active thread
-      // from any tab, so off-tab this stays silent rather than yanking the user's URL).
-      if (wasActive) setOpenThread(null);
-      try {
-        await apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`, { method: "DELETE" });
+      await optimistic({
+        // Deleting the open thread falls back to a new chat (the rail can delete the active thread
+        // from any tab, so off-tab this stays silent rather than yanking the user's URL).
+        apply: () => {
+          setSessions((s) => s.filter((x) => x.session_id !== sessionId));
+          if (wasActive) setOpenThread(null);
+        },
         // The other lists of this space (menu, Conversations) read it again.
-        sessionsStore.invalidate(agentId, profile ?? "");
-      } catch (e) {
-        // Functional rollback: re-insert only the removed row (preserving any threads added
-        // concurrently) and restore the open thread.
-        if (removed) setSessions((s) => (s.some((x) => x.session_id === sessionId) ? s : [removed, ...s]));
-        if (wasActive) setOpenThread(sessionId);
-        toast.error((e as Error).message || "La conversation n’a pas pu être supprimée.");
-      }
+        run: () => apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`, { method: "DELETE" }).then(() => sessionsStore.invalidate(agentId, profile ?? "")),
+        // Only the removed row comes back (threads added meanwhile stay), and the open thread.
+        rollback: () => {
+          if (removed) setSessions((s) => (s.some((x) => x.session_id === sessionId) ? s : [removed, ...s]));
+          if (wasActive) setOpenThread(sessionId);
+        },
+        refused: (m) => toast.error(m),
+      });
     },
     [agentId, profile, q, activeSessionId, sessions, setOpenThread]
   );
@@ -262,17 +270,13 @@ export function ChatProvider({
       const next = title.trim().slice(0, 200);
       const prev = sessions.find((s) => s.session_id === sessionId)?.title ?? null;
       if (!next || next === prev) return;
-      setSessions((s) => s.map((x) => (x.session_id === sessionId ? { ...x, title: next } : x))); // optimistic
-      try {
-        await apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`, {
-          method: "PATCH",
-          body: JSON.stringify({ title: next }),
-        });
-        sessionsStore.invalidate(agentId, profile ?? "");
-      } catch (e) {
-        setSessions((s) => s.map((x) => (x.session_id === sessionId ? { ...x, title: prev } : x))); // rollback
-        toast.error((e as Error).message || "La conversation n’a pas pu être renommée.");
-      }
+      const titled = (title: string | null) => setSessions((s) => s.map((x) => (x.session_id === sessionId ? { ...x, title } : x)));
+      await optimistic({
+        apply: () => titled(next),
+        run: () => apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`, { method: "PATCH", body: JSON.stringify({ title: next }) }).then(() => sessionsStore.invalidate(agentId, profile ?? "")),
+        rollback: () => titled(prev),
+        refused: (m) => toast.error(m),
+      });
     },
     [agentId, profile, q, sessions]
   );

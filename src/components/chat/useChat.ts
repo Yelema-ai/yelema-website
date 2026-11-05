@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, readApiError } from "@/lib/api";
-import { cached, remember, whenKept } from "@/lib/client-cache";
+import { cached, cachedFetch, forget, remember, whenKept } from "@/lib/client-cache";
 import { finishTiming, keepLast, mark, startTiming, type TurnTiming } from "@/lib/chat-timing";
 import { chatFailureMessage, OFFLINE } from "@/lib/chat-errors";
 import { batchQueued, insertBefore, isSteer, steerText, unreadSteerCount } from "@/lib/chat-queue";
@@ -200,26 +200,21 @@ function takeUnread(run: LiveRun, pending: string): Queued[] {
 // carries the user.
 const historyKey = (agentId: string, q: string, sessionId: string) => `chat:${agentId}${q}:${sessionId}`;
 // A thread read ahead (a row hovered or shown) serves its opening once, if this recent: one read, not two.
+// A send in the thread since makes that read stale: the key counts the thread's sends.
 const AHEAD_MS = 8_000;
-const ahead = new Map<string, { at: number; read: Promise<SessionDetail> }>();
+const sends = new Map<string, number>();
+const aheadKey = (key: string) => `ahead:${key}:${sends.get(key) ?? 0}`;
 const fetchThread = (agentId: string, q: string, sessionId: string) => apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`);
 function readThread(agentId: string, q: string, sessionId: string): Promise<SessionDetail> {
-  const key = historyKey(agentId, q, sessionId);
-  const hit = ahead.get(key);
-  ahead.delete(key);
-  return hit && Date.now() - hit.at < AHEAD_MS ? hit.read : fetchThread(agentId, q, sessionId);
+  const k = aheadKey(historyKey(agentId, q, sessionId));
+  return cachedFetch(k, () => fetchThread(agentId, q, sessionId), AHEAD_MS).finally(() => forget(k));
 }
 
 /** Reads a thread ahead of its click: its messages then paint at once, and the opening asks nothing more. */
 export function prefetchThread(agentId: string, profile: string | null, sessionId: string): void {
   const q = profileQuery(profile);
   const key = historyKey(agentId, q, sessionId);
-  const hit = ahead.get(key);
-  if (hit && Date.now() - hit.at < AHEAD_MS) return;
-  const read = fetchThread(agentId, q, sessionId);
-  ahead.set(key, { at: Date.now(), read });
-  read.then((res) => void remember(key, mapHistory(res.history)), () => ahead.get(key)?.read === read && ahead.delete(key));
-  for (const [k, v] of ahead) if (Date.now() - v.at >= AHEAD_MS) ahead.delete(k);
+  cachedFetch(aheadKey(key), () => fetchThread(agentId, q, sessionId), AHEAD_MS).then((res) => void remember(key, mapHistory(res.history)), () => undefined);
 }
 
 export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessionCreated, onActivity }: UseChatArgs) {
@@ -640,6 +635,8 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
       turns.start(run);
       if (sessionId) {
         runsRef.current.set(sessionId, run);
+        const key = historyKey(agentId, q, sessionId);
+        sends.set(key, (sends.get(key) ?? 0) + 1);
         // Bubble an existing thread to the top of the rail as soon as it gets a new turn.
         onActivityRef.current?.(sessionId);
       } else {
