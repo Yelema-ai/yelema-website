@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { byDeadline, settledByKey, spaceKey, within } from "./first-screen.ts";
+import { byDeadline, FIRST_SCREEN_BUDGET_MS, settledByKey, spaceKey, STREAM_GUARD_MS, within } from "./first-screen.ts";
 
 test("un premier écran lu à temps est transmis ; en retard ou en échec, le navigateur le lit lui-même", async () => {
   assert.equal(await within(Promise.resolve(1), 50), 1);
   assert.equal(await within(new Promise((r) => setTimeout(() => r(1), 200)), 10), null);
   assert.equal(await within(Promise.reject(new Error("x")), 50), null);
+});
+
+test("une lecture streamée qui ne s'achève jamais rend la main au navigateur, après le budget du serveur", async () => {
+  assert.equal(await within(new Promise(() => undefined), 10), null);
+  assert.ok(STREAM_GUARD_MS > FIRST_SCREEN_BUDGET_MS);
 });
 
 test("chaque espace sous sa clé, ceux en échec laissés de côté", async () => {

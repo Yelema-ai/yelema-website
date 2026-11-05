@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { STREAM_GUARD_MS, within } from "@/lib/first-screen";
 
 /** What a page read on the server for its first screen: the value, or its promise still streaming in. */
 export type ServerReading<T> = T | null | Promise<T | null>;
@@ -21,10 +22,8 @@ export function useServerReading<T>(reading: ServerReading<T>): { value: T | nul
       return;
     }
     let live = true;
-    (reading as Flight<T>).then(
-      (value) => live && setGot({ value: value ?? null, settled: true }),
-      () => live && setGot({ value: null, settled: true })
-    );
+    // A stream that never settles must not hold the page on its cache: past the guard, the view reads itself.
+    void within(reading as Flight<T>, STREAM_GUARD_MS).then((value) => live && setGot({ value: value ?? null, settled: true }));
     return () => {
       live = false;
     };
