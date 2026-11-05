@@ -202,10 +202,23 @@ const historyKey = (agentId: string, q: string, sessionId: string) => `chat:${ag
 // A thread read ahead (a row hovered or shown) serves its opening once, if this recent: one read, not two.
 // A send in the thread since makes that read stale: the key counts the thread's sends.
 const AHEAD_MS = 8_000;
+const REFRESH_HINT_MS = 300;
 const sends = new Map<string, number>();
 const aheadKey = (key: string) => `ahead:${key}:${sends.get(key) ?? 0}`;
-const fetchThread = (agentId: string, q: string, sessionId: string) => apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`);
-function readThread(agentId: string, q: string, sessionId: string): Promise<SessionDetail> {
+// When each thread's kept copy was read (the read's start): an older read landing late never replaces it.
+const readAt = new Map<string, number>();
+function keepThread(key: string, startedAt: number, history: ChatMessage[]): ChatMessage[] {
+  const kept = cached<ChatMessage[]>(key);
+  if (kept && (readAt.get(key) ?? 0) > startedAt) return kept;
+  readAt.set(key, startedAt);
+  return remember(key, history);
+}
+type Read = SessionDetail & { startedAt: number };
+const fetchThread = (agentId: string, q: string, sessionId: string): Promise<Read> => {
+  const startedAt = Date.now();
+  return apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`).then((res) => ({ ...res, startedAt }));
+};
+function readThread(agentId: string, q: string, sessionId: string): Promise<Read> {
   const k = aheadKey(historyKey(agentId, q, sessionId));
   return cachedFetch(k, () => fetchThread(agentId, q, sessionId), AHEAD_MS).finally(() => forget(k));
 }
@@ -216,7 +229,8 @@ export function prefetchThread(agentId: string, profile: string | null, sessionI
   const key = historyKey(agentId, q, sessionId);
   const k = aheadKey(key);
   cachedFetch(k, () => fetchThread(agentId, q, sessionId), AHEAD_MS).then((res) => {
-    remember(key, mapHistory(res.history));
+    // A send in the thread since this read started: its copy predates the turn.
+    if (aheadKey(key) === k) keepThread(key, res.startedAt, mapHistory(res.history));
     // Past AHEAD_MS it serves nothing: the whole thread is not kept in the tab for it.
     setTimeout(() => cached(k) === res && forget(k), AHEAD_MS);
   }, () => undefined);
@@ -226,7 +240,10 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
   const q = profileQuery(profile);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(false);
+  // A thread opening is loading until a copy or its read is there (the server's HTML included).
+  const [loadingHistory, setLoadingHistory] = useState(sessionId !== null);
+  // A kept copy of the thread is on screen while its fresh read is out.
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The connection back: the « no Internet » line goes, the member writes again.
   useEffect(() => {
@@ -313,8 +330,8 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
   const refreshHistory = useCallback(
     async (sid: string) => {
       try {
-        const res = await apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sid}${q}`);
-        const history = remember(historyKey(agentId, q, sid), mapHistory(res.history));
+        const res = await fetchThread(agentId, q, sid);
+        const history = keepThread(historyKey(agentId, q, sid), res.startedAt, mapHistory(res.history));
         if (activeSessionRef.current !== sid || runsRef.current.get(sid)) return;
         setMessages(history);
         setIsStreaming(false);
@@ -555,6 +572,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
     // will file it under its minted session without promoting it).
     newChatRunRef.current = null;
     setError(null);
+    setRefreshing(false);
 
     if (!sessionId) {
       setMessages([]);
@@ -570,18 +588,26 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
     const kept = liveNow ? undefined : cached<ChatMessage[]>(historyKey(agentId, q, sessionId));
     if (kept) setMessages(kept);
     setLoadingHistory(!kept);
-    // The device's copy of the thread (a reload) may land a moment later: it paints until the read answers.
+    // « Mise à jour… » only for a read that does not answer at once (one read ahead just now does).
     let answered = false;
+    let over = false;
+    let hint: ReturnType<typeof setTimeout> | undefined;
+    const showRefresh = () => {
+      if (!over) hint ??= setTimeout(() => !cancelled && !over && setRefreshing(true), REFRESH_HINT_MS);
+    };
+    if (kept) showRefresh();
+    // The device's copy of the thread (a reload) may land a moment later: it paints until the read answers.
     const offKept = kept || liveNow ? () => undefined : whenKept<ChatMessage[]>(historyKey(agentId, q, sessionId), (h) => {
       if (cancelled || answered) return;
       setMessages(h);
       setLoadingHistory(false);
+      showRefresh();
     });
     readThread(agentId, q, sessionId)
       .then((res) => {
         answered = true;
         if (cancelled) return;
-        const history = remember(historyKey(agentId, q, sessionId), mapHistory(res.history));
+        const history = keepThread(historyKey(agentId, q, sessionId), res.startedAt, mapHistory(res.history));
 
         let run = runsRef.current.get(sessionId) ?? null;
         if (!run && res.active_response_id) {
@@ -618,11 +644,17 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
         if (!cancelled) setError(chatFailureMessage((e as Error).message, (e as Error).message, isOnline()));
       })
       .finally(() => {
-        if (!cancelled) setLoadingHistory(false);
+        // After a failure the device's copy may still land and paint, without the hint.
+        over = true;
+        clearTimeout(hint);
+        if (cancelled) return;
+        setLoadingHistory(false);
+        setRefreshing(false);
       });
 
     return () => {
       cancelled = true;
+      clearTimeout(hint);
       offKept();
     };
   }, [agentId, q, sessionId, startReattach, forgetRun, refreshHistory]);
@@ -812,7 +844,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
     };
   }, []);
 
-  return { messages, isStreaming, loadingHistory, error, send, stop, killRun, unqueue };
+  return { messages, isStreaming, loadingHistory, refreshing, error, send, stop, killRun, unqueue };
 }
 
 // The turn's times go to the host's logs (one line, see /api/metrics/chat) and stay in this

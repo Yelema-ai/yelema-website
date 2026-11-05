@@ -163,8 +163,10 @@ export function AgentWorkspace({
 
   // The open chat thread rides the URL as `?session=` (a query param — the agent route only accepts
   // 0–1 tab segments). Read it on mount (refresh / shared link) and on Back/Forward (popstate). Lifted
-  // here (out of the Chat pane) so ChatProvider can wrap both this rail and the pane.
-  const [urlSessionId, setUrlSessionId] = useState<string | null>(null);
+  // here (out of the Chat pane) so ChatProvider can wrap both this rail and the pane. Known from the
+  // first render, so a thread never paints the new-chat welcome before its messages.
+  const searchSession = useSearchParams().get("session");
+  const [urlSessionId, setUrlSessionId] = useState<string | null>(searchSession);
   useEffect(() => {
     const read = () => setUrlSessionId(new URLSearchParams(window.location.search).get("session"));
     read();
@@ -172,7 +174,6 @@ export function AgentWorkspace({
     return () => window.removeEventListener("popstate", read);
   }, []);
   // A link into one thread from elsewhere in the app (« Modifier avec » on a file) arrives by router.push.
-  const searchSession = useSearchParams().get("session");
   useEffect(() => {
     if (searchSession) setUrlSessionId(searchSession);
   }, [searchSession]);

@@ -81,7 +81,7 @@ export function ChatView({
     bumpSession,
     threadVersion,
   } = useChatContext();
-  const { messages, isStreaming, loadingHistory, error, send, stop, killRun, unqueue } = useChat({
+  const { messages, isStreaming, loadingHistory, refreshing, error, send, stop, killRun, unqueue } = useChat({
     agentId,
     profile,
     sessionId: activeSessionId,
@@ -357,9 +357,17 @@ export function ChatView({
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : messages.length > 0 ? (
+          <>
+          {/* The last known copy is on screen while the thread is read again: said, without moving anything. */}
+          {refreshing && (
+            <div role="status" className="pointer-events-none sticky top-0 z-10 h-0">
+              <span className="absolute left-1/2 top-2 -translate-x-1/2 rounded-full bg-soft px-2.5 py-0.5 text-[12px] text-ink-3 shadow-sm">Mise à jour…</span>
+            </div>
+          )}
           <div ref={contentRef}>
             <ChatMessages messages={messages} isStreaming={isStreaming} face={face} driveFolder={driveFolder} onReply={(text) => void send(text)} onShowEarlier={showEarlier} onUnqueue={unqueue} onDocs={setDocs} onGoogle={setGoogle} routine={sessions.find((s) => s.session_id === activeSessionId)?.routine ?? null} pronoun={pronoun} />
           </div>
+          </>
         ) : (
           <>
             {face && !profile && <ExpertAvatar expert={face} size="lg" className="mb-4 max-sm:hidden" />}
