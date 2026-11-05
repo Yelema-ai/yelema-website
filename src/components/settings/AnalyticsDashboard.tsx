@@ -1,22 +1,27 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
   AlertTriangle,
   ArrowUpRight,
   BarChart3,
+  Calendar,
   CheckCircle2,
   FileCheck,
   FileCode,
   FileSpreadsheet,
   FileText,
+  HelpCircle,
+  LayoutGrid,
+  List,
   Music,
+  PieChart,
   Presentation,
   RefreshCw,
   ShieldAlert,
-  ShieldCheck,
   Sparkles,
+  TrendingUp,
   Users,
   Video,
   File as GenericFile,
@@ -29,6 +34,11 @@ import { useWorkspace } from "@/components/WorkspaceProvider";
 import { apiFetch } from "@/lib/api";
 import type { AnalyticsOverview, AnalyticsPeriod, DeliverableSummary, ExpertMetric } from "@/lib/analytics";
 import type { DocKind } from "@/lib/drive-links";
+import {
+  TimelineAreaChart,
+  ExpertDonutChart,
+  TokenDistributionBar,
+} from "@/components/settings/analytics-charts";
 import { cn } from "@/lib/utils";
 
 const PERIODS: { key: AnalyticsPeriod; label: string }[] = [
@@ -88,6 +98,10 @@ export function AnalyticsDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Filtre d'affichage du graphique principal
+  const [timelineMetric, setTimelineMetric] = useState<"sessions" | "tokens">("sessions");
+  const [donutMetric, setDonutMetric] = useState<"sessions" | "tokens">("sessions");
+
   const loadData = async (targetPeriod: AnalyticsPeriod, isManualRefresh = false) => {
     if (!ownAgentId) return;
     if (isManualRefresh) setRefreshing(true);
@@ -128,15 +142,20 @@ export function AnalyticsDashboard() {
   };
 
   return (
-    <div className="space-y-7 pb-16 pt-4">
+    <div className="space-y-8 pb-20 pt-3">
       {/* 1. Header & Period Selector */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="font-display text-[22px] font-bold tracking-tight text-ink sm:text-[24px]">
-            Analytics & Supervision d'Équipe
-          </h2>
-          <p className="mt-1 text-sm text-ink-3">
-            Supervision chiffrée de la production, de l'activité des experts et de la consommation d'IA.
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-brand/10 text-brand">
+              <BarChart3 className="size-5" />
+            </div>
+            <h2 className="font-display text-[22px] font-bold tracking-tight text-ink sm:text-[25px]">
+              Tableau de Bord & Métriques d'Équipe
+            </h2>
+          </div>
+          <p className="mt-1 text-xs text-ink-3">
+            Statistiques visuelles, graphiques d'évolution et consommation des modèles d'IA en temps réel.
           </p>
         </div>
 
@@ -180,17 +199,17 @@ export function AnalyticsDashboard() {
       {data && (
         <div className="flex flex-wrap items-center gap-3">
           {data.health.status === "healthy" ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
               <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-              Système sain · {data.health.totalCrons} routines scannées · 0 incident
+              Système sain · {data.health.totalCrons} routines de fond scannées · 0 incident
             </div>
           ) : data.health.status === "warning" ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/25 bg-amber-500/10 px-3.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
               <AlertTriangle className="size-3.5" />
               {data.health.warningsCount} avertissement(s) de configuration ou de connecteur
             </div>
           ) : (
-            <div className="inline-flex items-center gap-2 rounded-full border border-rose-500/20 bg-rose-500/10 px-3.5 py-1 text-xs font-semibold text-rose-600 dark:text-rose-400">
+            <div className="inline-flex items-center gap-2 rounded-full border border-rose-500/25 bg-rose-500/10 px-3.5 py-1 text-xs font-semibold text-rose-600 dark:text-rose-400">
               <ShieldAlert className="size-3.5" />
               {data.health.incidentsCount} incident(s) d'exécution détecté(s)
             </div>
@@ -209,17 +228,17 @@ export function AnalyticsDashboard() {
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="h-28 animate-pulse rounded-[18px] border border-line bg-surface p-4"
+                className="h-28 animate-pulse rounded-[20px] border border-line bg-surface p-4"
               />
             ))}
           </div>
-          <div className="h-64 animate-pulse rounded-[18px] border border-line bg-surface p-6" />
+          <div className="h-64 animate-pulse rounded-[22px] border border-line bg-surface p-6" />
         </div>
       )}
 
       {/* 4. Error State */}
       {error && !loading && (
-        <div className="rounded-[18px] border border-rose-500/30 bg-rose-500/10 p-6 text-center">
+        <div className="rounded-[20px] border border-rose-500/30 bg-rose-500/10 p-6 text-center">
           <p className="text-sm font-semibold text-rose-600 dark:text-rose-400">{error}</p>
           <button
             type="button"
@@ -234,10 +253,10 @@ export function AnalyticsDashboard() {
       {/* 5. Main Dashboard Content */}
       {data && !loading && (
         <>
-          {/* KPI Cards */}
+          {/* KPI Cards (4 Cartes Modernes) */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {/* KPI 1: Sessions */}
-            <div className="relative overflow-hidden rounded-[18px] border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm">
+            {/* KPI 1: Tâches & Sessions */}
+            <div className="relative overflow-hidden rounded-[20px] border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-ink-3">
                   Tâches Traitées
@@ -246,43 +265,43 @@ export function AnalyticsDashboard() {
                   <Activity className="size-4" />
                 </div>
               </div>
-              <p className="mt-3 font-display text-[28px] font-bold tracking-tight text-ink">
+              <p className="mt-3 font-display text-[30px] font-bold tracking-tight text-ink">
                 {formatNumber(data.totals.sessions)}
               </p>
               <p className="mt-1 text-xs text-ink-3">
-                Sessions actives exécutées par l'équipe
+                Total des missions réalisées par les experts
               </p>
             </div>
 
-            {/* KPI 2: AI Tokens */}
-            <div className="relative overflow-hidden rounded-[18px] border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm">
+            {/* KPI 2: Jetons IA (Tokens) */}
+            <div className="relative overflow-hidden rounded-[20px] border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-ink-3">
-                  Jetons IA (Tokens)
+                  Jetons IA Consommés
                 </span>
                 <div className="flex size-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
                   <Sparkles className="size-4" />
                 </div>
               </div>
-              <p className="mt-3 font-display text-[28px] font-bold tracking-tight text-ink">
+              <p className="mt-3 font-display text-[30px] font-bold tracking-tight text-ink">
                 {formatNumber(data.totals.totalTokens)}
               </p>
               <p className="mt-1 text-xs text-ink-3">
-                {formatNumber(data.totals.promptTokens)} in · {formatNumber(data.totals.completionTokens)} out
+                {formatNumber(data.totals.promptTokens)} lu · {formatNumber(data.totals.completionTokens)} généré
               </p>
             </div>
 
-            {/* KPI 3: Active Experts */}
-            <div className="relative overflow-hidden rounded-[18px] border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm">
+            {/* KPI 3: Experts Mobilisés */}
+            <div className="relative overflow-hidden rounded-[20px] border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-ink-3">
-                  Experts Mobilisés
+                  Taux d'Engagement
                 </span>
                 <div className="flex size-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                   <Users className="size-4" />
                 </div>
               </div>
-              <p className="mt-3 font-display text-[28px] font-bold tracking-tight text-ink">
+              <p className="mt-3 font-display text-[30px] font-bold tracking-tight text-ink">
                 {data.totals.activeExperts}{" "}
                 <span className="text-lg font-normal text-ink-3">/ {data.totals.totalExperts}</span>
               </p>
@@ -290,38 +309,63 @@ export function AnalyticsDashboard() {
                 {data.totals.totalExperts > 0
                   ? Math.round((data.totals.activeExperts / data.totals.totalExperts) * 100)
                   : 0}
-                % de votre équipe est active
+                % des experts ont travaillé cette période
               </p>
             </div>
 
-            {/* KPI 4: Deliverables */}
-            <div className="relative overflow-hidden rounded-[18px] border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm">
+            {/* KPI 4: Livrables */}
+            <div className="relative overflow-hidden rounded-[20px] border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-ink-3">
-                  Livrables Finaux
+                  Livrables Prêts
                 </span>
                 <div className="flex size-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
                   <FileCheck className="size-4" />
                 </div>
               </div>
-              <p className="mt-3 font-display text-[28px] font-bold tracking-tight text-ink">
+              <p className="mt-3 font-display text-[30px] font-bold tracking-tight text-ink">
                 {formatNumber(data.totals.deliverablesCount)}
               </p>
               <p className="mt-1 text-xs text-ink-3">
-                Fichiers prêts dans le dossier Livrables
+                Fichiers finaux enregistrés dans Livrables
               </p>
             </div>
           </div>
 
-          {/* 6. Performance & Experts Table */}
-          <section className="overflow-hidden rounded-[20px] border border-line bg-surface shadow-xs">
+          {/* 6. GRAPHIQUE 1 : COURBE TEMPORELLE INTERACTIVE */}
+          <TimelineAreaChart
+            timeline={data.timeline}
+            activeMetric={timelineMetric}
+            onMetricChange={setTimelineMetric}
+          />
+
+          {/* 7. GRAPHIQUE 2 & 3 : DONUT DE RÉPARTITION + BARRE D'EFFICACITÉ */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <ExpertDonutChart
+              experts={data.experts}
+              mode={donutMetric}
+              onModeChange={setDonutMetric}
+            />
+
+            <TokenDistributionBar distribution={data.tokenDistribution} />
+          </div>
+
+          {/* 8. TABLEAU COMPARATIF DES EXPERTS */}
+          <section className="overflow-hidden rounded-[22px] border border-line bg-surface shadow-xs">
             <div className="border-b border-line px-6 py-4">
-              <h3 className="text-sm font-semibold text-ink">
-                Répartition & Activité des Experts
-              </h3>
-              <p className="text-xs text-ink-3">
-                Volume de travail, temps d'activité et consommation des modèles de langage par collaborateur.
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-display text-base font-bold text-ink">
+                    Performance Détaillée par Expert
+                  </h3>
+                  <p className="text-xs text-ink-3">
+                    Volume de production, jetons IA consommés et modèles sollicités pour chaque profil.
+                  </p>
+                </div>
+                <span className="rounded-full bg-soft px-3 py-1 text-xs font-semibold text-ink-2">
+                  {data.experts.length} expert{data.experts.length > 1 ? "s" : ""} référencé{data.experts.length > 1 ? "s" : ""}
+                </span>
+              </div>
             </div>
 
             {data.experts.length === 0 ? (
@@ -330,16 +374,16 @@ export function AnalyticsDashboard() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm max-sm:min-w-[680px]">
+                <table className="w-full text-left text-sm max-sm:min-w-[720px]">
                   <thead className="border-b border-line bg-soft/60 text-xs font-semibold uppercase tracking-wider text-ink-3">
                     <tr>
-                      <th className="px-6 py-3">Expert</th>
-                      <th className="px-6 py-3">Rôle & Mission</th>
-                      <th className="px-6 py-3">Tâches Traitées</th>
-                      <th className="px-6 py-3">Jetons Consommés</th>
-                      <th className="px-6 py-3">Modèles d'IA</th>
-                      <th className="px-6 py-3">Dernière Activité</th>
-                      <th className="px-6 py-3 text-right">Statut</th>
+                      <th className="px-6 py-3.5">Expert</th>
+                      <th className="px-6 py-3.5">Rôle Métier</th>
+                      <th className="px-6 py-3.5">Tâches Traitées</th>
+                      <th className="px-6 py-3.5">Jetons IA</th>
+                      <th className="px-6 py-3.5">Modèle Principal</th>
+                      <th className="px-6 py-3.5">Dernière Action</th>
+                      <th className="px-6 py-3.5 text-right">Statut</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line text-xs">
@@ -348,52 +392,69 @@ export function AnalyticsDashboard() {
                       return (
                         <tr key={exp.id} className="transition-colors hover:bg-soft/40">
                           {/* Expert Avatar & Name */}
-                          <td className="px-6 py-3.5">
+                          <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               {meta ? (
                                 <ExpertAvatar expert={{ ...meta, gateway: null }} size="xs" />
                               ) : (
-                                <div className="flex size-7 items-center justify-center rounded-full bg-brand/10 font-bold text-brand">
+                                <div
+                                  className="flex size-7 items-center justify-center rounded-full text-white font-bold"
+                                  style={{ backgroundColor: exp.color }}
+                                >
                                   {exp.name.charAt(0).toUpperCase()}
                                 </div>
                               )}
-                              <span className="font-semibold text-ink">{exp.name}</span>
+                              <div>
+                                <span className="font-bold text-ink">{exp.name}</span>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span
+                                    className="size-2 rounded-full"
+                                    style={{ backgroundColor: exp.color }}
+                                  />
+                                  <span className="text-[10px] text-ink-3">
+                                    {exp.sessionsPercent}% de l'équipe
+                                  </span>
+                                </div>
+                              </div>
                             </div>
                           </td>
 
                           {/* Role */}
-                          <td className="px-6 py-3.5 text-ink-2">
-                            <span className="inline-flex rounded-md bg-soft px-2 py-0.5 text-[11px] font-medium text-ink-2">
+                          <td className="px-6 py-4 text-ink-2">
+                            <span className="inline-flex rounded-md bg-soft px-2.5 py-1 text-[11px] font-medium text-ink-2">
                               {exp.role}
                             </span>
                           </td>
 
-                          {/* Sessions Count & Percent */}
-                          <td className="px-6 py-3.5">
+                          {/* Sessions Count & Percent Bar */}
+                          <td className="px-6 py-4">
                             <div className="space-y-1">
                               <div className="flex items-center justify-between gap-2 text-ink">
-                                <span className="font-semibold">{formatNumber(exp.sessionsCount)}</span>
+                                <span className="font-bold">{formatNumber(exp.sessionsCount)}</span>
                                 <span className="text-[10px] text-ink-3">{exp.sessionsPercent}%</span>
                               </div>
-                              <div className="h-1.5 w-24 overflow-hidden rounded-full bg-soft">
+                              <div className="h-2 w-28 overflow-hidden rounded-full bg-soft">
                                 <div
-                                  className="h-full rounded-full bg-purple-500 transition-all"
-                                  style={{ width: `${Math.min(100, exp.sessionsPercent)}%` }}
+                                  className="h-full rounded-full transition-all duration-300"
+                                  style={{
+                                    width: `${Math.min(100, exp.sessionsPercent)}%`,
+                                    backgroundColor: exp.color,
+                                  }}
                                 />
                               </div>
                             </div>
                           </td>
 
-                          {/* Tokens Count & Percent */}
-                          <td className="px-6 py-3.5">
+                          {/* Tokens Count & Percent Bar */}
+                          <td className="px-6 py-4">
                             <div className="space-y-1">
                               <div className="flex items-center justify-between gap-2 text-ink">
-                                <span className="font-semibold">{formatNumber(exp.tokensCount)}</span>
+                                <span className="font-bold">{formatNumber(exp.tokensCount)}</span>
                                 <span className="text-[10px] text-ink-3">{exp.tokensPercent}%</span>
                               </div>
-                              <div className="h-1.5 w-24 overflow-hidden rounded-full bg-soft">
+                              <div className="h-2 w-28 overflow-hidden rounded-full bg-soft">
                                 <div
-                                  className="h-full rounded-full bg-amber-500 transition-all"
+                                  className="h-full rounded-full bg-amber-500 transition-all duration-300"
                                   style={{ width: `${Math.min(100, exp.tokensPercent)}%` }}
                                 />
                               </div>
@@ -401,13 +462,13 @@ export function AnalyticsDashboard() {
                           </td>
 
                           {/* Models */}
-                          <td className="px-6 py-3.5 text-ink-3">
+                          <td className="px-6 py-4 text-ink-3">
                             {exp.models.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
                                 {exp.models.map((m) => (
                                   <span
                                     key={m}
-                                    className="rounded border border-line bg-surface px-1.5 py-0.5 text-[10px] text-ink-2"
+                                    className="rounded border border-line bg-surface px-1.5 py-0.5 text-[10px] font-medium text-ink-2"
                                   >
                                     {m.replace(/^models\//, "")}
                                   </span>
@@ -419,19 +480,19 @@ export function AnalyticsDashboard() {
                           </td>
 
                           {/* Last Active */}
-                          <td className="px-6 py-3.5 text-ink-3">
+                          <td className="px-6 py-4 text-ink-3">
                             {formatDateFr(exp.lastActiveMs)}
                           </td>
 
                           {/* Status */}
-                          <td className="px-6 py-3.5 text-right">
+                          <td className="px-6 py-4 text-right">
                             {exp.isActive ? (
-                              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                                <span className="size-1.5 rounded-full bg-emerald-500" />
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                 Actif
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1.5 rounded-full bg-soft px-2.5 py-0.5 text-[11px] font-medium text-ink-3">
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-soft px-2.5 py-1 text-[11px] font-medium text-ink-3">
                                 En attente
                               </span>
                             )}
@@ -445,20 +506,27 @@ export function AnalyticsDashboard() {
             )}
           </section>
 
-          {/* 7. Recent Deliverables Section */}
-          <section className="overflow-hidden rounded-[20px] border border-line bg-surface shadow-xs">
+          {/* 9. DERNIERS LIVRABLES DE L'ÉQUIPE */}
+          <section className="overflow-hidden rounded-[22px] border border-line bg-surface shadow-xs">
             <div className="border-b border-line px-6 py-4">
-              <h3 className="text-sm font-semibold text-ink">
-                Derniers Livrables Générés
-              </h3>
-              <p className="text-xs text-ink-3">
-                Documents récents rédigés et exportés dans le dossier Livrables.
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-display text-base font-bold text-ink">
+                    Derniers Livrables Générés
+                  </h3>
+                  <p className="text-xs text-ink-3">
+                    Fichiers récents produits par l'équipe (rapports, feuilles de calcul, présentations, vidéos).
+                  </p>
+                </div>
+                <span className="text-xs font-semibold text-brand">
+                  Dossier ~/Livrables
+                </span>
+              </div>
             </div>
 
             {data.recentDeliverables.length === 0 ? (
               <div className="p-8 text-center text-sm text-ink-3">
-                Aucun document n'a été produit récemment dans le dossier Livrables.
+                Aucun livrable n'a été produit récemment dans le dossier Livrables.
               </div>
             ) : (
               <div className="divide-y divide-line">
@@ -467,21 +535,21 @@ export function AnalyticsDashboard() {
                     key={`${doc.name}-${idx}`}
                     className="flex items-center justify-between px-6 py-3.5 transition-colors hover:bg-soft/40"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-soft">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-soft">
                         {getDocIcon(doc.kind)}
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-ink">
+                        <p className="truncate text-xs font-bold text-ink">
                           {doc.name}
                         </p>
                         <p className="text-[11px] text-ink-3">
-                          {formatBytes(doc.size)} · {formatDateFr(doc.modified)}
+                          {formatBytes(doc.size)} · Modifié le {formatDateFr(doc.modified)}
                         </p>
                       </div>
                     </div>
 
-                    <span className="rounded-md bg-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-3">
+                    <span className="rounded-lg bg-soft px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-ink-2">
                       {doc.kind}
                     </span>
                   </div>

@@ -13,10 +13,32 @@ import {
 
 export type AnalyticsPeriod = "aujourdhui" | "7_jours" | "30_jours";
 
+export const EXPERT_COLORS: string[] = [
+  "#8B5CF6", // Violet (Fatima / Marketing)
+  "#F59E0B", // Ambre (Kouassi / Finance)
+  "#10B981", // Émeraude (Djénéba / Commercial)
+  "#06B6D4", // Cyan (Yélé / Assistant & Général)
+  "#EC4899", // Rose (Création & Design)
+  "#3B82F6", // Bleu (Opérations)
+  "#F97316", // Orange
+  "#6366F1", // Indigo
+  "#14B8A6", // Sarcelle
+];
+
+export interface TimeSeriesPoint {
+  label: string;
+  date: string;
+  timestamp: number;
+  sessions: number;
+  tokens: number;
+  expertsActive: number;
+}
+
 export interface ExpertMetric {
   id: string;
   name: string;
   role: string;
+  color: string;
   sessionsCount: number;
   sessionsPercent: number;
   tokensCount: number;
@@ -37,6 +59,15 @@ export interface DeliverableSummary {
   kind: DocKind;
 }
 
+export interface TokenDistribution {
+  totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
+  promptPercent: number;
+  completionPercent: number;
+  avgTokensPerSession: number;
+}
+
 export interface AnalyticsOverview {
   period: AnalyticsPeriod;
   from: string;
@@ -50,6 +81,8 @@ export interface AnalyticsOverview {
     completionTokens: number;
     deliverablesCount: number;
   };
+  timeline: TimeSeriesPoint[];
+  tokenDistribution: TokenDistribution;
   experts: ExpertMetric[];
   recentDeliverables: DeliverableSummary[];
   health: {
@@ -74,6 +107,97 @@ export interface ComputeAnalyticsParams {
 function toEpochMs(raw?: number | null): number | null {
   if (raw == null || raw <= 0) return null;
   return raw < 1e11 ? raw * 1000 : raw;
+}
+
+/**
+ * Builds timeline points according to the selected period:
+ * - "aujourdhui": 8 buckets of 3 hours (00h, 03h, 06h, 09h, 12h, 15h, 18h, 21h)
+ * - "7_jours": 7 daily buckets (J-6 to J0)
+ * - "30_jours": 30 daily buckets (J-29 to J0)
+ */
+function buildTimeline(
+  period: AnalyticsPeriod,
+  periodSessions: RawSessionInfo[],
+  totalTokens: number,
+  now: number
+): TimeSeriesPoint[] {
+  const points: TimeSeriesPoint[] = [];
+  const totalSessions = periodSessions.length;
+  const tokensPerSession = totalSessions > 0 ? totalTokens / totalSessions : 0;
+
+  if (period === "aujourdhui") {
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const startMs = startOfDay.getTime();
+    const intervalMs = 3 * 3600 * 1000; // 3 hours
+
+    for (let i = 0; i < 8; i++) {
+      const bucketStart = startMs + i * intervalMs;
+      const bucketEnd = bucketStart + intervalMs;
+      const hour = i * 3;
+      const label = `${hour.toString().padStart(2, "0")}h`;
+
+      const bucketSessions = periodSessions.filter((s) => {
+        const act = toEpochMs(s.last_active) ?? toEpochMs(s.started_at);
+        return act != null && act >= bucketStart && act < bucketEnd;
+      });
+
+      const distinctExperts = new Set(
+        bucketSessions.map((s) => (s.profile || "").toLowerCase()).filter(Boolean)
+      );
+
+      const count = bucketSessions.length;
+      points.push({
+        label,
+        date: new Date(bucketStart).toISOString(),
+        timestamp: bucketStart,
+        sessions: count,
+        tokens: Math.round(count * tokensPerSession),
+        expertsActive: distinctExperts.size,
+      });
+    }
+    return points;
+  }
+
+  const daysCount = period === "30_jours" ? 30 : 7;
+  const oneDayMs = 24 * 3600 * 1000;
+
+  // Align with start of today
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayStartMs = todayStart.getTime();
+
+  for (let i = daysCount - 1; i >= 0; i--) {
+    const bucketStart = todayStartMs - i * oneDayMs;
+    const bucketEnd = bucketStart + oneDayMs;
+    const d = new Date(bucketStart);
+
+    const label =
+      daysCount === 7
+        ? d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" })
+        : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+
+    const bucketSessions = periodSessions.filter((s) => {
+      const act = toEpochMs(s.last_active) ?? toEpochMs(s.started_at);
+      return act != null && act >= bucketStart && act < bucketEnd;
+    });
+
+    const distinctExperts = new Set(
+      bucketSessions.map((s) => (s.profile || "").toLowerCase()).filter(Boolean)
+    );
+
+    const count = bucketSessions.length;
+    points.push({
+      label,
+      date: new Date(bucketStart).toISOString(),
+      timestamp: bucketStart,
+      sessions: count,
+      tokens: Math.round(count * tokensPerSession),
+      expertsActive: distinctExperts.size,
+    });
+  }
+
+  return points;
 }
 
 export function computeAnalytics({
@@ -137,6 +261,7 @@ export function computeAnalytics({
 
   const expertMetrics: ExpertMetric[] = [];
   let activeExpertsCount = 0;
+  let expertColorIndex = 0;
 
   for (const id of allExpertIds) {
     const meta = expertMap.get(id);
@@ -150,11 +275,14 @@ export function computeAnalytics({
 
     const role = meta?.description ? meta.description.split(/[:;]/)[0].trim() : "Expert";
     const name = meta?.name || id.charAt(0).toUpperCase() + id.slice(1);
+    const color = EXPERT_COLORS[expertColorIndex % EXPERT_COLORS.length];
+    expertColorIndex++;
 
     expertMetrics.push({
       id,
       name,
       role,
+      color,
       sessionsCount: sCount,
       sessionsPercent: totalSessionsCount > 0 ? Math.round((sCount / totalSessionsCount) * 100) : 0,
       tokensCount: expTokens,
@@ -173,7 +301,28 @@ export function computeAnalytics({
     (a, b) => b.sessionsCount - a.sessionsCount || b.tokensCount - a.tokensCount || a.name.localeCompare(b.name, "fr")
   );
 
-  // 4. Format deliverables (filter working files, take top 10 recent)
+  // Re-assign colors based on sorted rank for visual consistency
+  expertMetrics.forEach((exp, idx) => {
+    exp.color = EXPERT_COLORS[idx % EXPERT_COLORS.length];
+  });
+
+  // 4. Build timeline & distribution
+  const timeline = buildTimeline(period, periodSessions, totalTokens, now);
+
+  const promptPercent = totalTokens > 0 ? Math.round((totalPromptTokens / totalTokens) * 100) : 50;
+  const completionPercent = totalTokens > 0 ? Math.round((totalCompletionTokens / totalTokens) * 100) : 50;
+  const avgTokensPerSession = totalSessionsCount > 0 ? Math.round(totalTokens / totalSessionsCount) : 0;
+
+  const tokenDistribution: TokenDistribution = {
+    totalTokens,
+    promptTokens: totalPromptTokens,
+    completionTokens: totalCompletionTokens,
+    promptPercent,
+    completionPercent,
+    avgTokensPerSession,
+  };
+
+  // 5. Format deliverables (filter working files, take top 10 recent)
   const validDeliverables: DeliverableSummary[] = deliverables
     .filter((d) => !/^\./.test(d.name) && !/\.(srt|vtt|json|py|ts|sh|md|txt)$/i.test(d.name))
     .map((d) => ({
@@ -186,7 +335,7 @@ export function computeAnalytics({
     .sort((a, b) => (b.modified || 0) - (a.modified || 0))
     .slice(0, 10);
 
-  // 5. Health status
+  // 6. Health status
   const incidents = alerts?.incidents || [];
   const warnings = alerts?.avertissements || [];
   let status: "healthy" | "warning" | "incident" = "healthy";
@@ -206,6 +355,8 @@ export function computeAnalytics({
       completionTokens: totalCompletionTokens,
       deliverablesCount: validDeliverables.length,
     },
+    timeline,
+    tokenDistribution,
     experts: expertMetrics,
     recentDeliverables: validDeliverables,
     health: {

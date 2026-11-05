@@ -157,6 +157,73 @@ test("computeAnalytics: sorts experts by activity (sessions, then tokens, then n
   assert.equal(res.experts[0].id, "b_expert");
   assert.equal(res.experts[1].id, "c_expert");
   assert.equal(res.experts[2].id, "a_expert");
+  assert.ok(res.experts[0].color.startsWith("#"));
+});
+
+test("computeAnalytics: computes timeline points according to period", () => {
+  const now = new Date("2026-11-05T12:00:00Z").getTime();
+  const sessions: RawSessionInfo[] = [
+    { id: "s1", profile: "fatima", last_active: now - 3600 * 1000 },
+    { id: "s2", profile: "fatima", last_active: now - 2 * 24 * 3600 * 1000 },
+  ];
+
+  // 1. Aujourd'hui (8 points of 3h)
+  const resToday = computeAnalytics({
+    sessions,
+    usageStats: null,
+    experts: [],
+    deliverables: [],
+    period: "aujourdhui",
+    now,
+  });
+  assert.equal(resToday.timeline.length, 8);
+  assert.equal(resToday.timeline[0].label, "00h");
+
+  // 2. 7 jours (7 points)
+  const res7 = computeAnalytics({
+    sessions,
+    usageStats: null,
+    experts: [],
+    deliverables: [],
+    period: "7_jours",
+    now,
+  });
+  assert.equal(res7.timeline.length, 7);
+
+  // 3. 30 jours (30 points)
+  const res30 = computeAnalytics({
+    sessions,
+    usageStats: null,
+    experts: [],
+    deliverables: [],
+    period: "30_jours",
+    now,
+  });
+  assert.equal(res30.timeline.length, 30);
+});
+
+test("computeAnalytics: computes token distribution and ratios", () => {
+  const res = computeAnalytics({
+    sessions: [{ id: "s1", profile: "fatima", last_active: Date.now() }, { id: "s2", profile: "fatima", last_active: Date.now() }],
+    usageStats: {
+      fatima: {
+        count: 2,
+        totalTokens: 10000,
+        promptTokens: 8000,
+        completionTokens: 2000,
+        totalDurationMs: 0,
+        errors: 0,
+        models: {},
+      },
+    },
+    experts: [],
+    deliverables: [],
+  });
+
+  assert.equal(res.tokenDistribution.totalTokens, 10000);
+  assert.equal(res.tokenDistribution.promptPercent, 80);
+  assert.equal(res.tokenDistribution.completionPercent, 20);
+  assert.equal(res.tokenDistribution.avgTokensPerSession, 5000); // 10000 / 2
 });
 
 test("computeAnalytics: filters out hidden and non-deliverable files", () => {
@@ -243,5 +310,6 @@ test("computeAnalytics: handles empty inputs gracefully without throwing", () =>
   assert.equal(res.totals.totalExperts, 0);
   assert.equal(res.experts.length, 0);
   assert.equal(res.recentDeliverables.length, 0);
+  assert.equal(res.timeline.length, 7);
   assert.equal(res.health.status, "healthy");
 });
