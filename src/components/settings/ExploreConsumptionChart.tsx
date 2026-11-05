@@ -16,25 +16,31 @@ interface DailyPoint {
   adjoua: number;
   mamadou: number;
   kouassi: number;
-  others: number;
+  fatou: number;
+  salif: number;
+  fatima: number;
+  alioune: number;
+  ibrahim: number;
+  awa: number;
+  nadia: number;
   activeUsers: number;
   isToday?: boolean;
 }
 
 const DAILY_DATA: DailyPoint[] = [
-  { date: "23 oct.", koffi: 950, djeneba: 880, adjoua: 780, mamadou: 740, kouassi: 720, others: 4800, activeUsers: 3 },
-  { date: "25 oct.", koffi: 1100, djeneba: 990, adjoua: 870, mamadou: 840, kouassi: 820, others: 5400, activeUsers: 3 },
-  { date: "28 oct.", koffi: 1050, djeneba: 950, adjoua: 820, mamadou: 800, kouassi: 780, others: 5200, activeUsers: 4 },
-  { date: "29 oct.", koffi: 2200, djeneba: 2000, adjoua: 1750, mamadou: 1680, kouassi: 1650, others: 10800, activeUsers: 4 },
-  { date: "31 oct.", koffi: 1450, djeneba: 1300, adjoua: 1150, mamadou: 1100, kouassi: 1080, others: 7100, activeUsers: 4 },
-  { date: "1 nov.", koffi: 800, djeneba: 720, adjoua: 640, mamadou: 610, kouassi: 600, others: 4000, activeUsers: 3 },
-  { date: "3 nov.", koffi: 1850, djeneba: 1680, adjoua: 1480, mamadou: 1420, kouassi: 1400, others: 9200, activeUsers: 4 },
-  { date: "5 nov.", koffi: 1100, djeneba: 990, adjoua: 870, mamadou: 830, kouassi: 820, others: 5400, activeUsers: 4, isToday: true },
-  { date: "8 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, others: 0, activeUsers: 0 },
-  { date: "12 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, others: 0, activeUsers: 0 },
-  { date: "15 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, others: 0, activeUsers: 0 },
-  { date: "18 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, others: 0, activeUsers: 0 },
-  { date: "21 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, others: 0, activeUsers: 0 },
+  { date: "23 oct.", koffi: 950, djeneba: 850, adjoua: 750, mamadou: 710, kouassi: 700, fatou: 680, salif: 680, fatima: 680, alioune: 680, ibrahim: 660, awa: 640, nadia: 590, activeUsers: 3 },
+  { date: "25 oct.", koffi: 1100, djeneba: 990, adjoua: 870, mamadou: 830, kouassi: 820, fatou: 800, salif: 790, fatima: 790, alioune: 790, ibrahim: 770, awa: 750, nadia: 690, activeUsers: 3 },
+  { date: "28 oct.", koffi: 1050, djeneba: 950, adjoua: 830, mamadou: 800, kouassi: 780, fatou: 760, salif: 760, fatima: 760, alioune: 760, ibrahim: 740, awa: 720, nadia: 660, activeUsers: 4 },
+  { date: "29 oct.", koffi: 2200, djeneba: 1980, adjoua: 1740, mamadou: 1660, kouassi: 1640, fatou: 1600, salif: 1590, fatima: 1590, alioune: 1580, ibrahim: 1550, awa: 1510, nadia: 1370, activeUsers: 4 },
+  { date: "31 oct.", koffi: 1450, djeneba: 1300, adjoua: 1150, mamadou: 1100, kouassi: 1080, fatou: 1050, salif: 1050, fatima: 1050, alioune: 1050, ibrahim: 1020, awa: 990, nadia: 910, activeUsers: 4 },
+  { date: "1 nov.", koffi: 800, djeneba: 720, adjoua: 630, mamadou: 600, kouassi: 600, fatou: 580, salif: 580, fatima: 580, alioune: 580, ibrahim: 560, awa: 550, nadia: 500, activeUsers: 3 },
+  { date: "3 nov.", koffi: 1850, djeneba: 1660, adjoua: 1460, mamadou: 1400, kouassi: 1380, fatou: 1340, salif: 1340, fatima: 1340, alioune: 1330, ibrahim: 1300, awa: 1270, nadia: 1150, activeUsers: 4 },
+  { date: "5 nov.", koffi: 1100, djeneba: 990, adjoua: 870, mamadou: 830, kouassi: 820, fatou: 800, salif: 790, fatima: 790, alioune: 790, ibrahim: 770, awa: 750, nadia: 690, activeUsers: 4, isToday: true },
+  { date: "8 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, fatou: 0, salif: 0, fatima: 0, alioune: 0, ibrahim: 0, awa: 0, nadia: 0, activeUsers: 0 },
+  { date: "12 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, fatou: 0, salif: 0, fatima: 0, alioune: 0, ibrahim: 0, awa: 0, nadia: 0, activeUsers: 0 },
+  { date: "15 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, fatou: 0, salif: 0, fatima: 0, alioune: 0, ibrahim: 0, awa: 0, nadia: 0, activeUsers: 0 },
+  { date: "18 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, fatou: 0, salif: 0, fatima: 0, alioune: 0, ibrahim: 0, awa: 0, nadia: 0, activeUsers: 0 },
+  { date: "21 nov.", koffi: 0, djeneba: 0, adjoua: 0, mamadou: 0, kouassi: 0, fatou: 0, salif: 0, fatima: 0, alioune: 0, ibrahim: 0, awa: 0, nadia: 0, activeUsers: 0 },
 ];
 
 const CUMULATIVE_DATES = [
@@ -145,18 +151,38 @@ export function ExploreConsumptionChart({
             {showFilterPopover && (
               <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-2xl border border-line bg-surface p-3 text-xs shadow-lg">
                 <p className="font-bold text-ink mb-2">Filtrer les agents</p>
-                <div className="space-y-1.5 text-ink-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
+                <div className="space-y-1.5 text-ink-2 max-h-56 overflow-y-auto pr-1">
+                  <p className="font-bold text-ink mb-1.5 text-[11px]">Filtrer les 12 agents</p>
+                  <label className="flex items-center gap-2 cursor-pointer font-semibold text-ink text-[11px]">
                     <input type="checkbox" defaultChecked className="rounded text-brand" />
-                    <span>Tous les 12 experts actifs</span>
+                    <span>Tous les 12 agents</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" defaultChecked className="rounded text-brand" />
-                    <span>Koffi (Top 1 · 11%)</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" defaultChecked className="rounded text-brand" />
-                    <span>Membres actifs</span>
+                  {[
+                    { name: "Koffi", role: "Design & DA", color: "#8B5CF6" },
+                    { name: "Djénéba", role: "Direction", color: "#10B981" },
+                    { name: "Adjoua", role: "Recrutement", color: "#EC4899" },
+                    { name: "Mamadou", role: "Finance", color: "#3B82F6" },
+                    { name: "Kouassi", role: "Ventes B2B", color: "#F59E0B" },
+                    { name: "Fatou", role: "RH & Paie", color: "#F97316" },
+                    { name: "Salif", role: "Opérations", color: "#6366F1" },
+                    { name: "Fatima", role: "Marketing", color: "#A855F7" },
+                    { name: "Alioune", role: "M&A", color: "#14B8A6" },
+                    { name: "Ibrahim", role: "Juridique", color: "#EF4444" },
+                    { name: "Awa", role: "Support", color: "#06B6D4" },
+                    { name: "Nadia", role: "Données", color: "#EAB308" },
+                  ].map((a) => (
+                    <label key={a.name} className="flex items-center justify-between gap-1.5 cursor-pointer text-[10px]">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: a.color }} />
+                        <span className="truncate">{a.name} ({a.role})</span>
+                      </div>
+                      <input type="checkbox" defaultChecked className="rounded text-brand size-3" />
+                    </label>
+                  ))}
+                  <div className="border-t border-line my-1" />
+                  <label className="flex items-center gap-2 cursor-pointer text-amber-600 dark:text-amber-400 font-medium text-[11px]">
+                    <input type="checkbox" defaultChecked className="rounded text-amber-500" />
+                    <span>Membres actifs (courbe)</span>
                   </label>
                 </div>
               </div>
@@ -275,18 +301,36 @@ export function ExploreConsumptionChart({
               {DAILY_DATA.map((pt, i) => {
                 const x = paddingLeft + (i / (DAILY_DATA.length - 1)) * chartWidth;
                 const barWidth = 24;
-                const total = pt.koffi + pt.djeneba + pt.adjoua + pt.mamadou + pt.kouassi + pt.others;
+                const total =
+                  pt.koffi +
+                  pt.djeneba +
+                  pt.adjoua +
+                  pt.mamadou +
+                  pt.kouassi +
+                  pt.fatou +
+                  pt.salif +
+                  pt.fatima +
+                  pt.alioune +
+                  pt.ibrahim +
+                  pt.awa +
+                  pt.nadia;
                 if (total === 0) return null;
 
                 let currentY = paddingTop + chartHeight;
 
                 const segments = [
-                  { val: pt.others, color: "#CBD5E1" },
-                  { val: pt.kouassi, color: "#6366F1" },
-                  { val: pt.mamadou, color: "#93C5FD" },
-                  { val: pt.adjoua, color: "#38BDF8" },
-                  { val: pt.djeneba, color: "#2563EB" },
-                  { val: pt.koffi, color: "#06B6D4" },
+                  { key: "nadia", name: "Nadia", val: pt.nadia, color: "#EAB308" },
+                  { key: "awa", name: "Awa", val: pt.awa, color: "#06B6D4" },
+                  { key: "ibrahim", name: "Ibrahim", val: pt.ibrahim, color: "#EF4444" },
+                  { key: "alioune", name: "Alioune", val: pt.alioune, color: "#14B8A6" },
+                  { key: "fatima", name: "Fatima", val: pt.fatima, color: "#A855F7" },
+                  { key: "salif", name: "Salif", val: pt.salif, color: "#6366F1" },
+                  { key: "fatou", name: "Fatou", val: pt.fatou, color: "#F97316" },
+                  { key: "kouassi", name: "Kouassi", val: pt.kouassi, color: "#F59E0B" },
+                  { key: "mamadou", name: "Mamadou", val: pt.mamadou, color: "#3B82F6" },
+                  { key: "adjoua", name: "Adjoua", val: pt.adjoua, color: "#EC4899" },
+                  { key: "djeneba", name: "Djénéba", val: pt.djeneba, color: "#10B981" },
+                  { key: "koffi", name: "Koffi", val: pt.koffi, color: "#8B5CF6" },
                 ];
 
                 return (
@@ -445,41 +489,68 @@ export function ExploreConsumptionChart({
         </svg>
       </div>
 
-      {/* 3. Légende en français */}
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-4 border-t border-line/60 pt-3 text-xs text-ink-2">
+      {/* 3. Légende en français des 12 agents nommés */}
+      <div className="mt-4 border-t border-line/60 pt-3 text-xs text-ink-2">
         {mode === "daily" ? (
-          <>
-            <div className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-[#06B6D4]" />
-              <span className="text-[11px] font-medium">Koffi (Design)</span>
+          <div className="flex flex-col gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-3 gap-y-2">
+              <div className="flex items-center gap-1.5">
+                <span className="size-2.5 shrink-0 rounded-full bg-[#8B5CF6]" />
+                <span className="text-[11px] font-medium truncate">Koffi (Design)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-2.5 shrink-0 rounded-full bg-[#10B981]" />
+                <span className="text-[11px] font-medium truncate">Djénéba (Direction)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-2.5 shrink-0 rounded-full bg-[#EC4899]" />
+                <span className="text-[11px] font-medium truncate">Adjoua (RH)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-2.5 shrink-0 rounded-full bg-[#3B82F6]" />
+                <span className="text-[11px] font-medium truncate">Mamadou (Finance)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-2.5 shrink-0 rounded-full bg-[#F59E0B]" />
+                <span className="text-[11px] font-medium truncate">Kouassi (Ventes)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-2.5 shrink-0 rounded-full bg-[#F97316]" />
+                <span className="text-[11px] font-medium truncate">Fatou (RH & Paie)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-2.5 shrink-0 rounded-full bg-[#6366F1]" />
+                <span className="text-[11px] font-medium truncate">Salif (Opérations)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-2.5 shrink-0 rounded-full bg-[#A855F7]" />
+                <span className="text-[11px] font-medium truncate">Fatima (Marketing)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-2.5 shrink-0 rounded-full bg-[#14B8A6]" />
+                <span className="text-[11px] font-medium truncate">Alioune (M&A)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-2.5 shrink-0 rounded-full bg-[#EF4444]" />
+                <span className="text-[11px] font-medium truncate">Ibrahim (Juridique)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-2.5 shrink-0 rounded-full bg-[#06B6D4]" />
+                <span className="text-[11px] font-medium truncate">Awa (Support)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-2.5 shrink-0 rounded-full bg-[#EAB308]" />
+                <span className="text-[11px] font-medium truncate">Nadia (Données)</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-[#2563EB]" />
-              <span className="text-[11px] font-medium">Djénéba (Direction)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-[#38BDF8]" />
-              <span className="text-[11px] font-medium">Adjoua (RH)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-[#93C5FD]" />
-              <span className="text-[11px] font-medium">Mamadou (Finance)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-[#6366F1]" />
-              <span className="text-[11px] font-medium">Kouassi (Ventes)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-[#CBD5E1] ring-1 ring-ink-3/20" />
-              <span className="text-[11px] font-medium">Autres experts</span>
-            </div>
-            <div className="flex items-center gap-1.5">
+
+            <div className="flex items-center justify-center gap-1.5 pt-2 border-t border-line/40">
               <span className="size-2.5 rounded-full bg-[#F59E0B]" />
               <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
-                Membres actifs
+                Membres actifs (courbe d'activité)
               </span>
             </div>
-          </>
+          </div>
         ) : (
           <>
             <div className="flex items-center gap-1.5">
