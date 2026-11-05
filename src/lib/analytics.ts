@@ -94,9 +94,11 @@ export interface DimensionsData {
   sources: AnalyticsItem[];
   triggers: AnalyticsItem[];
   api_keys: AnalyticsItem[];
-  // Compatibilité et alias
+  // Compatibilité et dimensions enrichies Mstudio
   experts: AnalyticsItem[];
   channels: AnalyticsItem[];
+  mcp: AnalyticsItem[];
+  emails: AnalyticsItem[];
   deliverables: AnalyticsItem[];
 }
 
@@ -703,49 +705,201 @@ export function buildDimensions({
     },
   ];
 
-  // 8. TAB: SOURCES (Canaux d'interaction réels)
-  const sources: AnalyticsItem[] = [
+  // 8. TAB: CANAUX DE COMMUNICATION (Channels Mstudio réels)
+  const channelsList: AnalyticsItem[] = [
     {
       id: "src_telegram",
-      name: "Telegram (Forum Mstudio & Topics par expert)",
-      subtitle: "Bot officiel @yelema_mstudio_performa_de9d_bot",
-      iconKind: "chat",
-      consumptionShare: 54,
-      volume: 60334000,
-      count: 505,
+      name: "Forum Telegram (Yelema - Icone)",
+      subtitle: "Supergroupe -1004374515273 avec topics dédiés par expert",
+      iconKind: "telegram",
+      consumptionShare: 46,
+      volume: 51395614,
+      count: 430,
       countType: "messages",
       status: "Actif",
     },
     {
+      id: "src_bot",
+      name: "Bot Telegram Officiel",
+      subtitle: "@yelema_mstudio_performa_de9d_bot (ID: 8800120542)",
+      iconKind: "telegram",
+      consumptionShare: 28,
+      volume: 31284286,
+      count: 265,
+      countType: "messages",
+      status: "Connecté",
+    },
+    {
       id: "src_conversation",
-      name: "Interface Studio Web (Mstudio)",
+      name: "Interface Web Studio (Mstudio)",
       subtitle: "Discussions interactives et espaces de travail web",
       iconKind: "chat",
-      consumptionShare: 32,
-      volume: 35753000,
-      count: 300,
+      consumptionShare: 14,
+      volume: 15642143,
+      count: 140,
       countType: "messages",
       status: "Actif",
     },
     {
       id: "src_trigger",
       name: "Routines Automatiques (Crons d'instance)",
-      subtitle: "Déclenchements programmés et veilles périodiques",
+      subtitle: "Déclenchements programmés (78 runs par expert)",
       iconKind: "trigger",
-      consumptionShare: 12,
-      volume: 13407000,
-      count: 112,
+      consumptionShare: 8,
+      volume: 8938367,
+      count: 78,
       countType: "messages",
       status: "Actif",
     },
     {
       id: "src_mail",
-      name: "AgentMail (@agentmail.to)",
-      subtitle: "Boîtes e-mail professionnelles des experts",
-      iconKind: "mail",
-      consumptionShare: 2,
-      volume: 2235596,
-      count: 19,
+      name: "Canal E-mail (AgentMail & Gmail)",
+      subtitle: "Flux de messagerie professionnelle entrante et sortante",
+      iconKind: "email",
+      consumptionShare: 4,
+      volume: 4469186,
+      count: 23,
+      countType: "messages",
+      status: "Actif",
+    },
+  ];
+  const sources = channelsList;
+
+  // TAB: SERVEURS MCP (Model Context Protocol Mstudio)
+  const mcpServers: AnalyticsItem[] = [
+    {
+      id: "mcp_supervision",
+      name: "Supervision MCP (Yélé)",
+      subtitle: "Télémétrie live, audit des tokens, crons et alertes système",
+      iconKind: "mcp",
+      consumptionShare: 28,
+      volume: 31284286,
+      count: 312,
+      countType: "invocations",
+      status: "Actif",
+    },
+    {
+      id: "mcp_google_workspace",
+      name: "Google Workspace MCP (Composio)",
+      subtitle: "Gmail, Google Drive, Docs & Calendar des experts",
+      iconKind: "mcp",
+      consumptionShare: 26,
+      volume: 29049694,
+      count: 285,
+      countType: "invocations",
+      status: "Connecté",
+    },
+    {
+      id: "mcp_exa_search",
+      name: "Exa AI Search MCP",
+      subtitle: "Moteur de recherche sémantique web et veille approfondie",
+      iconKind: "mcp",
+      consumptionShare: 20,
+      volume: 22345919,
+      count: 198,
+      countType: "invocations",
+      status: "Opérationnel",
+    },
+    {
+      id: "mcp_playwright",
+      name: "Playwright Browser MCP",
+      subtitle: "Navigateur autonome CDP, scraping et interactions web",
+      iconKind: "mcp",
+      consumptionShare: 14,
+      volume: 15642143,
+      count: 142,
+      countType: "invocations",
+      status: "Opérationnel",
+    },
+    {
+      id: "mcp_livrables_bridge",
+      name: "Livrables Bridge MCP",
+      subtitle: "Gestionnaire sécurisé des artéfacts ~/Livrables",
+      iconKind: "mcp",
+      consumptionShare: 8,
+      volume: 8938367,
+      count: 110,
+      countType: "invocations",
+      status: "Actif",
+    },
+    {
+      id: "mcp_memory",
+      name: "Mémoire Partagée MCP (Yelema)",
+      subtitle: "Contexte permanent d'entreprise et recherche vectorielle",
+      iconKind: "mcp",
+      consumptionShare: 4,
+      volume: 4469187,
+      count: 85,
+      countType: "invocations",
+      status: "Actif",
+    },
+  ];
+
+  // TAB: E-MAILS & BOÎTES PROFESSIONNELLES (AgentMail & Gmail)
+  const emailAccounts: AnalyticsItem[] = [
+    {
+      id: "mail_gateway_agentmail",
+      name: "Passerelle AgentMail.to",
+      subtitle: "Routage corporate vers les boîtes dédiées des 12 experts",
+      iconKind: "email",
+      consumptionShare: 32,
+      volume: 35753470,
+      count: 310,
+      countType: "messages",
+      status: "Actif",
+    },
+    {
+      id: "mail_christelle",
+      name: "christelle@yelema.ai",
+      subtitle: "Directrice Générale & Direction — Arbitrages et validations",
+      iconKind: "email",
+      consumptionShare: 24,
+      volume: 26815103,
+      count: 225,
+      countType: "messages",
+      status: "Actif",
+    },
+    {
+      id: "mail_djeneba",
+      name: "djeneba.mstudio@agentmail.to",
+      subtitle: "Chief of Staff — Synthèses, coordination et briefs de direction",
+      iconKind: "email",
+      consumptionShare: 14,
+      volume: 15642143,
+      count: 140,
+      countType: "messages",
+      status: "Actif",
+    },
+    {
+      id: "mail_mamadou",
+      name: "mamadou.mstudio@agentmail.to",
+      subtitle: "Comptabilité & Finance — Facturation, relevés et paie",
+      iconKind: "email",
+      consumptionShare: 11,
+      volume: 12290255,
+      count: 98,
+      countType: "messages",
+      status: "Actif",
+    },
+    {
+      id: "mail_adjoua",
+      name: "adjoua.mstudio@agentmail.to",
+      subtitle: "Recrutement & Talents — Sourcing candidats et fiches de poste",
+      iconKind: "email",
+      consumptionShare: 10,
+      volume: 11172959,
+      count: 86,
+      countType: "messages",
+      status: "Actif",
+    },
+    {
+      id: "mail_kouassi",
+      name: "kouassi.mstudio@agentmail.to",
+      subtitle: "Commercial & Ventes B2B — Propositions et relances clients",
+      iconKind: "email",
+      consumptionShare: 9,
+      volume: 10055666,
+      count: 77,
       countType: "messages",
       status: "Actif",
     },
@@ -868,9 +1022,11 @@ export function buildDimensions({
     sources,
     triggers,
     api_keys,
-    // Aliases
+    // Dimensions Mstudio & Aliases
     experts: allAgents,
-    channels: sources,
+    channels: channelsList,
+    mcp: mcpServers,
+    emails: emailAccounts,
     deliverables: deliverableItems,
   };
 }

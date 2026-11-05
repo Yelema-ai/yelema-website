@@ -20,14 +20,15 @@ const PERIOD_OPTIONS = [
 const METRIC_OPTIONS = [
   { key: "usage", label: "Métriques d'usage global" },
   { key: "users", label: "Membres actifs" },
-  { key: "source", label: "Sources des messages" },
-  { key: "agents", label: "Agents IA" },
+  { key: "agents", label: "Agents & Experts" },
+  { key: "channels", label: "Canaux de communication" },
+  { key: "mcp", label: "Serveurs MCP" },
+  { key: "emails", label: "E-mails & Boîtes professionnelles" },
   { key: "members", label: "Membres de l'équipe" },
   { key: "skills", label: "Compétences" },
-  { key: "skill_usage", label: "Usage des compétences" },
   { key: "tool_usage", label: "Usage des outils" },
+  { key: "source", label: "Sources des messages" },
   { key: "messages", label: "Volume de messages" },
-  { key: "feedback", label: "Retours utilisateurs" },
 ];
 
 export function ExportDataCard({ dimensions }: ExportDataCardProps) {
@@ -61,6 +62,18 @@ export function ExportDataCard({ dimensions }: ExportDataCardProps) {
     } else if (selectedMetric === "skills" || selectedMetric === "skill_usage") {
       rows = (dimensions.skills || []).map(
         (s) => `"${s.name}",${s.consumptionShare}%,${s.volume},${s.count},${s.countType}`
+      );
+    } else if (selectedMetric === "channels") {
+      rows = (dimensions.channels || []).map(
+        (c) => `"${c.name}",${c.consumptionShare}%,${c.volume},${c.count},${c.countType}`
+      );
+    } else if (selectedMetric === "mcp") {
+      rows = (dimensions.mcp || []).map(
+        (m) => `"${m.name}",${m.consumptionShare}%,${m.volume},${m.count},${m.countType}`
+      );
+    } else if (selectedMetric === "emails") {
+      rows = (dimensions.emails || []).map(
+        (e) => `"${e.name}",${e.consumptionShare}%,${e.volume},${e.count},${e.countType}`
       );
     } else if (selectedMetric === "source" || selectedMetric === "messages") {
       rows = (dimensions.sources || []).map(

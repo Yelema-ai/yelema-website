@@ -187,7 +187,7 @@ export function AnalyticsDashboard() {
             )}
           </div>
 
-          {/* Menu déroulant Fréquence (Quotidien / Hebdomadaire) */}
+          {/* Menu déroulant Fréquence (Journalier / Hebdomadaire) */}
           <div className="relative">
             <button
               type="button"
@@ -197,7 +197,7 @@ export function AnalyticsDashboard() {
               }}
               className="inline-flex items-center gap-2 rounded-xl border border-line bg-soft/60 px-3 py-1.5 text-xs font-semibold text-ink shadow-2xs transition-colors hover:bg-soft"
             >
-              <span>{frequency === "daily" ? "Quotidien" : "Hebdomadaire"}</span>
+              <span>{frequency === "daily" ? "Journalier" : "Hebdomadaire"}</span>
               <ChevronDown className="size-3.5 text-ink-3" />
             </button>
 
@@ -330,7 +330,7 @@ export function AnalyticsDashboard() {
             </div>
           </div>
 
-          {/* 3.2 Graphique SVG interactif Quotidien / Cumulée */}
+          {/* 3.2 Graphique SVG interactif Journalier / Cumulée */}
           <ExploreConsumptionChart
             usedCredits={usedCredits}
             capCredits={capCredits}

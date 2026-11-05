@@ -37,11 +37,14 @@ import { cn } from "@/lib/utils";
 export type DimensionTabKey =
   | "agents"
   | "members"
-  | "groups"
-  | "pods"
+  | "channels"
+  | "mcp"
+  | "emails"
   | "models"
   | "tools"
   | "skills"
+  | "groups"
+  | "pods"
   | "sources"
   | "triggers"
   | "api_keys";
@@ -54,11 +57,14 @@ interface TabConfig {
 const TABS: TabConfig[] = [
   { key: "agents", label: "Agents" },
   { key: "members", label: "Membres" },
-  { key: "groups", label: "Groupes" },
-  { key: "pods", label: "Pods" },
+  { key: "channels", label: "Canaux" },
+  { key: "mcp", label: "MCP" },
+  { key: "emails", label: "Email" },
   { key: "models", label: "Modèles IA" },
   { key: "tools", label: "Outils" },
   { key: "skills", label: "Compétences" },
+  { key: "groups", label: "Groupes" },
+  { key: "pods", label: "Pods" },
   { key: "sources", label: "Sources" },
   { key: "triggers", label: "Déclencheurs" },
   { key: "api_keys", label: "Clés API" },
@@ -255,6 +261,24 @@ function renderRowIcon(item: AnalyticsItem) {
           L
         </div>
       );
+    case "telegram":
+      return (
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400 ring-1 ring-sky-500/20">
+          <Send className="size-3.5" />
+        </div>
+      );
+    case "mcp":
+      return (
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400 ring-1 ring-violet-500/20">
+          <Cpu className="size-3.5" />
+        </div>
+      );
+    case "email":
+      return (
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 ring-1 ring-indigo-500/20">
+          <Mail className="size-3.5" />
+        </div>
+      );
     default:
       return (
         <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-soft text-ink-3 ring-1 ring-line">
@@ -325,6 +349,9 @@ export function DimensionsAnalyticsTable({
 
   const countColumnHeader = useMemo(() => {
     if (activeTab === "tools" || activeTab === "skills") return "Invocations";
+    if (activeTab === "mcp") return "Appels MCP";
+    if (activeTab === "channels") return "Échanges";
+    if (activeTab === "emails") return "E-mails traités";
     if (activeTab === "triggers") return "Déclenchements";
     if (activeTab === "pods") return "Sessions";
     if (activeTab === "api_keys") return "Requêtes";

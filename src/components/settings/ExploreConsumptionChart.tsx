@@ -163,7 +163,7 @@ export function ExploreConsumptionChart({
             )}
           </div>
 
-          {/* Commutateur Quotidien / Cumulée */}
+          {/* Commutateur Journalier / Cumulée */}
           <div className="flex items-center rounded-xl border border-line bg-soft/60 p-1">
             <button
               type="button"
@@ -175,7 +175,7 @@ export function ExploreConsumptionChart({
                   : "text-ink-3 hover:text-ink"
               )}
             >
-              Quotidien
+              Journalier
             </button>
             <button
               type="button"
@@ -256,7 +256,7 @@ export function ExploreConsumptionChart({
             Crédits
           </text>
 
-          {/* Titre de l'axe vertical droit (Quotidien) */}
+          {/* Titre de l'axe vertical droit (Journalier) */}
           {mode === "daily" && (
             <text
               x={width - 14}
@@ -269,7 +269,7 @@ export function ExploreConsumptionChart({
             </text>
           )}
 
-          {/* --- VUE 1 : QUOTIDIEN (BARRES EMPILÉES + COURBE MEMBRES ACTIFS) --- */}
+          {/* --- VUE 1 : JOURNALIER (BARRES EMPILÉES + COURBE MEMBRES ACTIFS) --- */}
           {mode === "daily" && (
             <>
               {DAILY_DATA.map((pt, i) => {
