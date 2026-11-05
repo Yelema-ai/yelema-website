@@ -28,7 +28,8 @@ export const META_KEY = "__meta";
 export const MAX_AGE_MS = 7 * 24 * 3_600_000;
 /** Message content (a thread, a Buzz exchange) is kept a day only. */
 export const CONTENT_MAX_AGE_MS = 24 * 3_600_000;
-const CONTENT = ["chat:", "buzz:thread"];
+// Kept a day: a thread, and what an expert's pack recommends (read again past 10 min anyway).
+const CONTENT = ["chat:", "buzz:thread", "expert-tools:"];
 export const maxAgeOf = (key: string): number => (CONTENT.some((p) => key.startsWith(p)) ? CONTENT_MAX_AGE_MS : MAX_AGE_MS);
 export const sameMeta = (stored: unknown, meta: Meta): boolean => {
   const m = stored as Partial<Meta> | undefined;

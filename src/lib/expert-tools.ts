@@ -56,6 +56,32 @@ export function parseToolsFile(body: string): ExpertTool[] | null {
   });
 }
 
+/**
+ * The gateway's grouped read (`experts/files/<name>?profiles=`): `{ data: { <profile>: entry } }`, an entry
+ * being the file's text (or `{ content }`, or the file already parsed), null when there is none, or
+ * `{ error: { status } }`. A 404 or an unreadable file is an empty list, as on the single route; another
+ * error leaves its profile out, for the caller to read it alone.
+ */
+export function parseGroupedToolsFiles(body: unknown, asked: readonly string[]): Map<string, ExpertTool[]> {
+  const out = new Map<string, ExpertTool[]>();
+  const data = body && typeof body === "object" ? (body as { data?: unknown }).data : null;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return out;
+  for (const profile of asked) {
+    if (!Object.hasOwn(data, profile)) continue;
+    const v = (data as Record<string, unknown>)[profile];
+    if (v === null) out.set(profile, []);
+    else if (typeof v === "string") out.set(profile, parseToolsFile(v) ?? []);
+    else if (v && typeof v === "object" && !Array.isArray(v)) {
+      const e = v as { error?: { status?: unknown }; content?: unknown };
+      if (e.error) {
+        if (e.error.status === 404) out.set(profile, []);
+      } else if (typeof e.content === "string") out.set(profile, parseToolsFile(e.content) ?? []);
+      else out.set(profile, parseToolsFile(JSON.stringify(v)) ?? []);
+    }
+  }
+  return out;
+}
+
 /** Letters and digits only, lower case, no accents: "Google Drive" = "google_drive". */
 export const key = (s: string): string =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");

@@ -9,7 +9,7 @@ export const CACHE_VERSION = 1;
 const MAX_BYTES = 2 * 1024 * 1024;
 const SCOPE_KEY = "yelema-cache-scope";
 // Only these client-cache answers are kept on the device; the rest live for the tab only.
-const KEPT = ["chat:", "drive-tree:", "drive-files:", "all-deliverables:", "conversations:", "models:", "experts:", "buzz:"];
+const KEPT = ["chat:", "drive-tree:", "drive-files:", "all-deliverables:", "conversations:", "models:", "experts:", "buzz:", "expert-tools:"];
 // A thread keeps its latest messages, without the model's reasoning.
 const THREAD_TAIL = 40;
 

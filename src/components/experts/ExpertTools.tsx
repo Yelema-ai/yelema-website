@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
+import { expertTools } from "@/lib/expert-tools-client";
 import { instanceEvents, matches } from "@/lib/instance-events";
 import { toolsOverview, type ExpertTool, type ToolState } from "@/lib/expert-tools";
 import type { McpOverview } from "@/lib/mcp-servers";
@@ -35,8 +36,8 @@ export function ExpertTools({ agentId, profileId, expertName }: { agentId: strin
   const load = useCallback(async () => {
     setLoadError(false);
     try {
-      const [{ outils }, connections, mcp] = await Promise.all([
-        apiFetch<{ outils: ExpertTool[] }>(`/api/agents/${agentId}/experts/${profileId}/outils`),
+      const [outils, connections, mcp] = await Promise.all([
+        expertTools(agentId, profileId),
         apiFetch<IntegrationConnectionsResult>(connectionsUrl).then((r) => r.connections, () => []),
         viaBackoffice ? apiFetch<McpOverview>("/api/mcp").catch(() => null) : null,
       ]);

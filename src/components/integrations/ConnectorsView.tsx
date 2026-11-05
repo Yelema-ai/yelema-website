@@ -41,6 +41,8 @@ import type { ExpertTool } from "@/lib/expert-tools";
 import { forWhom, recommendTools } from "@/lib/recommended-tools";
 import { expertCycle } from "@/lib/expert-cycle";
 import { runPool } from "@/lib/bulk";
+import { keptExpertTools, teamTools } from "@/lib/expert-tools-client";
+import { useInView } from "@/components/usePrefetch";
 
 const SEARCH_DEBOUNCE_MS = 250;
 const MIN_SEARCH = 3; // the toolkits route 400s a non-empty query shorter than this
@@ -153,27 +155,30 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
   // « Conseillés pour vos Experts »: what the member's Experts list in their pack (outils-recommandes.json).
   const { experts: team } = useExpertsContext();
   const mineExperts = useMemo(() => team.filter((e) => e.agentId === agentId), [team, agentId]);
-  const [packs, setPacks] = useState<{ expert: string; tools: ExpertTool[] }[] | null>(() => cached(`packs:${agentId}`) ?? null);
+  const label = (e: (typeof mineExperts)[number]) => expertCycle(e)?.name ?? e.displayName;
+  // The lists last read (this tab or this device) paint at once; all of them, or none.
+  const keptPacks = () => {
+    const kept = mineExperts.map((e) => keptExpertTools(agentId, e.profileId));
+    return kept.every(Boolean) ? mineExperts.map((e, i) => ({ expert: label(e), tools: kept[i]! })) : null;
+  };
+  const [packs, setPacks] = useState<{ expert: string; tools: ExpertTool[] }[] | null>(keptPacks);
   const teamKey = mineExperts.map((e) => e.profileId).join(",");
+  // Read once the catalog's place is on screen and the page is idle, not with the page's own first reads.
+  const [wanted, setWanted] = useState(false);
+  const catalogRef = useInView<HTMLElement>(() => setWanted(true));
   useEffect(() => {
-    if (!teamKey) return;
+    if (!teamKey || !wanted) return;
     let cancelled = false;
-    Promise.all(
-      mineExperts.map((e) =>
-        apiFetch<{ outils: ExpertTool[] }>(`/api/agents/${agentId}/experts/${encodeURIComponent(e.profileId)}/outils`)
-          .then((r) => ({ expert: expertCycle(e)?.name ?? e.displayName, tools: r.outils }))
-          .catch(() => ({ expert: expertCycle(e)?.name ?? e.displayName, tools: [] as ExpertTool[] }))
-      )
-    ).then((lists) => {
-      if (cancelled) return;
-      remember(`packs:${agentId}`, lists);
-      setPacks(lists);
+    const kept = keptPacks();
+    if (kept) setPacks(kept);
+    void teamTools(agentId, mineExperts.map((e) => e.profileId)).then((lists) => {
+      if (!cancelled) setPacks(mineExperts.map((e, i) => ({ expert: label(e), tools: lists[i] })));
     });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId, teamKey]);
+  }, [agentId, teamKey, wanted]);
 
   // The panel closes once its last account is gone.
   useEffect(() => {
@@ -331,7 +336,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
         </section>
       )}
 
-      <section className="space-y-3.5">
+      <section ref={catalogRef} className="space-y-3.5">
         <h2 className="text-[17px] font-bold text-ink">
           Tous les outils <span className="ml-1.5 text-[13.5px] font-normal text-ink-3">Plus de 1 000</span>
         </h2>

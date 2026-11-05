@@ -365,6 +365,18 @@ export const agent37 = {
     return instanceFetch(id, `/v1/files/content?path=${encodeURIComponent(`~/.hermes/profiles/${profile}/${name}`)}`, withTimeout(undefined, JSON_TIMEOUT_MS));
   },
 
+  // The same file for several experts in one call (gateway only); null where the gateway lacks the route.
+  expertFiles: async (id: string, profiles: string[], name: string): Promise<unknown> => {
+    const gw = runtimeGateway();
+    if (!gw) return null;
+    const res = await gatewayJson(gw, `/v1/instances/${urlId(id)}/experts/files/${encodeURIComponent(name)}?profiles=${profiles.map(encodeURIComponent).join(",")}`);
+    if (res.status === 404 || res.status === 405) {
+      await res.body?.cancel();
+      return null;
+    }
+    return parseAgent37<unknown>(res);
+  },
+
   // Telegram of an instance (Hermes or Claude Code), through the runtime gateway: a t.me link that has the
   // member create their own bot, then its forum group with one topic per expert.
   telegramHub: {

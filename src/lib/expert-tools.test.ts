@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseToolsFile, toolStatus, toolsOverview, TOOLS_FILE_MAX_BYTES, type ExpertTool } from "./expert-tools.ts";
+import { parseGroupedToolsFiles, parseToolsFile, toolStatus, toolsOverview, TOOLS_FILE_MAX_BYTES, type ExpertTool } from "./expert-tools.ts";
 
 const tool = (over: Partial<ExpertTool>): ExpertTool => ({
   nom: "Figma",
@@ -74,4 +74,33 @@ test("the overview lists what is left to connect, essential first, and counts wh
   assert.deepEqual(o.included.map((t) => t.nom), ["Recherche web"]);
   assert.equal(o.usable, 2);
   assert.equal(o.total, 4);
+});
+
+test("the grouped read: each asked profile its list, a 404 empty, another error left out for a single read", () => {
+  const body = {
+    data: {
+      a: file([tool({})]),
+      b: null,
+      c: { error: { status: 404 } },
+      d: { error: { status: 502 } },
+      e: { content: file([tool({ nom: "Notion", composio: "notion" })]) },
+      f: JSON.parse(file([tool({ nom: "Slack", composio: "slack" })])),
+      g: "not json",
+      h: "x".repeat(TOOLS_FILE_MAX_BYTES + 1),
+      stranger: file([tool({})]),
+    },
+  };
+  const got = parseGroupedToolsFiles(body, ["a", "b", "c", "d", "e", "f", "g", "h", "missing"]);
+  assert.deepEqual(got.get("a"), [tool({})]);
+  assert.deepEqual(got.get("b"), []);
+  assert.deepEqual(got.get("c"), []);
+  assert.equal(got.has("d"), false);
+  assert.deepEqual(got.get("e")?.map((t) => t.nom), ["Notion"]);
+  assert.deepEqual(got.get("f")?.map((t) => t.nom), ["Slack"]);
+  assert.deepEqual(got.get("g"), []);
+  assert.deepEqual(got.get("h"), []);
+  assert.equal(got.has("missing"), false);
+  assert.equal(got.has("stranger"), false);
+  assert.equal(parseGroupedToolsFiles({ data: [] }, ["a"]).size, 0);
+  assert.equal(parseGroupedToolsFiles(null, ["a"]).size, 0);
 });
