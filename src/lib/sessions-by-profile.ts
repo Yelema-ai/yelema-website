@@ -11,8 +11,8 @@ import type { ChatSession } from "@/components/chat/types";
 
 export type Space = { sessions: ChatSession[]; runs: RoutineSession[] };
 
-// A gateway without the grouped read is not asked again for a while.
-const byProfile = optionalRoute((agentId: string, profiles: string[]) => agent37.sessionsByProfile(agentId, profiles));
+// An instance whose gateway lacks the grouped read is not asked it again for a while; the others still are.
+const byProfile = optionalRoute((agentId: string, profiles: string[]) => agent37.sessionsByProfile(agentId, profiles), { key: (agentId) => agentId });
 
 async function grouped(agentId: string, profiles: string[]): Promise<Map<string, ProfileListing> | null> {
   const body = await byProfile(agentId, profiles).catch(() => undefined);

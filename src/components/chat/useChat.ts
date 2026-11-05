@@ -214,7 +214,12 @@ function readThread(agentId: string, q: string, sessionId: string): Promise<Sess
 export function prefetchThread(agentId: string, profile: string | null, sessionId: string): void {
   const q = profileQuery(profile);
   const key = historyKey(agentId, q, sessionId);
-  cachedFetch(aheadKey(key), () => fetchThread(agentId, q, sessionId), AHEAD_MS).then((res) => void remember(key, mapHistory(res.history)), () => undefined);
+  const k = aheadKey(key);
+  cachedFetch(k, () => fetchThread(agentId, q, sessionId), AHEAD_MS).then((res) => {
+    remember(key, mapHistory(res.history));
+    // Past AHEAD_MS it serves nothing: the whole thread is not kept in the tab for it.
+    setTimeout(() => cached(k) === res && forget(k), AHEAD_MS);
+  }, () => undefined);
 }
 
 export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessionCreated, onActivity }: UseChatArgs) {

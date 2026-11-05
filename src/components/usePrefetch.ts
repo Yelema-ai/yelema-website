@@ -10,7 +10,7 @@ export const INTENT_MS = 150;
 export function sparingData(): boolean {
   if (typeof navigator === "undefined") return true;
   const c = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
-  return Boolean(c?.saveData) || c?.effectiveType === "slow-2g" || c?.effectiveType === "2g";
+  return Boolean(c?.saveData) || c?.effectiveType === "slow-2g" || c?.effectiveType === "2g" || c?.effectiveType === "3g";
 }
 
 const allowed = () => !sparingData() && document.visibilityState === "visible";

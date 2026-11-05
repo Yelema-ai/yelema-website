@@ -97,7 +97,7 @@ function ConversationBadge({ status }: { status: keyof typeof BADGES }) {
 // (?session=) so refresh/Back/share reopen it. Routine runs repeat the same title every day, so they
 // show their repeat icon and have their own filter, and « Plus ancien » starts folded, so they never drown
 // the conversations people started.
-const TOP_AHEAD = 2;
+const TOP_AHEAD = 1;
 
 export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { agentId, profile, sessions, activeSessionId, onChatTab, loadingSessions, reloadSessions, refreshingSessions, sessionsError, selectSession, startNewChat, deleteSession, renameSession } =
@@ -123,11 +123,11 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       }
       return next;
     });
-  // A row hovered, touched or focused is read ahead; the two newest threads are read once the rail shows.
+  // A row hovered, touched or focused is read ahead; the newest thread is read once the rail shows (not on a touch screen).
   const rowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const top = sessions.filter((s) => s.session_id !== activeSessionId).slice(0, TOP_AHEAD).map((s) => s.session_id).join(",");
   useEffect(() => {
-    if (!top) return;
+    if (!top || window.matchMedia("(pointer: coarse)").matches) return;
     const t = setTimeout(() => whenIdle(() => top.split(",").forEach((sid) => prefetchThread(agentId, profile, sid))), 1_500);
     return () => clearTimeout(t);
   }, [agentId, profile, top]);

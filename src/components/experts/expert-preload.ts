@@ -103,8 +103,9 @@ export function useReadAhead(experts: { agentId: string; profileId: string; cata
   }, [list]);
 }
 
-// Once the tab's bootstrap is in, the menu's screens (Conversations, Livrables) are read while idle: every
-// Expert's conversations in one grouped read, every instance's drive. Data only, never their code.
+// Once the tab's bootstrap is in, the menu's screens (Conversations, Livrables) are read while idle: the own
+// instance's conversations in one grouped read, and its drive. Another instance (a team's) is read only
+// when its row is hovered or on screen (ExpertItem): reading it here would wake a sleeping machine.
 const warmed = new Set<string>();
 export function useWarmMenu(ownAgentId: string | null, experts: { agentId: string; profileId: string }[]): void {
   const list = experts.map((e) => `${e.agentId}\n${e.profileId}`).join("|");
@@ -117,8 +118,8 @@ export function useWarmMenu(ownAgentId: string | null, experts: { agentId: strin
           if (stop) return;
           warmed.add(`${ownAgentId}|${list}`);
           const all = list.split("|").map((s) => s.split("\n") as [string, string]);
-          for (const [agentId, profile] of all) void sessionsStore.read(agentId, profile, FRESH_MS).catch(() => undefined);
-          for (const agentId of new Set([ownAgentId, ...all.map(([a]) => a)])) void driveTree(agentId).catch(() => undefined);
+          for (const [agentId, profile] of all) if (agentId === ownAgentId) void sessionsStore.read(agentId, profile, FRESH_MS).catch(() => undefined);
+          void driveTree(ownAgentId).catch(() => undefined);
         })
       );
     }, WARM_AFTER_MS);

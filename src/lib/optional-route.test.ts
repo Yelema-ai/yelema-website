@@ -30,3 +30,13 @@ test("an absent route is not asked again before its TTL; another failure is thro
   t = 2_000;
   assert.equal(await route(), "body");
 });
+
+test("keyed by peer: one peer without the route does not stop the others asking", async () => {
+  const asked: string[] = [];
+  const route = optionalRoute(async (peer: string) => (asked.push(peer), peer === "old" ? null : peer), { key: (peer) => peer, ttlMs: 1_000, now: () => 0 });
+  assert.equal(await route("old"), null);
+  assert.equal(await route("new"), "new");
+  assert.equal(await route("old"), null);
+  assert.equal(await route("new"), "new");
+  assert.deepEqual(asked, ["old", "new", "new"]);
+});
