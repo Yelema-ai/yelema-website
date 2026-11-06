@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AethexError, VoiceCall, WebRTCPlatform } from "@aethexai/react/core";
 import type { VoiceLanguage } from "@/lib/voice";
 import { firstTurn, stepTurn, type CallPhase, type TurnState } from "@/lib/call-turns";
+import { sound, type EndedBy } from "@/lib/end-tone";
 import { micMeter, withMicTap, type MicMeter } from "@/lib/mic-tap";
 import { playHangupTone } from "./useRingback";
 
@@ -86,10 +87,9 @@ export function useVoiceCall(): UseVoiceCall {
   // Bumped by every release: an SDK still loading for an abandoned call is dropped.
   const attempt = useRef(0);
 
-  const go = useCallback((next: CallPhase) => {
+  const go = useCallback((next: CallPhase, by: EndedBy = "remote") => {
     if (phaseRef.current === "ended" || phaseRef.current === "unreachable") return;
-    // The short end tone, once, when a call the expert had answered ends (either side).
-    if (next === "ended" && answered.current) playHangupTone();
+    sound(playHangupTone, next, by, answered.current);
     phaseRef.current = next;
     setPhase(next);
   }, []);
@@ -289,9 +289,10 @@ export function useVoiceCall(): UseVoiceCall {
     [fail, go, meter, onServerMessage, release, sendLonger]
   );
 
+  // Ended first: the SDK's own close, fired by `release`, then finds the call over (no remote tone).
   const hangUp = useCallback(() => {
+    go("ended", "member");
     release();
-    go("ended");
   }, [go, release]);
 
   const setMuted = useCallback((m: boolean) => {
