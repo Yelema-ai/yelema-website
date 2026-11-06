@@ -104,7 +104,8 @@ export function VaultView() {
         className="w-full max-w-xs"
       />
 
-      <div className="flex items-start gap-3.5 rounded-[22px] border border-line bg-surface p-4 text-sm text-ink-2">
+      {/* Icon and sentence on one line, centred (Leslie, 06/11). */}
+      <div className="flex items-center gap-3.5 rounded-[22px] border border-line bg-surface p-4 text-sm text-ink-2">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-tint text-brand">
           <Lock className="h-5 w-5" />
         </div>
@@ -139,12 +140,12 @@ export function VaultView() {
                   <th className="px-4 py-2.5 font-medium">Site</th>
                   <th className="px-4 py-2.5 font-medium">À quoi il sert</th>
                   <th className="px-4 py-2.5 font-medium">Ajouté le</th>
-                  <th className="px-4 py-2.5" />
+                  <th className="px-4 py-2.5" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
                 {shown.items.map((it) => (
-                  <tr key={it.key} className="border-t border-line align-top">
+                  <tr key={it.key} className="border-t border-line align-middle">
                     <td className="px-4 py-3 text-ink">
                       {it.label}
                       {/* Ni l'identifiant ni l'adresse : seulement leur nature, rien qui se lise par-dessus l'épaule. */}
