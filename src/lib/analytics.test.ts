@@ -455,8 +455,8 @@ test("computeAnalytics: handles real membersList, instanceInfo, toolsList and sk
   // Pods: lists real instance
   assert.equal(res.dimensions.pods.length, 1);
   assert.equal(res.dimensions.pods[0].id, "pod_s9lgaayr9l");
-  assert.ok(res.dimensions.pods[0].name.includes("Mstudio Performance"));
-  assert.ok(res.dimensions.pods[0].subtitle.includes("4 vCPU"));
+  assert.ok(res.dimensions.pods[0]?.name.includes("Mstudio Performance"));
+  assert.ok(res.dimensions.pods[0]?.subtitle?.includes("4 vCPU"));
 
   // Tools: lists discovered tools
   assert.ok(res.dimensions.tools.some((t) => t.name === "Apify"));
