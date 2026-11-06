@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
+import { isCompanionProfile } from "@/lib/companion";
 import { apiFetch } from "@/lib/api";
 import type { MailRights, MailRightsPatch } from "@/lib/mail";
 import { expertDisplayName } from "@/lib/experts";
@@ -35,8 +36,9 @@ export function MailRightsView() {
 
   useEffect(() => {
     apiFetch<{ items: MailRights[] }>("/api/mail/rights")
-      // A suspended inbox is no longer the client's to manage: it is not shown (Leslie, 06/11).
-      .then((data) => setInboxes(data.items.filter((i) => i.status !== "suspended")))
+      // A suspended inbox is no longer the client's to manage, and Yélé is Yelema's companion, not one of
+      // the team's Experts: neither is shown (Leslie, 06/11).
+      .then((data) => setInboxes(data.items.filter((i) => i.status !== "suspended" && !isCompanionProfile(i.expert))))
       .catch((e: Error) => setError(e.message));
   }, []);
 
@@ -66,7 +68,6 @@ export function MailRightsView() {
       g.items.push(i);
       return acc;
     }, []);
-  const writing = (inboxes ?? []).filter(writes).length;
 
   return (
     <div className="max-w-5xl">
@@ -78,8 +79,9 @@ export function MailRightsView() {
 
       {inboxes && inboxes.length > 0 && (
         <>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <label className="relative block min-w-0 flex-1">
+          {/* The search on the whole width, without the « 31 Experts, 9 écrivent » count (Leslie, 06/11). */}
+          <div className="mt-2">
+            <label className="relative block w-full">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" aria-hidden />
               <input
                 type="search"
@@ -90,9 +92,6 @@ export function MailRightsView() {
                 className="h-11 w-full rounded-full border border-line bg-surface pl-10 pr-3 text-sm text-ink outline-none placeholder:text-ink-3 focus:border-brand/40"
               />
             </label>
-            <span className="shrink-0 text-sm text-ink-3">
-              {inboxes.length} Experts, {writing} écri{writing > 1 ? "vent" : "t"}
-            </span>
           </div>
 
           <div className="mt-3 overflow-hidden rounded-[22px] border border-line bg-surface">
