@@ -6,8 +6,10 @@ export interface ReplyChoice {
   /** « A »… or « 1 »…, as the expert wrote it. */
   letter: string;
   label: string;
-  /** Marked « (par défaut) » by the expert. */
+  /** Marked « (par défaut) » or « (recommandé) » by the expert. */
   isDefault: boolean;
+  /** The expert's own word for it, shown on the button: « par défaut » or « recommandé ». */
+  mark?: string;
 }
 
 export interface ReplyParts {
@@ -21,8 +23,10 @@ export interface ReplyParts {
 }
 
 const OPTION = /^\s*(?:[-*•]\s+)?(?:\*\*|__)?([A-F]|[1-9])(?:\*\*|__)?\s*(?:[).:–—-]|\s:)\s*(?:\*\*|__)?\s*(\S.*)$/;
-const DEFAULT_MARK = /\s*[([]?\s*par défaut\s*[)\]]?\s*[.,]?\s*$/i;
-const MAX_LABEL = 100;
+// « (par défaut) » or « (recommandé) », at the end or before a « : » that explains the option.
+const DEFAULT_MARK = /\s*[([]?\s*(?:par défaut|recommandée?)\s*[)\]]?\s*[.,]?\s*(?=$|:)/i;
+// An option often explains itself after « : » (Yélé, 06/11: 105 signs, its choices stayed text).
+const MAX_LABEL = 180;
 const MAX_NOTE = 140;
 
 const plain = (s: string) => s.replace(/\*\*|__/g, "").replace(/^_(.*)_$/, "$1").trim();
@@ -77,11 +81,18 @@ function readChoices(lines: string[]): { items: ReplyChoice[]; note: string | nu
   if (!asks) return null;
   if (unclosedFence(lines.slice(0, found[0].line))) return null;
 
+  // « Répondez par une lettre » says what the buttons now do: not repeated under them.
+  if (note && /^r[ée]pond(ez|s)\s+(par|avec)\s+(une|la)\s+lettre/i.test(note)) note = null;
   return {
-    items: found.map((f) => ({ letter: f.letter, label: f.label.replace(DEFAULT_MARK, "").trim(), isDefault: DEFAULT_MARK.test(f.label) })),
+    items: found.map((f) => ({ letter: f.letter, label: f.label.replace(DEFAULT_MARK, "").replace(/(\S):\s/, "$1 : ").trim(), isDefault: DEFAULT_MARK.test(f.label), mark: markOf(f.label) })),
     note,
     start: found[0].line,
   };
+}
+
+function markOf(label: string): string | undefined {
+  const m = label.match(/(par défaut|recommandée?)/i);
+  return m ? m[1].toLowerCase() : undefined;
 }
 
 /** What the member's click sends: the letter for the expert, the words for whoever reads the thread. */

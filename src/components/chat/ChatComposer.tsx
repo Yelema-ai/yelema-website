@@ -20,6 +20,7 @@ import { useVoices } from "@/components/voice/useVoices";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { commandsOf, filterCommands, missingFor, type ExpertCommand } from "@/lib/expert-commands";
 import { CommandMenu } from "./CommandMenu";
+import { UpdateSpinner, useDeployPhase } from "@/components/app/DeployStatus";
 
 interface Props {
   agentId: string;
@@ -87,6 +88,9 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
   const { experts } = useExpertsContext();
   const expert = experts.find((e) => e.agentId === agentId && e.profileId === profile);
   const expertKey = expert?.catalogueKey ?? null;
+  // While an update runs, said where the member writes, so a slow or missing answer is not taken for
+  // the Expert's fault (Leslie, 06/11: « il faut que ça se voie même dans le chat »).
+  const updating = useDeployPhase() === "maintenance";
   // « / » opens the Expert's commands; a command picked shows as a chip and says what it still needs.
   const commands = useMemo(() => commandsOf(expertKey, expert?.driveFolder ?? expert?.displayName), [expertKey, expert?.driveFolder, expert?.displayName]);
   const [chosen, setChosen] = useState<ExpertCommand | null>(null);
@@ -190,6 +194,14 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
         "relative"
       )}
     >
+      {updating && (
+        <p role="status" data-update-note="" className="flex items-center gap-2 rounded-t-[21px] border-b border-amber-200 bg-amber-50 px-5 py-2.5 text-[13px] font-medium leading-snug text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+          <UpdateSpinner />
+          <span>
+            Mise à jour en cours : {expert ? expert.displayName : "vos Experts"} {expert ? "peut" : "peuvent"} répondre plus lentement ou reprendre après la mise à jour. Vos messages sont gardés.
+          </span>
+        </p>
+      )}
       {menuOpen && (
         <CommandMenu
           name={expert?.displayName ?? "l’Expert"}

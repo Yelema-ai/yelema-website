@@ -15,18 +15,22 @@ import { cn } from "@/lib/utils";
 const DeployContext = createContext<DeployPhase>("idle");
 
 export const useDeployPhase = () => useContext(DeployContext);
+const CloseContext = createContext<() => void>(() => {});
 
 // Demo and screenshots: `?mise-a-jour=en-cours` or `?mise-a-jour=terminee` on any page.
 function forcedPhase(): DeployPhase | null {
   if (typeof window === "undefined") return null;
   const v = new URLSearchParams(window.location.search).get("mise-a-jour");
-  return v === "en-cours" ? "maintenance" : v === "terminee" ? "updated" : null;
+  return v === "en-cours" ? "maintenance" : v === "terminee" ? "updated" : v === "finie" ? "done" : null;
 }
 
 export function DeployStatusProvider({ children }: { children: React.ReactNode }) {
   const loaded = useRef<string | null>(null);
   const [status, setStatus] = useState<DeployStatus | null>(null);
   const [forced, setForced] = useState<DeployPhase | null>(null);
+  // An update seen by this page, and whether the member closed the « terminée » strip since.
+  const [saw, setSaw] = useState(false);
+  const [closed, setClosed] = useState(false);
 
   useEffect(() => setForced(forcedPhase()), []);
 
@@ -40,14 +44,27 @@ export function DeployStatusProvider({ children }: { children: React.ReactNode }
     // The first answer is the version this page runs; a page opened during an update runs the
     // new one only once the update is over, so the baseline waits for a quiet answer.
     if (!loaded.current && !s.maintenance) loaded.current = s.version;
+    if (s.maintenance) {
+      setSaw(true);
+      setClosed(false);
+    }
     setStatus(s);
   }, []);
   // A net beside the stream, still every DEPLOY_POLL_MS with it (a missed `job.done` must not hide the banner 5 min).
   usePoll(ask, { everyMs: DEPLOY_POLL_MS, live: true, minMs: DEPLOY_POLL_MS, liveMs: DEPLOY_POLL_MS, wake: { types: ["job.done"], kind: "deploy" } });
 
-  const phase = forced ?? deployPhase(loaded.current, status);
+  const base = deployPhase(loaded.current, status);
+  const phase = forced ?? (base === "idle" && saw && !closed ? "done" : base);
+  const close = useCallback(() => {
+    setClosed(true);
+    setForced((f) => (f === "done" ? "idle" : f));
+  }, []);
 
-  return <DeployContext.Provider value={phase}>{children}</DeployContext.Provider>;
+  return (
+    <DeployContext.Provider value={phase}>
+      <CloseContext.Provider value={close}>{children}</CloseContext.Provider>
+    </DeployContext.Provider>
+  );
 }
 
 /** The small turning ring the update states share. */
@@ -62,6 +79,7 @@ const UPDATE_TEXT = "Mise à jour en cours. Vos Experts répondent un peu plus l
  *  over, the same strip says so with « Actualiser », and stays until the page is reloaded. */
 export function UpdateStrip() {
   const phase = useDeployPhase();
+  const close = useContext(CloseContext);
   if (phase === "updated")
     return (
       <div role="status" className="flex items-center gap-2.5 border-b border-ok/25 bg-ok-pale px-4 py-1.5 text-[13px] font-semibold leading-snug text-ink md:px-8">
@@ -69,6 +87,16 @@ export function UpdateStrip() {
         <span className="min-w-0 flex-1">Mise à jour terminée. Actualisez la page pour en profiter.</span>
         <button type="button" onClick={() => window.location.reload()} className="inline-flex h-8 shrink-0 items-center rounded-lg bg-ink px-3 text-[12.5px] font-semibold text-bg hover:opacity-90 pointer-coarse:h-10">
           Actualiser
+        </button>
+      </div>
+    );
+  if (phase === "done")
+    return (
+      <div role="status" className="flex items-center gap-2.5 border-b border-ok/25 bg-ok-pale px-4 py-1.5 text-[13px] font-semibold leading-snug text-ink md:px-8">
+        <span aria-hidden className="size-2 shrink-0 rounded-full bg-ok" />
+        <span className="min-w-0 flex-1">Mise à jour terminée. Vos Experts répondent de nouveau normalement.</span>
+        <button type="button" onClick={close} className="inline-flex h-8 shrink-0 items-center rounded-lg bg-ink px-3 text-[12.5px] font-semibold text-bg hover:opacity-90 pointer-coarse:h-10">
+          OK
         </button>
       </div>
     );

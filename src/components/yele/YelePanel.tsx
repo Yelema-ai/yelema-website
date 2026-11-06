@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRight, BarChart3, Maximize2, Bug, ChevronLeft, History, KeyRound, Loader2, Mic, Plug, Receipt, Repeat, FileSpreadsheet, ShieldCheck, Send, Sparkles, SquarePen, Users, X, type LucideIcon } from "lucide-react";
+import { ArrowUpRight, BarChart3, Ellipsis, Maximize2, Bug, ChevronLeft, History, KeyRound, Loader2, Mic, Plug, Receipt, Repeat, FileSpreadsheet, ShieldCheck, Send, Sparkles, SquarePen, Users, X, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { sessionsStore } from "@/lib/sessions-client";
 import { useChat } from "@/components/chat/useChat";
@@ -15,6 +15,8 @@ import { useChatAttachments } from "@/components/chat/useChatAttachments";
 import { useDictation } from "@/components/chat/useDictation";
 import { useVoices } from "@/components/voice/useVoices";
 import { Markdown } from "@/components/chat/Markdown";
+import { ReplyChoices } from "@/components/chat/ReplyActions";
+import { replyParts } from "@/lib/reply-parts";
 import { useCallState } from "@/components/voice/CallProvider";
 import { CallButton } from "@/components/voice/CallButton";
 import type { Companion } from "@/lib/companion";
@@ -22,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { toMs } from "@/lib/activity";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { Portrait, YELE_FACE } from "./YelePortrait";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 // Yélé's open panel, loaded on first opening: the chat and its Markdown stay out of the shell.
 type Shortcut = { label: string; desc: string; prompt: string; icon: LucideIcon };
@@ -215,31 +218,39 @@ export function YelePanel({ companion, folded, onClose }: { companion: Companion
         folded ? "sm:bottom-48 sm:max-h-[calc(100dvh-14rem)]" : "sm:bottom-6 sm:max-h-[calc(100dvh-3rem)]"
       )} {...att.dragHandlers}>
       {att.dragOver && <DropOverlay label="Déposez vos fichiers pour Yélé" />}
-      <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Portrait animated />
-          <div>
-            <p className="text-[15px] font-bold text-ink">Yélé</p>
-            <p className="text-[12.5px] leading-snug text-ink-3">Prise en main, conseils et support</p>
-          </div>
+      {/* Three buttons (Leslie, 06/11, option B): Appeler, « … » with the rest, Fermer. Five buttons and
+          « Historique » in words left the subtitle one word per line. */}
+      <div className="flex items-center gap-3 border-b border-line px-4 py-3">
+        <Portrait animated />
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-bold text-ink">Yélé</p>
+          <p className="truncate text-[12.5px] leading-snug text-ink-3">Aide et support</p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           {/* Yélé se joint aussi par la voix, comme dans l'app mobile (Leslie, 01/11). */}
-          {/* Sa page entière : ses discussions, appels, livrables et routines, au lieu de les chercher
-              dans les notifications (Leslie, 01/11). */}
-          <Link href={agentTabPath(companion.agentId, "chat", companion.profileId)} onClick={onClose} title="Agrandir" aria-label="Agrandir : l’espace de Yélé" className="grid size-10 place-items-center rounded-lg text-ink-2 hover:bg-soft hover:text-ink">
-            <Maximize2 className="size-4" />
-          </Link>
           <CallButton expert={{ key: companion.profileId, name: "Yélé", photoUrl: YELE_FACE }} iconOnly label="Appeler" className="size-10 rounded-lg bg-transparent text-ink-2 shadow-none hover:bg-soft hover:text-ink" />
-          <button type="button" onClick={() => (past ? setPast(null) : openPast())} title="Anciennes discussions" aria-label="Anciennes discussions" aria-pressed={!!past} className={cn("flex h-10 items-center gap-1.5 rounded-lg px-2 text-[13px] font-semibold hover:bg-soft hover:text-ink", past ? "bg-soft text-ink" : "text-ink-2")}>
-            <History className="size-4" /> Historique
-          </button>
-          {(shown.length > 0 || past) && (
-            <button type="button" onClick={restart} title="Nouvelle discussion" aria-label="Nouvelle discussion" className="grid size-10 place-items-center rounded-lg text-ink-3 hover:bg-soft hover:text-ink">
-              <SquarePen className="size-4" />
-            </button>
-          )}
-          <button type="button" onClick={onClose} title="Réduire" aria-label="Réduire" className="grid size-10 place-items-center rounded-lg text-ink-3 hover:bg-soft hover:text-ink">
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <button type="button" title="Plus" aria-label="Plus : nouvelle discussion, historique, agrandir" className={cn("grid size-10 place-items-center rounded-lg text-ink-2 hover:bg-soft hover:text-ink data-[state=open]:bg-soft", past && "bg-soft text-ink")}>
+                <Ellipsis className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="z-[70] w-56 rounded-2xl p-1.5">
+              <DropdownMenuItem onSelect={restart} className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-sm">
+                <SquarePen className="size-4" /> Nouvelle discussion
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => (past ? setPast(null) : openPast())} className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-sm">
+                <History className="size-4" /> Historique
+              </DropdownMenuItem>
+              {/* Sa page entière : ses discussions, appels, livrables et routines (Leslie, 01/11). */}
+              <DropdownMenuItem asChild className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-sm">
+                <Link href={agentTabPath(companion.agentId, "chat", companion.profileId)} onClick={onClose}>
+                  <Maximize2 className="size-4" /> Agrandir
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button type="button" onClick={onClose} title="Fermer" aria-label="Fermer" className="grid size-10 place-items-center rounded-lg text-ink-3 hover:bg-soft hover:text-ink">
             <X className="size-4" />
           </button>
         </div>
@@ -314,7 +325,11 @@ export function YelePanel({ companion, folded, onClose }: { companion: Companion
             <div key={m.id} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
               <div className={cn("max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed", m.role === "user" ? "rounded-br-sm bg-brand text-on-brand" : "rounded-bl-sm border border-line bg-soft text-ink")}>
                 {m.role === "user" && m.attachments?.length ? <div className="mb-1.5"><MessageAttachments attachments={m.attachments} /></div> : null}
-                {m.role === "user" ? m.content && <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.content}</p> : <Markdown content={m.content} agentId={companion.agentId} />}
+                {m.role === "user" ? (
+                  m.content && <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.content}</p>
+                ) : (
+                  <YeleReply content={m.content} agentId={companion.agentId} answerable={!isStreaming && m === shown[shown.length - 1]} onSend={(t) => send(t, {})} />
+                )}
                 {m.role === "assistant" && !(isStreaming && m === shown[shown.length - 1]) && pagesIn(m.content, path).length > 0 && (
                   <div className="mt-2.5 flex flex-wrap gap-1.5">
                     {pagesIn(m.content, path).map((p) => (
@@ -400,5 +415,18 @@ export function YelePanel({ companion, folded, onClose }: { companion: Companion
         </div>
       </form>
     </div>
+  );
+}
+
+// Yélé's answer: its A, B, C at the end are buttons, as an Expert's are (Leslie, 06/11), on her last
+// finished answer only.
+function YeleReply({ content, agentId, answerable, onSend }: { content: string; agentId: string; answerable: boolean; onSend: (text: string) => void }) {
+  const parts = answerable ? replyParts(content) : null;
+  if (!parts || parts.choices.length === 0) return <Markdown content={content} agentId={agentId} />;
+  return (
+    <>
+      <Markdown content={parts.body} agentId={agentId} />
+      <ReplyChoices choices={parts.choices} note={parts.choicesNote} onSend={onSend} />
+    </>
   );
 }
