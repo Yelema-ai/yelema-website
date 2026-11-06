@@ -2,7 +2,7 @@ import { requireAgentAccess } from "@/lib/auth";
 import { handleError, json } from "@/lib/http";
 import { knownCatalogue, listPlatforms } from "@/lib/hermes-messaging";
 import { imageKeyOf, servesHermesTools } from "@/lib/runtime-capabilities";
-import { isConnectableChannel, neutralizeHarnessName, sortChannels } from "@/lib/channels";
+import { isConnectableChannel, sortChannels } from "@/lib/channels";
 import type { ChannelsResponse, MessagingPlatform } from "@/lib/channels";
 import { currentInstance } from "@/lib/session";
 
@@ -34,22 +34,22 @@ export async function GET(request: Request, { params }: Ctx) {
   }
 }
 
-// The harness describes its channels in English; the featured ones get a French line.
+// The harness describes its channels in English. A member reads none of it (Leslie, 06/11: « encore de
+// l'anglais » under Telegram): a channel with a French line here gets it, any other gets none.
 const CHANNEL_DESCRIPTIONS: Record<string, string> = {
-  teams: "Écrivez à vos experts depuis Microsoft Teams, en message privé ou dans vos équipes.",
-  slack: "Écrivez à vos experts depuis Slack, en message privé ou dans vos canaux.",
-  discord: "Écrivez à vos experts depuis Discord, en message privé ou sur vos serveurs.",
-  google_chat: "Écrivez à vos experts depuis Google Chat, en message privé ou dans vos espaces.",
+  telegram: "Écrivez à vos Experts depuis Telegram, en message privé ou dans un groupe avec un sujet par Expert.",
+  whatsapp: "Écrivez à vos Experts depuis WhatsApp.",
+  teams: "Écrivez à vos Experts depuis Microsoft Teams, en message privé ou dans vos équipes.",
+  slack: "Écrivez à vos Experts depuis Slack, en message privé ou dans vos canaux.",
+  discord: "Écrivez à vos Experts depuis Discord, en message privé ou sur vos serveurs.",
+  google_chat: "Écrivez à vos Experts depuis Google Chat, en message privé ou dans vos espaces.",
 };
 
 function rebrand(channel: MessagingPlatform): MessagingPlatform {
   return {
     ...channel,
-    description: CHANNEL_DESCRIPTIONS[channel.id] ?? neutralizeHarnessName(channel.description),
-    env_vars: channel.env_vars.map((field) => ({
-      ...field,
-      description: neutralizeHarnessName(field.description),
-      help: neutralizeHarnessName(field.help),
-    })),
+    description: CHANNEL_DESCRIPTIONS[channel.id] ?? null,
+    // The fields' own help is English too: the panels write their own French hints.
+    env_vars: channel.env_vars.map((field) => ({ ...field, description: null, help: null })),
   };
 }

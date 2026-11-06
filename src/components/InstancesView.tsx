@@ -61,7 +61,7 @@ export function InstancesView() {
       <div>
         <h1 className="sr-only">Instances</h1>
         <p className="text-sm text-muted-foreground">
-          {current.name} · une instance par membre, créée et gérée par votre administrateur Yelema.
+          Chaque membre de {current.name} a sa propre instance, créée et suivie par l’équipe Yelema.
         </p>
       </div>
 

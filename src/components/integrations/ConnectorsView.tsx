@@ -311,7 +311,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
       {!q && recommended.length > 0 && (
         <section>
           <h2 className="mb-3 text-[17px] font-bold text-ink">Conseillés pour vos Experts</h2>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {recommended.map(({ toolkit: t, who }) => {
               const k = slugKey(t.slug);
               return (
@@ -366,7 +366,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
         )}
 
         {catalog.length > 0 ? (
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {catalog.map((t) => {
               const k = slugKey(t.slug);
               const mineToo = accounts.get(k) ?? [];
@@ -374,7 +374,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
                 <AddTool
                   key={k}
                   toolkit={t}
-                  detail={t.description}
+                  detail={null}
                   accounts={connections === null ? null : mineToo}
                   waiting={connecting === k || pending === k}
                   onConnect={() => connect(t)}
@@ -396,7 +396,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
             )}
           </div>
         ) : searching ? (
-          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="h-16 animate-pulse rounded-[18px] border bg-soft" />
             ))}
@@ -488,18 +488,22 @@ function AddTool({
           <span title="Un compte est à reconnecter" className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#dc2626] ring-2 ring-card" />
         )}
       </span>
+      {/* The name gets the whole width, the state goes under it: four cards a row everywhere, as in « Vos
+          outils », with no name cut to « Goog… » (Leslie, 06/11). */}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[14.5px] font-semibold leading-snug text-ink">{toolkit.name}</span>
-        {detail && <span className="line-clamp-2 text-[12.5px] leading-snug text-ink-3">{detail}</span>}
+        <span className="mt-1 flex min-w-0 items-center gap-2">
+          {waiting ? (
+            <Loader2 className="size-4 shrink-0 animate-spin text-ink-3" />
+          ) : connected ? (
+            // In « Vos outils » the list says it is connected; elsewhere (a search), « Connecté » as in Canaux.
+            mine ? null : <StatePill state="connected" className="h-7 min-w-0 px-3 text-[12.5px]" />
+          ) : (
+            <StatePill state="connect" className="h-7 min-w-0 px-3 text-[12.5px]" />
+          )}
+          {detail && <span className="min-w-0 truncate text-[12.5px] leading-snug text-ink-3">{detail}</span>}
+        </span>
       </span>
-      {waiting ? (
-        <Loader2 className="size-4 shrink-0 animate-spin text-ink-3" />
-      ) : connected ? (
-        // In « Vos outils » the list says it is connected; elsewhere (a search), « Connecté » as in Canaux.
-        mine ? null : <StatePill state="connected" />
-      ) : (
-        <StatePill state="connect" />
-      )}
     </button>
   );
 }

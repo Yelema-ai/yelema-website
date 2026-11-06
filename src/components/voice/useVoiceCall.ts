@@ -38,7 +38,7 @@ const VOICE_BASE = "/api/voice";
 const LEVEL_MS = 80;
 
 function messageOf(e: AethexError): string | null {
-  if (e.code === "mic_denied" || e.code === "mic_missing") return "Autorisez le micro pour appeler vos experts.";
+  if (e.code === "mic_denied" || e.code === "mic_missing") return "Autorisez le micro pour appeler vos Experts.";
   if (e.code === "unsupported_browser") return "Ce navigateur ne permet pas les appels. Essayez Chrome, Edge ou Safari à jour.";
   if (e.code === "quota_exceeded" || e.code === "payment_required" || e.code === "capacity") return "Service vocal indisponible. Réessayez dans un instant.";
   return null;
@@ -122,7 +122,8 @@ export function useVoiceCall(): UseVoiceCall {
   const fail = useCallback(
     (why: string | null) => {
       release();
-      setReason(why ?? "L’expert est injoignable pour le moment. Réessayez dans un instant.");
+      // No reason of our own: the call window says it with the expert's name and what it knows (update, network).
+      setReason(why);
       go("unreachable");
     },
     [go, release]

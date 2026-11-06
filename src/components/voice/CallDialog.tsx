@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AudioLines, Loader2, Mic, MicOff, Minimize2, Phone, PhoneCall, PhoneOff, Search, WifiOff } from "lucide-react";
+import { AudioLines, Loader2, Mic, MicOff, Minimize2, Phone, PhoneCall, PhoneMissed, PhoneOff, RefreshCw, Search, WifiOff } from "lucide-react";
+import { useDeployPhase } from "@/components/app/DeployStatus";
 import { Button } from "@/components/ui/button";
 import { DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ const VIOLET = HALO_COLOR.parle;
 const GREEN = HALO_COLOR.ecoute;
 const RED = "#e24848";
 const GREY = "#9696a0";
+const AMBER = "#f2a93b";
 
 /**
  * The call as shown, from its state alone: CallProvider wires it to the live call (Leslie, 23/10, as on
@@ -64,7 +66,7 @@ export function CallView(p: {
         <p className="mt-0.5 h-4 text-[12px] tabular-nums text-ink-3">{timed || p.phase === "connecting" ? clock(p.elapsed) : ""}</p>
 
         <div className="mt-4 sm:mt-7">
-          <Portrait photoUrl={p.photoUrl} name={p.name} halo={halo} />
+          <Portrait photoUrl={p.photoUrl} name={p.name} halo={halo} dim={p.phase === "unreachable"} />
         </div>
 
         <DialogDescription asChild>
@@ -113,7 +115,7 @@ export function CallView(p: {
 
 /** What is happening, in a pill under the picture, in the colour of the halo. */
 function Status({ phase, halo, first, reason }: { phase: CallPhase; halo: Halo | null; first: string; reason: string | null }) {
-  if (phase === "unreachable") return <p className="max-w-[260px] text-sm text-ko">{reason}</p>;
+  if (phase === "unreachable") return <Unreachable first={first} reason={reason} />;
   if (phase === "ended") return <Pill color={GREY} ink="text-ink-2" icon={PhoneOff} text="Appel terminé" />;
   if (!halo) return null;
   if (halo === "muet")
@@ -144,6 +146,28 @@ function Status({ phase, halo, first, reason }: { phase: CallPhase; halo: Halo |
   return <Pill color={VIOLET} ink={ink} icon={phase === "speaking" ? AudioLines : PhoneCall} text={`${first} parle`} />;
 }
 
+/**
+ * A call that did not go through says why, in the same pill as the other states (Leslie, 06/11: a red
+ * sentence alone did not tell an update from a network cut). What the app knows comes first: an update
+ * running, then the browser offline; else the back office's own refusal, or the expert not answering.
+ */
+function Unreachable({ first, reason }: { first: string; reason: string | null }) {
+  const updating = useDeployPhase() === "maintenance";
+  const [offline, setOffline] = useState(false);
+  useEffect(() => setOffline(typeof navigator !== "undefined" && !navigator.onLine), []);
+  const [pill, line] = updating
+    ? [<Pill key="p" color={AMBER} ink="text-amber-800 dark:text-amber-300" icon={RefreshCw} text="Mise à jour en cours" />, `${first} revient dans quelques minutes. Rappelez après la mise à jour.`]
+    : offline
+      ? [<Pill key="p" color={GREY} ink="text-ink-2" icon={WifiOff} text="Pas de connexion Internet" />, "Vérifiez votre connexion, puis rappelez."]
+      : [<Pill key="p" color={GREY} ink="text-ink-2" icon={PhoneMissed} text={`${first} ne répond pas`} />, reason ?? "Rappelez dans un instant."];
+  return (
+    <>
+      {pill}
+      <p className="max-w-[280px] text-[12.5px] leading-snug text-ink-3">{line}</p>
+    </>
+  );
+}
+
 function Pill({ color, ink, icon: Icon, text, spin }: { color: string; ink: string; icon: typeof Mic; text: string; spin?: boolean }) {
   return (
     <span data-call-status="" className={cn("inline-flex min-h-9 max-w-full items-center gap-2 rounded-full px-4 text-[13px] font-semibold sm:whitespace-nowrap", ink)} style={{ backgroundColor: tint(color, 0.14) }}>
@@ -158,7 +182,7 @@ function Pill({ color, ink, icon: Icon, text, spin }: { color: string; ink: stri
 // shows a search and a red badge the microphone cut.
 const MARGIN = 34;
 
-function Portrait({ photoUrl, name, halo }: { photoUrl: string | null; name: string; halo: Halo | null }) {
+function Portrait({ photoUrl, name, halo, dim }: { photoUrl: string | null; name: string; halo: Halo | null; dim?: boolean }) {
   const color = halo ? HALO_COLOR[halo] : null;
   const pulse = halo ? HALO_PULSE_MS[halo] : null;
   const breathe = halo === "parle" || halo === "ecoute";
@@ -188,7 +212,8 @@ function Portrait({ photoUrl, name, halo }: { photoUrl: string | null; name: str
       <span
         className={cn(
           "relative grid place-items-center overflow-hidden rounded-full bg-tint text-5xl font-bold text-brand-ink transition-[filter] duration-300",
-          (halo === "connexion" || halo === "reco") && "grayscale",
+          (halo === "connexion" || halo === "reco" || dim) && "grayscale",
+          dim && "opacity-70",
           halo === "reco" && "brightness-75"
         )}
         style={{ width: FACE_PX, height: FACE_PX }}

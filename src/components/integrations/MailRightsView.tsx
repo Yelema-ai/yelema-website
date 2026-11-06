@@ -35,7 +35,8 @@ export function MailRightsView() {
 
   useEffect(() => {
     apiFetch<{ items: MailRights[] }>("/api/mail/rights")
-      .then((data) => setInboxes(data.items))
+      // A suspended inbox is no longer the client's to manage: it is not shown (Leslie, 06/11).
+      .then((data) => setInboxes(data.items.filter((i) => i.status !== "suspended")))
       .catch((e: Error) => setError(e.message));
   }, []);
 
@@ -65,7 +66,7 @@ export function MailRightsView() {
       g.items.push(i);
       return acc;
     }, []);
-  const writing = (inboxes ?? []).filter((i) => i.sendEnabled).length;
+  const writing = (inboxes ?? []).filter(writes).length;
 
   return (
     <div className="max-w-5xl">
@@ -152,10 +153,13 @@ export function MailRightsView() {
   );
 }
 
+/** Writes for real: allowed, and its inbox exists. */
+const writes = (i: MailRights) => i.sendEnabled && i.status === "active" && !!i.address;
+
 // « 2 sur 3 écrivent, 1 hors de l’entreprise, 1 en création » ; one Expert: « Écrit » or « N’écrit pas ».
 function summary(items: MailRights[]): string {
-  const w = items.filter((i) => i.sendEnabled).length;
-  const out = items.filter((i) => i.sendEnabled && i.externalAllowed).length;
+  const w = items.filter(writes).length;
+  const out = items.filter((i) => writes(i) && i.externalAllowed).length;
   const pending = items.filter((i) => i.status === "pending").length;
   const parts = [items.length === 1 ? (w ? "Écrit" : "N’écrit pas") : `${w} sur ${items.length} écri${w > 1 ? "vent" : "t"}`];
   if (out) parts.push(items.length === 1 ? "hors de l’entreprise" : `${out} hors de l’entreprise`);
@@ -172,7 +176,9 @@ function InboxRow({ inbox, name, photoUrl, saving, open, onToggle, onSave }: {
   onToggle: () => void;
   onSave: (patch: MailRightsPatch) => void;
 }) {
-  const locked = saving || inbox.status === "suspended";
+  // No address yet: nothing to switch on until the inbox exists (Leslie, 06/11).
+  const noBox = inbox.status !== "active" || !inbox.address;
+  const locked = saving || noBox;
   const who = inbox.eligible.length === 0 ? "Aucun membre" : inbox.senders.length > 0 ? `${inbox.senders.length} membres sur ${inbox.eligible.length}`.replace(/^1 membres/, "1 membre") : "Tous les membres";
   return (
     <li data-mail-row aria-busy={saving}>
@@ -188,9 +194,9 @@ function InboxRow({ inbox, name, photoUrl, saving, open, onToggle, onSave }: {
           </div>
         </div>
         <span className="text-[13px] text-ink-2 md:hidden">Écrit</span>
-        <Switch label={`Écrit : ${name}`} checked={inbox.sendEnabled} disabled={locked} onChange={(sendEnabled) => onSave({ sendEnabled })} />
+        <Switch label={`Écrit : ${name}`} checked={inbox.sendEnabled && !noBox} disabled={locked} onChange={(sendEnabled) => onSave({ sendEnabled })} />
         <span className="text-[13px] text-ink-2 md:hidden">Hors de l’entreprise</span>
-        <Switch label={`Hors de l’entreprise : ${name}`} checked={inbox.externalAllowed} disabled={locked || !inbox.sendEnabled} onChange={(externalAllowed) => onSave({ externalAllowed })} />
+        <Switch label={`Hors de l’entreprise : ${name}`} checked={inbox.externalAllowed && !noBox} disabled={locked || !inbox.sendEnabled} onChange={(externalAllowed) => onSave({ externalAllowed })} />
         <span className="text-[13px] text-ink-2 md:hidden">À la demande de</span>
         <button
           type="button"
