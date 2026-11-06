@@ -46,6 +46,11 @@ def detect_expert() -> str:
         curr = parent
 
     # 3. Déduction par le chemin d'exécution (agents/<expert>, .hermes/profiles/<expert>, etc.)
+    import getpass
+    system_reserved = {
+        "workspace", "default", "node", "home", "root", "scripts", "skills", "shared", "videos",
+        getpass.getuser().lower(),
+    }
     patterns = [
         r"/\.hermes/profiles/([^/]+)",
         r"/hermes-experts/([^/]+)",
@@ -55,8 +60,10 @@ def detect_expert() -> str:
     ]
     for p in patterns:
         m = re.search(p, cwd)
-        if m and m.group(1).lower() not in ("workspace", "default", "node", "home", "ubuntu", "christyb"):
-            return m.group(1).capitalize()
+        if m:
+            val = m.group(1).lower()
+            if val not in system_reserved and not val.startswith("."):
+                return m.group(1).capitalize()
 
     # 4. Fichier de profil actif Hermes s'il existe
     home = os.path.expanduser("~")
