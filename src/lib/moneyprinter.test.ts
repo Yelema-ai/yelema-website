@@ -118,7 +118,7 @@ test("createVideoTask: throws 503 when service is not configured", async () => {
   );
 });
 
-test("createVideoTask: sends correct payload and headers to upstream service", async () => {
+test("createVideoTask: parses real MoneyPrinterTurbo upstream response ({ status: 200, data: { task_id } })", async () => {
   const originalFetch = globalThis.fetch;
   let interceptedUrl = "";
   let interceptedMethod = "";
@@ -130,7 +130,7 @@ test("createVideoTask: sends correct payload and headers to upstream service", a
     interceptedMethod = init?.method ?? "GET";
     interceptedHeaders = init?.headers;
     interceptedBody = JSON.parse(String(init?.body));
-    return new Response(JSON.stringify({ task_id: "test-task-999", status: "processing" }), {
+    return new Response(JSON.stringify({ status: 200, message: "success", data: { task_id: "test-task-upstream" } }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
@@ -154,22 +154,26 @@ test("createVideoTask: sends correct payload and headers to upstream service", a
     assert.equal(interceptedBody.video_aspect, "9:16");
     assert.equal(interceptedBody.voice_name, "fr-FR-HenriNeural");
     assert.equal(interceptedBody.video_script, "Bienvenue sur Yelema.");
-    assert.equal(res.taskId, "test-task-999");
+    assert.equal(res.taskId, "test-task-upstream");
     assert.equal(res.status, "processing");
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test("getVideoTaskStatus: normalizes status and relative video URL", async () => {
+test("getVideoTaskStatus: parses real MoneyPrinterTurbo upstream completed task (state: 1, videos: [...])", async () => {
   const originalFetch = globalThis.fetch;
 
   globalThis.fetch = (async () => {
     return new Response(
       JSON.stringify({
-        status: "COMPLETED",
-        progress: 100,
-        result: { video_url: "/storage/tasks/test-task-999/final.mp4" },
+        status: 200,
+        message: "success",
+        data: {
+          state: 1,
+          progress: 100,
+          videos: ["/storage/tasks/test-task-999/final-1.mp4"],
+        },
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
@@ -180,8 +184,59 @@ test("getVideoTaskStatus: normalizes status and relative video URL", async () =>
     assert.equal(status.taskId, "test-task-999");
     assert.equal(status.status, "completed");
     assert.equal(status.progress, 100);
-    assert.equal(status.videoUrl, "http://127.0.0.1:8080/storage/tasks/test-task-999/final.mp4");
+    assert.equal(status.videoUrl, "http://127.0.0.1:8080/storage/tasks/test-task-999/final-1.mp4");
     assert.equal(status.error, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("getVideoTaskStatus: handles upstream task in progress (state: 4) and failed (state: -1)", async () => {
+  const originalFetch = globalThis.fetch;
+
+  // Processing state: 4
+  globalThis.fetch = (async () => {
+    return new Response(
+      JSON.stringify({
+        status: 200,
+        data: {
+          state: 4,
+          progress: 45,
+          videos: [],
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }) as any;
+
+  try {
+    const status = await getVideoTaskStatus("task-processing", mockConfig);
+    assert.equal(status.status, "processing");
+    assert.equal(status.progress, 45);
+    assert.equal(status.videoUrl, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // Failed state: -1
+  globalThis.fetch = (async () => {
+    return new Response(
+      JSON.stringify({
+        status: 200,
+        data: {
+          state: -1,
+          progress: 20,
+          error: "TTS synthesis failed",
+        },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+  }) as any;
+
+  try {
+    const status = await getVideoTaskStatus("task-failed", mockConfig);
+    assert.equal(status.status, "failed");
+    assert.equal(status.error, "TTS synthesis failed");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -204,13 +259,13 @@ test("getVideoTaskStatus: handles 404 not found cleanly", async () => {
   }
 });
 
-test("generateVideoScript: sends prompt and parses generated script", async () => {
+test("generateVideoScript: parses upstream script response", async () => {
   const originalFetch = globalThis.fetch;
   let interceptedBody: any = {};
 
   globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
     interceptedBody = JSON.parse(String(init?.body));
-    return new Response(JSON.stringify({ video_script: "Voici un script captivant..." }), {
+    return new Response(JSON.stringify({ status: 200, data: { video_script: "Voici un script captivant..." } }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

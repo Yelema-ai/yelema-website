@@ -21,6 +21,9 @@ const INERT_TYPE = /^(image\/(png|jpeg|gif|webp|bmp|avif|x-icon|vnd\.microsoft\.
 // outside the preview's sandboxed <iframe>. So anything but a picture, a PDF, audio, video or plain
 // text is answered with `Content-Security-Policy: sandbox`: an HTML or SVG file opened by its link
 // then runs in an origin of its own, without the member's session.
+//
+// HTTP Range requests (RFC 7233 / 9110) are forwarded to upstream and returned with status 206
+// (Partial Content) and Content-Range / Accept-Ranges headers, as required by iOS Safari for media.
 export async function GET(request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
@@ -33,67 +36,13 @@ export async function GET(request: Request, { params }: Ctx) {
     qs.set("path", path);
     if (disposition) qs.set("disposition", disposition);
 
-    let upstream = await instanceFetch(id, `/v1/files/content?${qs.toString()}`);
+    const reqHeaders: Record<string, string> = {};
+    const range = request.headers.get("range");
+    if (range) reqHeaders["Range"] = range;
 
-    // Fallback défensif si 404 : variations d'arborescence Livrables/<expert>/videos/ (casse minuscule/majuscule ou chemin direct)
-    if (upstream.status === 404) {
-      const candidates: string[] = [];
-
-      // Cas 1 : Chemin sous Livrables/<expert>/(videos|Videos)/<file>
-      const matchExpertVideo = path.match(/^(?:(?:\/home\/node\/|~\/)?Livrables)\/([^/]+)\/(?:videos|Videos)\/(.+)$/);
-      if (matchExpertVideo) {
-        const [, expert, file] = matchExpertVideo;
-        candidates.push(
-          `Livrables/${expert}/videos/${file}`,
-          `Livrables/${expert}/Videos/${file}`,
-          `/home/node/Livrables/${expert}/videos/${file}`,
-          `/home/node/Livrables/${expert}/Videos/${file}`,
-          `Livrables/${expert}/${file}`,
-          `/home/node/Livrables/${expert}/${file}`
-        );
-      }
-
-      // Cas 2 : Fichier vidéo directement cité sous Livrables/<expert>/<file.mp4>
-      const matchExpertDirect = path.match(/^(?:(?:\/home\/node\/|~\/)?Livrables)\/([^/]+)\/([^/]+\.(?:mp4|webm|mov|m4v))$/i);
-      if (matchExpertDirect) {
-        const [, expert, file] = matchExpertDirect;
-        candidates.push(
-          `Livrables/${expert}/videos/${file}`,
-          `Livrables/${expert}/Videos/${file}`,
-          `/home/node/Livrables/${expert}/videos/${file}`,
-          `/home/node/Livrables/${expert}/Videos/${file}`
-        );
-      }
-
-      // Cas 3 : Ancienne référence erronée Livrables/Videos/<file> -> rediriger dynamiquement vers l'expert actif
-      const matchRootVideo = path.match(/^(?:(?:\/home\/node\/|~\/)?Livrables)\/(?:videos|Videos)\/(.+)$/i);
-      if (matchRootVideo) {
-        const [, file] = matchRootVideo;
-        const profileParam = searchParams.get("profile");
-        const expertName = profileParam && profileParam !== "default"
-          ? profileParam.charAt(0).toUpperCase() + profileParam.slice(1)
-          : null;
-
-        if (expertName) {
-          candidates.push(
-            `Livrables/${expertName}/videos/${file}`,
-            `Livrables/${expertName}/Videos/${file}`,
-            `/home/node/Livrables/${expertName}/videos/${file}`,
-            `/home/node/Livrables/${expertName}/Videos/${file}`
-          );
-        }
-      }
-
-      for (const altPath of candidates) {
-        const altQs = new URLSearchParams(qs);
-        altQs.set("path", altPath);
-        const altUpstream = await instanceFetch(id, `/v1/files/content?${altQs.toString()}`);
-        if (altUpstream.ok) {
-          upstream = altUpstream;
-          break;
-        }
-      }
-    }
+    const upstream = await instanceFetch(id, `/v1/files/content?${qs.toString()}`, {
+      headers: reqHeaders,
+    });
 
     await assertUpstreamOk(upstream, "files/content", DOWNLOAD_FAILED, "download_error");
     if (!upstream.body) throw new ApiError(502, "download_error", DOWNLOAD_FAILED);
@@ -105,11 +54,15 @@ export async function GET(request: Request, { params }: Ctx) {
     if (cd) headers.set("Content-Disposition", cd);
     const cl = upstream.headers.get("Content-Length");
     if (cl) headers.set("Content-Length", cl);
+    const cr = upstream.headers.get("Content-Range");
+    if (cr) headers.set("Content-Range", cr);
+    const ar = upstream.headers.get("Accept-Ranges");
+    headers.set("Accept-Ranges", ar || "bytes");
     headers.set("Cache-Control", "no-store");
     headers.set("X-Content-Type-Options", "nosniff");
     if (!INERT_TYPE.test(ct ?? "")) headers.set("Content-Security-Policy", "sandbox");
 
-    return new Response(upstream.body, { status: 200, headers });
+    return new Response(upstream.body, { status: upstream.status, headers });
   } catch (e) {
     return handleError(e);
   }

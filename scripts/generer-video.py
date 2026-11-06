@@ -1,30 +1,31 @@
-#!/usr/bin/env python3
-"""
-Script utilitaire universel pour les Agents Yelema : Génération et rapatriement de vidéos MoneyPrinterTurbo.
-Utilisation :
-  python3 scripts/generer-video.py --sujet "3 conseils pour entrepreneurs" --aspect "9:16"
-"""
-
 import argparse
 import datetime
+import getpass
 import json
 import os
 import re
 import subprocess
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
 
 
+def remove_accents(text: str) -> str:
+    """Retire les accents pour aligner sur le nom de dossier ASCII (ex: Djénéba -> Djeneba)."""
+    nfkd = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
 def detect_expert() -> str:
-    """Détecte dynamiquement le vrai nom de l'expert courant (Fatima, Mamadou, Koffi, etc.)."""
+    """Détecte dynamiquement le vrai nom de l'expert courant (Fatima, Mamadou, Djeneba, etc.)."""
     # 1. Variables d'environnement injectées par le runtime
     for var in ("EXPERT_NAME", "HERMES_PROFILE", "PROFILE", "EXPERT", "AGENT_NAME", "HERMES_AGENT_NAME"):
         val = os.environ.get(var)
         if val and val.strip():
-            return val.strip().capitalize()
+            return remove_accents(val.strip()).capitalize()
 
     # 2. Lecture directe de SOUL.md dans le dossier courant ou les dossiers parents
     cwd = os.getcwd()
@@ -37,7 +38,7 @@ def detect_expert() -> str:
                     txt = f.read(600)
                     m = re.search(r"^name:\s*['\"]?([^'\"\r\n]+)", txt, re.MULTILINE)
                     if m and m.group(1).strip():
-                        return m.group(1).strip().capitalize()
+                        return remove_accents(m.group(1).strip()).capitalize()
             except Exception:
                 pass
         parent = os.path.dirname(curr)
@@ -46,7 +47,6 @@ def detect_expert() -> str:
         curr = parent
 
     # 3. Déduction par le chemin d'exécution (agents/<expert>, .hermes/profiles/<expert>, etc.)
-    import getpass
     system_reserved = {
         "workspace", "default", "node", "home", "root", "scripts", "skills", "shared", "videos",
         getpass.getuser().lower(),
@@ -63,7 +63,7 @@ def detect_expert() -> str:
         if m:
             val = m.group(1).lower()
             if val not in system_reserved and not val.startswith("."):
-                return m.group(1).capitalize()
+                return remove_accents(m.group(1)).capitalize()
 
     # 4. Fichier de profil actif Hermes s'il existe
     home = os.path.expanduser("~")
@@ -73,7 +73,7 @@ def detect_expert() -> str:
                 with open(active_f, "r", encoding="utf-8") as f:
                     name = f.read().strip()
                     if name:
-                        return name.capitalize()
+                        return remove_accents(name).capitalize()
             except Exception:
                 pass
 
@@ -95,13 +95,9 @@ def get_default_dest(expert: str, sujet: str) -> str:
     home = os.path.expanduser("~")
     expert_dir = os.path.join(home, "Livrables", expert)
 
-    # L'arborescence standard est ~/Livrables/<expert>/videos/
-    # Si le dossier 'videos' (ou 'Videos') n'existe pas, il doit être créé
-    videos_dir = os.path.join(expert_dir, "videos")
-    if not os.path.isdir(videos_dir) and os.path.isdir(os.path.join(expert_dir, "Videos")):
-        videos_dir = os.path.join(expert_dir, "Videos")
-    else:
-        os.makedirs(videos_dir, exist_ok=True)
+    # L'arborescence standard est ~/Livrables/<expert>/Videos/
+    videos_dir = os.path.join(expert_dir, "Videos")
+    os.makedirs(videos_dir, exist_ok=True)
 
     return os.path.join(videos_dir, filename)
 
@@ -180,7 +176,7 @@ def main():
     # Auto-démarrage si besoin
     ensure_server_running(api_url)
 
-    expert = args.expert or detect_expert()
+    expert = remove_accents(args.expert.strip()).capitalize() if args.expert else detect_expert()
     dest_path = args.sortie or get_default_dest(expert, args.sujet)
     dest_path = os.path.expanduser(dest_path)
 
@@ -209,7 +205,14 @@ def main():
         print(f"❌ Erreur lors de la connexion à MoneyPrinterTurbo ({api_url}) : {e}", file=sys.stderr)
         sys.exit(1)
 
-    task_id = init_res.get("task_id") or init_res.get("taskId")
+    task_id = None
+    if isinstance(init_res, dict):
+        data = init_res.get("data")
+        if isinstance(data, dict):
+            task_id = data.get("task_id") or data.get("taskId")
+        if not task_id:
+            task_id = init_res.get("task_id") or init_res.get("taskId")
+
     if not task_id:
         print(f"❌ Réponse inattendue du service : {init_res}", file=sys.stderr)
         sys.exit(1)
@@ -229,20 +232,36 @@ def main():
             print(f"⚠️ Erreur temporaire lors de la vérification : {e}")
             continue
 
-        raw_status = (status_res.get("status") or "").lower()
-        progress = status_res.get("progress", 0)
+        if not isinstance(status_res, dict):
+            continue
+
+        data = status_res.get("data") if isinstance(status_res.get("data"), dict) else status_res
+
+        # État MoneyPrinterTurbo : state = 1 (succès/terminé), -1 (échec), 4 (en cours)
+        state = data.get("state")
+        progress = data.get("progress") if data.get("progress") is not None else status_res.get("progress", 0)
+        videos = data.get("videos") or []
+        err_msg = data.get("error") or status_res.get("error") or ""
+
+        raw_status = status_res.get("status")
+        status_str = str(raw_status).lower() if isinstance(raw_status, str) else ""
 
         if progress != last_progress:
-            print(f"   Progression : {progress}% [{raw_status}]")
+            state_label = f"state={state}" if state is not None else status_str
+            print(f"   Progression : {progress}% [{state_label}]")
             last_progress = progress
 
-        if raw_status in ("completed", "success", "done"):
-            res_obj = status_res.get("result") or {}
-            video_url = res_obj.get("video_url") or status_res.get("video_url") or res_obj.get("file_path")
+        # Terminé avec succès (state == 1 ou statut textuel)
+        if state == 1 or status_str in ("completed", "success", "done"):
+            if videos and isinstance(videos, list) and len(videos) > 0:
+                video_url = videos[0]
+            else:
+                res_obj = data.get("result") or status_res.get("result") or {}
+                video_url = res_obj.get("video_url") or data.get("video_url") or status_res.get("video_url") or res_obj.get("file_path")
             break
-        elif raw_status in ("failed", "error"):
-            err_msg = status_res.get("error") or "Erreur inconnue"
-            print(f"❌ La génération a échoué : {err_msg}", file=sys.stderr)
+        # Échec de la tâche (state == -1 ou statut failed/error)
+        elif state == -1 or status_str in ("failed", "error"):
+            print(f"❌ La génération a échoué : {err_msg or 'Erreur inconnue'}", file=sys.stderr)
             sys.exit(1)
 
     if not video_url:
@@ -255,7 +274,7 @@ def main():
 
     print(f"📥 Rapatriement de la vidéo depuis : {video_url}")
 
-    # 3. Téléchargement vers ~/Livrables
+    # 3. Téléchargement vers ~/Livrables/<expert>/Videos/
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
 
     try:
@@ -266,27 +285,6 @@ def main():
     except Exception as e:
         print(f"❌ Échec du téléchargement du fichier vidéo : {e}", file=sys.stderr)
         sys.exit(1)
-
-    # Synchronisation immédiate dans l'arborescence de l'expert (Livrables/<expert>/videos/)
-    home = os.path.expanduser("~")
-    filename = os.path.basename(dest_path)
-    expert_dir = os.path.join(home, "Livrables", expert)
-    alt_paths = [
-        os.path.join(expert_dir, "videos", filename),
-        os.path.join(expert_dir, "Videos", filename),
-        os.path.join(expert_dir, filename)
-    ]
-    for alt in alt_paths:
-        try:
-            if alt != dest_path and not os.path.exists(alt):
-                os.makedirs(os.path.dirname(alt), exist_ok=True)
-                try:
-                    os.link(dest_path, alt)
-                except Exception:
-                    import shutil
-                    shutil.copy2(dest_path, alt)
-        except Exception:
-            pass
 
     size_mb = os.path.getsize(dest_path) / (1024 * 1024)
     print(f"✅ Vidéo enregistrée dans vos Livrables !")

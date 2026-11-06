@@ -150,6 +150,7 @@ function buildHeaders(config: MoneyPrinterConfig): HeadersInit {
 
 /**
  * Déclenche une tâche de génération vidéo sur MoneyPrinterTurbo.
+ * Réponse officielle upstream FastAPI : {"status": 200, "data": {"task_id": "..."}}
  */
 export async function createVideoTask(
   params: GenerateVideoParams,
@@ -198,8 +199,9 @@ export async function createVideoTask(
       throw new MoneyPrinterError(res.status >= 500 ? 502 : res.status, "upstream_error", message);
     }
 
-    const data = (await res.json()) as { task_id?: string; taskId?: string; status?: string };
-    const taskId = data.task_id || data.taskId;
+    const resJson = (await res.json()) as Record<string, unknown>;
+    const dataObj = (typeof resJson.data === "object" && resJson.data !== null ? resJson.data : resJson) as Record<string, unknown>;
+    const taskId = (dataObj.task_id || dataObj.taskId || resJson.task_id || resJson.taskId) as string | undefined;
 
     if (!taskId) {
       throw new MoneyPrinterError(502, "invalid_response", "Réponse incomplète du service vidéo (task_id manquant).");
@@ -207,7 +209,7 @@ export async function createVideoTask(
 
     return {
       taskId,
-      status: (data.status as TaskStatus) || "processing",
+      status: "processing",
     };
   } catch (e) {
     if (e instanceof MoneyPrinterError) throw e;
@@ -218,6 +220,9 @@ export async function createVideoTask(
 
 /**
  * Récupère l'état et l'avancement d'une tâche vidéo.
+ * Réponse officielle upstream FastAPI :
+ * {"status": 200, "data": {"state": 1, "progress": 100, "videos": [".../final-1.mp4"]}}
+ * state: 1 = complete, -1 = failed, 0 = queued/pending, 4 = processing/running.
  */
 export async function getVideoTaskStatus(
   taskId: string,
@@ -250,16 +255,21 @@ export async function getVideoTaskStatus(
       throw new MoneyPrinterError(res.status >= 500 ? 502 : res.status, "upstream_error", "Erreur lors de la vérification de la tâche.");
     }
 
-    const data = (await res.json()) as {
-      status?: string;
-      progress?: number;
-      result?: { video_url?: string; file_path?: string };
-      video_url?: string;
-      error?: string;
-    };
+    const resJson = (await res.json()) as Record<string, unknown>;
+    const dataObj = (typeof resJson.data === "object" && resJson.data !== null ? resJson.data : resJson) as Record<string, unknown>;
+
+    const state = typeof dataObj.state === "number" ? dataObj.state : undefined;
+    const progressRaw = typeof dataObj.progress === "number" ? dataObj.progress : (typeof resJson.progress === "number" ? resJson.progress : undefined);
+    const videos = Array.isArray(dataObj.videos) ? (dataObj.videos as string[]) : [];
+    const errorMsg = (dataObj.error || resJson.error || null) as string | null;
+
+    let rawUrl: string | undefined = videos.length > 0 ? videos[0] : undefined;
+    if (!rawUrl) {
+      const resultObj = (dataObj.result || resJson.result || {}) as Record<string, unknown>;
+      rawUrl = (resultObj.video_url || dataObj.video_url || resJson.video_url || resultObj.file_path) as string | undefined;
+    }
 
     let resolvedUrl: string | null = null;
-    const rawUrl = data.result?.video_url || data.video_url || data.result?.file_path;
     if (rawUrl) {
       if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
         resolvedUrl = rawUrl;
@@ -269,21 +279,21 @@ export async function getVideoTaskStatus(
     }
 
     let status: TaskStatus = "processing";
-    const rawStatus = (data.status || "").toLowerCase();
-    if (rawStatus === "completed" || rawStatus === "success" || rawStatus === "done") {
+    const rawStatus = typeof resJson.status === "string" ? resJson.status.toLowerCase() : "";
+    if (state === 1 || rawStatus === "completed" || rawStatus === "success" || rawStatus === "done") {
       status = "completed";
-    } else if (rawStatus === "failed" || rawStatus === "error") {
+    } else if (state === -1 || rawStatus === "failed" || rawStatus === "error") {
       status = "failed";
-    } else if (rawStatus === "pending" || rawStatus === "queued") {
+    } else if (state === 0 || rawStatus === "pending" || rawStatus === "queued") {
       status = "pending";
     }
 
     return {
       taskId: cleanId,
       status,
-      progress: Math.min(100, Math.max(0, data.progress ?? (status === "completed" ? 100 : 0))),
+      progress: Math.min(100, Math.max(0, progressRaw ?? (status === "completed" ? 100 : 0))),
       videoUrl: resolvedUrl,
-      error: data.error || null,
+      error: errorMsg,
     };
   } catch (e) {
     if (e instanceof MoneyPrinterError) throw e;
@@ -332,8 +342,9 @@ export async function generateVideoScript(
       throw new MoneyPrinterError(res.status >= 500 ? 502 : res.status, "upstream_error", "Erreur lors de la génération du script.");
     }
 
-    const data = (await res.json()) as { video_script?: string; script?: string };
-    const script = data.video_script || data.script;
+    const resJson = (await res.json()) as Record<string, unknown>;
+    const dataObj = (typeof resJson.data === "object" && resJson.data !== null ? resJson.data : resJson) as Record<string, unknown>;
+    const script = (dataObj.video_script || dataObj.script || resJson.video_script || resJson.script) as string | undefined;
     if (!script) {
       throw new MoneyPrinterError(502, "invalid_response", "Réponse incomplète du service (script manquant).");
     }
