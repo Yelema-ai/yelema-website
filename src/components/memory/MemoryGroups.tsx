@@ -93,7 +93,10 @@ function Item({ item, onToggle, onRemove, onNewVersion }: { item: MemoryItem } &
           </p>
         </div>
         <div className="flex items-center gap-1">
-          <Badge variant={item.active ? STATUS[item.status].variant : "muted"}>{item.active ? STATUS[item.status].label : "Désactivé"}</Badge>
+          {/* Read by the Experts is the normal case: only what differs is said (Leslie, 06/11). */}
+          {(!item.active || item.status !== "synced") && (
+            <Badge variant={item.active ? STATUS[item.status].variant : "muted"}>{item.active ? STATUS[item.status].label : "Désactivé"}</Badge>
+          )}
           {/* Its two actions in a « … » menu, as on the other lists: not two buttons on every row. */}
           {item.canEdit && (
             <DropdownMenu modal={false}>
