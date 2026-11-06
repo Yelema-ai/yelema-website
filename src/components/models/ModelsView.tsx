@@ -153,7 +153,7 @@ function InstancePicker({ mine, others, value, onChange }: { mine: boolean; othe
       value={value.kind === "member" ? value.id : "own"}
       onChange={(v) => onChange(v === "own" ? { kind: "own" } : { kind: "member", id: v })}
       groups={[{ options }]}
-      className="max-w-[14rem]"
+      className="max-w-[14rem] sm:h-8"
     />
   );
 }
