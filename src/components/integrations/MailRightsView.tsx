@@ -10,7 +10,6 @@ import { useCatalogue } from "@/components/experts/useCatalogue";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { Badge } from "@/components/ui/badge";
-import { Picker } from "@/components/ui/picker";
 import { cn } from "@/lib/utils";
 
 // Who may have each expert write e-mails: one line per expert, on one page, filtered (Leslie, 04/11).
@@ -19,21 +18,12 @@ import { cn } from "@/lib/utils";
 
 const STATUS: Record<"pending" | "suspended", string> = { pending: "En création", suspended: "Suspendue" };
 
-type Filter = "all" | "send" | "off" | "external" | "some";
-const FILTERS: { key: Filter; label: string; keep: (i: MailRights) => boolean }[] = [
-  { key: "all", label: "Tous", keep: () => true },
-  { key: "send", label: "Peuvent écrire", keep: (i) => i.sendEnabled },
-  { key: "off", label: "N’écrivent pas", keep: (i) => !i.sendEnabled },
-  { key: "external", label: "Hors de l’entreprise", keep: (i) => i.sendEnabled && i.externalAllowed },
-  { key: "some", label: "Certains membres", keep: (i) => i.senders.length > 0 },
-];
 const ALL_CYCLES = "*";
 
 export function MailRightsView() {
   const [inboxes, setInboxes] = useState<MailRights[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>("all");
   const [cycle, setCycle] = useState(ALL_CYCLES);
   const [query, setQuery] = useState("");
   const [opened, setOpened] = useState<string | null>(null);
@@ -60,13 +50,23 @@ export function MailRightsView() {
     }
   }
 
-  const cycles = [...new Map((inboxes ?? []).flatMap((i) => { const c = entry(i.expert)?.category; return c ? [[c.key, c.label] as const] : []; })).entries()];
   const q = query.trim().toLowerCase();
-  const inCycleAndSearch = (inboxes ?? []).filter(
-    (i) => (cycle === ALL_CYCLES || entry(i.expert)?.category?.key === cycle) && (!q || nameOf(i.expert).toLowerCase().includes(q) || (i.address ?? "").toLowerCase().includes(q))
-  );
-  const keep = FILTERS.find((f) => f.key === filter)!.keep;
-  const shown = inCycleAndSearch.filter(keep);
+  const found = (inboxes ?? []).filter((i) => !q || nameOf(i.expert).toLowerCase().includes(q) || (i.address ?? "").toLowerCase().includes(q));
+  // One block per cycle, in the catalogue's order (Leslie, 06/11: by cycle, with faces, not one long list).
+  const order = (key: string) => {
+    const i = catalogue.experts.findIndex((e) => e.key === key);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  const groups = [...found]
+    .sort((a, b) => order(a.expert) - order(b.expert))
+    .reduce<{ key: string; label: string; items: MailRights[] }[]>((acc, i) => {
+      const c = entry(i.expert)?.category;
+      const key = c?.key ?? "_";
+      const g = acc.find((x) => x.key === key) ?? (acc.push({ key, label: c?.label ?? "Autres", items: [] }), acc[acc.length - 1]!);
+      g.items.push(i);
+      return acc;
+    }, []);
+  const writing = (inboxes ?? []).filter((i) => i.sendEnabled).length;
 
   return (
     <div className="max-w-5xl">
@@ -78,7 +78,7 @@ export function MailRightsView() {
 
       {inboxes && inboxes.length > 0 && (
         <>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
             <label className="relative block min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" aria-hidden />
               <input
@@ -87,66 +87,81 @@ export function MailRightsView() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Chercher un Expert"
                 aria-label="Chercher un Expert"
-                className="h-11 w-full rounded-[12px] border border-line bg-surface pl-10 pr-3 text-sm text-ink outline-none placeholder:text-ink-3 focus:border-brand/40"
+                className="h-11 w-full rounded-full border border-line bg-surface pl-10 pr-3 text-sm text-ink outline-none placeholder:text-ink-3 focus:border-brand/40"
               />
             </label>
-            {cycles.length > 1 && (
-              <Picker
-                label="Cycle"
-                placeholder="Tous les cycles"
-                value={cycle}
-                onChange={setCycle}
-                className="sm:w-56"
-                groups={[{ options: [{ value: ALL_CYCLES, label: "Tous les cycles" }, ...cycles.map(([value, label]) => ({ value, label }))] }]}
-              />
-            )}
+            <span className="shrink-0 text-sm text-ink-3">
+              {inboxes.length} Experts, {writing} écri{writing > 1 ? "vent" : "t"}
+            </span>
           </div>
 
-          <div role="group" aria-label="Filtrer les Experts" className="mt-3 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {FILTERS.map((f) => {
-              const on = filter === f.key;
-              return (
-                <button
-                  key={f.key}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => setFilter(f.key)}
-                  className={cn("inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold transition-colors", on ? "border-ink bg-ink text-surface" : "border-line bg-surface text-ink-2 hover:bg-soft")}
-                >
-                  {f.label}
-                  <span className={cn("tabular-nums", on ? "opacity-70" : "text-ink-3")}>{inCycleAndSearch.filter(f.keep).length}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-3 overflow-hidden rounded-[18px] border border-line bg-surface">
-            <div className="hidden grid-cols-[minmax(0,1fr)_72px_110px_190px] gap-4 border-b border-line px-5 py-2.5 text-xs font-semibold text-ink-3 md:grid">
-              <span>Expert</span>
-              <span>Écrit</span>
-              <span>Hors de l’entreprise</span>
-              <span>À la demande de</span>
-            </div>
+          <div className="mt-3 overflow-hidden rounded-[22px] border border-line bg-surface">
             <ul className="divide-y divide-line">
-              {shown.map((inbox) => (
-                <InboxRow
-                  key={inbox.expert}
-                  inbox={inbox}
-                  name={nameOf(inbox.expert)}
-                  photoUrl={entry(inbox.expert)?.avatarUrl ?? null}
-                  saving={saving === inbox.expert}
-                  open={opened === inbox.expert}
-                  onToggle={() => setOpened((o) => (o === inbox.expert ? null : inbox.expert))}
-                  onSave={(patch) => void save(inbox, patch)}
-                />
-              ))}
-              {shown.length === 0 && <li className="px-5 py-8 text-center text-sm text-ink-3">Aucun Expert ne correspond.</li>}
+              {groups.map((g) => {
+                const open = q.length > 0 || cycle === g.key;
+                return (
+                  <li key={g.key}>
+                    <button
+                      type="button"
+                      aria-expanded={open}
+                      onClick={() => setCycle((c) => (c === g.key ? ALL_CYCLES : g.key))}
+                      className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left hover:bg-soft/50 md:gap-4 md:px-6"
+                    >
+                      <span className="w-32 shrink-0 text-[15px] font-bold text-ink md:w-44">{g.label}</span>
+                      <span className="flex shrink-0 -space-x-2">
+                        {g.items.slice(0, 4).map((i) => (
+                          <ExpertAvatar key={i.expert} expert={{ displayName: nameOf(i.expert), gateway: null, photoUrl: entry(i.expert)?.avatarUrl ?? null }} size="xs" className="rounded-full ring-2 ring-surface" />
+                        ))}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-ink-3 max-sm:hidden">{summary(g.items)}</span>
+                      <ChevronDown className={cn("ml-auto h-4 w-4 shrink-0 text-ink-3 transition-transform", open && "rotate-180")} />
+                    </button>
+                    {open && (
+                      <div className="border-t border-line bg-soft/40">
+                        <p className="px-4 pt-2 text-[13px] text-ink-3 sm:hidden">{summary(g.items)}</p>
+                        <div className="hidden grid-cols-[minmax(0,1fr)_72px_110px_190px] gap-4 px-5 pt-2.5 text-xs font-semibold text-ink-3 md:grid">
+                          <span>Expert</span>
+                          <span>Écrit</span>
+                          <span>Hors de l’entreprise</span>
+                          <span>À la demande de</span>
+                        </div>
+                        <ul className="divide-y divide-line">
+                          {g.items.map((inbox) => (
+                            <InboxRow
+                              key={inbox.expert}
+                              inbox={inbox}
+                              name={nameOf(inbox.expert)}
+                              photoUrl={entry(inbox.expert)?.avatarUrl ?? null}
+                              saving={saving === inbox.expert}
+                              open={opened === inbox.expert}
+                              onToggle={() => setOpened((o) => (o === inbox.expert ? null : inbox.expert))}
+                              onSave={(patch) => void save(inbox, patch)}
+                            />
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+              {groups.length === 0 && <li className="px-5 py-8 text-center text-sm text-ink-3">Aucun Expert ne correspond.</li>}
             </ul>
           </div>
         </>
       )}
     </div>
   );
+}
+
+// « 2 sur 3 écrivent, 1 hors de l’entreprise, 1 en création » ; one Expert: « Écrit » or « N’écrit pas ».
+function summary(items: MailRights[]): string {
+  const w = items.filter((i) => i.sendEnabled).length;
+  const out = items.filter((i) => i.sendEnabled && i.externalAllowed).length;
+  const pending = items.filter((i) => i.status === "pending").length;
+  const parts = [items.length === 1 ? (w ? "Écrit" : "N’écrit pas") : `${w} sur ${items.length} écri${w > 1 ? "vent" : "t"}`];
+  if (out) parts.push(items.length === 1 ? "hors de l’entreprise" : `${out} hors de l’entreprise`);
+  if (pending) parts.push(items.length === 1 ? "en création" : `${pending} en création`);
+  return parts.join(", ");
 }
 
 function InboxRow({ inbox, name, photoUrl, saving, open, onToggle, onSave }: {
