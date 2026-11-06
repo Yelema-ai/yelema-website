@@ -8,20 +8,28 @@ export function EssentialTile({
   title,
   line,
   done,
+  empty = false,
+  media,
   children,
 }: {
   icon: React.ReactNode;
   title: string;
   line: React.ReactNode;
   done: boolean;
+  /** Nothing there yet: the tile is drawn in dashes, so the gap shows (Leslie, 06/11). */
+  empty?: boolean;
+  /** In place of the icon square: thumbnails (the logos). */
+  media?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   return (
-    <section className="flex min-w-0 flex-col gap-3 rounded-[18px] border border-line bg-surface p-4">
+    <section className={cn("flex min-w-0 flex-col gap-3 rounded-[18px] bg-surface p-4", empty ? "border-2 border-dashed border-brand/30" : "border border-line")}>
       <div className="flex min-w-0 items-center gap-3">
-        <span className="relative grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-tint text-brand-ink">
-          {icon}
-        </span>
+        {media ?? (
+          <span className="relative grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-tint text-brand-ink">
+            {icon}
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           <h3 className="flex items-center gap-1.5 text-[15px] font-bold text-ink">
             {title}

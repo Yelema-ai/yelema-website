@@ -317,7 +317,7 @@ export function MemoryView({
           )}
           {adding === "documents" && (
             <div>
-              <p className="text-[13px] text-ink-3">PDF, texte ou JSON, 5 Mo au plus chacun.</p>
+              <p className="text-[13px] text-ink-3">PDF, texte ou JSON, 4 Mo au plus chacun.</p>
               {files.length > 0 && (
                 <ul className="mt-2 space-y-1">
                   {files.map((f, i) => (
@@ -395,11 +395,18 @@ export function MemoryView({
         </DialogContent>
       </Dialog>
 
-      {list?.items.length === 0 && <p className="mt-6 rounded-[22px] border border-line bg-surface p-8 text-center text-sm text-ink-3">La mémoire est vide pour l’instant.</p>}
+      {list && list.items.length === 0 && targets.length === 0 && (
+        <p className="mt-6 rounded-[22px] border border-line bg-surface p-8 text-center text-sm text-ink-3">La mémoire est vide pour l’instant.</p>
+      )}
 
-      {list && list.items.length > 0 && (
+      {list && (list.items.length > 0 || targets.length > 0) && (
         <MemoryGroups
           list={list}
+          onAdd={(unitId, kind) => {
+            setUnit(unitId ?? ALL);
+            setAdding(kind);
+            if (kind === "documents") picker.current?.click();
+          }}
           onToggle={(item) => void patch(item, { active: !item.active })}
           onRemove={setRemoving}
           onNewVersion={(item) => {

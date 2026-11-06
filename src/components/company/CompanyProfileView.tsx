@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Building2, ImageIcon, Loader2 } from "lucide-react";
+import { Building2, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
-import { PRESENTATION_TITLE, type CompanyProfile } from "@/lib/company";
+import { companyLogos, PRESENTATION_TITLE, type CompanyProfile } from "@/lib/company";
 import { CompanyLogos } from "./CompanyLogos";
 import { MemoryView } from "@/components/memory/MemoryView";
 import { useWorkspace } from "@/components/WorkspaceProvider";
@@ -65,15 +65,32 @@ export function CompanyProfileView() {
       toast.success("Présentation déposée dans la mémoire de l’entreprise.");
     });
 
+  // Several logos may be kept (light, dark, square, long): their thumbnails, the main one first, and
+  // « Gérer » to add one, pick the main one or remove one. None yet: a dashed tile (Leslie, 06/11).
+  const logoList = profile ? companyLogos(profile) : [];
   const logoTile = admin && profile && (
     <EssentialTile
-      icon={profile.logoUrl ? <img src={profile.logoUrl} alt="" className="size-full bg-white object-contain p-1" /> : <ImageIcon className="h-5 w-5" />}
-      title="Logo"
+      icon={<Plus className="h-5 w-5" />}
+      empty={logoList.length === 0}
+      media={
+        logoList.length > 0 ? (
+          <span className="flex shrink-0 items-center -space-x-3">
+            {logoList.slice(0, 2).map((l) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={l.id} src={l.url} alt="" className="size-11 rounded-xl border-2 border-surface bg-white object-contain p-1 shadow-sm" />
+            ))}
+            {logoList.length > 2 && (
+              <span className="grid size-11 place-items-center rounded-xl border-2 border-surface bg-soft text-[13px] font-semibold text-ink-2">+{logoList.length - 2}</span>
+            )}
+          </span>
+        ) : undefined
+      }
+      title={logoList.length > 1 ? "Logos" : "Logo"}
       done={profile.logo}
-      line={profile.logo ? "Logo principal" : "Clair, sombre, carré ou long"}
+      line={logoList.length > 1 ? `${logoList.length} versions` : logoList.length ? "Logo principal" : "Pas encore ajouté"}
     >
-      <Button variant="outline" size="sm" onClick={() => setLogos(true)}>
-        {profile.logo ? "Changer" : "Ajouter"}
+      <Button variant={logoList.length ? "outline" : "default"} size="sm" onClick={() => setLogos(true)}>
+        {logoList.length ? "Gérer" : "Ajouter"}
       </Button>
     </EssentialTile>
   );
@@ -99,7 +116,7 @@ export function CompanyProfileView() {
         <Dialog open={logos} onOpenChange={setLogos}>
           <DialogContent className="max-w-2xl">
             <DialogTitle>Logo</DialogTitle>
-            <DialogDescription>Toutes ses versions : claire, sombre, carrée, longue. Le logo principal s’affiche dans votre espace et sur la page de connexion. PNG, JPEG ou WebP, 5 Mo au plus.</DialogDescription>
+            <DialogDescription>Toutes ses versions : claire, sombre, carrée, longue. Le logo principal s’affiche dans votre espace et sur la page de connexion. PNG, JPEG ou WebP, 4 Mo au plus.</DialogDescription>
             <CompanyLogos profile={profile} onProfile={setProfile} />
           </DialogContent>
         </Dialog>
