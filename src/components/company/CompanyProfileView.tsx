@@ -70,7 +70,7 @@ export function CompanyProfileView() {
       icon={profile.logoUrl ? <img src={profile.logoUrl} alt="" className="size-full bg-white object-contain p-1" /> : <ImageIcon className="h-5 w-5" />}
       title="Logo"
       done={profile.logo}
-      line={profile.logo ? "Dans votre espace et à la connexion" : "Clair, sombre, carré ou long"}
+      line={profile.logo ? "Logo principal" : "Clair, sombre, carré ou long"}
     >
       <Button variant="outline" size="sm" onClick={() => setLogos(true)}>
         {profile.logo ? "Changer" : "Ajouter"}
