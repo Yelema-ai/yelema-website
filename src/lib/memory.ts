@@ -127,8 +127,11 @@ export interface MemoryGroup {
   items: MemoryItem[];
 }
 
-/** The deposits by compartment: the whole company first, then the units in the order given; empty ones left out. */
-export function groupByUnit(items: MemoryItem[], units: { id: string; name: string }[]): MemoryGroup[] {
+/**
+ * The deposits by compartment: the whole company first, then the units in the order given. Empty ones are
+ * left out, unless `keepEmpty`: then every unit given shows, so a department with nothing yet is seen.
+ */
+export function groupByUnit(items: MemoryItem[], units: { id: string; name: string }[], keepEmpty = false): MemoryGroup[] {
   const groups: MemoryGroup[] = [{ unit: null, name: "Toute l’entreprise", items: [] }, ...units.map((u) => ({ unit: u.id, name: u.name, items: [] as MemoryItem[] }))];
   const byId = new Map(groups.map((g) => [g.unit, g]));
   for (const item of items) {
@@ -140,5 +143,5 @@ export function groupByUnit(items: MemoryItem[], units: { id: string; name: stri
     }
     group.items.push(item);
   }
-  return groups.filter((g) => g.items.length > 0);
+  return groups.filter((g) => g.items.length > 0 || (keepEmpty && g.name !== "Département"));
 }
