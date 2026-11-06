@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, MessagesSquare } from "lucide-react";
+import { ChevronDown, Loader2, MessagesSquare } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { TelegramTopicsResult } from "@/lib/channels";
@@ -21,15 +21,23 @@ export function TelegramTopics({
   telegramConnected: boolean | null;
 }) {
   // The experts that get a topic: the profiles of this instance.
-  const experts = useExpertsContext().experts.filter((e) => e.agentId === agentId);
+  const experts = useExpertsContext().experts.filter(
+    (e) => e.agentId === agentId,
+  );
   const [busy, setBusy] = useState(false);
+  const [howTo, setHowTo] = useState(false);
   const [result, setResult] = useState<TelegramTopicsResult | null>(null);
 
   async function create() {
     setBusy(true);
     setResult(null);
     try {
-      setResult(await apiFetch<TelegramTopicsResult>(`/api/agents/${agentId}/channels/telegram/topics`, { method: "POST" }));
+      setResult(
+        await apiFetch<TelegramTopicsResult>(
+          `/api/agents/${agentId}/channels/telegram/topics`,
+          { method: "POST" },
+        ),
+      );
     } catch (e) {
       setResult({ ok: false, message: (e as Error).message, output: "" });
     } finally {
@@ -44,46 +52,76 @@ export function TelegramTopics({
           <MessagesSquare className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <h3 className="font-display text-lg font-bold text-ink">Un sujet par expert</h3>
+          <h3 className="font-display text-lg font-bold text-ink">
+            Un sujet par expert
+          </h3>
           <p className="mt-1 text-sm text-ink-3">
-            Dans un groupe Telegram, chaque Expert a son propre sujet : vous lui écrivez là, il vous répond au même
-            endroit.
+            Dans un groupe Telegram, chaque Expert a son sujet.
           </p>
         </div>
       </div>
 
       <div className="mt-4 flex -space-x-2" aria-hidden="true">
         {experts.map((e) => (
-          <ExpertAvatar key={e.profileId} expert={{ ...e, gateway: null }} size="xs" className="rounded-full ring-2 ring-card" />
+          <ExpertAvatar
+            key={e.profileId}
+            expert={{ ...e, gateway: null }}
+            size="xs"
+            className="rounded-full ring-2 ring-card"
+          />
         ))}
       </div>
 
-      <div className="mt-5 rounded-2xl bg-soft p-4">
-        <Steps
-          items={[
-            <>
-              Dans Telegram, créez un groupe (<span className="font-semibold text-ink">Nouveau groupe</span>) et
-              ajoutez-y votre bot.
-            </>,
-            <>
-              Ouvrez les paramètres du groupe : touchez son nom puis{" "}
-              <span className="font-semibold text-ink">Modifier</span> sur téléphone, ou{" "}
-              <span className="font-semibold text-ink">⋮</span> puis{" "}
-              <span className="font-semibold text-ink">Gérer le groupe</span> sur ordinateur. Activez{" "}
-              <span className="font-semibold text-ink">Sujets</span>.
-            </>,
-            <>
-              Toujours dans les paramètres, ouvrez <span className="font-semibold text-ink">Administrateurs</span>,
-              ajoutez votre bot et laissez-lui le droit <span className="font-semibold text-ink">Gérer les sujets</span>.
-            </>,
-            <>
-              Depuis votre compte (celui qui a écrit au bot), envoyez{" "}
-              <code className="rounded bg-card px-1 font-mono text-[13px] text-ink">/sethome</code> dans le sujet{" "}
-              <span className="font-semibold text-ink">Général</span> du groupe. Le bot répond pour confirmer.
-            </>,
-          ]}
+      {/* The four Telegram steps folded behind « Comment faire » (Leslie, 06/11: the page was too heavy). */}
+      <button
+        type="button"
+        aria-expanded={howTo}
+        onClick={() => setHowTo((v) => !v)}
+        className="mt-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink"
+      >
+        Comment faire (4 étapes)
+        <ChevronDown
+          className={cn("h-4 w-4 transition-transform", howTo && "rotate-180")}
         />
-      </div>
+      </button>
+      {howTo && (
+        <div className="mt-1 rounded-2xl bg-soft p-4">
+          <Steps
+            items={[
+              <>
+                Dans Telegram, créez un groupe (
+                <span className="font-semibold text-ink">Nouveau groupe</span>)
+                et ajoutez-y votre bot.
+              </>,
+              <>
+                Ouvrez les paramètres du groupe : touchez son nom puis{" "}
+                <span className="font-semibold text-ink">Modifier</span> sur
+                téléphone, ou <span className="font-semibold text-ink">⋮</span>{" "}
+                puis{" "}
+                <span className="font-semibold text-ink">Gérer le groupe</span>{" "}
+                sur ordinateur. Activez{" "}
+                <span className="font-semibold text-ink">Sujets</span>.
+              </>,
+              <>
+                Toujours dans les paramètres, ouvrez{" "}
+                <span className="font-semibold text-ink">Administrateurs</span>,
+                ajoutez votre bot et laissez-lui le droit{" "}
+                <span className="font-semibold text-ink">Gérer les sujets</span>
+                .
+              </>,
+              <>
+                Depuis votre compte (celui qui a écrit au bot), envoyez{" "}
+                <code className="rounded bg-card px-1 font-mono text-[13px] text-ink">
+                  /sethome
+                </code>{" "}
+                dans le sujet{" "}
+                <span className="font-semibold text-ink">Général</span> du
+                groupe. Le bot répond pour confirmer.
+              </>,
+            ]}
+          />
+        </div>
+      )}
 
       <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
         <Button onClick={create} disabled={busy || telegramConnected !== true}>
@@ -95,19 +133,24 @@ export function TelegramTopics({
             ? "Connectez d’abord Telegram ci-dessus."
             : busy
               ? "Cela peut prendre une minute."
-              : "Vous pouvez relancer à tout moment : les sujets déjà créés sont gardés."}
+              : null}
         </span>
       </div>
 
       {result && (
         <div
           role="status"
-          className={cn("mt-4 rounded-xl px-4 py-3 text-sm", result.ok ? "bg-ok-pale text-ok" : "bg-ko-pale text-ko")}
+          className={cn(
+            "mt-4 rounded-xl px-4 py-3 text-sm",
+            result.ok ? "bg-ok-pale text-ok" : "bg-ko-pale text-ko",
+          )}
         >
           <p className="font-semibold">{result.message}</p>
           {!result.ok && result.output && (
             <details className="mt-2 text-xs text-ink-2">
-              <summary className="cursor-pointer select-none">Voir le détail</summary>
+              <summary className="cursor-pointer select-none">
+                Voir le détail
+              </summary>
               <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-card p-3 font-mono text-[11px]">
                 {result.output}
               </pre>
@@ -125,7 +168,9 @@ function Steps({ items }: { items: React.ReactNode[] }) {
     <ol className="space-y-2.5">
       {items.map((item, i) => (
         <li key={i} className="flex gap-3 text-sm leading-relaxed text-ink-2">
-          <span className="grid size-6 shrink-0 place-items-center rounded-full bg-card text-xs font-bold text-ink">{i + 1}</span>
+          <span className="grid size-6 shrink-0 place-items-center rounded-full bg-card text-xs font-bold text-ink">
+            {i + 1}
+          </span>
           <span className="min-w-0">{item}</span>
         </li>
       ))}
