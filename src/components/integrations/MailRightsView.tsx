@@ -11,6 +11,7 @@ import { useWorkspace } from "@/components/WorkspaceProvider";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { catalogueCycle, expertRank, isDjeneba } from "@/lib/expert-cycle";
 
 // Who may have each expert write e-mails: one line per expert, on one page, filtered (Leslie, 04/11).
 // Three settings that add up: the expert may send at all, it may write outside the company, and only
@@ -52,17 +53,15 @@ export function MailRightsView() {
 
   const q = query.trim().toLowerCase();
   const found = (inboxes ?? []).filter((i) => !q || nameOf(i.expert).toLowerCase().includes(q) || (i.address ?? "").toLowerCase().includes(q));
-  // One block per cycle, in the catalogue's order (Leslie, 06/11: by cycle, with faces, not one long list).
-  const order = (key: string) => {
-    const i = catalogue.experts.findIndex((e) => e.key === key);
-    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
-  };
+  // One block per cycle, as in the menu: Direction (Djénéba) first, then the cycles in the catalogue's order
+  // (Leslie, 06/11: by cycle, with faces, not one long list).
+  const who = (key: string) => ({ profileId: key, catalogueKey: key, cycle: entry(key)?.category ?? null });
+  const cycleOf = (key: string) => (isDjeneba(who(key)) ? { key: "direction", label: "Direction" } : (catalogueCycle(who(key), entry(key)?.category ?? null) ?? { key: "_", label: "Autres" }));
   const groups = [...found]
-    .sort((a, b) => order(a.expert) - order(b.expert))
+    .sort((a, b) => expertRank(who(a.expert)) - expertRank(who(b.expert)))
     .reduce<{ key: string; label: string; items: MailRights[] }[]>((acc, i) => {
-      const c = entry(i.expert)?.category;
-      const key = c?.key ?? "_";
-      const g = acc.find((x) => x.key === key) ?? (acc.push({ key, label: c?.label ?? "Autres", items: [] }), acc[acc.length - 1]!);
+      const c = cycleOf(i.expert);
+      const g = acc.find((x) => x.key === c.key) ?? (acc.push({ ...c, items: [] }), acc[acc.length - 1]!);
       g.items.push(i);
       return acc;
     }, []);
