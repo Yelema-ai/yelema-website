@@ -317,7 +317,7 @@ export function MemoryView({
           )}
           {adding === "documents" && (
             <div>
-              <p className="text-[13px] text-ink-3">PDF, texte ou JSON, 4 Mo au plus chacun.</p>
+              <p className="text-[13px] text-ink-3">PDF ou texte, 4 Mo au plus chacun.</p>
               {files.length > 0 && (
                 <ul className="mt-2 space-y-1">
                   {files.map((f, i) => (
