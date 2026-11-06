@@ -121,6 +121,8 @@ export function DepartmentCard({
           )}
           <h2 className="font-display text-[19px] font-bold leading-snug text-ink [overflow-wrap:anywhere]">{unit.name}</h2>
         </div>
+        {/* Adding is a « + » beside « … », not a wide button repeated in every card (Leslie, 06/11). */}
+        {editable && <AddMenu org={org} unit={unit} people={people} experts={experts} />}
         {editable && (
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
@@ -157,11 +159,6 @@ export function DepartmentCard({
         </ul>
       )}
 
-      {editable && (
-        <div className="mt-auto pt-3">
-          <AddMenu org={org} unit={unit} people={people} experts={experts} />
-        </div>
-      )}
     </section>
   );
 }
@@ -176,13 +173,14 @@ function AddMenu({ org, unit, people, experts }: { org: Org; unit: OrgUnit; peop
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label={`Ajouter à ${unit.name}`}
-          className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line text-[13px] font-semibold text-ink-2 hover:border-brand/40 hover:bg-soft hover:text-ink"
+          aria-label={`Ajouter une personne ou un Expert à ${unit.name}`}
+          title="Ajouter une personne ou un Expert"
+          className="grid size-9 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-soft hover:text-ink"
         >
-          <Plus className="size-4" /> Ajouter une personne ou un Expert
+          <Plus className="size-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="max-h-80 w-72 overflow-y-auto">
+      <DropdownMenuContent align="end" className="max-h-80 w-72 overflow-y-auto">
         {freeMembers.length > 0 && (
           <DropdownMenuGroup>
             <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-ink-3">Une personne et ses Experts</DropdownMenuLabel>

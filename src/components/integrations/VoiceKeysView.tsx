@@ -25,6 +25,8 @@ export function VoiceKeysView() {
   const [provider, setProvider] = useState("");
   const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
+  // The key form opens on « Ajouter une clé » (Leslie, 06/11: always open, it weighed the page down).
+  const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<VoiceKey | null>(null);
 
   const load = useCallback(async () => {
@@ -83,7 +85,14 @@ export function VoiceKeysView() {
       {admin && data?.members && <ScopePicker members={data.members} value={scope} onChange={setScope} />}
 
       <div className="space-y-3">
-        <p className="text-[13px] font-semibold uppercase tracking-wider text-ink-3">Clés enregistrées ({data ? keys.length : "…"})</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[13px] font-semibold uppercase tracking-wider text-ink-3">Clés enregistrées ({data ? keys.length : "…"})</p>
+          {data && !adding && (
+            <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+              <KeyRound className="h-4 w-4" /> Ajouter une clé
+            </Button>
+          )}
+        </div>
         {!data ? (
           <div className="flex min-h-[6rem] items-center justify-center rounded-[22px] border border-line bg-surface">
             <Loader2 className="h-6 w-6 animate-spin text-ink-3" />
@@ -113,7 +122,7 @@ export function VoiceKeysView() {
         )}
       </div>
 
-      {data && (
+      {data && adding && (
         <form onSubmit={save} className="space-y-4 rounded-[22px] border border-line bg-surface p-4">
           <p className="flex items-center gap-2 text-sm font-semibold text-ink">
             <KeyRound className="h-4 w-4 text-brand" /> Ajouter ou remplacer une clé
@@ -132,9 +141,14 @@ export function VoiceKeysView() {
               <p className="text-xs text-ink-3">Vérifiée chez le fournisseur, chiffrée et gardée par Yelema ; seuls ses quatre derniers caractères seront affichés. Une clé déjà posée pour ce fournisseur est remplacée.</p>
             </div>
           )}
-          <Button type="submit" disabled={busy || !chosen || !secret.trim()}>
-            {busy && <Loader2 className="animate-spin" />} Enregistrer
-          </Button>
+          <div className="flex gap-2">
+            <Button type="submit" disabled={busy || !chosen || !secret.trim()}>
+              {busy && <Loader2 className="animate-spin" />} Enregistrer
+            </Button>
+            <Button type="button" variant="ghost" disabled={busy} onClick={() => (setAdding(false), setSecret(""))}>
+              Annuler
+            </Button>
+          </div>
         </form>
       )}
 
