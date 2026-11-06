@@ -137,6 +137,8 @@ export function guestView(v: GuestView): GuestView {
   };
 }
 
+export const DEVICE_LIMIT = "Vous êtes déjà connecté sur 2 appareils. Demandez à la personne qui vous a invité de déconnecter vos appareils.";
+
 /** How a back-office answer to a guest route reads: the session is dropped on 401 and 410. */
 export function guestRefusal(status: number, code: string): "ended" | "signed_out" | null {
   if (status === 410 || code === "access_ended") return "ended";

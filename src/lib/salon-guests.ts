@@ -14,6 +14,8 @@ export interface SalonGuest {
   acceptedAt: string | null;
   invitedBy: { nom: string } | null;
   invitedAt: string;
+  /** Appareils connectés (2 au plus) ; absent d'un back-office plus ancien. */
+  devices?: number;
 }
 
 const EMAIL = /^[^\s@<>(),;:"[\]\\]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
@@ -58,6 +60,9 @@ export const GUEST_STATUS_LABEL: Record<SalonGuest["status"], string> = {
   expired: "Accès terminé",
   revoked: "Accès retiré",
 };
+
+/** « 1 appareil », « 2 appareils » ; null sans appareil connecté. */
+export const devicesLabel = (n: number | undefined): string | null => (n && n > 0 ? `${n} appareil${n > 1 ? "s" : ""}` : null);
 
 /** Guests who can still come in: those the « Personnes externes présentes » banner counts. */
 export const presentGuests = (list: readonly SalonGuest[]): SalonGuest[] => list.filter((g) => g.status === "invited" || g.status === "active");

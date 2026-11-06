@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_GUEST_DAYS, guestFormError, isGuestDays, MAX_GUEST_EMAILS, mayInvite, parseGuestEmails, presentGuests, refusalLines, type SalonGuest } from "./salon-guests.ts";
+import { DEFAULT_GUEST_DAYS, devicesLabel, guestFormError, isGuestDays, MAX_GUEST_EMAILS, mayInvite, parseGuestEmails, presentGuests, refusalLines, type SalonGuest } from "./salon-guests.ts";
 
 test("formulaire d'invitation : adresses séparées par virgules, points-virgules ou lignes, sans doublon", () => {
   assert.deepEqual(parseGuestEmails("Jean.Paul@Exemple.com, lad@exemple.org;\nmims@exemple.org jean.paul@exemple.com"), {
@@ -40,4 +40,11 @@ test("bouton d'invitation : administrateur partout, sinon les salons qu'on a ouv
   assert.equal(mayInvite({ tous: false, salons: ["s1"] }, "s1"), true);
   assert.equal(mayInvite({ tous: false, salons: ["s1"] }, "s2"), false);
   assert.equal(mayInvite(undefined, "s1"), false);
+});
+
+test("appareils d'un invité : « N appareil(s) », rien sans appareil ni avec un back-office plus ancien", () => {
+  assert.equal(devicesLabel(1), "1 appareil");
+  assert.equal(devicesLabel(2), "2 appareils");
+  assert.equal(devicesLabel(0), null);
+  assert.equal(devicesLabel(undefined), null);
 });

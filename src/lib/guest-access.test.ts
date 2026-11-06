@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { clientIp, guestCookieApplies, guestCookieKey, guestCookieName, guestCookieOptions, guestDeliverables, guestDirectory, guestFileHref, guestRefusal, guestView, openGuestCookie, sealGuestCookie, rateWindow, sameOriginPost } from "./guest-access.ts";
+import { clientIp, DEVICE_LIMIT, guestCookieApplies, guestCookieKey, guestCookieName, guestCookieOptions, guestDeliverables, guestDirectory, guestFileHref, guestRefusal, guestView, openGuestCookie, sealGuestCookie, rateWindow, sameOriginPost } from "./guest-access.ts";
 import { salonDeliverableFor } from "./salon-deliverables.ts";
 
 const headers = (h: Record<string, string>) => ({ get: (n: string) => h[n.toLowerCase()] ?? null });
@@ -119,4 +120,11 @@ test("participants et livrables de l'invité au format des Échanges", () => {
   assert.equal(items[0].url, `/invite/salon/fichier?p=${encodeURIComponent(drivePath).replace(/%20/g, "+")}`);
   assert.equal(guestFileHref(drivePath).includes("inst"), false, "jamais l'instance ni une adresse signée");
   assert.equal(salonDeliverableFor(`~/Livrables/Mamadou/Salons/${chan}/cr.pdf`, chan, items)?.id, `~/${drivePath}`);
+});
+
+test("deux appareils au plus : le refus du back-office est dit en clair ; ce navigateur garde sa clé", () => {
+  assert.equal(DEVICE_LIMIT, "Vous êtes déjà connecté sur 2 appareils. Demandez à la personne qui vous a invité de déconnecter vos appareils.");
+  const route = readFileSync(new URL("../app/invite/[token]/verify/route.ts", import.meta.url), "utf8");
+  assert.match(route, /e\.code === "device_limit"\) return apiError\(DEVICE_LIMIT, 403, "device_limit"\)/);
+  assert.match(route, /const kept = await guestCookie\(token\);\s+const secret = kept \? hexToBytes\(kept\.secret\) : generateSecretKey\(\);/);
 });

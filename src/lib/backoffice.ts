@@ -694,6 +694,8 @@ export const backoffice = {
     call<{ data: SalonGuest }>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}`, { method: "PATCH", token, body: { days } }),
   buzzRemoveGuest: (token: string, id: string, guest: string) =>
     call<unknown>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}`, { method: "DELETE", token, timeoutMs: 60_000 }),
+  buzzResetGuestDevices: (token: string, id: string, guest: string) =>
+    call<unknown>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}/devices`, { method: "DELETE", token, timeoutMs: 60_000 }),
   // An external guest's routes: called by this server only, with its secret and the visitor's address.
   guestCode: (invite: string, email: string, ip: string) => guestCall<unknown>(`/guest/invites/${encodeURIComponent(invite)}/code`, { ip, method: "POST", body: { email } }),
   guestVerify: (invite: string, body: { email: string; code: string; pubkey: string }, ip: string) =>

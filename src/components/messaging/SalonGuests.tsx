@@ -1,17 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, MonitorX, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
-import { DEFAULT_GUEST_DAYS, GUEST_DAYS, GUEST_STATUS_LABEL, guestFormError, parseGuestEmails, presentGuests, refusalLines, type GuestDays, type GuestRefusal, type SalonGuest } from "@/lib/salon-guests";
+import { DEFAULT_GUEST_DAYS, devicesLabel, GUEST_DAYS, GUEST_STATUS_LABEL, guestFormError, parseGuestEmails, presentGuests, refusalLines, type GuestDays, type GuestRefusal, type SalonGuest } from "@/lib/salon-guests";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 
 // « Inviter des personnes externes » : des adresses et une durée, puis la liste des invités du salon (prolonger,
-// retirer). Le lien n'est jamais montré ici : chaque invité le reçoit par e-mail ; réinviter le renvoie.
+// déconnecter ses appareils, retirer). Le lien n'est jamais montré ici : chaque invité le reçoit par e-mail ; réinviter le renvoie.
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 
@@ -41,6 +41,7 @@ export function SalonGuests({ salon, nom, open, onClose, onPresent }: { salon: s
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [refused, setRefused] = useState<string[]>([]);
+  const [confirming, setConfirming] = useState<string | null>(null);
   const base = `/api/buzz/salons/${salon}/guests`;
 
   const tell = useRef(onPresent);
@@ -85,15 +86,17 @@ export function SalonGuests({ salon, nom, open, onClose, onPresent }: { salon: s
     }
   }
 
-  async function act(g: SalonGuest, how: "extend" | "remove", extend: GuestDays = DEFAULT_GUEST_DAYS) {
+  async function act(g: SalonGuest, how: "extend" | "remove" | "devices", extend: GuestDays = DEFAULT_GUEST_DAYS) {
     if (how === "remove" && !window.confirm(`Retirer l’accès de ${g.email} ? Ses clés quittent le salon tout de suite.`)) return;
+    setConfirming(null);
     setBusy(g.id);
     try {
       const url = `${base}/${encodeURIComponent(g.id)}`;
       if (how === "remove") await apiFetch(url, { method: "DELETE" }, "L’accès n’a pas pu être retiré");
+      else if (how === "devices") await apiFetch(`${url}/devices`, { method: "DELETE" }, "Ses appareils n’ont pas pu être déconnectés");
       else await apiFetch(url, { method: "PATCH", body: JSON.stringify({ days: extend }) }, "L’accès n’a pas pu être prolongé");
       shown((await apiFetch<{ data: SalonGuest[] }>(base)).data);
-      toast.success(how === "remove" ? "Accès retiré." : `Accès prolongé de ${extend} jours.`);
+      toast.success(how === "remove" ? "Accès retiré." : how === "devices" ? "Appareils déconnectés. Un nouveau code lui permettra de revenir." : `Accès prolongé de ${extend} jours.`);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -145,6 +148,7 @@ export function SalonGuests({ salon, nom, open, onClose, onPresent }: { salon: s
             <ul className="mt-2 overflow-hidden rounded-card border border-line">
               {list.map((g) => {
                 const live = g.status === "invited" || g.status === "active";
+                const devices = devicesLabel(g.devices);
                 return (
                   <li key={g.id} className="flex flex-wrap items-center gap-2 border-b border-line px-3.5 py-2.5 last:border-0">
                     <span className="min-w-0 flex-1">
@@ -152,11 +156,18 @@ export function SalonGuests({ salon, nom, open, onClose, onPresent }: { salon: s
                       <span className="block text-xs text-ink-3">
                         {GUEST_STATUS_LABEL[g.status]}
                         {live && ` · jusqu’au ${day(g.expiresAt)}`}
+                        {devices && ` · ${devices}`}
                         {g.invitedBy?.nom && ` · invité par ${g.invitedBy.nom}`}
                       </span>
                     </span>
                     {busy === g.id ? (
                       <Loader2 className="size-4 animate-spin text-ink-3" />
+                    ) : confirming === g.id ? (
+                      <span className="flex w-full items-center justify-end gap-2 text-[13px] text-ink-2">
+                        Déconnecter ses {devices} ?
+                        <Button type="button" size="sm" variant="destructive" onClick={() => void act(g, "devices")}>Déconnecter</Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setConfirming(null)}>Annuler</Button>
+                      </span>
                     ) : (
                       <>
                         <select
@@ -170,6 +181,11 @@ export function SalonGuests({ salon, nom, open, onClose, onPresent }: { salon: s
                             <option key={d} value={d}>{d} jours</option>
                           ))}
                         </select>
+                        {devices && (
+                          <button type="button" onClick={() => setConfirming(g.id)} aria-label={`Déconnecter ses appareils (${g.email})`} title="Déconnecter ses appareils" className="grid size-9 place-items-center rounded-lg text-ink-3 hover:bg-soft hover:text-ko">
+                            <MonitorX className="size-4" />
+                          </button>
+                        )}
                         {g.status !== "revoked" && (
                           <button type="button" onClick={() => void act(g, "remove")} aria-label={`Retirer l’accès de ${g.email}`} title="Retirer l’accès" className="grid size-9 place-items-center rounded-lg text-ink-3 hover:bg-soft hover:text-ko">
                             <Trash2 className="size-4" />
