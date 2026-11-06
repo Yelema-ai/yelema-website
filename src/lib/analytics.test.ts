@@ -359,3 +359,110 @@ test("computeAnalytics: handles empty inputs gracefully without throwing", () =>
   assert.ok(res.dimensions.tools.length > 0);
   assert.equal(res.health.status, "healthy");
 });
+
+test("computeAnalytics: incorporates real dailyAudit into timeline points with exact token counts", () => {
+  const now = new Date("2026-11-05T12:00:00Z").getTime();
+  const dailyAudit = {
+    "2026-11-05": {
+      totalTokens: 1556912,
+      promptTokens: 1500000,
+      completionTokens: 56912,
+      runs: 12,
+      byExpert: { koffi: 500000, djeneba: 400000, mamadou: 656912 },
+      byModel: { "claude-opus-5-5": 500000, default: 1056912 },
+    },
+    "2026-11-04": {
+      totalTokens: 1758431,
+      promptTokens: 1700000,
+      completionTokens: 58431,
+      runs: 12,
+      byExpert: { koffi: 758431, djeneba: 1000000 },
+      byModel: { default: 1758431 },
+    },
+  };
+
+  const res = computeAnalytics({
+    sessions: [],
+    usageStats: null,
+    dailyAudit,
+    experts: [
+      { id: "koffi", name: "Koffi", description: "Design" },
+      { id: "djeneba", name: "Djénéba", description: "Direction" },
+      { id: "mamadou", name: "Mamadou", description: "Finance" },
+    ],
+    deliverables: [],
+    period: "7_jours",
+    now,
+  });
+
+  assert.equal(res.timeline.length, 7);
+  // Last point is today (2026-11-05)
+  const todayPt = res.timeline[res.timeline.length - 1];
+  assert.equal(todayPt.tokens, 1556912);
+  assert.equal(todayPt.sessions, 12);
+  assert.equal(todayPt.expertsActive, 3);
+  assert.equal(todayPt.byExpert?.koffi, 500000);
+
+  // Point before is 2026-11-04
+  const yesterdayPt = res.timeline[res.timeline.length - 2];
+  assert.equal(yesterdayPt.tokens, 1758431);
+  assert.equal(yesterdayPt.sessions, 12);
+  assert.equal(yesterdayPt.expertsActive, 2);
+
+  // Older points with no audit should have 0 tokens and 0 sessions
+  const olderPt = res.timeline[0];
+  assert.equal(olderPt.tokens, 0);
+  assert.equal(olderPt.sessions, 0);
+  assert.equal(olderPt.expertsActive, 0);
+});
+
+test("computeAnalytics: handles real membersList, instanceInfo, toolsList and skillsList dynamically", () => {
+  const membersList = [
+    { email: "leslie@mstudio.vc", name: "Leslie", role: "admin", status: "Actif" },
+    { email: "selim@mstudio.vc", name: "Selim", role: "member", status: "Actif" },
+  ];
+  const toolsList = [
+    { name: "Apify", count: 13, status: "ok" },
+    { name: "Brave Search", count: 13, status: "ok" },
+  ];
+  const skillsList = ["moneyprinter-video-generator", "social-media"];
+  const instanceInfo = {
+    id: "s9lgaayr9l",
+    name: "Mstudio Performance",
+    cpu: 4,
+    memory: 8,
+    status: "running",
+  };
+
+  const res = computeAnalytics({
+    sessions: [],
+    usageStats: null,
+    experts: [],
+    deliverables: [],
+    membersList,
+    toolsList,
+    skillsList,
+    instanceInfo,
+  });
+
+  // Members: mapped dynamically from membersList, no fake 58M tokens
+  assert.equal(res.dimensions.members.length, 2);
+  assert.equal(res.dimensions.members[0].name, "Leslie");
+  assert.equal(res.dimensions.members[0].volume, 0);
+  assert.equal(res.dimensions.members[1].name, "Selim");
+  assert.equal(res.dimensions.members[1].volume, 0);
+
+  // Pods: lists real instance
+  assert.equal(res.dimensions.pods.length, 1);
+  assert.equal(res.dimensions.pods[0].id, "pod_s9lgaayr9l");
+  assert.ok(res.dimensions.pods[0].name.includes("Mstudio Performance"));
+  assert.ok(res.dimensions.pods[0].subtitle.includes("4 vCPU"));
+
+  // Tools: lists discovered tools
+  assert.ok(res.dimensions.tools.some((t) => t.name === "Apify"));
+  assert.ok(res.dimensions.tools.some((t) => t.name === "Brave Search"));
+
+  // Skills: lists discovered skills
+  assert.ok(res.dimensions.skills.some((s) => s.id === "skill_moneyprinter_video_generator"));
+  assert.ok(res.dimensions.skills.some((s) => s.id === "skill_social_media"));
+});

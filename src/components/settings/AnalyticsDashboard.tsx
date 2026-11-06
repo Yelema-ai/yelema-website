@@ -2,29 +2,12 @@
 
 import { useEffect, useState } from "react";
 import {
-  Activity,
-  AlertTriangle,
-  ArrowUpDown,
-  BarChart3,
-  Bot,
-  Calendar,
-  Check,
-  CheckCircle2,
   ChevronDown,
-  Download,
-  FileCheck,
-  Filter,
-  MessageSquare,
   RefreshCw,
-  Search,
-  ShieldAlert,
   Sparkles,
-  TrendingUp,
-  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useOwnAgentId } from "@/components/conversations/useAllConversations";
-import { useWorkspace } from "@/components/WorkspaceProvider";
 import { apiFetch } from "@/lib/api";
 import type { AnalyticsOverview } from "@/lib/analytics";
 import { ExploreConsumptionChart } from "@/components/settings/ExploreConsumptionChart";
@@ -35,15 +18,14 @@ import { cn } from "@/lib/utils";
 type TopTab = "consumption" | "export";
 
 const CYCLE_OPTIONS = [
-  { key: "cycle", label: "Ce cycle" },
-  { key: "7d", label: "7 derniers jours" },
-  { key: "30d", label: "30 derniers jours" },
-  { key: "90d", label: "90 derniers jours" },
+  { key: "cycle", label: "Ce cycle (30 j)", period: "30_jours" },
+  { key: "7d", label: "7 derniers jours", period: "7_jours" },
+  { key: "30d", label: "30 derniers jours", period: "30_jours" },
+  { key: "today", label: "Aujourd'hui", period: "aujourdhui" },
 ];
 
 export function AnalyticsDashboard() {
   const ownAgentId = useOwnAgentId();
-  const { current } = useWorkspace();
 
   const [activeTab, setActiveTab] = useState<TopTab>("consumption");
   const [selectedCycle, setSelectedCycle] = useState("cycle");
@@ -56,15 +38,18 @@ export function AnalyticsDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = async (isManualRefresh = false) => {
+  const loadData = async (isManualRefresh = false, cycleKey = selectedCycle) => {
     if (!ownAgentId) return;
     if (isManualRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
 
+    const opt = CYCLE_OPTIONS.find((c) => c.key === cycleKey);
+    const periodParam = opt?.period || "30_jours";
+
     try {
       const res = await apiFetch<AnalyticsOverview>(
-        `/api/agents/${ownAgentId}/analytics?period=30_jours`
+        `/api/agents/${ownAgentId}/analytics?period=${periodParam}`
       );
       setData(res);
     } catch (e) {
@@ -82,23 +67,34 @@ export function AnalyticsDashboard() {
   }, [ownAgentId]);
 
   const currentCycleLabel =
-    CYCLE_OPTIONS.find((c) => c.key === selectedCycle)?.label || "Ce cycle";
+    CYCLE_OPTIONS.find((c) => c.key === selectedCycle)?.label || "Ce cycle (30 j)";
 
-  // KPIs dynamiques calculés depuis la télémétrie réelle de l'instance Mstudio
-  const totalTokens = data?.totals.totalTokens ?? 111729596;
+  // KPIs dynamiques calculés depuis la télémétrie réelle
+  const totalTokens = data?.totals.totalTokens ?? 0;
   const usedCredits = Math.round(totalTokens / 1000);
-  const capCredits = 250000;
-  const capPercent = Math.min(100, Math.round((usedCredits / capCredits) * 100));
-  const totalRuns = data?.totals.sessions ?? 936;
-  const creditsPerRun = totalRuns > 0 ? (usedCredits / totalRuns).toFixed(1) : "119.4";
+  // Cap des crédits : non plafonné sauf si un quota strict est configuré
+  const capCredits: number | null = null;
+  const totalRuns = data ? (data.totals.sessions > 0 ? data.totals.sessions : data.health.totalCrons) : 0;
+  const creditsPerRun = totalRuns > 0 ? (usedCredits / totalRuns).toFixed(1) : "0";
 
   // Expert le plus sollicité
-  const topExpert = data?.experts && data.experts.length > 0 ? data.experts[0] : null;
-  const topAgentName = topExpert?.name || "Koffi";
+  const topExpert =
+    data?.experts && data.experts.length > 0 && data.experts[0].tokensCount > 0
+      ? data.experts[0]
+      : null;
+  const topAgentName = topExpert ? topExpert.name : (data ? "Aucun expert sollicité" : "—");
   const topAgentShare =
     topExpert && totalTokens > 0
       ? Math.round((topExpert.tokensCount / totalTokens) * 100)
-      : 11;
+      : 0;
+
+  // Libellés d'en-tête dynamiques
+  const periodLabel = data
+    ? `${new Date(data.from).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} – ${new Date(data.to).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`
+    : "Chargement…";
+  const activeLabel = data
+    ? `${data.totals.activeExperts} expert${data.totals.activeExperts > 1 ? "s" : ""} actif${data.totals.activeExperts > 1 ? "s" : ""} sur ${data.totals.totalExperts}`
+    : "—";
 
   // Ouvrir Yélé nativement sur demande
   const handleAskYele = () => {
@@ -117,7 +113,7 @@ export function AnalyticsDashboard() {
             Analytique & Consommation
           </h2>
           <p className="mt-1 text-xs text-ink-3">
-            21 oct. – 21 nov. &nbsp;|&nbsp; {data?.totals.activeExperts ?? 12} experts actifs sur {data?.totals.totalExperts ?? 12} &nbsp;|&nbsp; Mis à jour il y a 2h
+            {periodLabel} &nbsp;|&nbsp; {activeLabel} &nbsp;|&nbsp; Télémétrie en temps réel
           </p>
         </div>
 
@@ -138,7 +134,7 @@ export function AnalyticsDashboard() {
             </button>
 
             {cycleDropdownOpen && (
-              <div className="absolute right-0 top-full z-30 mt-1.5 w-48 rounded-2xl border border-line bg-surface p-1.5 shadow-xl">
+              <div className="absolute right-0 top-full z-30 mt-1.5 w-52 rounded-2xl border border-line bg-surface p-1.5 shadow-xl">
                 <div className="space-y-0.5">
                   {CYCLE_OPTIONS.map((c) => {
                     const active = selectedCycle === c.key;
@@ -149,6 +145,7 @@ export function AnalyticsDashboard() {
                         onClick={() => {
                           setSelectedCycle(c.key);
                           setCycleDropdownOpen(false);
+                          loadData(false, c.key);
                         }}
                         className={cn(
                           "flex w-full items-center justify-between rounded-xl px-3 py-1.5 text-left text-xs transition-colors",
@@ -170,19 +167,6 @@ export function AnalyticsDashboard() {
                     );
                   })}
                 </div>
-
-                <div className="my-1 border-t border-line" />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCycleDropdownOpen(false);
-                    toast.info("Période personnalisée sélectionnée");
-                  }}
-                  className="w-full rounded-xl px-3 py-1.5 text-left text-xs text-ink-3 hover:bg-soft hover:text-ink"
-                >
-                  Période personnalisée…
-                </button>
               </div>
             )}
           </div>
@@ -211,7 +195,7 @@ export function AnalyticsDashboard() {
                   }}
                   className="w-full rounded-lg px-3 py-1.5 text-left text-xs text-ink hover:bg-soft"
                 >
-                  Quotidien
+                  Journalier
                 </button>
                 <button
                   type="button"
@@ -227,7 +211,7 @@ export function AnalyticsDashboard() {
             )}
           </div>
 
-          {/* Bouton Demander à Yélé (ouvre la compagne Yélé nativement) */}
+          {/* Bouton Demander à Yélé */}
           <button
             type="button"
             onClick={handleAskYele}
@@ -299,7 +283,9 @@ export function AnalyticsDashboard() {
                 {usedCredits.toLocaleString("fr-FR")} crédits
               </p>
               <p className="mt-1 text-xs text-ink-3">
-                {capPercent}% du plafond ({capCredits.toLocaleString("fr-FR")})
+                {typeof capCredits === "number"
+                  ? `${Math.min(100, Math.round((usedCredits / (capCredits as number)) * 100))}% du plafond (${(capCredits as number).toLocaleString("fr-FR")})`
+                  : "Compte non plafonné (illimité)"}
               </p>
             </div>
 
@@ -312,7 +298,7 @@ export function AnalyticsDashboard() {
                 {totalRuns.toLocaleString("fr-FR")} runs
               </p>
               <p className="mt-1 text-xs text-ink-3">
-                {creditsPerRun} crédits / run (~{Math.round(totalTokens / (totalRuns || 1)).toLocaleString("fr-FR")} tokens)
+                {creditsPerRun} crédits / run {totalRuns > 0 ? `(~${Math.round(totalTokens / totalRuns).toLocaleString("fr-FR")} tokens)` : ""}
               </p>
             </div>
 
@@ -325,7 +311,9 @@ export function AnalyticsDashboard() {
                 {topAgentName}
               </p>
               <p className="mt-1 text-xs text-ink-3">
-                {topAgentShare}% de la consommation studio
+                {topExpert
+                  ? `${topAgentShare}% de la consommation studio`
+                  : "En attente d'activité"}
               </p>
             </div>
           </div>
@@ -334,6 +322,8 @@ export function AnalyticsDashboard() {
           <ExploreConsumptionChart
             usedCredits={usedCredits}
             capCredits={capCredits}
+            timeline={data?.timeline}
+            experts={data?.experts}
           />
 
           {/* 3.3 Tableau de ventilation par dimension */}
