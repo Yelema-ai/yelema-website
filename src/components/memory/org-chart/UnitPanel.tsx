@@ -3,8 +3,9 @@
 import type { OrgMember, OrgPlacement, OrgRole } from "@/lib/memory";
 import type { UnitCounts } from "@/lib/org-chart";
 import { cn } from "@/lib/utils";
+import { Picker } from "@/components/ui/picker";
 import { memberName, type Org } from "./context";
-import { CARD, count, FIELD, HEADING, LINK, LINK_KO } from "./styles";
+import { CARD, count, HEADING, LINK, LINK_KO } from "./styles";
 
 const ROLES: { value: OrgRole; label: string }[] = [
   { value: "member", label: "Membre" },
@@ -34,13 +35,7 @@ export function UnitPanel({ org, company, unitId, counts, onClose }: { org: Org;
       </span>
       {editable ? (
         <span className="flex shrink-0 items-center gap-2">
-          <select aria-label={`Rôle de ${label}`} className={FIELD} value={r.place.role} onChange={(e) => void org.setRole(r.place.id, e.target.value as OrgRole)}>
-            {ROLES.map((x) => (
-              <option key={x.value} value={x.value}>
-                {x.label}
-              </option>
-            ))}
-          </select>
+          <Picker label={`Rôle de ${label}`} placeholder="Rôle" value={r.place.role} onChange={(v) => void org.setRole(r.place.id, v as OrgRole)} groups={[{ options: ROLES }]} className="sm:h-8" />
           <button type="button" className={LINK_KO} onClick={() => void org.change(`/api/org/assignments/${r.place.id}`, "DELETE", undefined, "Retiré du département.")}>
             Retirer
           </button>
@@ -71,37 +66,30 @@ export function UnitPanel({ org, company, unitId, counts, onClose }: { org: Org;
             <p className="text-xs text-ink-3">Aucun expert ajouté seul.</p>
           )}
           {editable && (
-            <select
-              aria-label={`Ajouter à ${unit.name}`}
-              className={cn(FIELD, "mt-3 w-full")}
+            <Picker
+              label={`Ajouter à ${unit.name}`}
+              placeholder="+ Ajouter une personne ou un Expert"
               value=""
-              onChange={(e) => {
-                const [member, profile] = e.target.value.split("|");
+              onChange={(v) => {
+                const [member, profile] = v.split("|");
                 if (member) void org.assign(unit.id, member, profile || null);
               }}
-            >
-              <option value="">+ Ajouter une personne ou un Expert</option>
-              <optgroup label="Un membre et ses Experts">
-                {chart.members
-                  .filter((m) => !members.some((r) => r.member.id === m.id))
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {memberName(m)}
-                    </option>
-                  ))}
-              </optgroup>
-              <optgroup label="Un Expert seul">
-                {chart.members.flatMap((m) =>
-                  m.experts
-                    .filter((x) => !experts.some((r) => r.member.id === m.id && r.place.profile === x.profile))
-                    .map((x) => (
-                      <option key={`${m.id}|${x.profile}`} value={`${m.id}|${x.profile}`}>
-                        {`${x.label}, expert de ${memberName(m)}`}
-                      </option>
-                    ))
-                )}
-              </optgroup>
-            </select>
+              groups={[
+                {
+                  label: "Un membre et ses Experts",
+                  options: chart.members.filter((m) => !members.some((r) => r.member.id === m.id)).map((m) => ({ value: m.id, label: memberName(m) })),
+                },
+                {
+                  label: "Un Expert seul",
+                  options: chart.members.flatMap((m) =>
+                    m.experts
+                      .filter((x) => !experts.some((r) => r.member.id === m.id && r.place.profile === x.profile))
+                      .map((x) => ({ value: `${m.id}|${x.profile}`, label: `${x.label}, Expert de ${memberName(m)}` }))
+                  ),
+                },
+              ]}
+              className="mt-3 w-full"
+            />
           )}
         </>
       ) : (

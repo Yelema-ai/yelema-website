@@ -15,6 +15,7 @@ import { ModelsBoundary } from "./ModelsBoundary";
 import { useModelGroups } from "./useModelGroups";
 import { YelemaEngine } from "./YelemaEngine";
 import { usePoll } from "@/components/usePoll";
+import { Picker } from "@/components/ui/picker";
 
 const REFUSED = "Le fournisseur n’accepte plus cette clé. Vos Experts ne répondent plus tant qu’elle n’est pas remplacée ou retirée.";
 // Une pose prend d'ordinaire moins d'une minute par instance ; au-delà, on cesse de relire seul.
@@ -144,19 +145,15 @@ const othersOf = (data: LlmOverview | null): LlmMember[] => (data?.members ?? []
 
 // Le choix de l'instance regardée, compact, dans l'en-tête du bloc des comptes (admin seulement).
 function InstancePicker({ mine, others, value, onChange }: { mine: boolean; others: LlmMember[]; value: InstanceScope; onChange: (scope: InstanceScope) => void }) {
+  const options = [...(mine ? [{ value: "own", label: "Mon instance" }] : []), ...others.map((m) => ({ value: m.id, label: m.name ?? m.email }))];
   return (
-    <select
-      aria-label="Instance réglée"
+    <Picker
+      label="Instance réglée"
+      placeholder="Mon instance"
       value={value.kind === "member" ? value.id : "own"}
-      onChange={(e) => onChange(e.target.value === "own" ? { kind: "own" } : { kind: "member", id: e.target.value })}
-      className="h-7 max-w-[14rem] rounded-full border border-line bg-surface px-2.5 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-brand/40"
-    >
-      {mine && <option value="own">Mon instance</option>}
-      {others.map((m) => (
-        <option key={m.id} value={m.id}>
-          {m.name ?? m.email}
-        </option>
-      ))}
-    </select>
+      onChange={(v) => onChange(v === "own" ? { kind: "own" } : { kind: "member", id: v })}
+      groups={[{ options }]}
+      className="max-w-[14rem]"
+    />
   );
 }
