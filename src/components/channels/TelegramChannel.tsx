@@ -56,9 +56,9 @@ export function TelegramChannel({ agentId, canManage, legacy, legacyConnected = 
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
         {listened ? (
-          <>Vos Experts répondent sur Telegram via <span className="font-semibold text-ink">@{listened.username ?? listened.id}</span> ({listenedIsYelema ? "bot Yelema" : "votre bot"}).</>
+          <>Vos Experts répondent sur Telegram avec <span className="font-semibold text-ink">@{listened.username ?? listened.id}</span> {listenedIsYelema ? ", le bot Yelema" : ", votre bot"}.</>
         ) : legacyConnected ? (
-          "Vos Experts répondent sur Telegram via votre bot."
+          "Vos Experts répondent sur Telegram avec votre bot."
         ) : (
           "Aucun bot Telegram ne sert encore vos Experts."
         )}

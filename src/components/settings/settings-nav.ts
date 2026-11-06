@@ -31,7 +31,7 @@ export const SETTINGS_GROUPS: { label: string; entries: SettingsEntry[] }[] = [
       { href: "/parametres/entreprise", label: "Contexte", icon: Building2, backoffice: true },
       { href: "/parametres/facturation", label: "Facturation", icon: CreditCard, adminOnly: true, backoffice: true },
       { href: "/parametres/consommation", label: "Consommation", icon: Gauge, adminOnly: true, backoffice: true },
-      { href: "/parametres/instances", label: "Instances", icon: Server, adminOnly: true },
+      { href: "/parametres/instances", label: "Espaces", icon: Server, adminOnly: true },
     ],
   },
 ];

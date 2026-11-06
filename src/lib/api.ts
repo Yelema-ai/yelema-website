@@ -47,7 +47,7 @@ export async function apiFetch<T>(url: string, init?: RequestInit, fallback?: st
   if (!res.ok) {
     if (leaveIfSignedOut(res)) throw new Error(EXPIRED);
     const message = (data as { error?: { message?: string } })?.error?.message;
-    throw new Error(message || (fallback ? `${fallback}.` : FAILED));
+    throw new Error(message || (fallback ? asSentence(fallback) : FAILED));
   }
   return data as T;
 }
@@ -57,5 +57,13 @@ export async function apiFetch<T>(url: string, init?: RequestInit, fallback?: st
 export async function readApiError(res: Response, fallback: string): Promise<string> {
   if (leaveIfSignedOut(res)) return EXPIRED;
   const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-  return body?.error?.message || `${fallback}.`;
+  return asSentence(body?.error?.message || fallback);
+}
+
+// A capital first, one final stop: never « .. » when the text already ends a sentence.
+export function asSentence(text: string): string {
+  const t = text.trim();
+  if (!t) return t;
+  const head = t.charAt(0).toUpperCase() + t.slice(1);
+  return /[.!?…]$/.test(head) ? head : `${head}.`;
 }

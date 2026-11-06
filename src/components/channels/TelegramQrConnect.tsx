@@ -78,7 +78,7 @@ export function TelegramQrConnect({
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
           Nous créons un bot Telegram pour vos Experts : scannez un code avec votre téléphone et confirmez dans
-          Telegram. Pas de BotFather, aucun jeton à copier.
+          Telegram. Rien d’autre à faire.
         </p>
         <div className="space-y-1.5">
           <Label htmlFor="telegram-bot-name" className="text-xs">

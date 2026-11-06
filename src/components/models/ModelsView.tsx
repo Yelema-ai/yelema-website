@@ -79,7 +79,7 @@ export function ModelsView() {
     async (out?: LlmWritten | null) => {
       setRound((r) => r + 1);
       await load();
-      if (out) toast.success("Modèle enregistré", { description: out.state === "pending" ? "L’installation sur l’instance est en cours." : undefined });
+      if (out) toast.success("Modèle enregistré", { description: out.state === "pending" ? "Mise en place en cours, quelques instants." : undefined });
     },
     [load],
   );
@@ -88,8 +88,8 @@ export function ModelsView() {
   if (!data || !claude) return <div className="h-40 animate-pulse rounded-[22px] border border-line bg-soft" />;
 
   const who = member?.name ?? member?.email ?? "ce membre";
-  const title = scope.kind === "member" ? `Comptes de l’instance de ${who}` : "Comptes de l’instance";
-  const scopeLabel = scope.kind === "member" ? `l’instance de ${who}` : "votre instance";
+  const title = scope.kind === "member" ? `Comptes d’IA de ${who}` : "Vos comptes d’IA";
+  const scopeLabel = scope.kind === "member" ? `l’espace de ${who}` : "votre espace";
   const refused = (scope.kind === "member" ? member?.state : data.mine?.state) === "refused";
   const catalogues = { catalogue: data.catalogue ?? [], logins: data.logins ?? [] };
 
@@ -97,7 +97,7 @@ export function ModelsView() {
   if (!("unsupported" in claude)) {
     return (
       <div className="space-y-6">
-        <p className="text-[15px] text-ink-2">Cette instance tourne sous Claude Code : connectez un abonnement Claude, ou ajoutez des clés API et des jetons d’abonnement.</p>
+        <p className="text-[15px] text-ink-2">Vos Experts utilisent Claude. Connectez votre abonnement Claude, ou ajoutez des clés.</p>
         <ClaudeCodeModel status={claude} member={claudeMember} picker={picker} onChanged={loadClaude} />
         {admin && data.members && <MemberSources members={data.members} onPick={(id) => setScope(data.members?.find((m) => m.id === id)?.self ? { kind: "own" } : { kind: "member", id })} />}
       </div>
@@ -106,7 +106,7 @@ export function ModelsView() {
 
   return (
     <div className="space-y-6">
-      <p className="text-[15px] text-ink-2">Branchez vos comptes de modèles d’intelligence artificielle (BYOK) et choisissez le modèle de vos Experts.</p>
+      <p className="text-[15px] text-ink-2">Branchez vos propres comptes d’IA et choisissez le modèle de vos Experts.</p>
 
       {refused && (
         <div role="alert" className="flex gap-2.5 rounded-[22px] border border-ko/30 bg-ko-pale p-4 text-sm text-ko">
@@ -145,11 +145,11 @@ const othersOf = (data: LlmOverview | null): LlmMember[] => (data?.members ?? []
 
 // Le choix de l'instance regardée, compact, dans l'en-tête du bloc des comptes (admin seulement).
 function InstancePicker({ mine, others, value, onChange }: { mine: boolean; others: LlmMember[]; value: InstanceScope; onChange: (scope: InstanceScope) => void }) {
-  const options = [...(mine ? [{ value: "own", label: "Mon instance" }] : []), ...others.map((m) => ({ value: m.id, label: m.name ?? m.email }))];
+  const options = [...(mine ? [{ value: "own", label: "Mes Experts" }] : []), ...others.map((m) => ({ value: m.id, label: m.name ?? m.email }))];
   return (
     <Picker
-      label="Instance réglée"
-      placeholder="Mon instance"
+      label="Réglage pour"
+      placeholder="Mes Experts"
       value={value.kind === "member" ? value.id : "own"}
       onChange={(v) => onChange(v === "own" ? { kind: "own" } : { kind: "member", id: v })}
       groups={[{ options }]}

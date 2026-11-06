@@ -186,9 +186,9 @@ export function TelegramConnect({
         {view === "owner" && bot && (
           <div className="space-y-4">
             <p className="text-sm">
-              Ouvrez <span className="font-medium">@{bot.username}</span> et envoyez-lui un message. La première personne
-              qui lui écrit est la seule à qui vos Experts répondront en privé ; dans le groupe des Experts, tous ses
-              membres pourront leur écrire.
+              Ouvrez <span className="font-medium">@{bot.username}</span> et envoyez-lui un message. Vos Experts ne
+              répondront en privé qu’à la première personne qui lui écrit. Dans le groupe, tous les membres pourront
+              leur écrire.
             </p>
             <div className="flex items-center gap-2">
               <Button asChild variant="outline">

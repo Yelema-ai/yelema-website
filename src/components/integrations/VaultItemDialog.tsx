@@ -58,7 +58,7 @@ export function VaultItemDialog({ open, onOpenChange, profiles, nameOf, onSave }
             <div role="radiogroup" className="flex gap-1 rounded-xl bg-soft p-1">
               {[
                 { on: true, label: "Tous les Experts" },
-                { on: false, label: "Certains experts" },
+                { on: false, label: "Certains Experts" },
               ].map((o) => (
                 <button key={o.label} type="button" role="radio" aria-checked={everyone === o.on} onClick={() => setEveryone(o.on)} className={cn("flex-1 rounded-[10px] py-1.5 text-[13px] font-semibold", everyone === o.on ? "bg-surface text-ink shadow-sm" : "text-ink-2")}>
                   {o.label}
@@ -123,7 +123,7 @@ export function VaultItemDialog({ open, onOpenChange, profiles, nameOf, onSave }
               {busy && <Loader2 className="animate-spin" />} Enregistrer
             </Button>
           </DialogFooter>
-          {busy && <p className="text-xs text-ink-3">Si l’instance est en veille, son réveil prend quelques secondes.</p>}
+          {busy && <p className="text-xs text-ink-3">L’enregistrement peut prendre quelques secondes.</p>}
         </form>
       </DialogContent>
     </Dialog>

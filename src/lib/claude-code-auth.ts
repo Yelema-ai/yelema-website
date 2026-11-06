@@ -15,7 +15,7 @@ export const CREDENTIAL_ID_RE = /^[0-9a-f]{12}$/;
 const SECRET_RE = { api_key: /^sk-ant-api\d{2}-[A-Za-z0-9_-]{20,300}$/, oauth_token: /^sk-ant-oat\d{2}-[A-Za-z0-9_-]{20,300}$/ } as const;
 /** `api_key` (Console), `oauth_token` (`claude setup-token`), ou `null` pour toute autre forme. */
 export const secretKind = (v: string): ClaudeCredential["kind"] | null => (SECRET_RE.api_key.test(v) ? "api_key" : SECRET_RE.oauth_token.test(v) ? "oauth_token" : null);
-export const KIND_LABELS: Record<string, string> = { api_key: "Clé API", oauth_token: "Jeton d’abonnement", subscription: "Abonnement connecté" };
+export const KIND_LABELS: Record<string, string> = { api_key: "Clé Anthropic", oauth_token: "Clé d’abonnement", subscription: "Abonnement connecté" };
 const LOGIN_HOSTS = new Set(["claude.com", "claude.ai", "platform.claude.com", "console.anthropic.com"]);
 
 /** L'adresse de connexion, seulement si elle mène chez Anthropic. */
@@ -33,9 +33,9 @@ const PLANS: Record<string, string> = { pro: "Claude Pro", max: "Claude Max", te
 /** Ce qui sert l'instance, en une phrase : le premier compte disponible, sinon l'abonnement connecté. */
 export function describeClaudeAuth(s: ClaudeAuthStatus, now = Date.now()): string {
   const live = (s.credentials ?? []).find((c) => !c.exhaustedUntil || Date.parse(c.exhaustedUntil) <= now);
-  if (live) return `${live.label ?? KIND_LABELS[live.kind]} · …${live.last4}`;
-  if (s.key) return "Clé API Anthropic";
-  if (s.auth.loggedIn && s.auth.method === "claude.ai") return `${(s.auth.plan && PLANS[s.auth.plan]) || "Abonnement Claude"}${s.auth.email ? ` · ${s.auth.email}` : ""}`;
+  if (live) return `${live.label ?? KIND_LABELS[live.kind]} (…${live.last4})`;
+  if (s.key) return "Clé Anthropic";
+  if (s.auth.loggedIn && s.auth.method === "claude.ai") return `${(s.auth.plan && PLANS[s.auth.plan]) || "Abonnement Claude"}${s.auth.email ? ` (${s.auth.email})` : ""}`;
   if (s.auth.loggedIn) return "Compte Anthropic connecté";
   if (s.credentials?.length) return "Tous les comptes sont à court";
   return "Aucun modèle connecté";
@@ -56,14 +56,14 @@ export function usageByExpert(rows: ClaudeUsageRow[]): { profile: string; turns:
 }
 
 const REFUSALS: Record<string, string> = {
-  not_claude_code: "Cette instance ne tourne pas sous Claude Code.",
-  image_outdated: "Mettez l’instance à jour pour connecter son modèle depuis l’app.",
-  login_unavailable: "La connexion n’a pas pu démarrer sur l’instance. Réessayez dans un instant.",
-  instance_error: "L’instance n’a pas pu traiter la demande. Réessayez dans un instant.",
-  bad_secret_format: "Cette clé n’a pas la forme d’une clé API Anthropic (sk-ant-api…).",
+  not_claude_code: "Cet espace n’utilise pas Claude.",
+  image_outdated: "Cet espace doit d’abord être mis à jour par l’équipe Yelema.",
+  login_unavailable: "La connexion n’a pas pu démarrer. Réessayez dans un instant.",
+  instance_error: "La demande n’a pas abouti. Réessayez dans un instant.",
+  bad_secret_format: "Cette clé n’a pas la forme d’une clé Anthropic (sk-ant-api…).",
   secret_refused: "Anthropic refuse cette clé.",
-  bad_key: "Collez une clé API (sk-ant-api…) ou un jeton d’abonnement (sk-ant-oat…).",
-  conflict: "Dix comptes au plus par instance : retirez-en un d’abord.",
+  bad_key: "Collez une clé Anthropic (sk-ant-api…) ou une clé d’abonnement (sk-ant-oat…).",
+  conflict: "Dix comptes au plus par espace : retirez-en un d’abord.",
 };
 export const claudeAuthRefusal = (code: string): string | null => (Object.hasOwn(REFUSALS, code) ? REFUSALS[code]! : null);
 

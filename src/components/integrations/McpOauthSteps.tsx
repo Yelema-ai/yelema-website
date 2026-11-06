@@ -71,7 +71,7 @@ export function McpOauthSteps({ flow, tools, onOpenAccess, onCancel, onClose }: 
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <DialogTitle>Autorisation OAuth : {flow.name}</DialogTitle>
+            <DialogTitle>Connexion au compte : {flow.name}</DialogTitle>
             <DialogDescription>Finalisez la connexion en autorisant l’accès sur le site officiel.</DialogDescription>
           </div>
         </div>
@@ -82,7 +82,7 @@ export function McpOauthSteps({ flow, tools, onOpenAccess, onCancel, onClose }: 
           <div className="space-y-0.5">
             <p className="text-sm font-semibold text-ink">Page d’autorisation</p>
             <p className="text-xs text-ink-3">
-              {installing ? "Elle s’ouvrira dès que le serveur sera installé sur votre instance." : "Si la fenêtre ne s’est pas ouverte automatiquement, cliquez sur le bouton."}
+              {installing ? "Elle s’ouvrira dès que l’outil sera installé." : "Si la fenêtre ne s’est pas ouverte automatiquement, cliquez sur le bouton."}
             </p>
           </div>
           <Button size="sm" onClick={onOpenAccess} disabled={!flow.url} className="shrink-0">
@@ -90,7 +90,7 @@ export function McpOauthSteps({ flow, tools, onOpenAccess, onCancel, onClose }: 
             Ouvrir l’accès
           </Button>
         </div>
-        <Waiting>{installing ? "Installation du serveur sur votre instance…" : flow.url ? "En attente de votre validation dans la fenêtre du fournisseur…" : "Préparation de l’autorisation…"}</Waiting>
+        <Waiting>{installing ? "Installation de l’outil…" : flow.url ? "En attente de votre validation dans la fenêtre du fournisseur…" : "Préparation de l’autorisation…"}</Waiting>
       </div>
 
       <DialogFooter>

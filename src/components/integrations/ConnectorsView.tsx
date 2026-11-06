@@ -559,7 +559,7 @@ function AccountsPanel({
 
         <div className="flex-1 px-5 py-2">
           {listed.length > 1 && !listed.some((a) => a.isDefault) && (
-            <p className="pt-2 text-[13px] text-ink-3">Plusieurs comptes : choisissez celui que vos Experts utilisent (menu « … », Utiliser par défaut).</p>
+            <p className="pt-2 text-[13px] text-ink-3">Vous avez plusieurs comptes : choisissez celui de vos Experts avec « … » puis « Utiliser par défaut ».</p>
           )}
           <ul className="divide-y">
             {listed.map((a) => {
@@ -671,14 +671,14 @@ function AccountsPanel({
                 onClick={() =>
                   setConfirm({
                     ids: unfinished.map((c) => c.id),
-                    title: "Faire le ménage ?",
+                    title: "Retirer les connexions non terminées ?",
                     description: "Les connexions jamais terminées sont retirées. Vos comptes connectés ne bougent pas.",
                   })
                 }
                 className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 font-semibold text-ink transition-colors hover:bg-card disabled:opacity-60"
               >
                 <Trash2 className="h-4 w-4" />
-                Faire le ménage
+                Retirer
               </button>
             </div>
           )}

@@ -63,7 +63,7 @@ export function UnitPanel({ org, company, unitId, counts, onClose }: { org: Org;
           {experts.length ? (
             <ul className="grid gap-2">{experts.map((r) => row(r, expertLabel(r), `Expert de ${memberName(r.member)}`))}</ul>
           ) : (
-            <p className="text-xs text-ink-3">Aucun expert ajouté seul.</p>
+            <p className="text-xs text-ink-3">Aucun Expert ajouté seul.</p>
           )}
           {editable && (
             <Picker

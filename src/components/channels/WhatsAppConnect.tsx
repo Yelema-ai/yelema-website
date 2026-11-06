@@ -153,7 +153,7 @@ export function WhatsAppConnect({
           <ol className="list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
             <li>Sur votre téléphone, ouvrez WhatsApp.</li>
             <li>
-              Allez dans <span className="font-medium text-foreground">Réglages, Appareils connectés, Connecter un appareil</span>.
+              Allez dans <span className="font-medium text-foreground">Réglages › Appareils connectés › Connecter un appareil</span>.
             </li>
             <li>Pointez votre téléphone vers le code ci-dessous.</li>
           </ol>

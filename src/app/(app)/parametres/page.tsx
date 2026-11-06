@@ -25,7 +25,7 @@ export default function Page() {
             className="w-48"
           />
         </SettingsRow>
-        <SettingsRow label="Fuseau horaire" hint="Celui de votre appareil : les routines et les dates s’y règlent.">
+        <SettingsRow label="Fuseau horaire" hint="Celui de votre appareil. Vos routines et les dates le suivent.">
           <span className="text-sm font-semibold text-ink-2">{zone ? zone.replace(/^.*\//, "").replace(/_/g, " ") : "…"}</span>
         </SettingsRow>
       </SettingsCard>

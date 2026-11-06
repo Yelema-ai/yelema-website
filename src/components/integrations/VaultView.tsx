@@ -109,7 +109,7 @@ export function VaultView() {
           <Lock className="h-5 w-5" />
         </div>
         <p className="text-xs leading-relaxed text-ink-3">
-          Les mots de passe restent chiffrés dans votre instance : ni Yelema ni l’Expert ne les voient. Choisissez un compte sans double authentification.
+          Les mots de passe restent chiffrés : ni Yelema ni l’Expert ne les voient. Choisissez un compte sans double authentification.
         </p>
       </div>
 
@@ -118,7 +118,7 @@ export function VaultView() {
       ) : !data ? (
         <div className="flex min-h-[10rem] flex-col items-center justify-center gap-2 rounded-lg border border-line bg-surface p-8 text-xs text-ink-3">
           <Loader2 className="h-6 w-6 animate-spin" />
-          Lecture du coffre de l’instance…
+          Chargement des accès…
         </div>
       ) : rows.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-line px-6 py-12 text-center">
@@ -137,8 +137,8 @@ export function VaultView() {
                   <th className="px-4 py-2.5 font-medium">Libellé</th>
                   <th className="px-4 py-2.5 font-medium">Experts</th>
                   <th className="px-4 py-2.5 font-medium">Site</th>
-                  <th className="px-4 py-2.5 font-medium">À quoi elle sert</th>
-                  <th className="px-4 py-2.5 font-medium">Ajoutée le</th>
+                  <th className="px-4 py-2.5 font-medium">À quoi il sert</th>
+                  <th className="px-4 py-2.5 font-medium">Ajouté le</th>
                   <th className="px-4 py-2.5" />
                 </tr>
               </thead>
@@ -175,7 +175,7 @@ export function VaultView() {
       <ConfirmDialog
         open={Boolean(removing)}
         onOpenChange={(open) => !open && setRemoving(null)}
-        title="Retirer la connexion"
+        title="Retirer l’accès"
         description={`Retirer « ${removing?.label ?? ""} » ? ${removing ? holders(removing) : "Les Experts"} ne pourront plus se connecter à ce site.`}
         confirmText="Retirer"
         destructive

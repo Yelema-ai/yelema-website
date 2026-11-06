@@ -58,7 +58,7 @@ export function VoiceKeysView() {
       const out = await apiFetch<{ ok: true; verified: boolean }>(scopeUrl(scope), { method: "PUT", body: JSON.stringify({ provider, secret: secret.trim() }) });
       setSecret("");
       await load();
-      toast.success(`Clé ${labelOf(provider)} enregistrée`, { description: out.verified ? "Acceptée par le fournisseur." : "Le fournisseur n’a pas pu la vérifier : elle servira, et sera écartée si elle échoue." });
+      toast.success(`Clé ${labelOf(provider)} enregistrée`, { description: out.verified ? "Acceptée par le fournisseur." : "Le fournisseur n’a pas pu la vérifier. Elle sera utilisée, puis écartée si elle ne fonctionne pas." });
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -79,7 +79,7 @@ export function VoiceKeysView() {
     <div className="space-y-6">
       <div>
         <h3 className="font-display text-[18px] font-bold tracking-tight text-ink">Transcription de la voix</h3>
-        <p className="mt-1 max-w-xl text-sm text-ink-3">Pour la dictée et les notes vocales (Telegram, WhatsApp…). Les appels vocaux ne changent pas.</p>
+        <p className="mt-1 max-w-xl text-sm text-ink-3">Pour la dictée et les notes vocales (Telegram, WhatsApp…). Les appels vocaux ne sont pas concernés.</p>
       </div>
 
       {admin && data?.members && <ScopePicker members={data.members} value={scope} onChange={setScope} />}
