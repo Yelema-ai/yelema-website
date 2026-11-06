@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { conversationName, isSalonName, labelsOf, myExpertsIn, participants, peopleOf, salonPeople, shortName, startsRun, withPhotos, working, type BuzzEntry } from "./buzz.ts";
+import { conversationName, isSalonName, labelsOf, myExpertsIn, participants, peopleOf, salonPeople, salonRoster, shortName, startsRun, withPhotos, working, type BuzzEntry } from "./buzz.ts";
 
 const k = (c: string) => c.repeat(64);
 const directory: BuzzEntry[] = [
@@ -73,4 +73,28 @@ test("un même auteur enchaîne ses messages sans répéter son visage, sauf apr
   assert.equal(startsRun({ author: "a", at: 0 }, { author: "a", at: 60 }), false);
   assert.equal(startsRun({ author: "a", at: 0 }, { author: "b", at: 60 }), true);
   assert.equal(startsRun({ author: "a", at: 0 }, { author: "a", at: 301 }), true);
+});
+
+test("participants d'un salon : propriétaire, admins, membres, experts (et leur propriétaire), invités ; vous en tête de votre rang", () => {
+  const dir: BuzzEntry[] = [
+    { nom: "Leslie", type: "personne", membre: "16", cles: [k("a")], role: "membre" },
+    { nom: "Djénéba (de Leslie)", type: "expert", membre: "16", cles: [k("c")], profil: "djeneba" },
+    { nom: "Selim", type: "personne", membre: "21", cles: [k("d")], role: "admin" },
+    { nom: "Awa", type: "personne", membre: "22", cles: [k("e")], role: "admin" },
+    { nom: "Bob", type: "personne", membre: "23", cles: [k("f")], role: "membre" },
+    { nom: "jeanpaul", type: "invite", membre: "31", cles: [k("g")], expiresAt: "2026-12-06T09:00:00.000Z" },
+  ];
+  const members = [k("a"), k("c"), k("d"), k("e"), k("f"), k("g")];
+  const roles = (createur: string | null) => salonRoster(dir, members, [k("e")], createur).map((r) => `${r.role}:${r.entry.nom}${r.owner ? `<${r.owner}` : ""}${r.self ? "*" : ""}`);
+  assert.deepEqual(roles("23"), ["proprietaire:Bob", "admin:Awa*", "admin:Selim", "membre:Leslie", "expert:Djénéba (de Leslie)<Leslie", "invite:jeanpaul"]);
+  assert.deepEqual(roles(null), ["admin:Awa*", "admin:Selim", "membre:Bob", "membre:Leslie", "expert:Djénéba (de Leslie)<Leslie", "invite:jeanpaul"]);
+  assert.equal(salonRoster(dir, [k("c")], [k("e")], null)[0]?.owner, "Leslie", "un expert seul dans le salon garde le nom de son propriétaire");
+});
+
+test("un invité n'est jamais rangé parmi les Experts d'un membre (son id d'invité peut valoir un id de membre)", () => {
+  const dir: BuzzEntry[] = [
+    { nom: "Leslie", type: "personne", membre: "16", cles: [k("a")] },
+    { nom: "jeanpaul", type: "invite", membre: "16", cles: [k("g")] },
+  ];
+  assert.deepEqual(salonPeople(dir, [k("a"), k("g")], [k("a")]).map((g) => [g.nom, g.experts.length]), [["Leslie", 0]]);
 });

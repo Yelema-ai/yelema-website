@@ -18,6 +18,7 @@ import { SalonDocCards } from "@/components/messaging/SalonDocCards";
 import { readSalonDeliverables, salonReadAt, useSalonDeliverables } from "@/components/messaging/salon-deliverables-store";
 import { linkSalonPaths, salonDeliverableFor, salonPathsIn, type SalonDeliverable } from "@/lib/salon-deliverables";
 import { GuestBadge, SalonParticipants } from "@/components/messaging/SalonParticipants";
+import type { RosterContext } from "@/components/messaging/SalonRoster";
 
 // Le fil d'un échange, comme le chat d'un Expert (l'en-tête et ses onglets sont dans ExchangeHeader) : messages,
 // visage de l'auteur en tête de chaque suite, choix du dernier message en boutons (comme le chat d'un Expert), « … travaille » pour vos Experts sollicités, saisie avec « @ ».
@@ -40,6 +41,8 @@ export interface ThreadProps {
   onSend: (text: string, mentions: string[], replyTo: Message | null) => Promise<boolean>;
   /** The salon's deliverables read elsewhere (an external guest's page); by default, the member's own reading. */
   deliverables?: { items: SalonDeliverable[] | null; error: string | null; loading: boolean; refresh: () => void };
+  /** Each participant's role (a member's space); a guest's page goes without. */
+  roles?: RosterContext;
 }
 
 export function ExchangeThread(p: ThreadProps) {
@@ -121,7 +124,7 @@ export function ExchangeThread(p: ThreadProps) {
       {p.pane === "livrables" && p.salon ? (
         <SalonDeliverables items={items} error={livrables.error} loading={livrables.loading} onRefresh={livrables.refresh} directory={p.directory} />
       ) : p.pane === "participants" && p.salon ? (
-        <SalonParticipants members={p.current.members} directory={p.directory} mine={p.mine} />
+        <SalonParticipants members={p.current.members} directory={p.directory} mine={p.mine} roles={p.roles} />
       ) : (
         <>
           <ol

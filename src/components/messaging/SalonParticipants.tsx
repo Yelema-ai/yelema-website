@@ -3,12 +3,19 @@
 import { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { guestsIn, salonPeople, shortName, type BuzzEntry } from "@/lib/buzz";
+import { RoleBadge, SalonRoster, type RosterContext } from "@/components/messaging/SalonRoster";
 import { cn } from "@/lib/utils";
 import { ParticipantAvatar } from "@/components/messaging/ParticipantAvatar";
 
 // L'onglet « Participants » d'un salon : une ligne par personne, vous en tête, ses Experts présents en petits
 // visages ; un clic la déplie pour les nommer. Qui est là se lit d'un coup d'œil, sans tout dérouler.
-export function SalonParticipants({ members, directory, mine }: { members: string[]; directory: BuzzEntry[]; mine: string[] }) {
+// With `roles` (a member's own space), each person's role in the salon; a guest's page goes without.
+export function SalonParticipants({ members, directory, mine, roles }: { members: string[]; directory: BuzzEntry[]; mine: string[]; roles?: RosterContext }) {
+  if (roles) return <SalonRoster members={members} directory={directory} mine={mine} context={roles} />;
+  return <TeamParticipants members={members} directory={directory} mine={mine} />;
+}
+
+function TeamParticipants({ members, directory, mine }: { members: string[]; directory: BuzzEntry[]; mine: string[] }) {
   const groups = useMemo(() => salonPeople(directory, members, mine), [directory, members, mine]);
   const guests = useMemo(() => guestsIn(directory, members), [directory, members]);
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -90,5 +97,5 @@ export function SalonParticipants({ members, directory, mine }: { members: strin
 
 /** Marks a person from outside the client, in the thread and the participants. */
 export function GuestBadge() {
-  return <span className="shrink-0 rounded-full bg-coral-pale px-2 py-0.5 text-[11px] font-semibold text-coral-ink">Invité</span>;
+  return <RoleBadge role="invite" />;
 }

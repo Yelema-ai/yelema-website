@@ -338,6 +338,7 @@ export function Messaging() {
   if (state.kind === "closed") return <p className="m-6 max-w-xl rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{state.reason}</p>;
 
   const kind = current ? (isUnit(current) ? "unite" : isSalon(current) ? "salon" : "direct") : null;
+  const rosterContext = current && overview?.createurs && kind !== "direct" ? { createur: overview.createurs[current.id] ?? null, unit: kind === "unite" } : undefined;
   // The salon's creator or an admin (`invitations` of the overview); the back office checks again.
   const canInvite = Boolean(current && kind !== "direct" && mayInvite(overview?.invitations, current.id));
   const withGuests = Boolean(current && kind !== "direct" && (guestCounts[current.id] ?? overview?.salonsAvecInvites?.includes(current.id)));
@@ -393,6 +394,7 @@ export function Messaging() {
           candidates={candidates}
           sending={sending}
           onSend={send}
+          roles={rosterContext}
         />
       </section>
       </div>

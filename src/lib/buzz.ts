@@ -2,8 +2,11 @@
 // the member's own devices, the directory (people and their experts) and the team salons. Messages
 // themselves never pass through the back office: the browser reads and writes them on the relay.
 
-/** `profil` (experts): their Hermes profile; `photo`: an expert's from the catalogue (added by this app), a person's profile photo (served by the back office, one's own added by this app). `invite`: a guest from outside the client, in one salon. */
-export interface BuzzEntry { nom: string; type: "personne" | "expert" | "invite"; membre: string; cles: string[]; profil?: string; photo?: string | null }
+/**
+ * `membre`: the person, or an expert's owner. `profil` (experts): their Hermes profile; `photo`: an expert's from the catalogue (added by this app), a person's profile photo
+ * (served by the back office, one's own added by this app). `role` (people): admin or member of the space. `invite`: a guest from outside the client, in one salon, until `expiresAt`.
+ */
+export interface BuzzEntry { nom: string; type: "personne" | "expert" | "invite"; membre: string; cles: string[]; profil?: string; photo?: string | null; role?: "admin" | "membre"; expiresAt?: string }
 export interface BuzzOverview {
   relais: string;
   appareils: { cle: string; nom: string }[];
@@ -13,6 +16,8 @@ export interface BuzzOverview {
   salonsAvecInvites?: string[];
   /** Where the member may invite external guests: everywhere (admin) or in the salons they opened. */
   invitations?: { tous: boolean; salons: string[] };
+  /** Free salon → the member who opened it (its owner); absent: not recorded, only admins manage its guests. */
+  createurs?: Record<string, string>;
 }
 
 export const PUBKEY_RE = /^[0-9a-f]{64}$/;
@@ -82,14 +87,14 @@ export function withPhotos(directory: BuzzEntry[], photoOf: (profil: string) => 
 
 export interface SalonGroup { membre: string; nom: string; self: boolean; person: BuzzEntry | null; experts: BuzzEntry[] }
 
-/** Who is in a salon, by member: the person (if one of their keys is in it) and their experts there; oneself first. */
+/** Who is in a salon, by member: the person (if one of their keys is in it) and their experts there; oneself first. Guests: `guestsIn`. */
 export function salonPeople(directory: BuzzEntry[], members: string[], mine: string[]): SalonGroup[] {
   const me = myMember(directory, mine);
   const inIt = (e: BuzzEntry) => e.cles.some((k) => members.includes(k));
   const groups = new Map<string, SalonGroup>();
   const group = (e: BuzzEntry) => groups.get(e.membre) ?? groups.set(e.membre, { membre: e.membre, nom: e.nom, self: e.membre === me, person: null, experts: [] }).get(e.membre)!;
   for (const e of directory) if (e.type === "personne") group(e).nom = e.nom;
-  for (const e of directory.filter(inIt)) {
+  for (const e of directory.filter((d) => d.type !== "invite" && inIt(d))) {
     if (e.type === "personne") group(e).person = e;
     else group(e).experts.push(e);
   }
@@ -120,4 +125,20 @@ export const guestsIn = (directory: BuzzEntry[], members: string[]): BuzzEntry[]
 export function withOwnPhoto(directory: BuzzEntry[], devices: string[], photo: string | null | undefined): BuzzEntry[] {
   const me = myMember(directory, devices);
   return photo && me ? directory.map((e) => (e.type === "personne" && e.membre === me && !e.photo ? { ...e, photo } : e)) : directory;
+}
+
+export type SalonRole = "proprietaire" | "admin" | "membre" | "expert" | "invite";
+export interface RosterRow { entry: BuzzEntry; role: SalonRole; self: boolean; owner: string | null }
+const RANK: Record<SalonRole, number> = { proprietaire: 0, admin: 1, membre: 2, expert: 3, invite: 4 };
+
+/** Who is in a salon and what each may do: owner, admins, members, experts (with their owner's name), guests; oneself first in each. */
+export function salonRoster(directory: BuzzEntry[], members: string[], mine: string[], createur: string | null): RosterRow[] {
+  const me = myMember(directory, mine);
+  const nameOf = (membre: string) => directory.find((e) => e.type === "personne" && e.membre === membre)?.nom ?? null;
+  const rows = salonPeople(directory, members, mine).flatMap((g): RosterRow[] => [
+    ...(g.person ? [{ entry: g.person, role: g.membre === createur ? "proprietaire" : g.person.role === "admin" ? "admin" : "membre", self: g.self, owner: null } satisfies RosterRow] : []),
+    ...g.experts.map((e): RosterRow => ({ entry: e, role: "expert", self: false, owner: nameOf(e.membre) ?? (e.membre === me ? "vous" : null) })),
+  ]);
+  const guests = guestsIn(directory, members).map((e): RosterRow => ({ entry: e, role: "invite", self: e.cles.some((k) => mine.includes(k)), owner: null }));
+  return [...rows, ...guests].sort((a, b) => RANK[a.role] - RANK[b.role] || Number(b.self) - Number(a.self) || a.entry.nom.localeCompare(b.entry.nom, "fr"));
 }
