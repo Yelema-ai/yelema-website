@@ -11,9 +11,10 @@ import { downsample, encodeWav } from "@/lib/wav";
 /** A long dictation is cut into pieces sent while the member keeps talking: each piece stays far under
  * the host's 4 MB body limit (a WAV at 16 kHz is 32 kB a second) and is transcribed in seconds, so
  * nothing is lost to a size refusal or a slow answer. A piece closes on a quiet moment after
- * SEGMENT_MIN_SECONDS, and at SEGMENT_MAX_SECONDS whatever happens. Leslie, 06/11: long notes cut off. */
-const SEGMENT_MIN_SECONDS = 40;
-const SEGMENT_MAX_SECONDS = 60;
+ * SEGMENT_MIN_SECONDS, and at SEGMENT_MAX_SECONDS whatever happens. Leslie, 06/11: long notes cut off.
+ * The maximum stays under Aethex's 40 s per file (HTTP 413 beyond); raise both if Aethex lifts that limit. */
+const SEGMENT_MIN_SECONDS = 25;
+const SEGMENT_MAX_SECONDS = 35;
 /** Below this level (RMS of one audio buffer) the member is between two words. */
 const QUIET_RMS = 0.012;
 /** Ten minutes at most, then the dictation stops and is transcribed. */
