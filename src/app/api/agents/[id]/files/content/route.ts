@@ -35,42 +35,55 @@ export async function GET(request: Request, { params }: Ctx) {
 
     let upstream = await instanceFetch(id, `/v1/files/content?${qs.toString()}`);
 
-    // Fallback défensif si 404 : variations d'arborescence Livrables (ex: Livrables/Videos/ vs Livrables/<Expert>/Videos/)
+    // Fallback défensif si 404 : variations d'arborescence Livrables/<expert>/videos/ (casse minuscule/majuscule ou chemin direct)
     if (upstream.status === 404) {
       const candidates: string[] = [];
-      const matchExpertVideo = path.match(/^(?:(?:\/home\/node\/|~\/)?Livrables)\/([^/]+)\/Videos\/(.+)$/);
+
+      // Cas 1 : Chemin sous Livrables/<expert>/(videos|Videos)/<file>
+      const matchExpertVideo = path.match(/^(?:(?:\/home\/node\/|~\/)?Livrables)\/([^/]+)\/(?:videos|Videos)\/(.+)$/);
       if (matchExpertVideo) {
         const [, expert, file] = matchExpertVideo;
         candidates.push(
-          `Livrables/Videos/${file}`,
-          `/home/node/Livrables/Videos/${file}`,
+          `Livrables/${expert}/videos/${file}`,
+          `Livrables/${expert}/Videos/${file}`,
+          `/home/node/Livrables/${expert}/videos/${file}`,
+          `/home/node/Livrables/${expert}/Videos/${file}`,
           `Livrables/${expert}/${file}`,
           `/home/node/Livrables/${expert}/${file}`
         );
       }
-      const matchExpertDirect = path.match(/^(?:(?:\/home\/node\/|~\/)?Livrables)\/([^/]+)\/([^/]+\.(?:mp4|webm|mov|m4v))$/);
+
+      // Cas 2 : Fichier vidéo directement cité sous Livrables/<expert>/<file.mp4>
+      const matchExpertDirect = path.match(/^(?:(?:\/home\/node\/|~\/)?Livrables)\/([^/]+)\/([^/]+\.(?:mp4|webm|mov|m4v))$/i);
       if (matchExpertDirect) {
         const [, expert, file] = matchExpertDirect;
         candidates.push(
+          `Livrables/${expert}/videos/${file}`,
           `Livrables/${expert}/Videos/${file}`,
-          `/home/node/Livrables/${expert}/Videos/${file}`,
-          `Livrables/Videos/${file}`,
-          `/home/node/Livrables/Videos/${file}`
+          `/home/node/Livrables/${expert}/videos/${file}`,
+          `/home/node/Livrables/${expert}/Videos/${file}`
         );
       }
-      const matchRootVideo = path.match(/^(?:(?:\/home\/node\/|~\/)?Livrables)\/Videos\/(.+)$/);
+
+      // Cas 3 : Ancienne référence erronée Livrables/Videos/<file> -> rediriger dynamiquement vers l'expert actif
+      const matchRootVideo = path.match(/^(?:(?:\/home\/node\/|~\/)?Livrables)\/(?:videos|Videos)\/(.+)$/i);
       if (matchRootVideo) {
         const [, file] = matchRootVideo;
-        candidates.push(
-          `Livrables/Fatima/Videos/${file}`,
-          `/home/node/Livrables/Fatima/Videos/${file}`,
-          `Livrables/Fatima/${file}`,
-          `/home/node/Livrables/Fatima/${file}`,
-          `Livrables/Contenu/Videos/${file}`,
-          `Livrables/Mamadou/Videos/${file}`,
-          `Livrables/Koffi/Videos/${file}`
-        );
+        const profileParam = searchParams.get("profile");
+        const expertName = profileParam && profileParam !== "default"
+          ? profileParam.charAt(0).toUpperCase() + profileParam.slice(1)
+          : null;
+
+        if (expertName) {
+          candidates.push(
+            `Livrables/${expertName}/videos/${file}`,
+            `Livrables/${expertName}/Videos/${file}`,
+            `/home/node/Livrables/${expertName}/videos/${file}`,
+            `/home/node/Livrables/${expertName}/Videos/${file}`
+          );
+        }
       }
+
       for (const altPath of candidates) {
         const altQs = new URLSearchParams(qs);
         altQs.set("path", altPath);

@@ -50,7 +50,17 @@ def get_default_dest(expert: str, sujet: str) -> str:
     slug = slugify(sujet)
     filename = f"{prefix}_{slug}.mp4"
     home = os.path.expanduser("~")
-    return os.path.join(home, "Livrables", expert, "Videos", filename)
+    expert_dir = os.path.join(home, "Livrables", expert)
+
+    # L'arborescence standard est ~/Livrables/<expert>/videos/
+    # Si le dossier 'videos' (ou 'Videos') n'existe pas, il doit être créé
+    videos_dir = os.path.join(expert_dir, "videos")
+    if not os.path.isdir(videos_dir) and os.path.isdir(os.path.join(expert_dir, "Videos")):
+        videos_dir = os.path.join(expert_dir, "Videos")
+    else:
+        os.makedirs(videos_dir, exist_ok=True)
+
+    return os.path.join(videos_dir, filename)
 
 
 def request_json(url: str, method: str = "GET", data: dict = None, headers: dict = None):
@@ -214,13 +224,14 @@ def main():
         print(f"❌ Échec du téléchargement du fichier vidéo : {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Synchronisation immédiate dans la racine de l'expert et dans Livrables/Videos pour compatibilité maximale
+    # Synchronisation immédiate dans l'arborescence de l'expert (Livrables/<expert>/videos/)
     home = os.path.expanduser("~")
     filename = os.path.basename(dest_path)
+    expert_dir = os.path.join(home, "Livrables", expert)
     alt_paths = [
-        os.path.join(home, "Livrables", expert, filename),
-        os.path.join(home, "Livrables", "Videos", filename),
-        os.path.join(home, "Livrables", expert, "Videos", filename)
+        os.path.join(expert_dir, "videos", filename),
+        os.path.join(expert_dir, "Videos", filename),
+        os.path.join(expert_dir, filename)
     ]
     for alt in alt_paths:
         try:
