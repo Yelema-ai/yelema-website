@@ -129,7 +129,7 @@ export function ExchangeRail(p: RailProps) {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between px-2.5 pb-2 pt-1">
         <span className="text-[15px] font-bold text-ink">
-          Échanges{p.list && p.list.length > 0 && <span className="ml-1 font-semibold tabular-nums text-ink-3">({p.list.length})</span>}
+          Salons{p.list && p.list.length > 0 && <span className="ml-1 font-semibold tabular-nums text-ink-3">({p.list.length})</span>}
         </span>
         <button type="button" onClick={p.onRefresh} disabled={!p.ready || p.refreshing} aria-label="Actualiser" title="Actualiser" className="grid h-8 w-8 place-items-center rounded-lg text-ink-3 hover:bg-soft hover:text-ink disabled:opacity-60">
           <RotateCw className={cn("h-4 w-4", p.refreshing && "animate-spin")} />
@@ -145,14 +145,14 @@ export function ExchangeRail(p: RailProps) {
       </div>
       <label className="relative mx-1 mb-2 block">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" aria-hidden />
-        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Chercher" aria-label="Rechercher un échange" className="h-9 w-full rounded-[10px] border border-line bg-soft pl-8 pr-8 text-[13px] text-ink outline-none placeholder:text-ink-3 focus:border-brand/40 focus:bg-surface [&::-webkit-search-cancel-button]:hidden" />
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Chercher" aria-label="Rechercher une conversation" className="h-9 w-full rounded-[10px] border border-line bg-soft pl-8 pr-8 text-[13px] text-ink outline-none placeholder:text-ink-3 focus:border-brand/40 focus:bg-surface [&::-webkit-search-cancel-button]:hidden" />
         {query && (
           <button type="button" onClick={() => setQuery("")} aria-label="Effacer la recherche" className="absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-ink-3 hover:text-ink">
             <X className="h-3.5 w-3.5" />
           </button>
         )}
       </label>
-      <div role="group" aria-label="Filtrer les échanges" className="mx-1 mb-2.5 grid grid-cols-3 gap-0.5 rounded-xl bg-soft p-[3px]">
+      <div role="group" aria-label="Filtrer les conversations" className="mx-1 mb-2.5 grid grid-cols-3 gap-0.5 rounded-xl bg-soft p-[3px]">
         {FILTERS.map(({ id, label }) => (
           <button key={id} type="button" onClick={() => setFilter(id)} aria-pressed={filter === id} className={cn("inline-flex h-8 items-center justify-center rounded-[9px] px-2 text-[12.5px] font-semibold transition-colors", filter === id ? "bg-surface text-brand-ink shadow-[0_1px_3px_rgba(20,10,60,0.12)]" : "text-ink-2 hover:text-ink")}>
             {label}
@@ -161,7 +161,7 @@ export function ExchangeRail(p: RailProps) {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto" aria-busy={p.list === null}>
         {p.list === null && [1, 2, 3].map((n) => <div key={n} className="mx-1 mb-1.5 h-11 animate-pulse rounded-[10px] bg-soft" />)}
-        {p.list?.length === 0 && <p className="px-2.5 py-3 text-xs text-ink-3">Aucun échange pour l’instant.</p>}
+        {p.list?.length === 0 && <p className="px-2.5 py-3 text-xs text-ink-3">Aucune conversation pour l’instant.</p>}
         {groups.map((g) => (
           <div key={g.label} className="mb-2">
             <div className="px-2.5 pb-1 pt-2 text-[11.5px] font-semibold uppercase tracking-wide text-ink-3">{g.label}</div>

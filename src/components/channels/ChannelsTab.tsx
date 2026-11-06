@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronRight, Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { cached, remember } from "@/lib/client-cache";
@@ -15,7 +15,6 @@ import {
 } from "@/lib/channels";
 import type { MergedAgent } from "@/lib/types";
 import type { TelegramHubStatus } from "@/lib/agent37";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { channelBrand } from "@/components/channels/BrandIcons";
 import { ChannelCredentialsForm } from "@/components/channels/ChannelCredentialsForm";
@@ -26,6 +25,7 @@ import { RelayChannel } from "@/components/channels/RelayChannel";
 import { TelegramChannel } from "@/components/channels/TelegramChannel";
 import { TelegramTopics } from "@/components/channels/TelegramTopics";
 import { WhatsAppConnect } from "@/components/channels/WhatsAppConnect";
+import { StatePill } from "@/components/integrations/StatePill";
 import { useRuntimeTools, useTelegramRelay } from "@/components/experts/useRuntimeTools";
 
 // The Messaging tab: connect this agent to the apps its owner already uses, so they can talk to it
@@ -56,7 +56,9 @@ export function ChannelsTab({
   // What this page read last time, kept for the visit (Leslie, 28/10: « la page Canaux s'affiche très
   // lentement »): shown at once, the live state read again behind it.
   const memoKey = `channels:${agentId}`;
-  const seen = cached<ChannelsResponse>(memoKey);
+  // Kept in the browser across visits too (Leslie, 05/11: « la page Canaux charge très lentement, surtout les
+  // boutons »): the last known state shows at once, the live one replaces it when the instance answers.
+  const seen = cached<ChannelsResponse>(memoKey) ?? stored(memoKey);
   const [channels, setChannels] = useState<MessagingPlatform[] | null>(() => seen?.channels ?? null);
   // False while the rows come from the image's channel list and their state is still being read.
   const [stateKnown, setStateKnown] = useState(Boolean(seen));
@@ -81,6 +83,7 @@ export function ChannelsTab({
         const res = await apiFetch<ChannelsResponse>(`/api/agents/${agentId}/channels`);
         const { channels: list, teams_endpoint } = res;
         remember(memoKey, res);
+        store(memoKey, res);
         setChannels(list);
         setTeamsEndpoint(teams_endpoint ?? null);
         setStateKnown(true);
@@ -219,6 +222,23 @@ export function ChannelsTab({
   );
 }
 
+const STORE = "yelema:";
+function stored(key: string): ChannelsResponse | undefined {
+  try {
+    const raw = window.localStorage.getItem(STORE + key);
+    return raw ? (JSON.parse(raw) as ChannelsResponse) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+function store(key: string, value: ChannelsResponse) {
+  try {
+    window.localStorage.setItem(STORE + key, JSON.stringify(value));
+  } catch {
+    // Private window or full storage: the page reads the live state, as before.
+  }
+}
+
 function Header() {
   return (
     <header className="space-y-1">
@@ -246,6 +266,14 @@ const placeholder = (id: string, name: string): MessagingPlatform => ({
 // In the order of the page (Telegram, Slack, Teams, then WhatsApp).
 const PLACEHOLDERS = [placeholder("telegram", "Telegram"), placeholder("slack", "Slack"), placeholder("teams", "Microsoft Teams"), placeholder("whatsapp", "WhatsApp")];
 
+// What each channel is for, in French: the harness's own descriptions are English (Leslie, 05/11).
+const CHANNEL_TEXT: Record<string, string> = {
+  telegram: "Écrivez à vos Experts depuis Telegram.",
+  slack: "Vos Experts dans les canaux de votre équipe.",
+  teams: "Vos Experts dans Microsoft Teams.",
+  whatsapp: "Écrivez à vos Experts depuis WhatsApp.",
+};
+
 function ChannelRow({
   channel,
   canManage,
@@ -261,50 +289,34 @@ function ChannelRow({
   const { Icon, color } = channelBrand(channel.id);
   const connected = isChannelConnected(channel);
   const error = channelError(channel);
-  const body = (
-    <>
+  // One row, one pill of one size on the right, the whole row opens the channel (Leslie, 05/11: « Connecter »
+  // alone, « Connecté » on green, the same buttons everywhere).
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      disabled={!canManage || (checking && !connected && !error)}
+      aria-label={connected || error ? `Gérer ${channel.name}` : `Connecter ${channel.name}`}
+      className="flex min-h-[68px] w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-soft disabled:pointer-events-none"
+    >
       <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-[12px] border bg-muted/20">
         <Icon className="h-5 w-5 shrink-0" {...(color ? { style: { color } } : {})} />
       </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-semibold">{channel.name}</p>
-        <p className="truncate text-[13px] text-muted-foreground">{error || channel.description || channelStateLabel(channel)}</p>
-      </div>
-    </>
-  );
-  if (connected || error) {
-    return (
-      <button
-        type="button"
-        onClick={onOpen}
-        disabled={!canManage}
-        aria-label={`Gérer ${channel.name}`}
-        className="flex min-h-[68px] w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-soft disabled:pointer-events-none"
-      >
-        {body}
-        {connected ? <Badge variant="success">Connecté</Badge> : <Badge variant="warning">À vérifier</Badge>}
-        <ChevronRight className="h-4 w-4 shrink-0 text-ink-3" />
-      </button>
-    );
-  }
-  if (checking) {
-    return (
-      <div className="flex min-h-[68px] items-center gap-3 px-4 py-3">
-        {body}
-        <span className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Vérification…
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-semibold">{channel.name}</span>
+        <span className="block truncate text-[13px] text-muted-foreground">{error ? "La connexion est à vérifier." : (CHANNEL_TEXT[channel.id] ?? channelStateLabel(channel))}</span>
+      </span>
+      {connected ? (
+        <StatePill state="connected" />
+      ) : error ? (
+        <StatePill state="attention" />
+      ) : checking ? (
+        <span className="inline-flex h-8 min-w-[108px] items-center justify-center" aria-label="Vérification">
+          <Loader2 className="h-4 w-4 animate-spin text-ink-3" />
         </span>
-      </div>
-    );
-  }
-  return (
-    <div className="flex min-h-[68px] items-center gap-3 px-4 py-3">
-      {body}
-      <Button variant="outline" size="sm" disabled={!canManage} onClick={onOpen} className="rounded-full max-sm:h-10">
-        {/* On a phone the channel's name is already on the row: « Connecter » alone, so the name is not cut. */}
-        Connecter{isFeaturedChannel(channel.id) && <span className="max-sm:hidden">&nbsp;{channel.name}</span>}
-      </Button>
-    </div>
+      ) : (
+        <StatePill state="connect" />
+      )}
+    </button>
   );
 }

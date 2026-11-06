@@ -177,7 +177,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
           )}
         >
           <MessagesSquare className="size-5 shrink-0" strokeWidth={1.9} />
-          {!collapsed && "Échanges"}
+          {!collapsed && "Salons"}
         </Link>
       )}
       {current?.access === "equipe" && (
