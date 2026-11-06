@@ -6,13 +6,13 @@ import { noStore, voiceToken } from "../_shared";
 // speech service's key. The recording and its text only pass through.
 export const maxDuration = 120;
 
-// The host refuses a body over 4.5 MB before this route; the dictation stops at two minutes for it.
+// The host refuses a body over 4.5 MB before this route; the dictation sends pieces of a minute at most.
 const MAX_BYTES = 4 * 1024 * 1024;
 
 export async function POST(request: Request) {
   try {
     const token = await voiceToken();
-    if (Number(request.headers.get("content-length") ?? 0) > MAX_BYTES + 64 * 1024) throw new ApiError(422, "unprocessable", "Enregistrement trop long (environ 2 minutes au plus).");
+    if (Number(request.headers.get("content-length") ?? 0) > MAX_BYTES + 64 * 1024) throw new ApiError(422, "unprocessable", "Morceau de dictée trop long.");
     const form = await request.formData().catch(() => null);
     const file = form?.get("file");
     if (!(file instanceof Blob)) throw new ApiError(400, "bad_request", "Enregistrement requis.");
