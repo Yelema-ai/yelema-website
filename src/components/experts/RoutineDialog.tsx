@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Picker } from "@/components/ui/picker";
 
 // What the tab needs to know about the expert: its profile on the instance (where the routines
 // live), and what the catalogue says of it.
@@ -193,18 +194,7 @@ export function RoutineDialog({
 
           <div className="flex flex-wrap items-center gap-2">
             {draft.recurring ? (
-              <select
-                aria-label="Fréquence"
-                value={draft.recurrence}
-                onChange={(e) => set({ recurrence: e.target.value })}
-                className="h-11 rounded-xl border bg-card px-3 text-[15px] text-ink"
-              >
-                {recurrences.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
+              <Picker label="Fréquence" placeholder="Fréquence" value={draft.recurrence} onChange={(v) => set({ recurrence: v })} groups={[{ options: recurrences }]} className="sm:h-11 sm:text-[15px]" />
             ) : (
               <Input
                 type="date"

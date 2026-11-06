@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Page } from "@/lib/paginate";
 import { Button } from "@/components/ui/button";
+import { Picker } from "@/components/ui/picker";
 
 // Under a paginated list: "6–10 sur 12", previous / next, and the page size when `sizes` is given.
 export function Pager({
@@ -24,20 +25,10 @@ export function Pager({
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-ink-3">
       {sizes && onSize && (
-        <label className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5">
           Lignes
-          <select
-            value={size}
-            onChange={(e) => onSize(Number(e.target.value))}
-            className="h-8 rounded-lg border border-line bg-surface px-2 text-[13px] text-ink"
-          >
-            {sizes.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
+          <Picker label="Lignes" placeholder={String(size ?? "")} value={String(size ?? "")} onChange={(v) => onSize(Number(v))} groups={[{ options: sizes.map((n) => ({ value: String(n), label: String(n) })) }]} className="sm:h-8" />
+        </div>
       )}
       <span className="ml-auto tabular-nums">
         {page.from}–{page.to} sur {total}
