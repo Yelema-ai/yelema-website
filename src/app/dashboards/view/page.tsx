@@ -29,7 +29,7 @@ interface SharedDashboardResponse {
   description?: string;
   pdfUrl?: string | null;
   htmlUrl?: string | null;
-  reason?: "login_required" | "forbidden";
+  reason?: "login_required" | "forbidden" | "not_found" | "expired";
   message?: string;
   currentUserEmail?: string | null;
   error?: string;
@@ -198,7 +198,7 @@ export default function SharedDashboardViewPage() {
           <div className="mx-auto mb-5 flex size-14 items-center justify-center rounded-2xl bg-slate-800 text-slate-400">
             <LayoutDashboard className="size-7" />
           </div>
-          <h1 className="text-xl font-bold text-white mb-2">Tableau de bord indisponible</h1>
+          <h1 className="text-xl font-bold text-white mb-2">{data?.reason === "expired" ? "Lien expiré" : "Tableau de bord indisponible"}</h1>
           <p className="text-sm text-slate-400 mb-6">
             {data?.error || "Le tableau de bord demandé n'a pas encore été généré ou le lien est expiré."}
           </p>

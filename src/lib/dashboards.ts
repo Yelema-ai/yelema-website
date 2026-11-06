@@ -188,13 +188,26 @@ export function getDashboardStateCandidatePaths(profile: string, folders: readon
   ];
 }
 
-/** The expert's dashboard state file: only where the dashboard is, never who may read it (that is the back office's). */
+/**
+ * The expert's dashboard state file: only where the dashboard is, never who may read it (that is the back
+ * office's). `fichier`/`pdf`: the page and its PDF in the drive; `lien`: a legacy page on Render.
+ */
 export interface StoredDashboardState {
+  fichier?: string | null;
+  pdf?: string | null;
   lien?: string | null;
-  hebergeur?: string | null;
   maj?: string | null;
   pdfPath?: string | null;
   htmlPath?: string | null;
   fichiers?: string | null;
   [key: string]: unknown;
+}
+
+/** A state naming a page in the drive: such a dashboard is never sent to Render. */
+export const namesFile = (state: StoredDashboardState | null | undefined): boolean => typeof state?.fichier === "string" && state.fichier.trim() !== "";
+
+/** The legacy Render page of a state, only when it names no drive page. */
+export function legacyLink(state: StoredDashboardState | null | undefined): string | null {
+  const lien = state?.lien;
+  return !namesFile(state) && isTrustedDashboardUrl(lien) ? lien.trim() : null;
 }

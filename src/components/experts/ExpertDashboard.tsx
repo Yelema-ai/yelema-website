@@ -114,7 +114,7 @@ function DashboardHeaderControls({
   onMaximize?: () => void;
   onClose?: () => void;
 }) {
-  const { activeUrl, refresh, loading, data, activeTab, setActiveTab, setShareModalOpen, downloadPdf, downloadHtml, downloadPptx } = useDashboard();
+  const { embedUrl, refresh, loading, data, activeTab, setActiveTab, setShareModalOpen, downloadPdf, downloadHtml, downloadPptx } = useDashboard();
   const icon = "h-9 w-9 text-ink-3 hover:text-ink";
 
   return (
@@ -164,11 +164,12 @@ function DashboardHeaderControls({
           <ExportItem icon={<FileText className="size-4" />} tone="bg-orange-500/10 text-orange-600" label="PDF" hint="A4 paysage, prêt à imprimer" onSelect={downloadPdf} />
           <ExportItem icon={<Presentation className="size-4" />} tone="bg-red-500/10 text-red-600" label="PowerPoint" hint="Une diapositive par bloc" onSelect={downloadPptx} />
           <ExportItem icon={<FileCode className="size-4" />} tone="bg-blue-500/10 text-blue-600" label="HTML" hint="Page web autonome" onSelect={downloadHtml} />
-          {activeUrl && (
+          {/* Always this app's own sandboxed frame, never the page's host. */}
+          {embedUrl?.startsWith("/api/dashboards/frame") && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild className="gap-2.5 rounded-lg px-2.5 py-2 text-[13px]">
-                <a href={activeUrl} target="_blank" rel="noopener noreferrer">
+                <a href={embedUrl} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="size-4 text-ink-3" /> Ouvrir dans un nouvel onglet
                 </a>
               </DropdownMenuItem>
