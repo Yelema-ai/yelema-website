@@ -8,7 +8,6 @@ import type { LlmOverview } from "@/lib/llm";
 import { catalogToolkit } from "@/lib/integration-catalog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Picker } from "@/components/ui/picker";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +47,16 @@ const pad = (n: number) => String(n).padStart(2, "0");
 function currentMonth(): string {
   const now = new Date();
   return `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}`;
+}
+
+// The last `n` months, newest first: « novembre 2026 ».
+function lastMonths(n: number): { value: string; label: string }[] {
+  const now = new Date();
+  return Array.from({ length: n }, (_, k) => {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - k, 1));
+    const label = d.toLocaleDateString("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" });
+    return { value: `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`, label: label.charAt(0).toUpperCase() + label.slice(1) };
+  });
 }
 
 // "2026-10" -> its first and last day, the last one no later than today.
@@ -266,8 +275,9 @@ export function UsageView() {
     <div className="max-w-5xl">
       <h1 className="sr-only">Consommation d’outils hors tokens</h1>
       <p className="mt-1 text-sm text-ink-2">
-        Les appels de vos Experts aux outils connectés (Gmail, Sheets,
-        HubSpot…).
+        Les appels de vos Experts aux outils de l’onglet Connecteurs (Gmail,
+        Sheets, HubSpot…). Les outils sur mesure ajoutés dans MCP ne sont pas
+        encore comptés ici.
       </p>
       {ownKey && (
         <p className="mt-3 max-w-2xl rounded-xl border border-line bg-soft px-4 py-3 text-[13px] text-ink-2">
@@ -278,20 +288,21 @@ export function UsageView() {
       )}
 
       <div className="mt-5 flex flex-wrap items-end gap-3">
-        <label className="text-[13px] font-semibold text-ink-3">
+        {/* The browser's month field was English and « archaïque » (Leslie, 06/11): our list, the last 12 months in French. */}
+        <div className="text-[13px] font-semibold text-ink-3">
           Mois
-          <Input
-            type="month"
+          <Picker
+            label="Mois"
+            placeholder="Ce mois-ci"
             value={month}
-            max={currentMonth()}
-            onChange={(e) => {
-              if (!e.target.value) return;
-              setMonth(e.target.value);
+            onChange={(v) => {
+              setMonth(v);
               setMember("");
             }}
-            className="mt-1 w-44"
+            groups={[{ options: lastMonths(12) }]}
+            className="mt-1 flex h-11 w-52 font-normal sm:h-11 sm:text-[15px]"
           />
-        </label>
+        </div>
         <div className="text-[13px] font-semibold text-ink-3">
           Membre
           <Picker
