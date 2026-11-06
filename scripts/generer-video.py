@@ -19,20 +19,56 @@ import urllib.request
 
 
 def detect_expert() -> str:
-    """Détecte dynamiquement le nom de l'expert courant sans valeur en dur."""
-    for var in ("EXPERT_NAME", "HERMES_PROFILE", "PROFILE", "EXPERT", "AGENT_NAME"):
+    """Détecte dynamiquement le vrai nom de l'expert courant (Fatima, Mamadou, Koffi, etc.)."""
+    # 1. Variables d'environnement injectées par le runtime
+    for var in ("EXPERT_NAME", "HERMES_PROFILE", "PROFILE", "EXPERT", "AGENT_NAME", "HERMES_AGENT_NAME"):
         val = os.environ.get(var)
         if val and val.strip():
             return val.strip().capitalize()
 
+    # 2. Lecture directe de SOUL.md dans le dossier courant ou les dossiers parents
     cwd = os.getcwd()
-    match_profile = re.search(r"/\.hermes/profiles/([^/]+)", cwd)
-    if match_profile:
-        return match_profile.group(1).capitalize()
+    curr = cwd
+    for _ in range(4):
+        soul = os.path.join(curr, "SOUL.md")
+        if os.path.exists(soul):
+            try:
+                with open(soul, "r", encoding="utf-8") as f:
+                    txt = f.read(600)
+                    m = re.search(r"^name:\s*['\"]?([^'\"\r\n]+)", txt, re.MULTILINE)
+                    if m and m.group(1).strip():
+                        return m.group(1).strip().capitalize()
+            except Exception:
+                pass
+        parent = os.path.dirname(curr)
+        if parent == curr:
+            break
+        curr = parent
 
-    match_experts = re.search(r"hermes-experts/([^/]+)", cwd)
-    if match_experts:
-        return match_experts.group(1).capitalize()
+    # 3. Déduction par le chemin d'exécution (agents/<expert>, .hermes/profiles/<expert>, etc.)
+    patterns = [
+        r"/\.hermes/profiles/([^/]+)",
+        r"/hermes-experts/([^/]+)",
+        r"/agents/([^/]+)",
+        r"/\.openclaw/workspace-([^/]+)",
+        r"/Livrables/([^/]+)",
+    ]
+    for p in patterns:
+        m = re.search(p, cwd)
+        if m and m.group(1).lower() not in ("workspace", "default", "node", "home", "ubuntu", "christyb"):
+            return m.group(1).capitalize()
+
+    # 4. Fichier de profil actif Hermes s'il existe
+    home = os.path.expanduser("~")
+    for active_f in (os.path.join(home, ".hermes", "active_profile"), os.path.join(home, ".hermes", "profile")):
+        if os.path.exists(active_f):
+            try:
+                with open(active_f, "r", encoding="utf-8") as f:
+                    name = f.read().strip()
+                    if name:
+                        return name.capitalize()
+            except Exception:
+                pass
 
     return "Contenu"
 
