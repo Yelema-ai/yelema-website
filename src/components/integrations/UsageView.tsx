@@ -9,6 +9,7 @@ import { catalogToolkit } from "@/lib/integration-catalog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Picker } from "@/components/ui/picker";
 
 // The shapes of GET /api/composio-usage and /calls, as the back office gives them (see
 // BoComposioUsage, BoComposioCall). The back office also sends what each call cost Yelema: never
@@ -212,21 +213,17 @@ export function UsageView() {
             className="mt-1 w-44"
           />
         </label>
-        <label className="text-[13px] font-semibold text-ink-3">
+        <div className="text-[13px] font-semibold text-ink-3">
           Membre
-          <select
+          <Picker
+            label="Membre"
+            placeholder="Tous les membres"
             value={member}
-            onChange={(e) => setMember(e.target.value)}
-            className="mt-1 flex h-11 w-64 max-w-full rounded-xl border border-line bg-surface px-3 text-[15px] font-normal text-ink focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15"
-          >
-            <option value="">Tous les membres</option>
-            {members.map((m) => (
-              <option key={m.email} value={m.email ?? ""}>
-                {memberName(m)}
-              </option>
-            ))}
-          </select>
-        </label>
+            onChange={setMember}
+            groups={[{ options: [{ value: "", label: "Tous les membres" }, ...members.map((m) => ({ value: m.email ?? "", label: memberName(m) }))] }]}
+            className="mt-1 flex h-11 w-64 font-normal sm:h-11 sm:text-[15px]"
+          />
+        </div>
         {loading && <Loader2 className="mb-3 h-4 w-4 animate-spin text-ink-3" aria-label="Chargement" />}
       </div>
 
