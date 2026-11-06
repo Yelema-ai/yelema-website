@@ -270,14 +270,14 @@ export function UnipileCard() {
       {editing && status && (
         <div className="space-y-3 border-t px-4 pb-3 pt-3 text-[13px]">
           <p className="text-ink-3">
-            Dans votre tableau de bord Unipile, reliez votre WhatsApp, puis copiez le DSN et créez une clé d’API.
+            Dans votre tableau de bord Unipile, reliez votre WhatsApp, puis copiez l’adresse de votre compte (DSN) et créez une clé d’accès.
           </p>
           <label className="block space-y-1">
-            <span className="font-semibold text-ink-2">DSN</span>
+            <span className="font-semibold text-ink-2">Adresse du compte Unipile (DSN)</span>
             <Input value={dsn} onChange={(e) => setDsn(e.target.value)} placeholder="api8.unipile.com:13851" autoComplete="off" />
           </label>
           <label className="block space-y-1">
-            <span className="font-semibold text-ink-2">Clé d’API</span>
+            <span className="font-semibold text-ink-2">Clé</span>
             <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={status.connected ? "Saisissez-la de nouveau" : ""} autoComplete="new-password" />
           </label>
           <div className="space-y-1">
@@ -293,7 +293,7 @@ export function UnipileCard() {
           </div>
           {tested && (
             <p className="text-ink-2">
-              {tested.length ? `Comptes trouvés : ${tested.map((a) => `${a.type} · ${a.name}`).join(", ")}` : "La clé marche, mais aucun compte n’est relié chez Unipile."}
+              {tested.length ? `Comptes trouvés : ${tested.map((a) => `${a.name} (${a.type})`).join(", ")}` : "La clé fonctionne, mais aucun compte n’est relié dans Unipile."}
             </p>
           )}
           <div className="flex flex-wrap gap-2">

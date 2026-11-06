@@ -99,7 +99,7 @@ export function CompanyProfileView() {
         <Dialog open={logos} onOpenChange={setLogos}>
           <DialogContent className="max-w-2xl">
             <DialogTitle>Logo</DialogTitle>
-            <DialogDescription>Toutes ses versions : claire, sombre, carrée, longue. Le logo principal s’affiche dans votre espace et sur la page de connexion. PNG, JPEG ou WebP, 5 Mo au plus.</DialogDescription>
+            <DialogDescription>Toutes ses versions : claire, sombre, carrée, longue. Le logo principal s’affiche dans votre espace et sur la page de connexion. PNG, JPEG ou WebP, 4 Mo au plus.</DialogDescription>
             <CompanyLogos profile={profile} onProfile={setProfile} />
           </DialogContent>
         </Dialog>

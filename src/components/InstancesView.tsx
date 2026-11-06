@@ -14,7 +14,7 @@ const STATE: Record<string, string> = {
   sleeping: "En veille",
   waking: "Réveil",
   starting: "Démarrage",
-  stopped: "Arrêtée",
+  stopped: "Arrêté",
   failed: "Échec",
   unknown: "Inconnu",
 };
@@ -59,16 +59,16 @@ export function InstancesView() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="sr-only">Instances</h1>
+        <h1 className="sr-only">Espaces des membres</h1>
         <p className="text-sm text-muted-foreground">
-          Chaque membre de {current.name} a sa propre instance, créée et suivie par l’équipe Yelema.
+          Chaque membre de {current.name} a son propre espace d’Experts, créé et suivi par l’équipe Yelema.
         </p>
       </div>
 
       {instances === null ? (
         <p className="text-sm text-muted-foreground">Chargement…</p>
       ) : instances.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Aucune instance pour le moment.</p>
+        <p className="text-sm text-muted-foreground">Aucun espace pour le moment.</p>
       ) : (
         <div className="overflow-x-auto rounded-lg border bg-card">
           <table className="w-full text-sm max-sm:min-w-[640px]">
@@ -82,16 +82,16 @@ export function InstancesView() {
                     <th className="px-4 py-2.5 font-medium">Experts</th>
                   </>
                 ) : (
-                  <th className="px-4 py-2.5 font-medium">Créée par</th>
+                  <th className="px-4 py-2.5 font-medium">Créé par</th>
                 )}
-                <th className="px-4 py-2.5 font-medium">Créée le</th>
+                <th className="px-4 py-2.5 font-medium">Créé le</th>
               </tr>
             </thead>
             <tbody>
               {instances.map((i, k) => (
                 <tr key={k} className="border-t">
                   <td className="px-4 py-3 font-medium">{i.name?.trim() || "Sans nom"}</td>
-                  <td className="px-4 py-3">{i.member_email ?? "Non attribuée"}</td>
+                  <td className="px-4 py-3">{i.member_email ?? "Non attribué"}</td>
                   {detailed ? (
                     <>
                       <td className="px-4 py-3">{i.state ? (STATE[i.state] ?? "Inconnu") : "—"}</td>

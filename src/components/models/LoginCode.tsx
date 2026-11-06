@@ -19,7 +19,7 @@ export function LoginCode({ account, onDone, compact }: { account: LlmAccount; o
   const poller = usePoll(
     async () => {
       const next = await apiFetch<LlmAccount>(`/api/llm/accounts/${account.id}`);
-      if (next.state === "active") toast.success("Compte connecté", { description: "L’installation sur l’instance est en cours." });
+      if (next.state === "active") toast.success("Compte connecté", { description: "Mise en place en cours, quelques instants." });
       if (next.state === "failed") toast.error("La connexion n’a pas abouti (refusée ou code expiré). Relancez-la.");
       if (next.state === "pending") return;
       poller.current?.stop();

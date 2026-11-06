@@ -50,8 +50,8 @@ function manifest(name: string): string {
 }
 
 const FIELDS = [
-  { key: "SLACK_BOT_TOKEN", label: "Jeton du bot (xoxb-…)", hint: "OAuth & Permissions › Bot User OAuth Token, après l’installation." },
-  { key: "SLACK_APP_TOKEN", label: "Jeton de l’application (xapp-…)", hint: "Basic Information › App-Level Tokens › Generate, avec le droit connections:write." },
+  { key: "SLACK_BOT_TOKEN", label: "Clé du bot (xoxb-…)", hint: "OAuth & Permissions › Bot User OAuth Token, après l’installation." },
+  { key: "SLACK_APP_TOKEN", label: "Clé de l’application (xapp-…)", hint: "Basic Information › App-Level Tokens › Generate, avec le droit connections:write." },
   {
     key: "SLACK_ALLOWED_USERS",
     label: "Personnes autorisées",
@@ -104,12 +104,12 @@ export function SlackConnect({ agentId, agentName, channel, onBack }: { agentId:
           </span>
         </li>
         <li>
-          <strong>Install App › Install to Workspace</strong>, puis copiez le jeton du bot (xoxb-…).
+          <strong>Install App › Install to Workspace</strong>, puis copiez la clé du bot (xoxb-…).
         </li>
         <li>
-          <strong>Basic Information › App-Level Tokens</strong> : créez un jeton avec le droit <code>connections:write</code> et copiez-le (xapp-…).
+          <strong>Basic Information › App-Level Tokens</strong> : créez une clé avec le droit <code>connections:write</code> et copiez-le (xapp-…).
         </li>
-        <li>Renseignez ci-dessous les deux jetons et les personnes autorisées, puis connectez. Écrivez ensuite à l’application dans Slack.</li>
+        <li>Renseignez ci-dessous les deux clés et les personnes autorisées, puis connectez. Écrivez ensuite à l’application dans Slack.</li>
       </ol>
 
       <div className="space-y-4">

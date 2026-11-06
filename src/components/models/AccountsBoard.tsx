@@ -146,7 +146,7 @@ export function AccountsBoard({ setup, scope, title, picker, scopeLabel, catalog
       {groups.length > 0 && (
         <p className="flex items-center gap-2 rounded-2xl border border-line bg-soft/40 px-3 py-2 text-xs text-ink-2">
           <Sparkles className="h-3.5 w-3.5 shrink-0 text-brand" />
-          <span><span className="font-semibold">Dernier recours</span> · Moteur Yelema (inclus dans l’abonnement)</span>
+          <span><span className="font-semibold">En dernier recours</span> : le moteur Yelema, inclus dans l’abonnement</span>
         </p>
       )}
 

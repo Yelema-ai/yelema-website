@@ -18,7 +18,7 @@ export function McpOauthReturn({ query }: { query: Query }) {
     sent.current = true;
     apiFetch<{ name: string; connected: boolean }>("/api/mcp/oauth/callback", { method: "POST", body: JSON.stringify(query) })
       .then((r) => {
-        if (!r.connected) return setOutcome({ kind: "failed", message: query.error ? "L’autorisation a été refusée chez le fournisseur." : "L’autorisation n’a pas abouti. Relancez-la depuis l’écran MCP." });
+        if (!r.connected) return setOutcome({ kind: "failed", message: query.error ? "L’autorisation a été refusée chez le fournisseur." : "La connexion n’a pas abouti. Relancez-la depuis Intégrations, onglet MCP." });
         setOutcome({ kind: "connected", name: r.name });
         setTimeout(() => window.close(), 1500);
       })

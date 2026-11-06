@@ -49,7 +49,7 @@ export default function IntegrationsLayout({ children }: { children: React.React
     return (
       <>
         <h1 className="mx-auto w-full max-w-[1280px] px-4 pt-6 font-display text-[30px] font-bold tracking-tight text-ink sm:px-8">Mes connecteurs</h1>
-        <p className="mx-auto w-full max-w-[1280px] px-4 pt-1 text-sm text-ink-2 sm:px-8">Vos applications, utilisées par votre seul chat d’entreprise : personne d’autre n’y a accès.</p>
+        <p className="mx-auto w-full max-w-[1280px] px-4 pt-1 text-sm text-ink-2 sm:px-8">Vos applications, utilisées seulement par votre chat d’entreprise. Personne d’autre n’y a accès.</p>
         {children}
       </>
     );

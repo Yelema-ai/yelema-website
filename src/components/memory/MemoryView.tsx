@@ -131,7 +131,7 @@ export function MemoryView({
     form.set("title", "Charte graphique");
     form.set("file", file);
     const res = await fetch("/api/memory/items", { method: "POST", body: form });
-    if (!res.ok) toast.error(await readApiError(res, "la charte n’a pas pu être déposée."));
+    if (!res.ok) toast.error(await readApiError(res, "La charte n’a pas pu être déposée"));
     await load();
   }
 
@@ -140,7 +140,7 @@ export function MemoryView({
     const form = new FormData();
     form.set("file", file);
     const res = await fetch(`/api/memory/items/${item.id}/versions`, { method: "POST", body: form });
-    if (!res.ok) toast.error(await readApiError(res, "la nouvelle version n’a pas pu être déposée."));
+    if (!res.ok) toast.error(await readApiError(res, "La nouvelle version n’a pas pu être déposée"));
     else toast.success(`${item.title} : nouvelle version déposée`);
     await load();
   }
@@ -184,7 +184,7 @@ export function MemoryView({
           if (unitId) form.set("unit", unitId);
           form.set("file", file);
           const res = await fetch("/api/memory/items", { method: "POST", body: form });
-          if (!res.ok) toast.error(`${file.name} : ${await readApiError(res, "le document n’a pas pu être déposé.")}`);
+          if (!res.ok) toast.error(`${file.name} : ${await readApiError(res, "Le document n’a pas pu être déposé")}`);
           return res.ok;
         });
         sent.forEach((r, i) => {
@@ -273,7 +273,7 @@ export function MemoryView({
           ) : (
             <h1 className="font-display text-[28px] font-bold tracking-tight text-ink">Mémoire de l’entreprise</h1>
           )}
-          <p className="mt-0.5 text-sm text-ink-3">Chaque Expert lit ce que l’organigramme ouvre à son utilisateur.</p>
+          <p className="mt-0.5 text-sm text-ink-3">Chaque Expert lit ce que l’organigramme permet à son membre de lire.</p>
         </div>
         {list && targets.length > 0 && (
           <DropdownMenu modal={false}>
@@ -317,7 +317,7 @@ export function MemoryView({
           )}
           {adding === "documents" && (
             <div>
-              <p className="text-[13px] text-ink-3">PDF, texte ou JSON, 5 Mo au plus chacun.</p>
+              <p className="text-[13px] text-ink-3">PDF ou texte, 4 Mo au plus chacun.</p>
               {files.length > 0 && (
                 <ul className="mt-2 space-y-1">
                   {files.map((f, i) => (

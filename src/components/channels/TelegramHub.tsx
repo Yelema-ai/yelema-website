@@ -33,7 +33,7 @@ export function TelegramHub({ hub, source, canManage }: { hub: TelegramHubApi; s
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="text-sm font-semibold">Bot Yelema</p>
-            <p className="text-xs text-muted-foreground">Un bot à vous, créé en un geste, et un groupe où chaque Expert a son sujet.</p>
+            <p className="text-xs text-muted-foreground">Votre propre bot, créé en un clic, et un groupe où chaque Expert a son sujet.</p>
           </div>
           {canManage && !hub.link && (
             <Button onClick={() => (other ? setConfirmReplace(true) : void hub.connect())} disabled={busy}>
@@ -89,7 +89,7 @@ export function TelegramHub({ hub, source, canManage }: { hub: TelegramHubApi; s
     return (
       <div className="space-y-3 rounded-lg border bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm">Bot : {botLink}{s.chatTitle ? <> · groupe « {s.chatTitle} »</> : null}</p>
+          <p className="text-sm">Bot {botLink}{s.chatTitle ? <>, groupe « {s.chatTitle} »</> : null}</p>
           {canManage && <Button variant="ghost" size="sm" onClick={() => void hub.disconnect()} disabled={busy}>Annuler</Button>}
         </div>
         <ol className="list-decimal space-y-1.5 pl-5 text-xs text-muted-foreground">

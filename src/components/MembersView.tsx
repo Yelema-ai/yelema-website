@@ -77,12 +77,12 @@ export function MembersView({ initial = null }: { initial?: Loaded | null }) {
         <div>
           <h1 className="sr-only">Membres</h1>
           <p className="text-sm text-muted-foreground">
-            {current.name} · {room ? "vous invitez les membres du chat d’entreprise ; ceux qui ont des Experts sont ajoutés par Yelema." : "les membres sont ajoutés et retirés par votre administrateur Yelema."}
+            {room ? "Vous invitez les membres du chat d’entreprise. Ceux qui ont des Experts sont ajoutés par l’équipe Yelema." : `Les membres de ${current.name} sont ajoutés et retirés par l’équipe Yelema.`}
           </p>
           {room && (
             <p className="mt-1 text-sm">
               <span className="font-medium">{quotaLabel(room.quota)}</span>
-              {room.seats && <span className="text-muted-foreground"> · chat d’entreprise : {room.seats.used} / {room.seats.cap} membres</span>}
+              {room.seats && <span className="text-muted-foreground"> Chat d’entreprise : {room.seats.used} membres sur {room.seats.cap}.</span>}
             </p>
           )}
         </div>
@@ -107,7 +107,7 @@ export function MembersView({ initial = null }: { initial?: Loaded | null }) {
                 <th className="px-4 py-2.5 font-medium">Rôle</th>
                 {detailed && <th className="px-4 py-2.5 font-medium">Accès</th>}
                 {detailed && <th className="px-4 py-2.5 font-medium">État</th>}
-                {detailed && <th className="px-4 py-2.5 font-medium">Instance</th>}
+                {detailed && <th className="px-4 py-2.5 font-medium">Espace</th>}
                 <th className="px-4 py-2.5 font-medium">Ajouté le</th>
                 {room && <th className="px-4 py-2.5" />}
               </tr>
@@ -171,7 +171,7 @@ function InviteDialog({ workspaceId, open, onOpenChange, onDone }: { workspaceId
     setBusy(true);
     try {
       const r = await apiFetch<{ ok: true; warning: string | null }>(`/api/workspaces/${workspaceId}/members`, { method: "POST", body: JSON.stringify(form) });
-      toast.success(`${form.firstName} est invité(e) : son accès arrive par e-mail.`);
+      toast.success(`Invitation envoyée à ${form.firstName} : son accès arrive par e-mail.`);
       if (r.warning) toast.warning(r.warning);
       setForm({ email: "", firstName: "", lastName: "" });
       onOpenChange(false);

@@ -273,17 +273,16 @@ export function UsageView() {
 
   return (
     <div className="max-w-5xl">
-      <h1 className="sr-only">Consommation d’outils hors tokens</h1>
+      <h1 className="sr-only">Utilisation des outils connectés</h1>
       <p className="mt-1 text-sm text-ink-2">
         Les appels de vos Experts aux outils de l’onglet Connecteurs (Gmail,
-        Sheets, HubSpot…). Les outils sur mesure ajoutés dans MCP ne sont pas
+        Sheets, HubSpot…). Les outils sur mesure ajoutés dans Serveurs MCP ne sont pas
         encore comptés ici.
       </p>
       {ownKey && (
         <p className="mt-3 max-w-2xl rounded-xl border border-line bg-soft px-4 py-3 text-[13px] text-ink-2">
-          Des Experts tournent sur votre propre clé de modèle : la dépense de
-          modèle n’est pas mesurée par Yelema, elle se lit chez votre
-          fournisseur.
+          Certains Experts utilisent votre propre compte d’IA : cette dépense
+          n’apparaît pas ici, consultez-la chez votre fournisseur.
         </p>
       )}
 

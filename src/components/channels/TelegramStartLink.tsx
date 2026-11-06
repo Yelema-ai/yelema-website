@@ -43,8 +43,8 @@ export function TelegramStartLink({ url, started, since, onCancel, busy }: { url
         </p>
         {slow && (
           <p className="text-xs text-muted-foreground">
-            Rien reçu de Telegram pour l’instant. Pas de Telegram sur cet ordinateur, ou bouton absent dans Telegram Web ? Scannez
-            ce QR code avec votre téléphone, ou copiez le lien pour l’ouvrir dans l’app Telegram.
+            Telegram n’a encore rien reçu. Si Telegram n’est pas installé sur cet ordinateur, scannez ce QR code avec votre
+            téléphone, ou copiez le lien.
           </p>
         )}
         <div className="flex flex-wrap gap-2">

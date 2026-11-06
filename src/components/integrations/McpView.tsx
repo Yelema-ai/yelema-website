@@ -57,7 +57,7 @@ function ToolList({ tools }: { tools: Tools }) {
           {tools.tools.map((t) => (
             <li key={t.name} className="text-[11px] leading-snug text-ink-3">
               <span className="font-mono text-ink-2">{t.name}</span>
-              {t.description && <> — {t.description}</>}
+              {t.description && <> : {t.description}</>}
             </li>
           ))}
         </ul>
@@ -78,21 +78,21 @@ function ServerCard({ server, note, access, tools, catalogueLabel, onRemove }: {
             <p className="truncate text-[15px] font-semibold text-ink">{server.name}</p>
             {server.auth === "oauth" && (
               <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-tint px-2 py-0.5 text-[11px] font-semibold text-brand">
-                <ShieldCheck className="h-3 w-3" /> OAuth
+                <ShieldCheck className="h-3 w-3" /> Connexion au compte
               </span>
             )}
             {note && <span className="shrink-0 rounded-full bg-soft px-2 py-0.5 text-[11px] font-semibold text-ink-3">{note}</span>}
           </div>
           {server.auth === "stdio" ? (
-            <p className="truncate text-[12px] text-ink-3">Catalogue Yelema · {catalogueLabel ?? server.stdio}</p>
+            <p className="truncate text-[12px] text-ink-3">Proposé par Yelema : {catalogueLabel ?? server.stdio}</p>
           ) : (
             <p className="truncate font-mono text-[12px] text-ink-3" title={server.url}>
               {server.url}
             </p>
           )}
           <p className="text-[11px] text-ink-3">
-            {server.auth === "stdio" ? "Lancé sur l’instance" : server.auth === "oauth" ? "OAuth · chacun autorise son compte" : server.hint ? `Jeton ${server.hint}` : "Sans jeton"}
-            {tools?.state === "failed" && <span className="text-ko"> · injoignable au dernier relevé</span>}
+            {server.auth === "stdio" ? "Installé chez vous" : server.auth === "oauth" ? "Chacun se connecte avec son compte" : server.hint ? `Clé ${server.hint}` : "Sans clé"}
+            {tools?.state === "failed" && <span className="text-ko">, injoignable lors de la dernière vérification</span>}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -167,7 +167,7 @@ export function McpView() {
     try {
       const own = await apiFetch<McpToolsReport>("/api/mcp/tools/refresh", { method: "POST" });
       setTools((t) => ({ ...t, own }));
-      toast.success("Outils relevés sur votre instance");
+      toast.success("Liste des outils mise à jour");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -218,7 +218,7 @@ export function McpView() {
     setOauthTries(0);
     try {
       const { authorizationUrl } = await apiFetch<{ authorizationUrl: string }>(`/api/mcp/oauth/${encodeURIComponent(serverId)}`, { method: "POST" });
-      if (!authorizationUrl.startsWith("https://")) throw new Error("Adresse d’autorisation refusée.");
+      if (!authorizationUrl.startsWith("https://")) throw new Error("Ce lien de connexion n’est pas sûr : il a été bloqué.");
       setFlow((f) => (f?.serverId === serverId ? { ...f, url: authorizationUrl } : f));
       const w = popup.current;
       if (w && !w.closed) {
@@ -312,7 +312,7 @@ export function McpView() {
     const out = await call;
     setRound((r) => r + 1);
     await load();
-    toast.success(done, { description: out.state === "pending" ? "L’installation sur les instances est en cours." : undefined });
+    toast.success(done, { description: out.state === "pending" ? "Installation en cours, quelques instants." : undefined });
     return out;
   }
 
@@ -344,11 +344,11 @@ export function McpView() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <h2 className="sr-only">Serveurs MCP</h2>
-          <p className="mt-1 max-w-xl text-sm text-ink-3">Connectez vos serveurs Model Context Protocol (MCP) pour étendre les capacités de vos Experts.</p>
+          <p className="mt-1 max-w-xl text-sm text-ink-3">Serveurs MCP : les outils sur mesure de votre entreprise, branchés sur vos Experts.</p>
         </div>
         <div className="flex gap-2 self-start sm:self-auto">
           {scope.kind !== "member" && (
-            <Button variant="outline" onClick={() => void survey()} disabled={surveying} title={report ? `Dernier relevé : ${new Date(report.at).toLocaleString("fr-FR")}` : undefined}>
+            <Button variant="outline" onClick={() => void survey()} disabled={surveying} title={report ? `Dernière vérification : ${new Date(report.at).toLocaleString("fr-FR")}` : undefined}>
               {surveying ? <Loader2 className="animate-spin" /> : <RefreshCw />} Relever les outils
             </Button>
           )}
@@ -369,7 +369,7 @@ export function McpView() {
         <div className="space-y-0.5">
           <p className="font-semibold text-ink">Vos outils, sous votre responsabilité</p>
           <p className="text-xs leading-relaxed text-ink-3">
-            Les outils d’un serveur sont offerts à tous les Experts concernés, routines et messages reçus par Telegram ou WhatsApp compris. Yelema ne les vérifie pas : ne branchez qu’un serveur en qui vous avez confiance.
+            Tous les Experts concernés peuvent utiliser ces outils, y compris dans leurs routines et sur Telegram ou WhatsApp. Yelema ne les vérifie pas : ne branchez qu’un serveur en qui vous avez confiance.
           </p>
         </div>
       </div>
@@ -394,8 +394,8 @@ export function McpView() {
             <div className="mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-soft text-ink-3">
               <Layers className="h-6 w-6" />
             </div>
-            <p className="text-sm font-semibold text-ink">Aucun serveur MCP personnalisé</p>
-            <p className="mt-1 max-w-sm text-xs text-ink-3">Ajoutez vos serveurs MCP pour connecter vos sources de données et vos outils à vos Experts.</p>
+            <p className="text-sm font-semibold text-ink">Aucun serveur MCP pour le moment</p>
+            <p className="mt-1 max-w-sm text-xs text-ink-3">Branchez vos outils sur mesure et vos données pour que vos Experts s’en servent.</p>
             <Button onClick={() => setAdding(true)} variant="outline" size="sm" className="mt-4">
               <Plus />
               Ajouter un outil
@@ -404,7 +404,7 @@ export function McpView() {
         )}
         {servers.some((s) => s.state === "failed") && (
           <p role="alert" className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">
-            L’installation d’un serveur n’a pas abouti sur une instance au moins. Supprimez-le puis ajoutez-le de nouveau ; si cela persiste, contactez Yelema.
+            L’installation d’un serveur n’a pas abouti pour au moins un membre. Supprimez-le puis ajoutez-le de nouveau. Si cela persiste, contactez l’équipe Yelema.
           </p>
         )}
       </div>

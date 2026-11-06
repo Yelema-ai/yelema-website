@@ -121,7 +121,7 @@ export function MailRightsView() {
                         <p className="px-4 pt-2 text-[13px] text-ink-3 sm:hidden">{summary(g.items)}</p>
                         <div className="hidden grid-cols-[minmax(0,1fr)_72px_110px_190px] gap-4 px-5 pt-2.5 text-xs font-semibold text-ink-3 md:grid">
                           <span>Expert</span>
-                          <span>Écrit</span>
+                          <span>Envoie des e-mails</span>
                           <span>Hors de l’entreprise</span>
                           <span>À la demande de</span>
                         </div>
@@ -161,7 +161,7 @@ function summary(items: MailRights[]): string {
   const w = items.filter(writes).length;
   const out = items.filter((i) => writes(i) && i.externalAllowed).length;
   const pending = items.filter((i) => i.status === "pending").length;
-  const parts = [items.length === 1 ? (w ? "Écrit" : "N’écrit pas") : `${w} sur ${items.length} écri${w > 1 ? "vent" : "t"}`];
+  const parts = [items.length === 1 ? (w ? "Envoie des e-mails" : "N’envoie pas d’e-mails") : `${w} sur ${items.length} envoi${w > 1 ? "ent" : "e"} des e-mails`];
   if (out) parts.push(items.length === 1 ? "hors de l’entreprise" : `${out} hors de l’entreprise`);
   if (pending) parts.push(items.length === 1 ? "en création" : `${pending} en création`);
   return parts.join(", ");
@@ -193,8 +193,8 @@ function InboxRow({ inbox, name, photoUrl, saving, open, onToggle, onSave }: {
             <p className="truncate text-xs text-ink-3">{inbox.address ?? "Adresse en cours de création"}</p>
           </div>
         </div>
-        <span className="text-[13px] text-ink-2 md:hidden">Écrit</span>
-        <Switch label={`Écrit : ${name}`} checked={inbox.sendEnabled && !noBox} disabled={locked} onChange={(sendEnabled) => onSave({ sendEnabled })} />
+        <span className="text-[13px] text-ink-2 md:hidden">Envoie des e-mails</span>
+        <Switch label={`Envoie des e-mails : ${name}`} checked={inbox.sendEnabled && !noBox} disabled={locked} onChange={(sendEnabled) => onSave({ sendEnabled })} />
         <span className="text-[13px] text-ink-2 md:hidden">Hors de l’entreprise</span>
         <Switch label={`Hors de l’entreprise : ${name}`} checked={inbox.externalAllowed && !noBox} disabled={locked || !inbox.sendEnabled} onChange={(externalAllowed) => onSave({ externalAllowed })} />
         <span className="text-[13px] text-ink-2 md:hidden">À la demande de</span>
@@ -241,7 +241,7 @@ function MemberAccess({ inbox, name, locked, onSave }: { inbox: MailRights; name
   );
   return (
     <fieldset className="mt-3" disabled={locked}>
-      <legend className="sr-only">Qui peut le faire écrire et lire sa boîte</legend>
+      <legend className="sr-only">Qui peut lui faire envoyer des e-mails et lire sa boîte</legend>
       <div className="flex flex-col gap-2 sm:flex-row">
         {choice(!some, `Tous les membres qui ont ${name}`, `${inbox.eligible.length} aujourd’hui, et ceux qui l’auront plus tard`, () => {
           setSome(false);

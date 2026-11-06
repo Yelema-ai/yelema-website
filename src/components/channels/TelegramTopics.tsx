@@ -53,7 +53,7 @@ export function TelegramTopics({
         </span>
         <div className="min-w-0">
           <h3 className="font-display text-lg font-bold text-ink">
-            Un sujet par expert
+            Un sujet par Expert
           </h3>
           <p className="mt-1 text-sm text-ink-3">
             Dans un groupe Telegram, chaque Expert a son sujet.
