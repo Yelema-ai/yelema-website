@@ -199,6 +199,8 @@ export interface BoMemberRoom {
   quota: { used: number; allowed: number | null };
   seats: { used: number; cap: number } | null;
   enterpriseOpen: boolean;
+  /** The company's own e-mail domains, when the back office serves them (asked of Sélim on 07/11). */
+  allowedDomains?: string[];
 }
 
 export type BoOpenedSession = { session: BoSession } & BoMe;

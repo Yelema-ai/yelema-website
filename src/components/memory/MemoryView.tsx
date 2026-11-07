@@ -18,6 +18,11 @@ import Link from "next/link";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { usePoll } from "@/components/usePoll";
 import { runPool } from "@/lib/bulk";
+import { MAX_UPLOAD_BYTES, tooLarge } from "@/lib/upload-limit";
+
+// The limit said in every refusal of a too large file (Leslie, 07/11): the host refuses it before the app sees it.
+const LIMIT_MB = Math.round(MAX_UPLOAD_BYTES / (1024 * 1024));
+const tooBig = (what: string) => `${what} dépasse ${LIMIT_MB} Mo, la taille maximale d’un envoi. Réduisez-la (un PDF compressé, par exemple) puis réessayez.`;
 import { driveTree } from "@/lib/drive-store";
 import { expertPath } from "@/lib/expert-tabs";
 
@@ -126,21 +131,23 @@ export function MemoryView({
   }
 
   async function depositCharte(file: File) {
+    if (tooLarge(file)) return void toast.error(tooBig("La charte"));
     if (charte) return newVersion(charte, file);
     const form = new FormData();
     form.set("title", "Charte graphique");
     form.set("file", file);
     const res = await fetch("/api/memory/items", { method: "POST", body: form });
-    if (!res.ok) toast.error(await readApiError(res, "La charte n’a pas pu être déposée"));
+    if (!res.ok) toast.error(res.status === 413 ? tooBig("La charte") : await readApiError(res, `La charte n’a pas pu être déposée (${LIMIT_MB} Mo au plus)`));
     await load();
   }
 
   // A new file for a deposited document: the back office keeps the old one as the previous version.
   async function newVersion(item: MemoryItem, file: File) {
+    if (tooLarge(file)) return void toast.error(tooBig(`« ${file.name} »`).replace("Réduisez-la", "Réduisez-le"));
     const form = new FormData();
     form.set("file", file);
     const res = await fetch(`/api/memory/items/${item.id}/versions`, { method: "POST", body: form });
-    if (!res.ok) toast.error(await readApiError(res, "La nouvelle version n’a pas pu être déposée"));
+    if (!res.ok) toast.error(res.status === 413 ? tooBig("La nouvelle version") : await readApiError(res, `La nouvelle version n’a pas pu être déposée (${LIMIT_MB} Mo au plus)`));
     else toast.success(`${item.title} : nouvelle version déposée`);
     await load();
   }
@@ -179,12 +186,16 @@ export function MemoryView({
       if (kind === "documents") {
         // Three documents at a time; the ones refused stay in the window, in their order.
         const sent = await runPool(files, 3, async (file) => {
+          if (tooLarge(file)) {
+            toast.error(`${file.name} : ${tooBig("ce document").replace(/^ce/, "Ce").replace("Réduisez-la", "Réduisez-le")}`);
+            return false;
+          }
           const form = new FormData();
           form.set("title", file.name);
           if (unitId) form.set("unit", unitId);
           form.set("file", file);
           const res = await fetch("/api/memory/items", { method: "POST", body: form });
-          if (!res.ok) toast.error(`${file.name} : ${await readApiError(res, "Le document n’a pas pu être déposé")}`);
+          if (!res.ok) toast.error(`${file.name} : ${res.status === 413 ? `il dépasse ${LIMIT_MB} Mo, la taille maximale d’un envoi.` : await readApiError(res, "Le document n’a pas pu être déposé")}`);
           return res.ok;
         });
         sent.forEach((r, i) => {

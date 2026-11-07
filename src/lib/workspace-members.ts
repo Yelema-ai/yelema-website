@@ -4,6 +4,7 @@ import { backoffice, BackofficeError } from "@/lib/backoffice";
 import { ApiError, dbError } from "@/lib/http";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { currentPrincipal, readSession } from "@/lib/session";
+import { domainOf } from "@/lib/member-room";
 import type { Invitation, MemberRoom, Role, WorkspaceMember } from "@/lib/types";
 
 export type WorkspaceMembers = { members: WorkspaceMember[]; invitations: Invitation[]; role: Role } & Partial<MemberRoom>;
@@ -40,7 +41,7 @@ async function backofficeMembers(role: Role): Promise<{ members: WorkspaceMember
     return { members: [{ user_id: me.user.id, email: me.user.email, name: me.user.name, role: me.user.role, created_at: null }] };
   }
   try {
-    const { items, quota, seats, enterpriseOpen } = await backoffice.members(session.accessToken);
+    const { items, quota, seats, enterpriseOpen, allowedDomains } = await backoffice.members(session.accessToken);
     const members = items.map((m) => ({
       user_id: m.email,
       id: m.id,
@@ -53,7 +54,9 @@ async function backofficeMembers(role: Role): Promise<{ members: WorkspaceMember
       instance_name: m.instance?.name ?? null,
       created_at: m.instance?.createdAt ?? null,
     }));
-    return { members, quota, seats, enterpriseOpen };
+    // The company's own domains: the back office's list, else the admin's own (Leslie, 07/11).
+    const own = domainOf(me.user.email);
+    return { members, quota, seats, enterpriseOpen, allowedDomains: allowedDomains?.length ? allowedDomains : own ? [own] : [] };
   } catch (e) {
     if (e instanceof BackofficeError) throw new ApiError(e.status, e.code, e.message);
     throw e;
