@@ -39,3 +39,18 @@ test("répondre à mon Expert le mentionne (sans doublon) ; à l'Expert d'un aut
   assert.deepEqual(withReplyMention([], k("c"), c), [], "une personne");
   assert.deepEqual(withReplyMention([], null, c), []);
 });
+
+test("group mentions: @tous for the people, @experts for mine, one per department", async () => {
+  const { groupCandidates } = await import("./buzz-mentions.ts");
+  const dir: BuzzEntry[] = [
+    { nom: "Aïcha", type: "personne", membre: "a", cles: ["ka"], unite: "Direction" },
+    { nom: "Konan", type: "personne", membre: "k", cles: ["kk"], unite: "Finance" },
+    { nom: "Serge", type: "personne", membre: "s", cles: ["ks"], unite: "Finance" },
+    { nom: "Fatima (de Aïcha)", type: "expert", membre: "a", cles: ["kf"] },
+    { nom: "Mamadou (de Konan)", type: "expert", membre: "k", cles: ["km"] },
+  ];
+  const g = groupCandidates(dir, ["ka", "kk", "ks", "kf", "km"], "a", ["ka"]);
+  assert.deepEqual(g.map((c) => [c.handle, c.entry.cles, c.mine]), [["tous", ["kk", "ks"], false], ["experts", ["kf"], true], ["Finance", ["kk", "ks"], false]]);
+  assert.equal(g[0].group?.hint, "Prévient les 2 personnes du salon");
+  assert.deepEqual(groupCandidates(dir, ["ka", "kk"], "a", ["ka"]).map((c) => c.handle), ["tous", "Finance"]);
+});

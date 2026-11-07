@@ -310,3 +310,32 @@ export async function openDirect(c: BuzzConnection, pubkeys: string[]): Promise<
   if (!r.ok || !id) throw new Error(r.message.replace(/^[a-z-]+: /, "") || "Conversation non ouverte.");
   return id;
 }
+
+/**
+ * The last message of each conversation, for the rail's preview and its unread mark: one query per
+ * channel (`limit: 1`), then one subscription on all of them from now on. `onLast` gets every newer one.
+ */
+export function watchLast(c: BuzzConnection, ids: string[], onLast: (channel: string, m: Message) => void): Subscription {
+  let open = true;
+  const channelOf = (e: Event) => tag(e, "h");
+  for (const id of ids)
+    void c.query({ kinds: MESSAGE_KINDS, "#h": [id], limit: 1 }).then(
+      (events) => {
+        const last = events.reduce<Event | null>((a, e) => (!a || e.created_at > a.created_at ? e : a), null);
+        if (open && last) onLast(id, toMessage(last));
+      },
+      () => undefined,
+    );
+  const live = ids.length
+    ? c.subscribe({ kinds: MESSAGE_KINDS, "#h": ids, since: now() }, (e) => {
+        const h = channelOf(e);
+        if (open && h) onLast(h, toMessage(e));
+      })
+    : null;
+  return {
+    close: () => {
+      open = false;
+      live?.close();
+    },
+  };
+}

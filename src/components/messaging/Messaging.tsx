@@ -10,13 +10,15 @@ import { optimistic } from "@/lib/optimistic";
 import { conversationName, facesOf, isSalonName, labelsOf, myExpertsIn, myMember, participants, working, type BuzzOverview } from "@/lib/buzz";
 import { deviceKey, rememberedRelay, storedKey } from "@/lib/buzz-keys";
 import { reconnectDelay } from "@/lib/instance-events";
-import { BuzzConnection, conversations, follow, openDirect, refusalText, sendMessage, watchRosters, withMessage, type Conversation, type Message } from "@/lib/buzz-relay";
+import { BuzzConnection, conversations, follow, openDirect, refusalText, sendMessage, watchLast, watchRosters, withMessage, type Conversation, type Message } from "@/lib/buzz-relay";
+import { excerpt } from "@/lib/activity";
+import { useVoices } from "@/components/voice/useVoices";
 import { cn } from "@/lib/utils";
 import { useChatMarks } from "@/components/conversations/useChatMarks";
 import { ExchangeRail } from "@/components/messaging/ExchangeRail";
 import { ExchangeHeader, type ExchangePane } from "@/components/messaging/ExchangeHeader";
 import { ExchangeThread } from "@/components/messaging/ExchangeThread";
-import { candidatesOf } from "@/lib/buzz-mentions";
+import { candidatesOf, groupCandidates } from "@/lib/buzz-mentions";
 import { NewExchange, type ExchangeKind } from "@/components/messaging/NewExchange";
 import { prefetchSalonDeliverables } from "@/components/messaging/salon-deliverables-store";
 import { whenIdle } from "@/components/usePrefetch";
@@ -36,6 +38,24 @@ const OVERVIEW_KEY = "buzz:overview";
 const LIST_KEY = "buzz:list";
 const threadKey = (id: string) => `buzz:thread:${id}`;
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// When this device last read each conversation (the time of its last message then): a newer message from
+// someone else makes the row bold. Absent on a first visit: everything counts as read.
+const SEEN_KEY = "buzz:seen";
+function readSeen(): Record<string, number> | null {
+  try {
+    const raw = localStorage.getItem(SEEN_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : null;
+  } catch {
+    return null;
+  }
+}
+function writeSeen(seen: Record<string, number>) {
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
+  } catch {
+    // Private window: unread marks last this visit only.
+  }
+}
 
 export function Messaging() {
   const router = useRouter();
@@ -48,7 +68,11 @@ export function Messaging() {
   const [thread, setThread] = useState<Message[] | null>(null);
   const [threadFailed, setThreadFailed] = useState(false);
   const [sending, setSending] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [, setRefreshing] = useState(false);
+  // The last message of each conversation (preview, time, unread), and when each was last read here.
+  const [lasts, setLasts] = useState<Record<string, Message>>({});
+  const [seen, setSeen] = useState<Record<string, number> | null>(null);
+  const canDictate = useVoices().length > 0;
   const [composing, setComposing] = useState<ExchangeKind | null>(null);
   const [pane, setPane] = useState<ExchangePane>("fil");
   const [guestsOpen, setGuestsOpen] = useState(false);
@@ -186,6 +210,31 @@ export function Messaging() {
     };
   }, [me, link, refresh]);
 
+  // Le dernier message de chaque conversation : l'aperçu de la ligne, son heure, et le gras d'un non-lu.
+  const ids = useMemo(() => (list ?? []).map((c) => c.id).sort().join(","), [list]);
+  useEffect(() => {
+    const c = relay.current;
+    if (!c || !ids) return;
+    const watch = watchLast(c, ids.split(","), (channel, m) => setLasts((l) => (l[channel] && l[channel].at > m.at ? l : { ...l, [channel]: m })));
+    return () => watch.close();
+  }, [ids, link]);
+  // Première visite : ce qui précède compte comme lu (`__since`) ; la conversation ouverte est lue jusqu'à son dernier message.
+  useEffect(() => {
+    const s = readSeen() ?? { __since: Math.floor(Date.now() / 1000) };
+    writeSeen(s);
+    setSeen(s);
+  }, []);
+  const lastOpen = open ? Math.max(lasts[open]?.at ?? 0, thread?.at(-1)?.at ?? 0) : 0;
+  useEffect(() => {
+    if (!open || !lastOpen) return;
+    setSeen((s) => {
+      if (!s || (s[open] ?? 0) >= lastOpen) return s;
+      const next = { ...s, [open]: lastOpen };
+      writeSeen(next);
+      return next;
+    });
+  }, [open, lastOpen]);
+
   // « Actualiser » : l'annuaire (participants, portraits), puis la liste et le fil ; la connexion d'abord si elle est tombée.
   async function reload() {
     setRefreshing(true);
@@ -240,8 +289,9 @@ export function Messaging() {
   const candidates = useMemo(() => {
     if (!current) return [];
     const all = candidatesOf(directory, current.members, myMember(directory, mine), mine);
-    // Hors salon, vos Experts ne travaillent pas sur mention : ils restent de simples participants.
-    return isSalon(current) ? all : all.map((c) => ({ ...c, mine: false }));
+    // Hors salon, vos Experts ne travaillent pas sur mention : ils restent de simples participants. Les mentions
+    // de groupe (@tous, @experts, @Finance) sont celles d'un salon, en tête de la liste.
+    return isSalon(current) ? [...groupCandidates(directory, current.members, myMember(directory, mine), mine), ...all] : all.map((c) => ({ ...c, mine: false }));
   }, [current, directory, mine, isSalon]);
 
   async function send(text: string, mentions: string[], replyTo: Message | null): Promise<boolean> {
@@ -361,7 +411,6 @@ export function Messaging() {
           list={list}
           open={open}
           ready={state.kind === "ready"}
-          refreshing={refreshing}
           pinned={pinned}
           archived={archived}
           nameOf={nameOf}
@@ -371,7 +420,13 @@ export function Messaging() {
           facesOf={(c) => facesOf(directory, c.members, mine)}
           onOpen={setOpen}
           onNew={setComposing}
-          onRefresh={() => void reload()}
+          lastOf={(c) => {
+            const m = lasts[c.id];
+            if (!m) return null;
+            const who = mine.includes(m.author) ? "Vous" : (labels.get(m.author) ?? "").replace(/ \((?:de |d’|d')[^)]*\)$/, "");
+            const text = excerpt(m.text.replace(/[`*_>#]/g, ""), 90);
+            return { at: m.at, text: who && isSalon(c) ? `${who} : ${text}` : mine.includes(m.author) ? `Vous : ${text}` : text, unread: Boolean(seen) && !mine.includes(m.author) && m.at > (seen?.[c.id] ?? seen?.__since ?? 0) && c.id !== open };
+          }}
           onMark={(id, kind, on) => mark(markKey(id), kind, on)}
           onCopy={(c) => void copyLink(c)}
           onRename={rename}
@@ -395,6 +450,8 @@ export function Messaging() {
           sending={sending}
           onSend={send}
           roles={rosterContext}
+          onNew={state.kind === "ready" ? setComposing : undefined}
+          canDictate={canDictate}
         />
       </section>
       </div>
