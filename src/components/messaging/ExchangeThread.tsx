@@ -127,7 +127,7 @@ export function ExchangeThread(p: ThreadProps) {
   const entryOf = (k: string) => (p.mine.includes(k) ? self : (byKey.get(k) ?? null));
   // Un Expert par son prénom, son propriétaire dans la pastille ; une personne par son nom.
   const shownName = (k: string) => (entryOf(k)?.type === "expert" ? expertParts(nameOf(k)).name : nameOf(k));
-  const handles = p.directory.flatMap((e) => (e.type === "expert" ? [e.nom, shortName(e.nom)] : [e.nom]));
+  const handles = [...p.directory.flatMap((e) => (e.type === "expert" ? [e.nom, shortName(e.nom)] : [e.nom])), ...p.candidates.filter((c) => c.group).map((c) => c.handle), "tous", "experts"];
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {p.pane === "livrables" && p.salon ? (

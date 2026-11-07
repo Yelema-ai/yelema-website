@@ -18,7 +18,7 @@ import { useChatMarks } from "@/components/conversations/useChatMarks";
 import { ExchangeRail } from "@/components/messaging/ExchangeRail";
 import { ExchangeHeader, type ExchangePane } from "@/components/messaging/ExchangeHeader";
 import { ExchangeThread } from "@/components/messaging/ExchangeThread";
-import { candidatesOf } from "@/lib/buzz-mentions";
+import { candidatesOf, groupCandidates } from "@/lib/buzz-mentions";
 import { NewExchange, type ExchangeKind } from "@/components/messaging/NewExchange";
 import { prefetchSalonDeliverables } from "@/components/messaging/salon-deliverables-store";
 import { whenIdle } from "@/components/usePrefetch";
@@ -289,8 +289,9 @@ export function Messaging() {
   const candidates = useMemo(() => {
     if (!current) return [];
     const all = candidatesOf(directory, current.members, myMember(directory, mine), mine);
-    // Hors salon, vos Experts ne travaillent pas sur mention : ils restent de simples participants.
-    return isSalon(current) ? all : all.map((c) => ({ ...c, mine: false }));
+    // Hors salon, vos Experts ne travaillent pas sur mention : ils restent de simples participants. Les mentions
+    // de groupe (@tous, @experts, @Finance) sont celles d'un salon, en tête de la liste.
+    return isSalon(current) ? [...groupCandidates(directory, current.members, myMember(directory, mine), mine), ...all] : all.map((c) => ({ ...c, mine: false }));
   }, [current, directory, mine, isSalon]);
 
   async function send(text: string, mentions: string[], replyTo: Message | null): Promise<boolean> {

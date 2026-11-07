@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { AtSign, CornerDownRight, Loader2, Mic, Send, X } from "lucide-react";
+import { AtSign, CornerDownRight, Loader2, Mic, Send, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { mentionsIn, TOKEN, type Candidate } from "@/lib/buzz-mentions";
 import { fold } from "@/lib/fold";
@@ -93,9 +93,13 @@ export function MentionComposer({ candidates, replyTo, onCancelReply, sending, o
           {shown.map((c, i) => (
             <li key={c.handle} role="option" aria-selected={i === active}>
               <button type="button" onMouseDown={(e) => { e.preventDefault(); choose(c); }} className={cn("flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm", i === active ? "bg-soft" : "hover:bg-soft")}>
-                <ParticipantAvatar entry={c.entry} name={c.handle} />
+                {c.group ? (
+                  <span className="grid size-7 shrink-0 place-items-center rounded-full bg-tint text-brand" aria-hidden><Users className="size-3.5" /></span>
+                ) : (
+                  <ParticipantAvatar entry={c.entry} name={c.handle} />
+                )}
                 <span className="min-w-0 flex-1 truncate font-semibold text-ink">{c.handle}</span>
-                <span className="shrink-0 text-xs text-ink-3">{c.entry.type === "expert" ? `${c.mine ? "Votre " : ""}${c.entry.pronom === "elle" ? "Experte" : "Expert"}` : "Membre de l’équipe"}</span>
+                <span className="shrink-0 text-xs text-ink-3">{c.group ? c.group.hint : c.entry.type === "expert" ? `${c.mine ? "Votre " : ""}${c.entry.pronom === "elle" ? "Experte" : "Expert"}` : "Membre de l’équipe"}</span>
               </button>
             </li>
           ))}
