@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, test } from "node:test";
 
 import { isServerId, mcpPending, mcpRefusalMessage, mcpScopePath, mcpServerPath, parseOauthQuery, parseServerDraft, type McpOverview, type McpServer } from "./mcp-servers.ts";
 
@@ -95,4 +95,15 @@ describe("parseOauthQuery", () => {
   it("refuses a return without state, without code nor error, or with a non-printable value", () => {
     for (const body of [null, {}, { code: "c" }, { state: "s" }, { code: "a b", state: "s" }, { code: "c\n", state: "s" }, { code: "x".repeat(4097), state: "s" }, { code: 7, state: "s" }]) assert.equal(parseOauthQuery(body), null, JSON.stringify(body));
   });
+});
+
+test("a server card's name and address", async () => {
+  const { serverHost, serverTitle } = await import("./mcp-servers.ts");
+  assert.equal(serverHost("https://mcp.higgsfield.ai/mcp"), "higgsfield.ai");
+  assert.equal(serverHost("https://developer.unipile.com/x"), "unipile.com");
+  assert.equal(serverHost("pas une adresse"), null);
+  assert.equal(serverTitle({ name: "h.", url: "https://mcp.higgsfield.ai/mcp" }), "Higgsfield");
+  assert.equal(serverTitle({ name: "", url: "https://mcp.plaud.ai/sse" }), "Plaud");
+  assert.equal(serverTitle({ name: "buffer", url: "https://mcp.buffer.com/mcp" }), "Buffer");
+  assert.equal(serverTitle({ name: "Mon CRM", url: "https://mcp.exa.ai/mcp" }), "Mon CRM");
 });
