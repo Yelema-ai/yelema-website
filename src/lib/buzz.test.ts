@@ -98,3 +98,34 @@ test("un invité n'est jamais rangé parmi les Experts d'un membre (son id d'inv
   ];
   assert.deepEqual(salonPeople(dir, [k("a"), k("g")], [k("a")]).map((g) => [g.nom, g.experts.length]), [["Leslie", 0]]);
 });
+
+test("an expert's name, its owner and its chip", async () => {
+  const { expertParts, expertChip } = await import("./buzz.ts");
+  assert.deepEqual(expertParts("Djénéba (de Aïcha)"), { name: "Djénéba", owner: "Aïcha" });
+  assert.deepEqual(expertParts("Koffi"), { name: "Koffi", owner: null });
+  const e = (nom: string, pronom: "il" | "elle" | null): BuzzEntry => ({ nom, type: "expert", membre: "1", cles: [], pronom });
+  assert.equal(expertChip(e("Djénéba (de Aïcha)", "elle"), false), "Experte d’Aïcha");
+  assert.equal(expertChip(e("Koffi (de Selim T)", "il"), false), "Expert de Selim T");
+  assert.equal(expertChip(e("Koffi (de Selim T)", null), true), "Votre Expert");
+});
+
+test("day separators and row times", async () => {
+  const { dayLabel, whenLabel, newDay } = await import("./buzz.ts");
+  const now = new Date(2026, 10, 7, 11, 0).getTime() / 1000;
+  assert.equal(dayLabel(now - 3600, now), "Aujourd’hui");
+  assert.equal(dayLabel(now - 86400, now), "Hier");
+  assert.equal(dayLabel(new Date(2026, 10, 5, 9).getTime() / 1000, now), "Jeudi 5 novembre");
+  assert.equal(whenLabel(new Date(2026, 10, 7, 9, 5).getTime() / 1000, now), "09:05");
+  assert.equal(whenLabel(now - 86400, now), "Hier");
+  assert.equal(newDay({ at: now - 86400 }, { at: now }), true);
+  assert.equal(newDay({ at: now - 60 }, { at: now }), false);
+});
+
+test("mentions become chips, longest name first, not inside a word", async () => {
+  const { markMentions } = await import("./buzz.ts");
+  const names = ["Djénéba", "Djénéba (de Aïcha)", "Aïcha Koné"];
+  assert.equal(markMentions("@Djénéba (de Aïcha) peux-tu ?", names), "`@Djénéba (de Aïcha)` peux-tu ?");
+  assert.equal(markMentions("Merci @Djénéba, et @Aïcha Koné.", names), "Merci `@Djénéba`, et `@Aïcha Koné`.");
+  assert.equal(markMentions("mail a@Djénéba.com", names), "mail a@Djénéba.com");
+  assert.equal(markMentions("@Djénébaa", names), "@Djénébaa");
+});

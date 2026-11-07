@@ -1,22 +1,35 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { AtSign, CornerDownRight, Loader2, Send, X } from "lucide-react";
+import { AtSign, CornerDownRight, Loader2, Mic, Send, X } from "lucide-react";
+import { toast } from "sonner";
 import { mentionsIn, TOKEN, type Candidate } from "@/lib/buzz-mentions";
 import { fold } from "@/lib/fold";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { ParticipantAvatar } from "@/components/messaging/ParticipantAvatar";
+import { DictationBar } from "@/components/chat/ChatComposer";
+import { useDictation } from "@/components/chat/useDictation";
 
 // La saisie d'un échange : « @ » ouvre la liste des participants. Vos Experts y sont en tête : mentionnés, ils
 // travaillent ; une personne ou l'Expert d'un collègue mentionné est seulement prévenu.
 
-export function MentionComposer({ candidates, replyTo, onCancelReply, sending, onSend }: { candidates: Candidate[]; replyTo: string | null; onCancelReply: () => void; sending: boolean; onSend: (text: string, mentions: string[]) => Promise<boolean> }) {
+export function MentionComposer({ candidates, replyTo, onCancelReply, sending, onSend, canDictate = false }: { candidates: Candidate[]; replyTo: string | null; onCancelReply: () => void; sending: boolean; onSend: (text: string, mentions: string[]) => Promise<boolean>; /** Le micro, comme dans le chat d'un Expert, là où la voix est active. */ canDictate?: boolean }) {
   const [draft, setDraft] = useState("");
   const [picked, setPicked] = useState<Candidate[]>([]);
   const [query, setQuery] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const area = useRef<HTMLTextAreaElement>(null);
+  // La dictée du chat d'un Expert : ce qui est dit arrive dans le champ, envoyé avec Envoyer.
+  const dictation = useDictation({
+    expert: null,
+    onText: (said) => {
+      setDraft((prev) => (prev.trim() ? `${prev.trim()} ${said}` : said));
+      requestAnimationFrame(() => area.current?.focus());
+    },
+    onError: (message) => toast.error(message),
+  });
+  const dictating = dictation.state !== "idle";
 
   const shown = useMemo(() => (query === null ? [] : candidates.filter((c) => fold(c.handle).includes(fold(query))).slice(0, 8)), [candidates, query]);
 
@@ -82,7 +95,7 @@ export function MentionComposer({ candidates, replyTo, onCancelReply, sending, o
               <button type="button" onMouseDown={(e) => { e.preventDefault(); choose(c); }} className={cn("flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm", i === active ? "bg-soft" : "hover:bg-soft")}>
                 <ParticipantAvatar entry={c.entry} name={c.handle} />
                 <span className="min-w-0 flex-1 truncate font-semibold text-ink">{c.handle}</span>
-                <span className="shrink-0 text-xs text-ink-3">{c.mine ? "Votre Expert IA" : c.entry.type === "expert" ? "Expert IA" : "Membre de l’équipe"}</span>
+                <span className="shrink-0 text-xs text-ink-3">{c.entry.type === "expert" ? `${c.mine ? "Votre " : ""}${c.entry.pronom === "elle" ? "Experte" : "Expert"}` : "Membre de l’équipe"}</span>
               </button>
             </li>
           ))}
@@ -115,6 +128,9 @@ export function MentionComposer({ candidates, replyTo, onCancelReply, sending, o
           placeholder="Écrire un message"
           className="block max-h-[180px] min-h-[44px] w-full resize-none bg-transparent px-5 pb-2 pt-4 text-[15px] leading-relaxed text-ink outline-none [field-sizing:content] placeholder:text-ink-3"
         />
+        {dictating ? (
+          <div className="px-3 pb-3"><DictationBar dictation={dictation} /></div>
+        ) : (
         <div className="flex items-center gap-2 px-3 pb-3">
           {/* « @ » : demander à vos Experts (ils travaillent) ou prévenir quelqu'un ; un clic ouvre la liste. */}
           <button
@@ -128,17 +144,29 @@ export function MentionComposer({ candidates, replyTo, onCancelReply, sending, o
             <AtSign className="size-4" />
             <span className="@max-md:sr-only">{candidates.some((c) => c.mine) ? "Demander à vos Experts" : "Mentionner"}</span>
           </button>
+          {canDictate && (
+            <button
+              type="button"
+              onClick={() => void dictation.start()}
+              aria-label="Dicter un message"
+              title="Dicter un message"
+              className="ml-auto inline-flex size-10 shrink-0 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-soft hover:text-ink"
+            >
+              <Mic className="size-[18px]" />
+            </button>
+          )}
           <button
             type="submit"
             disabled={!draft.trim() || sending}
             aria-label="Envoyer"
             title="Envoyer"
-            className="ml-auto inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-on-brand transition-opacity hover:opacity-90 disabled:opacity-40 @max-xl:w-10 @max-xl:justify-center @max-xl:rounded-full @max-xl:px-0"
+            className={cn(!canDictate && "ml-auto", "inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-on-brand transition-opacity hover:opacity-90 disabled:opacity-40 @max-xl:w-10 @max-xl:justify-center @max-xl:rounded-full @max-xl:px-0")}
           >
             {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
             <span className="@max-xl:sr-only">Envoyer</span>
           </button>
         </div>
+        )}
       </div>
     </form>
   );

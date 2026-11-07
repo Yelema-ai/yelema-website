@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState, type KeyboardEvent } from "react";
-import { Archive, Hash, Link2, MoreHorizontal, Pencil, Pin, PinOff, Plus, RotateCw, Search, Trash2, User, Users, X } from "lucide-react";
-import type { BuzzEntry } from "@/lib/buzz";
+import { Archive, Hash, Link2, MessageCircle, MoreHorizontal, Pencil, Pin, PinOff, Plus, Search, Trash2, User, Users, X } from "lucide-react";
+import { whenLabel, type BuzzEntry } from "@/lib/buzz";
 import type { Conversation } from "@/lib/buzz-relay";
 import { fold } from "@/lib/fold";
 import { cn } from "@/lib/utils";
@@ -11,21 +11,17 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { ExchangeKind } from "@/components/messaging/NewExchange";
 import { ParticipantAvatar } from "@/components/messaging/ParticipantAvatar";
 
-// La colonne des échanges, sur le modèle de celle des conversations d'un Expert : recherche, filtres, groupes
-// (Épinglés, Salons, Conversations, Archivés replié) et, par ligne, « … » : renommer, épingler, copier, archiver, supprimer.
+// La colonne des échanges, façon Slack : un seul « + » (salon ou message direct), la recherche, les groupes
+// (Épinglés, Salons, Messages directs, Archivés replié), le plus récent en tête. Chaque ligne : visages, nom,
+// dernier message, heure, et en gras avec un point tant qu'elle n'est pas lue. « … » : renommer, épingler,
+// copier, archiver, supprimer. Pas de bouton Actualiser : la liste suit le relais d'elle-même.
 
-type Filter = "all" | "salons" | "direct";
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: "all", label: "Tout" },
-  { id: "salons", label: "Salons" },
-  { id: "direct", label: "Directs" },
-];
+export interface RowLast { at: number; text: string; unread: boolean }
 
 export interface RailProps {
   list: Conversation[] | null;
   open: string | null;
   ready: boolean;
-  refreshing: boolean;
   pinned: Set<string>;
   archived: Set<string>;
   nameOf: (c: Conversation) => string;
@@ -36,7 +32,8 @@ export interface RailProps {
   facesOf: (c: Conversation) => BuzzEntry[];
   onOpen: (id: string) => void;
   onNew: (kind: ExchangeKind) => void;
-  onRefresh: () => void;
+  /** The conversation's last message as its row shows it; null until read from the relay. */
+  lastOf: (c: Conversation) => RowLast | null;
   onMark: (id: string, kind: "pinned" | "archived", on: boolean) => void;
   onCopy: (c: Conversation) => void;
   onRename: (c: Conversation, nom: string) => Promise<void>;
@@ -45,7 +42,6 @@ export interface RailProps {
 
 export function ExchangeRail(p: RailProps) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -53,14 +49,15 @@ export function ExchangeRail(p: RailProps) {
 
   const groups = useMemo(() => {
     const q = fold(query.trim());
-    const found = (p.list ?? []).filter((c) => (filter === "all" || (filter === "salons") === p.isSalon(c)) && (!q || fold(p.nameOf(c)).includes(q)));
+    const recent = (c: Conversation) => p.lastOf(c)?.at ?? 0;
+    const found = (p.list ?? []).filter((c) => !q || fold(p.nameOf(c)).includes(q)).sort((a, b) => recent(b) - recent(a));
     const live = found.filter((c) => !p.archived.has(c.id));
     return [
       { label: "Épinglés", items: live.filter((c) => p.pinned.has(c.id)) },
       { label: "Salons", items: live.filter((c) => !p.pinned.has(c.id) && p.isSalon(c)) },
       { label: "Messages directs", items: live.filter((c) => !p.pinned.has(c.id) && !p.isSalon(c)) },
     ].filter((g) => g.items.length);
-  }, [p, query, filter]);
+  }, [p, query]);
   const archivedItems = (p.list ?? []).filter((c) => p.archived.has(c.id));
 
   async function commit(c: Conversation) {
@@ -81,6 +78,8 @@ export function ExchangeRail(p: RailProps) {
         <input key={c.id} autoFocus value={draft} maxLength={60} onChange={(e) => setDraft(e.target.value)} onFocus={(e) => e.currentTarget.select()} onKeyDown={(e) => onKey(e, c)} onBlur={() => void commit(c)} aria-label="Nom du salon" className="w-full rounded-[10px] bg-soft px-2.5 py-2 text-sm text-ink outline-none ring-1 ring-brand/30" />
       );
     const n = p.countOf(c);
+    const last = p.lastOf(c);
+    const unread = Boolean(last?.unread);
     return (
       <div key={c.id} className="group relative">
         <button
@@ -91,8 +90,17 @@ export function ExchangeRail(p: RailProps) {
         >
           <Faces faces={p.facesOf(c)} salon={salon} unit={p.isUnit(c)} />
           <span className="min-w-0 flex-1">
-            <span className="block truncate">{p.nameOf(c)}</span>
-            <span className="block truncate text-[11.5px] font-normal text-ink-3">{p.isUnit(c) ? "Salon d’équipe, " : ""}{n} participant{n > 1 ? "s" : ""}</span>
+            <span className="flex items-baseline gap-2">
+              <span className={cn("min-w-0 flex-1 truncate", unread && "font-bold text-ink")}>{p.nameOf(c)}</span>
+              {/* L'heure laisse la place au « … » quand il apparaît. */}
+              {last && <time className={cn("shrink-0 text-[11px] tabular-nums group-hover:invisible group-focus-within:invisible pointer-coarse:invisible", unread ? "font-semibold text-brand-ink" : "font-normal text-ink-3")}>{whenLabel(last.at)}</time>}
+            </span>
+            <span className="flex items-center gap-2">
+              <span className={cn("min-w-0 flex-1 truncate text-[12px]", unread ? "font-semibold text-ink-2" : "font-normal text-ink-3")}>
+                {last ? last.text : `${p.isUnit(c) ? "Salon d’équipe, " : ""}${n} participant${n > 1 ? "s" : ""}`}
+              </span>
+              {unread && <span className="size-2 shrink-0 rounded-full bg-brand" aria-label="Non lu" />}
+            </span>
           </span>
         </button>
         <DropdownMenu>
@@ -131,17 +139,7 @@ export function ExchangeRail(p: RailProps) {
         <span className="text-[15px] font-bold text-ink">
           Salons{p.list && p.list.length > 0 && <span className="ml-1 font-semibold tabular-nums text-ink-3">({p.list.length})</span>}
         </span>
-        <button type="button" onClick={p.onRefresh} disabled={!p.ready || p.refreshing} aria-label="Actualiser" title="Actualiser" className="grid h-8 w-8 place-items-center rounded-lg text-ink-3 hover:bg-soft hover:text-ink disabled:opacity-60">
-          <RotateCw className={cn("h-4 w-4", p.refreshing && "animate-spin")} />
-        </button>
-      </div>
-      <div className="mx-1 mb-2.5 grid grid-cols-2 gap-1.5">
-        <button type="button" disabled={!p.ready} onClick={() => p.onNew("message")} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-brand/60 bg-surface text-[13px] font-semibold text-brand-ink transition-colors hover:bg-tint disabled:opacity-60">
-          <Plus className="h-4 w-4" /> Message direct
-        </button>
-        <button type="button" disabled={!p.ready} onClick={() => p.onNew("salon")} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-line bg-surface text-[13px] font-semibold text-ink-2 transition-colors hover:bg-soft disabled:opacity-60">
-          <Hash className="h-4 w-4" /> Nouveau salon
-        </button>
+        <NewMenu disabled={!p.ready} onNew={p.onNew} />
       </div>
       <label className="relative mx-1 mb-2 block">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" aria-hidden />
@@ -152,16 +150,10 @@ export function ExchangeRail(p: RailProps) {
           </button>
         )}
       </label>
-      <div role="group" aria-label="Filtrer les conversations" className="mx-1 mb-2.5 grid grid-cols-3 gap-0.5 rounded-xl bg-soft p-[3px]">
-        {FILTERS.map(({ id, label }) => (
-          <button key={id} type="button" onClick={() => setFilter(id)} aria-pressed={filter === id} className={cn("inline-flex h-8 items-center justify-center rounded-[9px] px-2 text-[12.5px] font-semibold transition-colors", filter === id ? "bg-surface text-brand-ink shadow-[0_1px_3px_rgba(20,10,60,0.12)]" : "text-ink-2 hover:text-ink")}>
-            {label}
-          </button>
-        ))}
-      </div>
       <div className="min-h-0 flex-1 overflow-y-auto" aria-busy={p.list === null}>
         {p.list === null && [1, 2, 3].map((n) => <div key={n} className="mx-1 mb-1.5 h-11 animate-pulse rounded-[10px] bg-soft" />)}
         {p.list?.length === 0 && <p className="px-2.5 py-3 text-xs text-ink-3">Aucune conversation pour l’instant.</p>}
+        {p.list && p.list.length > 0 && query && !groups.length && <p className="px-2.5 py-3 text-xs text-ink-3">Aucune conversation ne s’appelle ainsi.</p>}
         {groups.map((g) => (
           <div key={g.label} className="mb-2">
             <div className="px-2.5 pb-1 pt-2 text-[11.5px] font-semibold uppercase tracking-wide text-ink-3">{g.label}</div>
@@ -216,5 +208,33 @@ function Faces({ faces, salon, unit }: { faces: BuzzEntry[]; salon: boolean; uni
         <Sign className="size-2.5" strokeWidth={2.4} />
       </span>
     </span>
+  );
+}
+
+/** Le « + » des Salons : un salon ou un message direct, comme le « + » de Slack. */
+export function NewMenu({ disabled, onNew, label }: { disabled?: boolean; onNew: (kind: ExchangeKind) => void; label?: string }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        disabled={disabled}
+        aria-label="Nouvelle conversation"
+        title="Nouvelle conversation"
+        className={cn(
+          "inline-flex items-center justify-center gap-1.5 bg-brand font-semibold text-on-brand transition-opacity hover:opacity-90 disabled:opacity-50",
+          label ? "h-10 rounded-xl px-4 text-sm" : "size-9 rounded-full",
+        )}
+      >
+        <Plus className="size-[18px]" strokeWidth={2.4} />
+        {label}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align={label ? "center" : "end"} className="w-56 p-1.5">
+        <DropdownMenuItem onSelect={() => onNew("salon")} className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-sm">
+          <Hash className="size-4" /> Salon
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onNew("message")} className="gap-2.5 rounded-[10px] px-2.5 py-2.5 text-sm">
+          <MessageCircle className="size-4" /> Message direct
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

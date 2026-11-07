@@ -6,7 +6,7 @@
  * `membre`: the person, or an expert's owner. `profil` (experts): their Hermes profile; `photo`: an expert's from the catalogue (added by this app), a person's profile photo
  * (served by the back office, one's own added by this app). `role` (people): admin or member of the space. `invite`: a guest from outside the client, in one salon, until `expiresAt`.
  */
-export interface BuzzEntry { nom: string; type: "personne" | "expert" | "invite"; membre: string; cles: string[]; profil?: string; photo?: string | null; role?: "admin" | "membre"; expiresAt?: string }
+export interface BuzzEntry { nom: string; type: "personne" | "expert" | "invite"; membre: string; cles: string[]; profil?: string; photo?: string | null; role?: "admin" | "membre"; expiresAt?: string; /** Experts: from the catalogue (added by this app), « Experte » or « Expert ». */ pronom?: "il" | "elle" | null }
 export interface BuzzOverview {
   relais: string;
   appareils: { cle: string; nom: string }[];
@@ -81,8 +81,67 @@ export function working(thread: { author: string; at: number; mentions: string[]
 export const shortName = (nom: string): string => nom.replace(/ \(de .*\)$/, "");
 
 /** Each entry with its portrait (experts only), from a lookup by profile. */
-export function withPhotos(directory: BuzzEntry[], photoOf: (profil: string) => string | null): BuzzEntry[] {
-  return directory.map((e) => (e.type === "expert" && e.profil ? { ...e, photo: photoOf(e.profil) } : e));
+export function withPhotos(directory: BuzzEntry[], photoOf: (profil: string) => string | null, pronounOf?: (profil: string) => "il" | "elle" | null): BuzzEntry[] {
+  return directory.map((e) => (e.type === "expert" && e.profil ? { ...e, photo: photoOf(e.profil), ...(pronounOf ? { pronom: pronounOf(e.profil) } : {}) } : e));
+}
+
+/** An expert's directory name in its two parts: « Djénéba (de Aïcha) » → Djénéba, owned by Aïcha. */
+export function expertParts(nom: string): { name: string; owner: string | null } {
+  const m = / \((?:de |d’|d')(.+)\)$/.exec(nom);
+  return m ? { name: nom.slice(0, m.index), owner: m[1] } : { name: nom, owner: null };
+}
+
+/** « d’Aïcha », « de Selim » : the French elision before a vowel. */
+export const ofOwner = (owner: string): string => (/^[aeiouyàâäéèêëîïôöùûü]/i.test(owner) ? `d’${owner}` : `de ${owner}`);
+
+/** The small chip after an expert's name in a thread: « Experte d’Aïcha », « Votre Expert ». */
+export function expertChip(e: BuzzEntry, own: boolean): string {
+  const word = e.pronom === "elle" ? "Experte" : "Expert";
+  if (own) return `Votre ${word}`;
+  const { owner } = expertParts(e.nom);
+  return owner ? `${word} ${ofOwner(owner)}` : word;
+}
+
+const DAY = 86_400;
+const midnight = (seconds: number) => {
+  const d = new Date(seconds * 1000);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime() / 1000;
+};
+
+/** The day a message belongs to, as a separator reads it: « Aujourd’hui », « Hier », « jeudi 5 novembre » (the year when not this one). */
+export function dayLabel(seconds: number, now = Date.now() / 1000): string {
+  const days = Math.round((midnight(now) - midnight(seconds)) / DAY);
+  if (days === 0) return "Aujourd’hui";
+  if (days === 1) return "Hier";
+  const d = new Date(seconds * 1000);
+  const label = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", ...(d.getFullYear() !== new Date(now * 1000).getFullYear() ? { year: "numeric" } : {}) });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/** Whether two messages fall on different days (a separator goes between them). */
+export const newDay = (prev: { at: number } | undefined, m: { at: number }): boolean => !prev || midnight(prev.at) !== midnight(m.at);
+
+/** « 14:05 ». */
+export const hourLabel = (seconds: number): string => new Date(seconds * 1000).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+/** The time on a conversation's row: the hour today, « Hier », the weekday this week, else « 5 nov. ». */
+export function whenLabel(seconds: number, now = Date.now() / 1000): string {
+  const days = Math.round((midnight(now) - midnight(seconds)) / DAY);
+  if (days <= 0) return hourLabel(seconds);
+  if (days === 1) return "Hier";
+  if (days < 7) return new Date(seconds * 1000).toLocaleDateString("fr-FR", { weekday: "short" });
+  return new Date(seconds * 1000).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Each « @Name » of a known participant set as inline code, which the thread draws as a mention chip. Longest names first. */
+export function markMentions(text: string, handles: string[]): string {
+  const names = [...new Set(handles.filter(Boolean))].sort((a, b) => b.length - a.length);
+  if (!names.length || !text.includes("@")) return text;
+  const re = new RegExp(`(^|[^\\w\`])@(${names.map(escapeRe).join("|")})(?![\\p{L}\\d])`, "gu");
+  return text.replace(re, (_all, lead: string, name: string) => `${lead}\`@${name}\``);
 }
 
 export interface SalonGroup { membre: string; nom: string; self: boolean; person: BuzzEntry | null; experts: BuzzEntry[] }
