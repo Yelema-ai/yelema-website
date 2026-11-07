@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
-import { inviteBlocked, quotaLabel } from "@/lib/member-room";
+import { domainRefusal, inviteBlocked, quotaLabel } from "@/lib/member-room";
 import type { MemberRoom, Role, WorkspaceMember } from "@/lib/types";
 
 // An admin invites and removes the members of the enterprise chat; members with Experts are added and
@@ -129,8 +129,9 @@ export function MembersView({ initial = null }: { initial?: Loaded | null }) {
                   {room && (
                     <td className="px-4 py-3 text-right">
                       {m.removable && (
+                        // Une invitation pas encore acceptée s'annule (mauvaise adresse) ; un membre se retire.
                         <Button variant="ghost" size="sm" onClick={() => setRemoving(m)}>
-                          Retirer
+                          {m.status === "pending" ? "Annuler l’invitation" : "Retirer"}
                         </Button>
                       )}
                     </td>
@@ -142,18 +143,18 @@ export function MembersView({ initial = null }: { initial?: Loaded | null }) {
         </div>
       )}
 
-      <InviteDialog workspaceId={current.id} open={inviting} onOpenChange={setInviting} onDone={load} />
+      <InviteDialog workspaceId={current.id} domains={data.allowedDomains ?? []} open={inviting} onOpenChange={setInviting} onDone={load} />
       <ConfirmDialog
         open={removing != null}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title={`Retirer ${removing?.name?.trim() || removing?.email || ""} du chat d’entreprise ?`}
-        description="Son accès est coupé et ses conversations sont archivées, puis effacées après 30 jours. Sa place sur votre abonnement est libérée."
-        confirmText="Retirer"
+        title={removing?.status === "pending" ? `Annuler l’invitation de ${removing?.name?.trim() || removing?.email || ""} ?` : `Retirer ${removing?.name?.trim() || removing?.email || ""} du chat d’entreprise ?`}
+        description={removing?.status === "pending" ? `Le lien envoyé à ${removing.email} ne marchera plus. Vous pourrez inviter la bonne adresse ensuite.` : "Son accès est coupé et ses conversations sont archivées, puis effacées après 30 jours. Sa place sur votre abonnement est libérée."}
+        confirmText={removing?.status === "pending" ? "Annuler l’invitation" : "Retirer"}
         destructive
         onConfirm={async () => {
           if (!removing?.id) return;
           await apiFetch(`/api/workspaces/${current.id}/members/${removing.id}`, { method: "DELETE" });
-          toast.success("Membre retiré.");
+          toast.success(removing.status === "pending" ? "Invitation annulée." : "Membre retiré.");
           await load();
         }}
       />
@@ -161,13 +162,16 @@ export function MembersView({ initial = null }: { initial?: Loaded | null }) {
   );
 }
 
-function InviteDialog({ workspaceId, open, onOpenChange, onDone }: { workspaceId: string; open: boolean; onOpenChange: (o: boolean) => void; onDone: () => Promise<void> }) {
+function InviteDialog({ workspaceId, domains, open, onOpenChange, onDone }: { workspaceId: string; domains: string[]; open: boolean; onOpenChange: (o: boolean) => void; onDone: () => Promise<void> }) {
   const [form, setForm] = useState({ email: "", firstName: "", lastName: "" });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  // Seulement les domaines de l'entreprise : dit dès que l'adresse est complète, avant l'envoi.
+  const refused = /@[^@\s]+\.[^@\s]+$/.test(form.email.trim()) ? domainRefusal(form.email, domains) : null;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (domainRefusal(form.email, domains)) return;
     setBusy(true);
     try {
       const r = await apiFetch<{ ok: true; warning: string | null }>(`/api/workspaces/${workspaceId}/members`, { method: "POST", body: JSON.stringify(form) });
@@ -203,13 +207,14 @@ function InviteDialog({ workspaceId, open, onOpenChange, onDone }: { workspaceId
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="inv-email">E-mail professionnel</Label>
-            <Input id="inv-email" type="email" value={form.email} onChange={set("email")} required maxLength={254} autoComplete="off" />
+            <Input id="inv-email" type="email" value={form.email} onChange={set("email")} required maxLength={254} autoComplete="off" placeholder={domains[0] ? `prenom@${domains[0]}` : undefined} aria-invalid={Boolean(refused)} aria-describedby={refused ? "inv-email-refus" : undefined} />
+            {refused && <p id="inv-email-refus" role="alert" className="text-xs text-ko">{refused}</p>}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
               Annuler
             </Button>
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy || Boolean(refused)}>
               {busy ? "Invitation…" : "Inviter"}
             </Button>
           </DialogFooter>

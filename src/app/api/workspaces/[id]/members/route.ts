@@ -1,5 +1,6 @@
 import { requireMember, requireUser } from "@/lib/auth";
 import { workspaceMembers } from "@/lib/workspace-members";
+import { domainRefusal } from "@/lib/member-room";
 import { backoffice, BackofficeError } from "@/lib/backoffice";
 import { ApiError, handleError, json, readJson } from "@/lib/http";
 import { authViaBackoffice } from "@/lib/runtime-config";
@@ -28,6 +29,10 @@ export async function POST(request: Request, { params }: Ctx) {
     const field = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
     const session = await readSession();
     if (!session) throw new ApiError(401, "unauthorized", "Session expirée.");
+    // Only the company's own domains (Leslie, 07/11), checked here too: the form is not the guard.
+    const { allowedDomains } = await workspaceMembers(id);
+    const refused = domainRefusal(field(body.email, 254), allowedDomains ?? []);
+    if (refused) throw new ApiError(400, "domain_not_allowed", refused);
     try {
       return json(await backoffice.inviteMember(session.accessToken, { email: field(body.email, 254), firstName: field(body.firstName, 60), lastName: field(body.lastName, 60) }));
     } catch (e) {
