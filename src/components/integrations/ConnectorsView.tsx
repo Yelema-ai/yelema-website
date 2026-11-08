@@ -311,7 +311,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
       {!q && recommended.length > 0 && (
         <section>
           <h2 className="mb-3 text-[17px] font-bold text-ink">Conseillés pour vos Experts</h2>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
             {recommended.map(({ toolkit: t, who }) => {
               const k = slugKey(t.slug);
               return (
@@ -366,7 +366,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
         )}
 
         {catalog.length > 0 ? (
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
             {catalog.map((t) => {
               const k = slugKey(t.slug);
               const mineToo = accounts.get(k) ?? [];
@@ -488,21 +488,21 @@ function AddTool({
           <span title="Un compte est à reconnecter" className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#dc2626] ring-2 ring-card" />
         )}
       </span>
-      {/* The name gets the whole width, the state goes under it: four cards a row everywhere, as in « Vos
-          outils », with no name cut to « Goog… » (Leslie, 06/11). */}
+      {/* The name, then the state beside it on the right (Leslie, 07/11: « plutôt à côté »). A long name goes on two
+          lines, never cut inside a word: three cards a row where the button sits beside the name, four in « Vos outils ». */}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14.5px] font-semibold leading-snug text-ink">{toolkit.name}</span>
-        <span className="mt-1 flex min-w-0 items-center gap-2">
-          {waiting ? (
-            <Loader2 className="size-4 shrink-0 animate-spin text-ink-3" />
-          ) : connected ? (
-            // In « Vos outils » the list says it is connected; elsewhere (a search), « Connecté » as in Canaux.
-            mine ? null : <StatePill state="connected" className="h-7 min-w-0 px-3 text-[12.5px]" />
-          ) : (
-            <StatePill state="connect" className="h-7 min-w-0 px-3 text-[12.5px]" />
-          )}
-          {detail && <span className="min-w-0 truncate text-[12.5px] leading-snug text-ink-3">{detail}</span>}
-        </span>
+        <span className="line-clamp-2 text-[14.5px] font-semibold leading-snug text-ink">{toolkit.name}</span>
+        {detail && <span className="mt-0.5 block truncate text-[12.5px] leading-snug text-ink-3">{detail}</span>}
+      </span>
+      <span className="flex shrink-0 items-center">
+        {waiting ? (
+          <Loader2 className="size-4 animate-spin text-ink-3" />
+        ) : connected ? (
+          // In « Vos outils » the list says it is connected; elsewhere (a search), « Connecté » as in Canaux.
+          mine ? null : <StatePill state="connected" className="h-8 min-w-0 px-3.5 text-[12.5px]" />
+        ) : (
+          <StatePill state="connect" className="h-8 min-w-0 px-3.5 text-[12.5px]" />
+        )}
       </span>
     </button>
   );
