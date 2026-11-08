@@ -23,6 +23,7 @@ import { NewExchange, type ExchangeKind } from "@/components/messaging/NewExchan
 import { prefetchSalonDeliverables } from "@/components/messaging/salon-deliverables-store";
 import { whenIdle } from "@/components/usePrefetch";
 import { mayInvite } from "@/lib/salon-guests";
+import { SalonsClosed } from "@/components/messaging/SalonsClosed";
 
 // Loaded only once a member opens it: the dialog weighs nothing on the page until then.
 const SalonGuests = dynamic(() => import("@/components/messaging/SalonGuests").then((m) => m.SalonGuests), { ssr: false });
@@ -403,7 +404,7 @@ export function Messaging() {
     }
   }
 
-  if (state.kind === "closed") return <p className="m-6 max-w-xl rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">{state.reason}</p>;
+  if (state.kind === "closed") return <SalonsClosed reason={state.reason} />;
 
   const kind = current ? (isUnit(current) ? "unite" : isSalon(current) ? "salon" : "direct") : null;
   const rosterContext = current && overview?.createurs && kind !== "direct" ? { createur: overview.createurs[current.id] ?? null, unit: kind === "unite" } : undefined;
