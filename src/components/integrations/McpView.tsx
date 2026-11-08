@@ -14,6 +14,7 @@ import type { SettingScope } from "@/lib/llm";
 import { mcpPending, serverHost, serverTitle, type McpOauthServer, type McpOverview, type McpServer, type McpServerDraft, type McpToolsOverview, type McpToolsReport, type McpWritten } from "@/lib/mcp-servers";
 import { type McpOauthFlow } from "./McpOauthSteps";
 import { McpServerDialog } from "./McpServerDialog";
+import { directoryEntryFor } from "@/lib/mcp-directory";
 import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
 
 // Une pose prend d'ordinaire moins d'une minute par instance ; au-delà, on cesse de relire seul.
@@ -70,6 +71,8 @@ function ToolList({ tools }: { tools: Tools }) {
 function ServerCard({ server, note, access, tools, catalogueLabel, onRemove }: { server: McpServer; note?: string; access?: Access; tools?: Tools; catalogueLabel?: string; onRemove?: () => void }) {
   const title = serverTitle(server);
   const host = server.auth === "stdio" ? null : serverHost(server.url);
+  // Only a catalogue vendor's public domain goes to the logo service; a client's own address shows its initial.
+  const vendor = host ? directoryEntryFor(server.url) : null;
   return (
     <div className="overflow-hidden rounded-[22px] border border-line bg-surface">
       <div className="flex min-h-[76px] items-center gap-3 py-3 pl-4 pr-3">
@@ -77,7 +80,7 @@ function ServerCard({ server, note, access, tools, catalogueLabel, onRemove }: {
             under it; the full address in the tooltip. « Chacun se connecte avec son compte » says the account sign-in:
             no badge repeating it. */}
         {host ? (
-          <ToolLogo logo={`https://www.google.com/s2/favicons?domain=${host}&sz=64`} name={title} className="size-10 shrink-0 rounded-xl" imgClassName="size-6" />
+          <ToolLogo logo={vendor ? `https://www.google.com/s2/favicons?domain=${vendor.domain}&sz=64` : null} name={title} className="size-10 shrink-0 rounded-xl" imgClassName="size-6" />
         ) : (
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-tint text-brand">
             <Server className="h-5 w-5" />

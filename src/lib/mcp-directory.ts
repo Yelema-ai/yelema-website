@@ -86,3 +86,20 @@ export function serverName(entry: McpDirectoryEntry): string {
 export function serverSlug(typed: string): string {
   return typed.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
 }
+
+/**
+ * The catalogue entry a server's address belongs to (its own host, or the vendor's domain), so its card shows the
+ * vendor's logo. Null for any other address: a client's own server (an internal hub, an IP) is never sent to a logo service.
+ */
+export function directoryEntryFor(url: string | null | undefined): McpDirectoryEntry | null {
+  const hostOf = (u: string): string => {
+    try {
+      return new URL(u).hostname.toLowerCase();
+    } catch {
+      return "";
+    }
+  };
+  const host = hostOf(String(url ?? ""));
+  if (!host) return null;
+  return MCP_DIRECTORY.find((e) => hostOf(e.url) === host || host === e.domain || host.endsWith(`.${e.domain}`)) ?? null;
+}
