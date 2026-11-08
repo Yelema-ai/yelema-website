@@ -25,7 +25,7 @@ function TeamParticipants({ members, directory, mine }: { members: string[]; dir
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
       <p className="text-[13px] text-ink-3">
-        {people} membre{people > 1 ? "s" : ""} de l’équipe, {experts} Expert{experts > 1 ? "s" : ""} IA
+        {people} membre{people > 1 ? "s" : ""} de l’équipe, {experts} Expert{experts > 1 ? "s" : ""}
         {guests.length > 0 && `, ${guests.length} invité${guests.length > 1 ? "s" : ""}`}
       </p>
       {groups.length === 0 && guests.length === 0 && <p className="mt-3 text-sm text-ink-3">Personne d’autre n’est encore dans ce salon.</p>}
@@ -47,7 +47,7 @@ function TeamParticipants({ members, directory, mine }: { members: string[]; dir
                     {g.self && <span className="font-normal text-ink-3"> (vous)</span>}
                   </span>
                   <span className="block truncate text-xs text-ink-3">
-                    {!g.person ? "Ses Experts IA seulement" : g.experts.length ? `Membre de l’équipe, ${g.experts.length} Expert${g.experts.length > 1 ? "s" : ""} IA` : "Membre de l’équipe"}
+                    {!g.person ? "Ses Experts seulement" : g.experts.length ? `Membre de l’équipe, ${g.experts.length} Expert${g.experts.length > 1 ? "s" : ""}` : "Membre de l’équipe"}
                   </span>
                 </span>
                 {g.experts.length > 0 && !unfolded && (

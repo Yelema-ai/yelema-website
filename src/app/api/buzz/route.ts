@@ -12,7 +12,11 @@ export async function GET() {
   try {
     const token = await sessionToken();
     const [overview, catalogue, me] = await Promise.all([backoffice.buzz(token), loadCatalogue(), backoffice.me(token).catch(() => null)]);
-    const experts = withPhotos(overview.annuaire, (profil) => matchCatalogue(catalogue.experts, profil)?.avatarUrl ?? null);
+    const experts = withPhotos(
+      overview.annuaire,
+      (profil) => matchCatalogue(catalogue.experts, profil)?.avatarUrl ?? null,
+      (profil) => matchCatalogue(catalogue.experts, profil)?.pronoun ?? null,
+    );
     const annuaire = withOwnPhoto(experts, overview.appareils.map((d) => d.cle), me?.user.avatarUrl);
     return noStore(json({ ...overview, annuaire }));
   } catch (e) {

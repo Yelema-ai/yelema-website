@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { CornerDownRight, Loader2, MessagesSquare, Reply } from "lucide-react";
-import { shortName, startsRun, type BuzzEntry } from "@/lib/buzz";
+import { dayLabel, expertChip, expertParts, hourLabel, mentionMarker, newDay, shortName, startsRun, type BuzzEntry } from "@/lib/buzz";
 import type { Conversation, Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
 import { BUBBLE, BUBBLE_ROW } from "@/lib/exchange-bubble";
@@ -19,11 +19,17 @@ import { readSalonDeliverables, salonReadAt, useSalonDeliverables } from "@/comp
 import { linkSalonPaths, salonDeliverableFor, salonPathsIn, type SalonDeliverable } from "@/lib/salon-deliverables";
 import { GuestBadge, SalonParticipants } from "@/components/messaging/SalonParticipants";
 import type { RosterContext } from "@/components/messaging/SalonRoster";
+import { NewMenu } from "@/components/messaging/ExchangeRail";
+import type { ExchangeKind } from "@/components/messaging/NewExchange";
 
 // Le fil d'un échange, comme le chat d'un Expert (l'en-tête et ses onglets sont dans ExchangeHeader) : messages,
 // visage de l'auteur en tête de chaque suite, choix du dernier message en boutons (comme le chat d'un Expert), « … travaille » pour vos Experts sollicités, saisie avec « @ ».
+// Façon Slack : un séparateur par jour (« Aujourd'hui », « Hier », la date), l'heure seule à côté du nom, un Expert
+// nommé par son prénom avec une pastille « Experte d'Aïcha », les @mentions en pastille de couleur.
 
-const moment = (seconds: number) => new Date(seconds * 1000).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const moment = (seconds: number) => new Date(seconds * 1000).toLocaleString("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+// Une mention est posée en code en ligne (markMentions) : ici, dessinée en pastille de la couleur de l'espace.
+const MENTIONS = "[&_[data-streamdown=inline-code]]:rounded-md [&_[data-streamdown=inline-code]]:bg-tint [&_[data-streamdown=inline-code]]:px-1 [&_[data-streamdown=inline-code]]:py-px [&_[data-streamdown=inline-code]]:font-sans [&_[data-streamdown=inline-code]]:text-[0.95em] [&_[data-streamdown=inline-code]]:font-semibold [&_[data-streamdown=inline-code]]:text-brand-ink";
 
 export interface ThreadProps {
   current: Conversation | null;
@@ -43,6 +49,10 @@ export interface ThreadProps {
   deliverables?: { items: SalonDeliverable[] | null; error: string | null; loading: boolean; refresh: () => void };
   /** Each participant's role (a member's space); a guest's page goes without. */
   roles?: RosterContext;
+  /** The « + » of the empty screen (a member's space); a guest's page goes without. */
+  onNew?: (kind: ExchangeKind) => void;
+  /** The microphone in the composer, where voice is on. */
+  canDictate?: boolean;
 }
 
 export function ExchangeThread(p: ThreadProps) {
@@ -101,16 +111,17 @@ export function ExchangeThread(p: ThreadProps) {
     if (first || atEnd.current || (last && p.mine.includes(last.author))) end.current?.scrollIntoView({ block: "end" });
   }, [id, p.thread, last, p.mine, p.busy.length]);
 
+  const mark = useMemo(
+    () => mentionMarker([...p.directory.flatMap((e) => (e.type === "expert" ? [e.nom, shortName(e.nom)] : [e.nom])), ...p.candidates.filter((c) => c.group).map((c) => c.handle), "tous", "experts"]),
+    [p.directory, p.candidates],
+  );
+
   if (!p.current)
     return (
-      <div className="m-auto p-10 text-center">
-        <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-soft text-ink-3"><MessagesSquare className="h-6 w-6" /></span>
-        <h2 className="mt-3 text-base font-semibold text-ink">Choisissez une conversation</h2>
-        <ul className="mx-auto mt-3 max-w-sm space-y-2 text-left text-sm text-ink-3">
-          <li><span className="font-semibold text-ink">Message direct</span> : écrivez à un membre de l’équipe ou à ses Experts IA, 9 personnes au plus.</li>
-          <li><span className="font-semibold text-ink">Salon</span> : un espace nommé pour un sujet, jusqu’à 50 participants.</li>
-          <li><span className="font-semibold text-ink">@</span> : demandez un travail à vos Experts IA, ils répondent dans le fil.</li>
-        </ul>
+      <div className="m-auto flex flex-col items-center p-10 text-center">
+        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-soft text-ink-3"><MessagesSquare className="h-6 w-6" /></span>
+        <h2 className="mt-3 text-base font-semibold text-ink">Choisissez une conversation, ou commencez-en une.</h2>
+        {p.onNew && <div className="mt-4"><NewMenu onNew={p.onNew} label="Nouvelle conversation" /></div>}
       </div>
     );
 
@@ -119,6 +130,8 @@ export function ExchangeThread(p: ThreadProps) {
   const self = p.directory.find((e) => e.type !== "expert" && e.cles.length > 0 && e.cles.every((k) => p.mine.includes(k))) ?? null;
   const nameOf = (k: string) => (p.mine.includes(k) ? (self?.nom ?? "Vous") : (p.labels.get(k) ?? "Membre inconnu"));
   const entryOf = (k: string) => (p.mine.includes(k) ? self : (byKey.get(k) ?? null));
+  // Un Expert par son prénom, son propriétaire dans la pastille ; une personne par son nom.
+  const shownName = (k: string) => (entryOf(k)?.type === "expert" ? expertParts(nameOf(k)).name : nameOf(k));
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {p.pane === "livrables" && p.salon ? (
@@ -156,23 +169,35 @@ export function ExchangeThread(p: ThreadProps) {
                 const d = salonDeliverableFor(path, salonId, items);
                 return d?.url ? [{ ...d, url: d.url }] : [];
               }) : [];
+              const day = newDay(p.thread?.[i - 1], m);
+              const author = entryOf(m.author);
               return (
-                <li key={m.id} className={cn("group flex gap-2.5", first ? "mt-4 first:mt-0" : "mt-1", m.replyTo && "pl-8")}>
-                  {first ? <ParticipantAvatar entry={entryOf(m.author)} name={nameOf(m.author)} className="mt-0.5" /> : <span className="w-7 shrink-0" aria-hidden />}
+                <Fragment key={m.id}>
+                {day && (
+                  <li role="separator" aria-label={dayLabel(m.at)} className="relative mb-1 mt-5 flex items-center justify-center first:mt-0">
+                    <span className="absolute inset-x-0 top-1/2 h-px bg-line" aria-hidden />
+                    <span className="relative rounded-full border border-line bg-surface px-3 py-0.5 text-[12px] font-semibold text-ink-2">{dayLabel(m.at)}</span>
+                  </li>
+                )}
+                <li className={cn("group flex gap-2.5", first || day ? "mt-4 first:mt-0" : "mt-1", m.replyTo && "pl-8")}>
+                  {first || day ? <ParticipantAvatar entry={author} name={shownName(m.author)} className="mt-0.5" /> : <span className="w-7 shrink-0" aria-hidden />}
                   <div className="flex min-w-0 flex-1 flex-col items-start">
-                    {first && (
-                      <div className="flex items-baseline gap-2">
-                        {m.replyTo && <CornerDownRight className="h-3.5 w-3.5 shrink-0 self-center text-ink-3" />}
-                        <span className="text-[13px] font-semibold text-ink">{nameOf(m.author)}</span>
-                        {entryOf(m.author)?.type === "invite" && <GuestBadge />}
-                        <time className="text-[11.5px] text-ink-3">{moment(m.at)}</time>
+                    {(first || day) && (
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        {m.replyTo && <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-ink-3" />}
+                        <span className="text-[13px] font-semibold text-ink">{shownName(m.author)}</span>
+                        {author?.type === "expert" && (
+                          <span className="rounded-full bg-tint px-2 py-px text-[11px] font-semibold text-brand-ink">{expertChip(author, author.membre === self?.membre)}</span>
+                        )}
+                        {author?.type === "invite" && <GuestBadge />}
+                        <time dateTime={new Date(m.at * 1000).toISOString()} title={moment(m.at)} className="text-[11.5px] tabular-nums text-ink-3">{hourLabel(m.at)}</time>
                       </div>
                     )}
-                    <div className={cn(BUBBLE_ROW, first && "mt-1")}>
-                      <div className={cn(BUBBLE, mineMsg ? "rounded-tl-md bg-tint" : "rounded-tl-md border border-line bg-surface")} title={first ? undefined : moment(m.at)} tabIndex={-1}>
+                    <div className={cn(BUBBLE_ROW, (first || day) && "mt-1")}>
+                      <div className={cn(BUBBLE, mineMsg ? "rounded-tl-md bg-tint" : "rounded-tl-md border border-line bg-surface")} title={first || day ? undefined : hourLabel(m.at)} tabIndex={-1}>
                         {/* Comme le chat d'un Expert : liens cliquables (un site extérieur demande confirmation), listes, gras. */}
-                        <div onClickCapture={openCited}>
-                          <Markdown content={linked?.text ?? body} />
+                        <div onClickCapture={openCited} className={MENTIONS}>
+                          <Markdown content={mark(linked?.text ?? body)} />
                         </div>
                         {/* Répondre, accroché au coin haut de la bulle au survol (comme Slack) : on voit à quel message il répond. */}
                         <button
@@ -196,6 +221,7 @@ export function ExchangeThread(p: ThreadProps) {
                     )}
                   </div>
                 </li>
+                </Fragment>
               );
             })}
             {p.busy.map((e) => (
@@ -216,8 +242,9 @@ export function ExchangeThread(p: ThreadProps) {
           </ol>
           <MentionComposer
             candidates={p.candidates}
-            replyTo={replyTo ? `Réponse à ${nameOf(replyTo.author)}${replyMention(replyTo.author, p.candidates) ? " — votre Expert sera prévenu" : ""} : « ${excerpt(replyTo.text, 120)} »` : null}
+            replyTo={replyTo ? `Réponse à ${shownName(replyTo.author)}${replyMention(replyTo.author, p.candidates) ? " — votre Expert sera prévenu" : ""} : « ${excerpt(replyTo.text, 120)} »` : null}
             onCancelReply={() => setReplyTo(null)}
+            canDictate={p.canDictate}
             sending={p.sending}
             onSend={async (text, mentions) => {
               const ok = await p.onSend(text, withReplyMention(mentions, replyTo?.author, p.candidates), replyTo);
