@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, ChevronDown, Layers, Loader2, MoreHorizontal, Plus, RefreshCw, Server, ShieldCheck, Trash2 } from "lucide-react";
+import { ToolLogo } from "./ToolLogo";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { StateBadge } from "@/components/models/MemberSources";
@@ -10,9 +11,10 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiFetch } from "@/lib/api";
 import type { SettingScope } from "@/lib/llm";
-import { mcpPending, type McpOauthServer, type McpOverview, type McpServer, type McpServerDraft, type McpToolsOverview, type McpToolsReport, type McpWritten } from "@/lib/mcp-servers";
+import { mcpPending, serverHost, serverTitle, type McpOauthServer, type McpOverview, type McpServer, type McpServerDraft, type McpToolsOverview, type McpToolsReport, type McpWritten } from "@/lib/mcp-servers";
 import { type McpOauthFlow } from "./McpOauthSteps";
 import { McpServerDialog } from "./McpServerDialog";
+import { directoryEntryFor } from "@/lib/mcp-directory";
 import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
 
 // Une pose prend d'ordinaire moins d'une minute par instance ; au-delà, on cesse de relire seul.
@@ -67,27 +69,33 @@ function ToolList({ tools }: { tools: Tools }) {
 }
 
 function ServerCard({ server, note, access, tools, catalogueLabel, onRemove }: { server: McpServer; note?: string; access?: Access; tools?: Tools; catalogueLabel?: string; onRemove?: () => void }) {
+  const title = serverTitle(server);
+  const host = server.auth === "stdio" ? null : serverHost(server.url);
+  // Only a catalogue vendor's public domain goes to the logo service; a client's own address shows its initial.
+  const vendor = host ? directoryEntryFor(server.url) : null;
   return (
     <div className="overflow-hidden rounded-[22px] border border-line bg-surface">
       <div className="flex min-h-[76px] items-center gap-3 py-3 pl-4 pr-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-tint text-brand">
-          <Server className="h-5 w-5" />
-        </span>
+        {/* The tool's own logo and name first (Leslie, 07/11: « on ne lit plus le nom de l'outil »), its short address
+            under it; the full address in the tooltip. « Chacun se connecte avec son compte » says the account sign-in:
+            no badge repeating it. */}
+        {host ? (
+          <ToolLogo logo={vendor ? `https://www.google.com/s2/favicons?domain=${vendor.domain}&sz=64` : null} name={title} className="size-10 shrink-0 rounded-xl" imgClassName="size-6" />
+        ) : (
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-tint text-brand">
+            <Server className="h-5 w-5" />
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <p className="truncate text-[15px] font-semibold text-ink">{server.name}</p>
-            {server.auth === "oauth" && (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-tint px-2 py-0.5 text-[11px] font-semibold text-brand">
-                <ShieldCheck className="h-3 w-3" /> Connexion au compte
-              </span>
-            )}
+            <p className="truncate text-[15px] font-semibold text-ink" title={server.name !== title ? server.name : undefined}>{title}</p>
             {note && <span className="shrink-0 rounded-full bg-soft px-2 py-0.5 text-[11px] font-semibold text-ink-3">{note}</span>}
           </div>
           {server.auth === "stdio" ? (
             <p className="truncate text-[12px] text-ink-3">Proposé par Yelema : {catalogueLabel ?? server.stdio}</p>
           ) : (
-            <p className="truncate font-mono text-[12px] text-ink-3" title={server.url}>
-              {server.url}
+            <p className="truncate text-[12px] text-ink-3" title={server.url}>
+              {host ?? server.url}
             </p>
           )}
           <p className="text-[11px] text-ink-3">

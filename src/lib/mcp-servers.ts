@@ -184,3 +184,28 @@ export interface McpToolsOverview {
   own: McpToolsReport | null;
   members?: { id: string; name: string | null; email: string; report: McpToolsReport | null }[];
 }
+
+const SUBDOMAINS = /^(mcp|api|www|developer|developers|app|server)\./i;
+
+/** A server's address as people read it: « higgsfield.ai » for https://mcp.higgsfield.ai/mcp; null without one. */
+export function serverHost(url: string | null | undefined): string | null {
+  try {
+    let host = new URL(String(url ?? "")).hostname.toLowerCase();
+    while (SUBDOMAINS.test(host) && host.split(".").length > 2) host = host.replace(SUBDOMAINS, "");
+    return host || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The name a server card shows (Leslie, 07/11: « on ne lit plus le nom de l'outil »): the name typed when it says
+ * something, else the tool's name read from its address (« Higgsfield » for mcp.higgsfield.ai), first letter capital.
+ */
+export function serverTitle(server: Pick<McpServer, "name" | "url">): string {
+  const typed = server.name.trim().replace(/\.$/, "");
+  const host = serverHost(server.url);
+  const fromHost = host ? host.split(".").slice(-2)[0] : "";
+  const name = typed.length >= 3 || !fromHost ? typed : fromHost;
+  return name ? name.charAt(0).toUpperCase() + name.slice(1) : "Serveur";
+}

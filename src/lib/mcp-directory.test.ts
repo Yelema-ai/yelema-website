@@ -39,3 +39,14 @@ test("serverSlug: a typed tool becomes a server name", () => {
   assert.equal(serverSlug("Magnific AI"), "magnific_ai");
   assert.equal(serverSlug("  Élan-CRM! "), "elan_crm");
 });
+
+test("directoryEntryFor: a catalogue vendor by its host or domain, never a client's own address", async () => {
+  const { directoryEntryFor } = await import("./mcp-directory.ts");
+  assert.equal(directoryEntryFor("https://mcp.notion.com/mcp")?.key, "notion");
+  assert.equal(directoryEntryFor("https://api.githubcopilot.com/mcp/")?.key, "github");
+  assert.equal(directoryEntryFor("https://eu.mcp.linear.app/x")?.key, "linear");
+  assert.equal(directoryEntryFor("https://sage-hub.mstudio.vc/mcp"), null);
+  assert.equal(directoryEntryFor("http://10.0.0.4:8080/mcp"), null);
+  assert.equal(directoryEntryFor("https://abc.ngrok-free.app/mcp"), null);
+  assert.equal(directoryEntryFor("pas une adresse"), null);
+});
