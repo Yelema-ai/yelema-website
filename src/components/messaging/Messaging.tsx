@@ -15,7 +15,7 @@ import { excerpt } from "@/lib/activity";
 import { useVoices } from "@/components/voice/useVoices";
 import { cn } from "@/lib/utils";
 import { useChatMarks } from "@/components/conversations/useChatMarks";
-import { ExchangeRail } from "@/components/messaging/ExchangeRail";
+import { ExchangeRail, type RowLast } from "@/components/messaging/ExchangeRail";
 import { ExchangeHeader, type ExchangePane } from "@/components/messaging/ExchangeHeader";
 import { ExchangeThread } from "@/components/messaging/ExchangeThread";
 import { candidatesOf, groupCandidates } from "@/lib/buzz-mentions";
@@ -215,7 +215,12 @@ export function Messaging() {
   useEffect(() => {
     const c = relay.current;
     if (!c || !ids) return;
-    const watch = watchLast(c, ids.split(","), (channel, m) => setLasts((l) => (l[channel] && l[channel].at > m.at ? l : { ...l, [channel]: m })));
+    const watch = watchLast(c, ids.split(","), (batch) =>
+      setLasts((l) => {
+        const newer = Object.entries(batch).filter(([channel, m]) => !l[channel] || l[channel].at <= m.at);
+        return newer.length ? { ...l, ...Object.fromEntries(newer) } : l;
+      }),
+    );
     return () => watch.close();
   }, [ids, link]);
   // Première visite : ce qui précède compte comme lu (`__since`) ; la conversation ouverte est lue jusqu'à son dernier message.
@@ -224,6 +229,19 @@ export function Messaging() {
     writeSeen(s);
     setSeen(s);
   }, []);
+  // One preview per conversation, rebuilt only when its inputs change: the rail sorts on it.
+  const rows = useMemo(() => {
+    const out = new Map<string, RowLast>();
+    for (const c of list ?? []) {
+      const m = lasts[c.id];
+      if (!m) continue;
+      const who = mine.includes(m.author) ? "Vous" : (labels.get(m.author) ?? "").replace(/ \((?:de |d’|d')[^)]*\)$/, "");
+      const text = excerpt(m.text.replace(/[`*_>#]/g, ""), 90);
+      out.set(c.id, { at: m.at, text: who && isSalon(c) ? `${who} : ${text}` : mine.includes(m.author) ? `Vous : ${text}` : text, unread: Boolean(seen) && !mine.includes(m.author) && m.at > (seen?.[c.id] ?? seen?.__since ?? 0) && c.id !== open });
+    }
+    return out;
+  }, [list, lasts, mine, labels, isSalon, seen, open]);
+  const lastOf = useCallback((c: Conversation) => rows.get(c.id) ?? null, [rows]);
   const lastOpen = open ? Math.max(lasts[open]?.at ?? 0, thread?.at(-1)?.at ?? 0) : 0;
   useEffect(() => {
     if (!open || !lastOpen) return;
@@ -420,13 +438,7 @@ export function Messaging() {
           facesOf={(c) => facesOf(directory, c.members, mine)}
           onOpen={setOpen}
           onNew={setComposing}
-          lastOf={(c) => {
-            const m = lasts[c.id];
-            if (!m) return null;
-            const who = mine.includes(m.author) ? "Vous" : (labels.get(m.author) ?? "").replace(/ \((?:de |d’|d')[^)]*\)$/, "");
-            const text = excerpt(m.text.replace(/[`*_>#]/g, ""), 90);
-            return { at: m.at, text: who && isSalon(c) ? `${who} : ${text}` : mine.includes(m.author) ? `Vous : ${text}` : text, unread: Boolean(seen) && !mine.includes(m.author) && m.at > (seen?.[c.id] ?? seen?.__since ?? 0) && c.id !== open };
-          }}
+          lastOf={lastOf}
           onMark={(id, kind, on) => mark(markKey(id), kind, on)}
           onCopy={(c) => void copyLink(c)}
           onRename={rename}

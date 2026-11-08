@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { CornerDownRight, Loader2, MessagesSquare, Reply } from "lucide-react";
-import { dayLabel, expertChip, expertParts, hourLabel, markMentions, newDay, shortName, startsRun, type BuzzEntry } from "@/lib/buzz";
+import { dayLabel, expertChip, expertParts, hourLabel, mentionMarker, newDay, shortName, startsRun, type BuzzEntry } from "@/lib/buzz";
 import type { Conversation, Message } from "@/lib/buzz-relay";
 import { cn } from "@/lib/utils";
 import { BUBBLE, BUBBLE_ROW } from "@/lib/exchange-bubble";
@@ -111,6 +111,11 @@ export function ExchangeThread(p: ThreadProps) {
     if (first || atEnd.current || (last && p.mine.includes(last.author))) end.current?.scrollIntoView({ block: "end" });
   }, [id, p.thread, last, p.mine, p.busy.length]);
 
+  const mark = useMemo(
+    () => mentionMarker([...p.directory.flatMap((e) => (e.type === "expert" ? [e.nom, shortName(e.nom)] : [e.nom])), ...p.candidates.filter((c) => c.group).map((c) => c.handle), "tous", "experts"]),
+    [p.directory, p.candidates],
+  );
+
   if (!p.current)
     return (
       <div className="m-auto flex flex-col items-center p-10 text-center">
@@ -127,7 +132,6 @@ export function ExchangeThread(p: ThreadProps) {
   const entryOf = (k: string) => (p.mine.includes(k) ? self : (byKey.get(k) ?? null));
   // Un Expert par son prénom, son propriétaire dans la pastille ; une personne par son nom.
   const shownName = (k: string) => (entryOf(k)?.type === "expert" ? expertParts(nameOf(k)).name : nameOf(k));
-  const handles = [...p.directory.flatMap((e) => (e.type === "expert" ? [e.nom, shortName(e.nom)] : [e.nom])), ...p.candidates.filter((c) => c.group).map((c) => c.handle), "tous", "experts"];
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {p.pane === "livrables" && p.salon ? (
@@ -193,7 +197,7 @@ export function ExchangeThread(p: ThreadProps) {
                       <div className={cn(BUBBLE, mineMsg ? "rounded-tl-md bg-tint" : "rounded-tl-md border border-line bg-surface")} title={first || day ? undefined : hourLabel(m.at)} tabIndex={-1}>
                         {/* Comme le chat d'un Expert : liens cliquables (un site extérieur demande confirmation), listes, gras. */}
                         <div onClickCapture={openCited} className={MENTIONS}>
-                          <Markdown content={markMentions(linked?.text ?? body, handles)} />
+                          <Markdown content={mark(linked?.text ?? body)} />
                         </div>
                         {/* Répondre, accroché au coin haut de la bulle au survol (comme Slack) : on voit à quel message il répond. */}
                         <button

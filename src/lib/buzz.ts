@@ -138,10 +138,15 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Each « @Name » of a known participant set as inline code, which the thread draws as a mention chip. Longest names first. */
 export function markMentions(text: string, handles: string[]): string {
+  return mentionMarker(handles)(text);
+}
+
+/** `markMentions` with its pattern compiled once, for a thread that marks every message on each render. */
+export function mentionMarker(handles: string[]): (text: string) => string {
   const names = [...new Set(handles.filter(Boolean))].sort((a, b) => b.length - a.length);
-  if (!names.length || !text.includes("@")) return text;
+  if (!names.length) return (text) => text;
   const re = new RegExp(`(^|[^\\w\`])@(${names.map(escapeRe).join("|")})(?![\\p{L}\\d])`, "gu");
-  return text.replace(re, (_all, lead: string, name: string) => `${lead}\`@${name}\``);
+  return (text) => (text.includes("@") ? text.replace(re, (_all, lead: string, name: string) => `${lead}\`@${name}\``) : text);
 }
 
 export interface SalonGroup { membre: string; nom: string; self: boolean; person: BuzzEntry | null; experts: BuzzEntry[] }

@@ -90,7 +90,12 @@ export class BuzzConnection {
 
   /** Every stored event matching `filter`, up to the relay's end-of-stored-events. */
   query(filter: Filter): Promise<Event[]> {
-    return this.req(filter);
+    return this.req([filter]);
+  }
+
+  /** Events matching any of `filters` in ONE request, each filter with its own limit (NIP-01). */
+  queryAny(filters: Filter[]): Promise<Event[]> {
+    return this.req(filters);
   }
 
   /**
@@ -128,7 +133,7 @@ export class BuzzConnection {
     });
   }
 
-  private req(filter: Filter): Promise<Event[]> {
+  private req(filters: Filter[]): Promise<Event[]> {
     const id = `q${++this.serial}`;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -137,7 +142,7 @@ export class BuzzConnection {
         this.drop();
       }, TIMEOUT_MS);
       this.queries.set(id, { events: [], resolve, reject, timer });
-      this.send(["REQ", id, filter]);
+      this.send(["REQ", id, ...filters]);
     });
   }
 
@@ -312,24 +317,28 @@ export async function openDirect(c: BuzzConnection, pubkeys: string[]): Promise<
 }
 
 /**
- * The last message of each conversation, for the rail's preview and its unread mark: one query per
- * channel (`limit: 1`), then one subscription on all of them from now on. `onLast` gets every newer one.
+ * The last message of each conversation, for the rail's preview and its unread mark: ONE request with a
+ * `limit: 1` filter per channel (one round trip, one render), then one subscription on all of them from now on.
  */
-export function watchLast(c: BuzzConnection, ids: string[], onLast: (channel: string, m: Message) => void): Subscription {
+export function watchLast(c: BuzzConnection, ids: string[], onLasts: (lasts: Record<string, Message>) => void): Subscription {
   let open = true;
   const channelOf = (e: Event) => tag(e, "h");
-  for (const id of ids)
-    void c.query({ kinds: MESSAGE_KINDS, "#h": [id], limit: 1 }).then(
+  if (ids.length)
+    void c.queryAny(ids.map((id) => ({ kinds: MESSAGE_KINDS, "#h": [id], limit: 1 }))).then(
       (events) => {
-        const last = events.reduce<Event | null>((a, e) => (!a || e.created_at > a.created_at ? e : a), null);
-        if (open && last) onLast(id, toMessage(last));
+        const lasts: Record<string, Message> = {};
+        for (const e of events) {
+          const h = channelOf(e);
+          if (h && (!lasts[h] || e.created_at > lasts[h].at)) lasts[h] = toMessage(e);
+        }
+        if (open && Object.keys(lasts).length) onLasts(lasts);
       },
       () => undefined,
     );
   const live = ids.length
     ? c.subscribe({ kinds: MESSAGE_KINDS, "#h": ids, since: now() }, (e) => {
         const h = channelOf(e);
-        if (open && h) onLast(h, toMessage(e));
+        if (open && h) onLasts({ [h]: toMessage(e) });
       })
     : null;
   return {

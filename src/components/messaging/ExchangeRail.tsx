@@ -57,7 +57,7 @@ export function ExchangeRail(p: RailProps) {
       { label: "Salons", items: live.filter((c) => !p.pinned.has(c.id) && p.isSalon(c)) },
       { label: "Messages directs", items: live.filter((c) => !p.pinned.has(c.id) && !p.isSalon(c)) },
     ].filter((g) => g.items.length);
-  }, [p, query]);
+  }, [p.list, p.archived, p.pinned, p.lastOf, p.nameOf, p.isSalon, query]);
   const archivedItems = (p.list ?? []).filter((c) => p.archived.has(c.id));
 
   async function commit(c: Conversation) {
