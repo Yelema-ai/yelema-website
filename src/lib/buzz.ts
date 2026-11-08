@@ -6,7 +6,7 @@
  * `membre`: the person, or an expert's owner. `profil` (experts): their Hermes profile; `photo`: an expert's from the catalogue (added by this app), a person's profile photo
  * (served by the back office, one's own added by this app). `role` (people): admin or member of the space. `invite`: a guest from outside the client, in one salon, until `expiresAt`.
  */
-export interface BuzzEntry { nom: string; type: "personne" | "expert" | "invite"; membre: string; cles: string[]; profil?: string; photo?: string | null; role?: "admin" | "membre"; expiresAt?: string; /** People: their department in the org chart, when the back office serves it (for @Finance). */ unite?: string | null; /** Experts: from the catalogue (added by this app), « Experte » or « Expert ». */ pronom?: "il" | "elle" | null }
+export interface BuzzEntry { nom: string; type: "personne" | "expert" | "invite"; membre: string; cles: string[]; profil?: string; photo?: string | null; role?: "admin" | "membre"; expiresAt?: string; /** People: their departments in the org chart, as the back office serves them (for @Finance). */ unites?: string[]; /** Experts: from the catalogue (added by this app), « Experte » or « Expert ». */ pronom?: "il" | "elle" | null }
 export interface BuzzOverview {
   relais: string;
   appareils: { cle: string; nom: string }[];

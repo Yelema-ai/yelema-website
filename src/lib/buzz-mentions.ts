@@ -45,12 +45,13 @@ export function groupCandidates(directory: BuzzEntry[], members: string[], myMem
   const keysOf = (list: BuzzEntry[]) => [...new Set(list.flatMap((e) => e.cles.filter((k) => members.includes(k))))];
   const group = (handle: string, list: BuzzEntry[], hint: string, own = false): Candidate[] =>
     list.length ? [{ entry: { nom: handle, type: "personne", membre: `@${handle}`, cles: keysOf(list) }, mine: own, handle, group: { hint } }] : [];
-  const units = [...new Set(people.map((e) => e.unite?.trim()).filter((u): u is string => Boolean(u)))].sort((a, b) => a.localeCompare(b, "fr"));
+  const unitsOf = (e: BuzzEntry): string[] => (e.unites ?? []).map((u) => u.trim()).filter(Boolean);
+  const units = [...new Set(people.flatMap(unitsOf))].sort((a, b) => a.localeCompare(b, "fr"));
   return [
     ...group("tous", people, `Prévient les ${people.length} personne${people.length > 1 ? "s" : ""} du salon`),
     ...group("experts", experts, `Vos ${experts.length} Expert${experts.length > 1 ? "s" : ""} du salon`, true),
     ...units.flatMap((u) => {
-      const list = people.filter((e) => e.unite?.trim() === u);
+      const list = people.filter((e) => unitsOf(e).includes(u));
       return group(u.replace(/\s+/g, ""), list, `${u} : ${list.length} personne${list.length > 1 ? "s" : ""}`);
     }),
   ];
