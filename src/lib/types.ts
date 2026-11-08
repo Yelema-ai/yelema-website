@@ -40,6 +40,8 @@ export interface MemberRoom {
   quota: { used: number; allowed: number | null };
   seats: { used: number; cap: number } | null;
   enterpriseOpen: boolean;
+  /** Domains an admin may invite (« mstudio.vc ») : the back office's list when it serves one, else the admin's own. */
+  allowedDomains?: string[];
 }
 
 export interface Invitation {
