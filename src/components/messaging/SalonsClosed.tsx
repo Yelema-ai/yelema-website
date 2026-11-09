@@ -6,8 +6,8 @@ import { closedSalons } from "@/lib/salons-closed";
 
 // Salons pas (encore) ouverts pour ce membre : un état calme au centre de la page, jamais un bloc d'erreur rouge.
 // Le back-office dit pourquoi ; ce qui n'est qu'un délai se réessaie d'un clic.
-export function SalonsClosed({ reason }: { reason: string }) {
-  const { title, text, retry } = closedSalons(reason);
+export function SalonsClosed({ reason, code }: { reason: string; code?: string | null }) {
+  const { title, text, retry } = closedSalons(reason, code);
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center p-6">
       <div className="flex max-w-sm flex-col items-center text-center">

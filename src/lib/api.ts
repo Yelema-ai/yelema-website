@@ -26,6 +26,18 @@ const EXPIRED = "Votre session a expiré. Reconnectez-vous.";
 // A form or a file sets its own type (multipart boundary); anything else is sent as JSON.
 const ownType = (body: RequestInit["body"]) => typeof FormData !== "undefined" && (body instanceof FormData || body instanceof Blob || body instanceof URLSearchParams || body instanceof ArrayBuffer);
 
+/** A refusal of this app's API: its sentence, and the code and status it came with (`salons_closed`…). */
+export class ApiFetchError extends Error {
+  status: number;
+  code: string | null;
+  constructor(message: string, status: number, code: string | null) {
+    super(message);
+    this.name = "ApiFetchError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
 /** `fallback`: the sentence (without its full stop) when a refusal carries none of its own. */
 export async function apiFetch<T>(url: string, init?: RequestInit, fallback?: string): Promise<T> {
   const res = await fetch(url, {
@@ -46,8 +58,9 @@ export async function apiFetch<T>(url: string, init?: RequestInit, fallback?: st
   }
   if (!res.ok) {
     if (leaveIfSignedOut(res)) throw new Error(EXPIRED);
-    const message = (data as { error?: { message?: string } })?.error?.message;
-    throw new Error(message || (fallback ? asSentence(fallback) : FAILED));
+    const error = (data as { error?: { message?: string; code?: unknown } })?.error;
+    const code = typeof error?.code === "string" ? error.code : null;
+    throw new ApiFetchError(error?.message || (fallback ? asSentence(fallback) : FAILED), res.status, code);
   }
   return data as T;
 }

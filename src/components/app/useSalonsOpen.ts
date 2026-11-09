@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useWorkspace } from "@/components/WorkspaceProvider";
 
-// Whether « Salons » belongs in the menu: only once the back office has opened them for the company.
-// This device remembers the last answer, so the entry neither blinks in nor out on the next visit;
-// a failure (network, relay down) changes nothing. One read per tab.
+// Whether « Salons » belongs in the menu: only once the back office has opened them for the company. It says so
+// in `/app/me` (`salons`, already read with the workspace): no extra call. An older back office does not say:
+// the Salons page then tells, from the refusal of `/app/buzz`, and this device remembers it, so the entry
+// neither blinks in nor out on the next visit.
 const KEY = "yelema.salons-ouverts";
-let asked: Promise<boolean | null> | null = null;
 
 function remembered(): boolean | null {
   try {
@@ -17,29 +18,23 @@ function remembered(): boolean | null {
   }
 }
 
+/** What the Salons page learnt (open, or refused with `salons_closed`): the menu follows on the next visit. */
+export function rememberSalonsOpen(open: boolean): void {
+  try {
+    localStorage.setItem(KEY, open ? "1" : "0");
+  } catch {}
+}
+
 export function useSalonsOpen(enabled: boolean): boolean {
-  const [open, setOpen] = useState<boolean | null>(null);
+  const said = useWorkspace().current?.salons;
+  const [kept, setKept] = useState<boolean | null>(null);
   useEffect(() => {
     if (!enabled) return;
-    setOpen(remembered());
-    asked ??= fetch("/api/buzz/ouvert", { headers: { Accept: "application/json" } })
-      .then((r) => (r.ok ? (r.json() as Promise<{ open?: boolean }>) : null))
-      .then((b) => (typeof b?.open === "boolean" ? b.open : null))
-      .catch(() => null);
-    let live = true;
-    asked.then((answer) => {
-      if (answer === null) asked = null;
-      else {
-        try {
-          localStorage.setItem(KEY, answer ? "1" : "0");
-        } catch {}
-      }
-      if (live && answer !== null) setOpen(answer);
-    });
-    return () => {
-      live = false;
-    };
-  }, [enabled]);
-  // Unknown (first visit, or the back office did not answer): shown, the page itself says if they are not open.
-  return enabled && open !== false;
+    if (typeof said === "boolean") rememberSalonsOpen(said);
+    else setKept(remembered());
+  }, [enabled, said]);
+  if (!enabled) return false;
+  if (typeof said === "boolean") return said;
+  // Unknown (first visit with an older back office): shown, the page itself says if they are not open.
+  return kept !== false;
 }
