@@ -32,9 +32,11 @@ interface Props {
   // Prominent welcome-state composer (vs the compact docked composer).
   large?: boolean;
   focusToken?: number;
+  /** Text put in the composer (an approval « Modifier »); a new token puts it again. */
+  draft?: { text: string; token: number } | null;
 }
 
-export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large = false, focusToken = 0 }: Props) {
+export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large = false, focusToken = 0, draft = null }: Props) {
   const [text, setText] = useState("");
   // model + provider are always chosen together (one selection); effort is independent. Group
   // them as the composer's outgoing ChatSettings so send is just `{ ...settings, files }`.
@@ -64,6 +66,20 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
     const frame = requestAnimationFrame(() => textareaRef.current?.focus());
     return () => cancelAnimationFrame(frame);
   }, [focusToken]);
+
+  useEffect(() => {
+    if (!draft) return;
+    setText(draft.text);
+    const frame = requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(draft.text.length, draft.text.length);
+      grow(el);
+    });
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.token]);
 
   // The model switcher is a persistent control, shown once the instance reports at least one model
   // (the older metered gateway exposes a single "default"; current builds expose the full catalog).

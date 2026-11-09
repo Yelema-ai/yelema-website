@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, readApiError } from "@/lib/api";
+import { addApproval, answerOutcome, expireOpen, isApprovalChoice, parseApproval, settleApproval, type ApprovalChoice, type ApprovalState } from "@/lib/approval";
 import { cached, cachedFetch, forget, remember, whenKept } from "@/lib/client-cache";
 import { finishTiming, keepLast, mark, startTiming, type TurnTiming } from "@/lib/chat-timing";
 import { chatFailureMessage, OFFLINE } from "@/lib/chat-errors";
@@ -415,6 +416,16 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
               case "response.tool_call.failed":
                 patchRun(run, (m) => ({ ...m, tools: closeTool(m.tools, str(data.tool) ?? "tool", "error") }));
                 break;
+              case "response.approval_requested": {
+                const a = parseApproval(data);
+                if (a) patchRun(run, (m) => ({ ...m, approvals: addApproval(m.approvals, a) }));
+                break;
+              }
+              case "response.approval_resolved": {
+                const rid = str(data.request_id);
+                if (rid) patchRun(run, (m) => ({ ...m, approvals: settleApproval(m.approvals, rid, "answered", isApprovalChoice(data.choice) ? data.choice : undefined) }));
+                break;
+              }
               case "response.completed": {
                 sawTerminal = true;
                 const final = str(data.output_text);
@@ -450,6 +461,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
           ...m,
           content: m.content || (streamError ? `_${streamError}_` : ""),
           tools: (m.tools ?? []).map((t) => (t.status === "running" ? { ...t, status: "completed" as const } : t)),
+          approvals: expireOpen(m.approvals),
         }));
         // The end shows at once, before the streaming flag drops.
         frames.flush();
@@ -801,6 +813,28 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
     [startTurn, steer]
   );
 
+  // The member's answer to an approval card. 409: it no longer waits (past its deadline, or answered elsewhere).
+  const answerApproval = useCallback(
+    async (messageId: string, requestId: string, choice: ApprovalChoice): Promise<void> => {
+      const run = [newChatRunRef.current, ...runsRef.current.values()].find((r) => r && !r.done && r.assistant.id === messageId);
+      const settle = (state: ApprovalState, c?: ApprovalChoice) => {
+        if (run) return patchRun(run, (m) => ({ ...m, approvals: settleApproval(m.approvals, requestId, state, c) }));
+        setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, approvals: settleApproval(m.approvals, requestId, state, c) } : m)));
+      };
+      if (!run?.responseId) return settle("expired");
+      settle("sending", choice);
+      const outcome = await fetch(`/api/agents/${agentId}/chat/responses/${encodeURIComponent(run.responseId)}/approval`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: requestId, choice }),
+      }).then((res) => answerOutcome(res.status), () => "error" as const);
+      if (outcome !== "error") return settle(outcome, choice);
+      settle("pending");
+      setError("Votre réponse n’a pas pu être transmise. Réessayez.");
+    },
+    [agentId, patchRun]
+  );
+
   // Stop the current turn: abort the local stream and cancel it upstream so the agent stops work.
   const stop = useCallback(() => {
     const run = activeSessionRef.current ? runsRef.current.get(activeSessionRef.current) : newChatRunRef.current;
@@ -844,7 +878,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
     };
   }, []);
 
-  return { messages, isStreaming, loadingHistory, refreshing, error, send, stop, killRun, unqueue };
+  return { messages, isStreaming, loadingHistory, refreshing, error, send, stop, killRun, unqueue, answerApproval };
 }
 
 // The turn's times go to the host's logs (one line, see /api/metrics/chat) and stay in this

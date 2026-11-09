@@ -26,6 +26,8 @@ import { cleanReply } from "@/lib/chat-errors";
 import { mediaTags } from "@/lib/media-tags";
 import { LiveWait, StepsList } from "./ChatSteps";
 import { ReplyChoices } from "./ReplyActions";
+import { ApprovalCard } from "./ApprovalCard";
+import type { ApprovalChoice } from "@/lib/approval";
 import { replyParts } from "@/lib/reply-parts";
 import type { ChatMessage, MessageAttachment } from "./types";
 import { commandText } from "@/lib/session-title";
@@ -150,6 +152,8 @@ export function ChatMessages({
   routine = null,
   pronoun = null,
   onReply,
+  onApproval,
+  onModifyApproval,
 }: {
   messages: ChatMessage[];
   isStreaming: boolean;
@@ -170,6 +174,10 @@ export function ChatMessages({
   pronoun?: "elle" | "il" | null;
   /** Sends a message for the member: a choice clicked. */
   onReply?: (text: string) => void;
+  /** Answers an approval card of a live reply. */
+  onApproval?: (messageId: string, requestId: string, choice: ApprovalChoice) => void;
+  /** « Modifier » on an approval card: refused, and the composer opened to say what to change. */
+  onModifyApproval?: (messageId: string, requestId: string) => void;
 }) {
   // The instance whose drive the paths in a reply point into (they become download links).
   const { agentId, profile } = useChatContext();
@@ -206,8 +214,10 @@ export function ChatMessages({
   useEffect(() => onGoogle?.(allGoogle), [allGoogle, onGoogle]);
   // Stable across the parent's renders, so the memoized rows stay put while a reply streams.
   const stableFace = useMemo(() => face, [face?.displayName, face?.photoUrl, face?.gateway]); // eslint-disable-line react-hooks/exhaustive-deps
-  const handlers = useRef({ onReply, onUnqueue });
-  handlers.current = { onReply, onUnqueue };
+  const handlers = useRef({ onReply, onUnqueue, onApproval, onModifyApproval });
+  handlers.current = { onReply, onUnqueue, onApproval, onModifyApproval };
+  const approve = useCallback((id: string, rid: string, c: ApprovalChoice) => handlers.current.onApproval?.(id, rid, c), []);
+  const modify = useCallback((id: string, rid: string) => handlers.current.onModifyApproval?.(id, rid), []);
   const reply = useCallback((text: string) => handlers.current.onReply?.(text), []);
   const unqueue = useCallback((id: string) => handlers.current.onUnqueue?.(id), []);
       const dashboard = useSafeDashboard();
@@ -268,6 +278,8 @@ export function ChatMessages({
             pronoun={pronoun}
             onReply={onReply ? reply : undefined}
             onUnqueue={onUnqueue ? unqueue : undefined}
+            onApproval={onApproval ? approve : undefined}
+            onModifyApproval={onModifyApproval ? modify : undefined}
           />
         );
       })}
@@ -292,6 +304,8 @@ const MessageRow = memo(function MessageRow({
   pronoun,
   onReply,
   onUnqueue,
+  onApproval,
+  onModifyApproval,
 }: {
   m: ChatMessage;
   live: boolean;
@@ -308,6 +322,8 @@ const MessageRow = memo(function MessageRow({
   pronoun: "elle" | "il" | null;
   onReply?: (text: string) => void;
   onUnqueue?: (id: string) => void;
+  onApproval?: (messageId: string, requestId: string, choice: ApprovalChoice) => void;
+  onModifyApproval?: (messageId: string, requestId: string) => void;
 }) {
     if (m.role === "user" && isCallTranscript(m.content)) {
       return (
@@ -386,6 +402,9 @@ const MessageRow = memo(function MessageRow({
         <div className="min-w-0 max-w-full flex-1 text-[15px] text-ink">
           {m.thinking && <ThinkingBlock content={m.thinking} live={live && !m.content} />}
           {(working || (showDots && !updating)) && <LiveWait tools={tools} name={face?.displayName ?? null} since={since} />}
+          {onApproval && onModifyApproval && m.approvals?.map((a) => (
+            <ApprovalCard key={a.requestId} approval={a} onAnswer={(c) => onApproval(m.id, a.requestId, c)} onModify={() => onModifyApproval(m.id, a.requestId)} />
+          ))}
           {!live && tools.length > 0 && <StepsList tools={tools} />}
           {routineThread && !live && isSilentRun(m.content) ? (
             <p className="text-sm italic text-ink-3">{SILENT_RUN_LABEL}</p>
