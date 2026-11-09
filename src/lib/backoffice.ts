@@ -6,6 +6,7 @@ import type { ComposioCall } from "@/lib/composio-usage";
 import { voiceKeyPath, type VoiceKeysOverview } from "@/lib/voice-keys";
 import { isServerId, mcpScopePath, mcpServerPath, type McpOauthQuery, type McpOauthServer, type McpOverview, type McpToolsOverview, type McpToolsReport, type McpServerDraft, type McpWritten } from "@/lib/mcp-servers";
 import type { UnipileAccount, UnipileDraft, UnipileStatus } from "@/lib/unipile";
+import type { TriggersOverview, TriggerWithKey } from "@/lib/triggers";
 import { vaultPath, type VaultDraft, type VaultEntry, type VaultItem, type VaultList, type VaultOverview, type VaultRef, type VaultScope } from "@/lib/vault";
 import { scopePath, type LlmModelChoice, type LlmOverview, type LlmWritten, type SettingScope } from "@/lib/llm";
 import { mailPath, type MailDetail, type MailDraft, type MailInbox, type MailRights, type MailRightsPatch, type MailSummary } from "@/lib/mail";
@@ -612,6 +613,11 @@ export const backoffice = {
   clearUnipile: (token: string) => call<{ ok: true }>("/app/unipile", { method: "DELETE", token, timeoutMs: 60_000 }),
   // A one-click Unipile link, made by the instance (it alone holds the key), to link a broken account again.
   reconnectUnipile: (token: string, accountId: string) => call<{ url: string }>("/app/unipile/reconnect", { method: "POST", token, body: { accountId }, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
+  // The member's « quand… alors… » triggers; a webhook key comes back once, never kept here.
+  triggers: (token: string) => call<TriggersOverview>("/app/triggers", { token }),
+  createTrigger: (token: string, body: Record<string, unknown>) => call<TriggerWithKey>("/app/triggers", { method: "POST", token, body, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
+  updateTrigger: (token: string, id: string, body: Record<string, unknown>) => call<TriggerWithKey>(`/app/triggers/${encodeURIComponent(id)}`, { method: "PATCH", token, body, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
+  deleteTrigger: (token: string, id: string) => call<{ ok: true }>(`/app/triggers/${encodeURIComponent(id)}`, { method: "DELETE", token, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
   mcp: (token: string) => call<McpOverview>("/app/mcp", { token }),
   addMcpServer: (token: string, scope: SettingScope, draft: McpServerDraft) => {
     const path = mcpScopePath(scope);
