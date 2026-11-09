@@ -13,7 +13,7 @@ const LONG_WAIT_MS = 30_000;
 // message, then its latest step. A long turn adds one line, no more (Leslie, 27/10: light, no
 // timer, no list). The wait counts from `since`, the member's message, so a line that comes and
 // goes during the turn (a thought, a sentence before a tool) does not start it again.
-export function LiveWait({ tools, name, since, compacting }: { tools: ToolEvent[]; name: string | null; since?: number; compacting?: boolean }) {
+export function LiveWait({ tools, name, since, compacting, status }: { tools: ToolEvent[]; name: string | null; since?: number; compacting?: boolean; status?: string | null }) {
   const [long, setLong] = useState(false);
   useEffect(() => {
     const left = LONG_WAIT_MS - (since ? Date.now() - since : 0);
@@ -26,6 +26,8 @@ export function LiveWait({ tools, name, since, compacting }: { tools: ToolEvent[
   }, [since]);
   const current = tools.findLast((t) => t.status === "running") ?? tools.at(-1);
   const doing = current?.phrase ?? "Lit votre message";
+  // The runtime's own sentence for what the turn waits on (quota, retry, nothing yet) comes first, as it is.
+  if (status) return <TurnStatusLine text={status} />;
   const line = compacting
     ? `La conversation est longue : ${name ?? "votre expert"} la résume avant de répondre`
     : name ? `${name} ${doing.charAt(0).toLowerCase()}${doing.slice(1)}` : doing;
@@ -40,6 +42,18 @@ export function LiveWait({ tools, name, since, compacting }: { tools: ToolEvent[
       ) : (
         long && <p className="mt-0.5 text-[13px] text-ink-3">Vous serez prévenu dès que c’est prêt.</p>
       )}
+    </div>
+  );
+}
+
+/** What the turn waits on (`response.status`), in the runtime's words: one quiet line, whole, never cut. */
+export function TurnStatusLine({ text }: { text: string }) {
+  return (
+    <div className="mb-2" aria-live="polite">
+      <p className="flex items-center gap-2.5 py-1 text-sm text-ink-3">
+        <TypingDots />
+        <span>{text}</span>
+      </p>
     </div>
   );
 }

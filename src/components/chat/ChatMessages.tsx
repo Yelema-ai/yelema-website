@@ -24,7 +24,7 @@ import { FilePreview, ReducedImage } from "@/components/files/FilePreview";
 import { contentUrl, thumbUrl, type FileEntry } from "@/components/files/types";
 import { cleanReply } from "@/lib/chat-errors";
 import { mediaTags } from "@/lib/media-tags";
-import { LiveWait, StepsList } from "./ChatSteps";
+import { LiveWait, StepsList, TurnStatusLine } from "./ChatSteps";
 import { ReplyChoices } from "./ReplyActions";
 import { ApprovalCard } from "./ApprovalCard";
 import type { ApprovalChoice } from "@/lib/approval";
@@ -392,6 +392,7 @@ const MessageRow = memo(function MessageRow({
     // Once the expert works with tools, the turn shows one live step line; its reply appears when the turn ends.
     const working = live && tools.length > 0;
     const showDots = live && !working && !m.content && !m.thinking;
+    const waitShown = working || (showDots && !updating);
     // Only the conversation's last reply can still be answered in a click; an older question reads as written.
     const finished = !live && m.content ? replyParts(withoutGoogleActions(cleanReply(m.content))) : null;
     const answerable = finished && onReply && !isStreaming && !routineThread && last && finished.choices.length > 0;
@@ -401,7 +402,7 @@ const MessageRow = memo(function MessageRow({
         {face && <ExpertAvatar expert={face} size="xs" className="mt-0.5" />}
         <div className="min-w-0 max-w-full flex-1 text-[15px] text-ink">
           {m.thinking && <ThinkingBlock content={m.thinking} live={live && !m.content} />}
-          {(working || (showDots && !updating)) && <LiveWait tools={tools} name={face?.displayName ?? null} since={since} compacting={m.compacting} />}
+          {waitShown && <LiveWait tools={tools} name={face?.displayName ?? null} since={since} compacting={m.compacting} status={m.status?.message} />}
           {onApproval && onModifyApproval && m.approvals?.map((a) => (
             <ApprovalCard key={a.requestId} approval={a} onAnswer={(c) => onApproval(m.id, a.requestId, c)} onModify={() => onModifyApproval(m.id, a.requestId)} />
           ))}
@@ -417,6 +418,8 @@ const MessageRow = memo(function MessageRow({
               {face ? `${face.displayName} reprend` : "Votre Expert reprend"} dans un instant, votre message est bien reçu.
             </p>
           ) : null}
+          {/* A state that comes once the reply has begun (a thought, a sentence): under it, not above. */}
+          {live && !waitShown && m.status && <TurnStatusLine text={m.status.message} />}
           {answerable && <ReplyChoices choices={finished.choices} note={finished.choicesNote} onSend={onReply} />}
           {!live && m.content && <GoogleDocCards docs={googleDocs(cleanReply(m.content))} />}
           {!live && m.content && <DocumentCards agentId={agentId} docs={turnDocs(cleanReply(m.content), listing, [...(m.files ?? []), ...mediaTags(m.content).paths])} />}
