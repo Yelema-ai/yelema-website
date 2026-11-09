@@ -1,5 +1,6 @@
 import "server-only";
 import { coldStartWait } from "./cold-start";
+import type { ApprovalChoice } from "./approval";
 import type { DriveTree } from "./drive-paths";
 import { EXEC_TIMEOUT_MS, JSON_TIMEOUT_MS, withTimeout } from "./fetch-timeout";
 import { authViaBackoffice } from "./runtime-config";
@@ -314,6 +315,13 @@ export const agent37 = {
       id,
       `/v1/responses/${encodeURIComponent(responseId)}/steer`,
       { method: "POST", body: JSON.stringify({ text, ...(key ? { client_message_id: key } : {}) }) }
+    ),
+  // Answer an approval asked during a running turn (yelema-hermes I65; older images answer 404, a settled one 409).
+  approveResponse: (id: string, responseId: string, requestId: string, choice: ApprovalChoice) =>
+    instanceCall<{ id: string; request_id: string; choice: ApprovalChoice; resolved: number }>(
+      id,
+      `/v1/responses/${encodeURIComponent(responseId)}/approval`,
+      { method: "POST", body: JSON.stringify({ request_id: requestId, choice }) }
     ),
 
   // ---- Per-instance file browser (Agents API /v1/files) — JSON surfaces only. The byte surfaces

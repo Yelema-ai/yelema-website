@@ -29,6 +29,7 @@ import { ChatSessionsPanel } from "./ChatSessionsPanel";
 import { setChatFull, setChatListHidden, useChatFull, useChatListHidden, useChatSidePanel } from "./chat-layout";
 import { useChatContext } from "./ChatProvider";
 import { useChat } from "./useChat";
+import { MODIFY_PREFIX } from "@/lib/approval";
 import { wakeInstance } from "@/components/app/wake";
 import { useChatAttachments } from "./useChatAttachments";
 import { rememberedSettings } from "./rememberedSettings";
@@ -81,7 +82,7 @@ export function ChatView({
     bumpSession,
     threadVersion,
   } = useChatContext();
-  const { messages, isStreaming, loadingHistory, refreshing, error, send, stop, killRun, unqueue } = useChat({
+  const { messages, isStreaming, loadingHistory, refreshing, error, send, stop, killRun, unqueue, answerApproval } = useChat({
     agentId,
     profile,
     sessionId: activeSessionId,
@@ -100,6 +101,15 @@ export function ChatView({
   // dropped anywhere over the transcript or composer lands in the same tray. A landed attachment
   // refocuses the composer through the same shared signal selecting/creating a thread uses.
   const att = useChatAttachments(agentId, requestComposerFocus);
+  // « Modifier » on an approval: the action is refused and the member says what to change instead.
+  const [draft, setDraft] = useState<{ text: string; token: number } | null>(null);
+  const modifyApproval = useCallback(
+    (id: string, rid: string) => {
+      void answerApproval(id, rid, "deny");
+      setDraft((d) => ({ text: MODIFY_PREFIX, token: (d?.token ?? 0) + 1 }));
+    },
+    [answerApproval]
+  );
   const { clearFiles } = att;
 
   // Switching threads / starting a new chat empties the staged tray, so a file picked for one
@@ -365,7 +375,7 @@ export function ChatView({
             </div>
           )}
           <div ref={contentRef}>
-            <ChatMessages messages={messages} isStreaming={isStreaming} face={face} driveFolder={driveFolder} onReply={(text) => void send(text)} onShowEarlier={showEarlier} onUnqueue={unqueue} onDocs={setDocs} onGoogle={setGoogle} routine={sessions.find((s) => s.session_id === activeSessionId)?.routine ?? null} pronoun={pronoun} />
+            <ChatMessages messages={messages} isStreaming={isStreaming} face={face} driveFolder={driveFolder} onReply={(text) => void send(text)} onShowEarlier={showEarlier} onUnqueue={unqueue} onApproval={(id, rid, c) => void answerApproval(id, rid, c)} onModifyApproval={modifyApproval} onDocs={setDocs} onGoogle={setGoogle} routine={sessions.find((s) => s.session_id === activeSessionId)?.routine ?? null} pronoun={pronoun} />
           </div>
           </>
         ) : (
@@ -410,6 +420,7 @@ export function ChatView({
           onStop={stop}
           large={showWelcome}
           focusToken={composerFocusToken}
+          draft={draft}
         />
       </div>
 
