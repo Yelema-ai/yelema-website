@@ -6,6 +6,7 @@ import { addApproval, answerOutcome, expireOpen, isApprovalChoice, parseApproval
 import { cached, cachedFetch, forget, remember, whenKept } from "@/lib/client-cache";
 import { finishTiming, keepLast, mark, startTiming, type TurnTiming } from "@/lib/chat-timing";
 import { chatFailureMessage, OFFLINE } from "@/lib/chat-errors";
+import { failureFallback, parseTurnStatus, type TurnStatus } from "@/lib/turn-status";
 import { batchQueued, insertBefore, isSteer, steerText, unreadSteerCount } from "@/lib/chat-queue";
 import { profileQuery } from "@/lib/profile-id";
 import { toolPhrase } from "@/lib/tool-steps";
@@ -356,6 +357,8 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
       let streamError: string | null = null;
       let sawTerminal = false;
       let pendingSteer = "";
+      // The state standing when the turn fails: a spent quota says why, rather than the generic sentence.
+      let lastStatus: TurnStatus | null = null;
       try {
         await readSSE(
           body,
@@ -390,7 +393,10 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
               case "response.output_text.delta": {
                 if (run.timing) mark(run.timing, "first", performance.now());
                 const t = str(data.text);
-                if (t) patchRun(run, (m) => ({ ...m, content: m.content + t }));
+                if (t) {
+                  lastStatus = null;
+                  patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, content: m.content + t }));
+                }
                 break;
               }
               case "response.tool_call.generating":
@@ -404,7 +410,8 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
                 }
                 const said = run.assistant.content.trim();
                 if (said) run.narration.push(said);
-                patchRun(run, (m) => ({ ...m, content: "", tools: openTool(m.tools, { tool, status: "running", phrase: toolPhrase(tool, args), generating }) }));
+                lastStatus = null;
+                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, content: "", tools: openTool(m.tools, { tool, status: "running", phrase: toolPhrase(tool, args), generating }) }));
                 break;
               }
               case "response.tool_call.completed":
@@ -416,6 +423,23 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
               case "response.tool_call.failed":
                 patchRun(run, (m) => ({ ...m, tools: closeTool(m.tools, str(data.tool) ?? "tool", "error") }));
                 break;
+              // The conversation grew too long: the runtime summarises its start before answering, which can take a
+              // minute or two. Said while it happens (Leslie, 09/11: « on aurait pu être prévenu »), not afterwards.
+              case "response.compaction.started":
+                patchRun(run, (m) => ({ ...m, compacting: true, status: undefined }));
+                break;
+              case "response.compaction.completed":
+                patchRun(run, (m) => ({ ...m, compacting: false }));
+                break;
+              // The turn waits: quota spent, servers overloaded, or nothing for a minute. The runtime's sentence, as
+              // is, under the bubble; the next state replaces it (contract of 09/11).
+              case "response.status": {
+                const status = parseTurnStatus(data);
+                if (!status) break;
+                lastStatus = status;
+                patchRun(run, (m) => ({ ...m, status }));
+                break;
+              }
               case "response.approval_requested": {
                 const a = parseApproval(data);
                 if (a) patchRun(run, (m) => ({ ...m, approvals: addApproval(m.approvals, a) }));
@@ -429,7 +453,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
               case "response.completed": {
                 sawTerminal = true;
                 const final = str(data.output_text);
-                if (final) patchRun(run, (m) => ({ ...m, content: finalReply(final, run.narration) }));
+                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, ...(final ? { content: finalReply(final, run.narration) } : {}) }));
                 pendingSteer = str(data.pending_steer) ?? "";
                 break;
               }
@@ -438,7 +462,8 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
                 const err = data.error as { message?: string } | undefined;
                 // The instance's own reason is technical and in English: it stays in the browser console.
                 if (err?.message) console.error("[chat] response.failed:", err.message);
-                streamError = chatFailureMessage(err?.message, "Votre expert n’a pas pu répondre. Réessayez dans un instant.", isOnline());
+                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined }));
+                streamError = chatFailureMessage(err?.message, failureFallback(lastStatus, "Votre expert n’a pas pu répondre. Réessayez dans un instant."), isOnline());
                 break;
               }
             }
@@ -460,6 +485,8 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
         patchRun(run, (m) => ({
           ...m,
           content: m.content || (streamError ? `_${streamError}_` : ""),
+          compacting: false,
+          status: undefined,
           tools: (m.tools ?? []).map((t) => (t.status === "running" ? { ...t, status: "completed" as const } : t)),
           approvals: expireOpen(m.approvals),
         }));
