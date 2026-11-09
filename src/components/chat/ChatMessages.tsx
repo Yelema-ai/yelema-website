@@ -401,7 +401,7 @@ const MessageRow = memo(function MessageRow({
         {face && <ExpertAvatar expert={face} size="xs" className="mt-0.5" />}
         <div className="min-w-0 max-w-full flex-1 text-[15px] text-ink">
           {m.thinking && <ThinkingBlock content={m.thinking} live={live && !m.content} />}
-          {(working || (showDots && !updating)) && <LiveWait tools={tools} name={face?.displayName ?? null} since={since} />}
+          {(working || (showDots && !updating)) && <LiveWait tools={tools} name={face?.displayName ?? null} since={since} compacting={m.compacting} />}
           {onApproval && onModifyApproval && m.approvals?.map((a) => (
             <ApprovalCard key={a.requestId} approval={a} onAnswer={(c) => onApproval(m.id, a.requestId, c)} onModify={() => onModifyApproval(m.id, a.requestId)} />
           ))}

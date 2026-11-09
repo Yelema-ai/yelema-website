@@ -13,7 +13,7 @@ const LONG_WAIT_MS = 30_000;
 // message, then its latest step. A long turn adds one line, no more (Leslie, 27/10: light, no
 // timer, no list). The wait counts from `since`, the member's message, so a line that comes and
 // goes during the turn (a thought, a sentence before a tool) does not start it again.
-export function LiveWait({ tools, name, since }: { tools: ToolEvent[]; name: string | null; since?: number }) {
+export function LiveWait({ tools, name, since, compacting }: { tools: ToolEvent[]; name: string | null; since?: number; compacting?: boolean }) {
   const [long, setLong] = useState(false);
   useEffect(() => {
     const left = LONG_WAIT_MS - (since ? Date.now() - since : 0);
@@ -26,14 +26,20 @@ export function LiveWait({ tools, name, since }: { tools: ToolEvent[]; name: str
   }, [since]);
   const current = tools.findLast((t) => t.status === "running") ?? tools.at(-1);
   const doing = current?.phrase ?? "Lit votre message";
-  const line = name ? `${name} ${doing.charAt(0).toLowerCase()}${doing.slice(1)}` : doing;
+  const line = compacting
+    ? `La conversation est longue : ${name ?? "votre expert"} la résume avant de répondre`
+    : name ? `${name} ${doing.charAt(0).toLowerCase()}${doing.slice(1)}` : doing;
   return (
     <div className="mb-2" aria-live="polite">
       <p className="flex items-center gap-2.5 py-1 text-sm text-ink-3">
         <TypingDots />
-        <span className="truncate">{line.replace(/…$/, "")}</span>
+        <span className={compacting ? undefined : "truncate"}>{line.replace(/…$/, "")}</span>
       </p>
-      {long && <p className="mt-0.5 text-[13px] text-ink-3">Vous serez prévenu dès que c’est prêt.</p>}
+      {compacting ? (
+        <p className="mt-0.5 text-[13px] text-ink-3">Rien n’est perdu. Vous serez prévenu dès que c’est prêt.</p>
+      ) : (
+        long && <p className="mt-0.5 text-[13px] text-ink-3">Vous serez prévenu dès que c’est prêt.</p>
+      )}
     </div>
   );
 }

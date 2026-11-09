@@ -37,6 +37,8 @@ export interface ChatMessage {
   steered?: boolean;
   /** The deliverables this reply's own turn wrote (home-relative), as the runtime's history reports them. */
   files?: string[];
+  /** The runtime is summarising the conversation, grown too long, before it answers (live only). */
+  compacting?: boolean;
   /** Approvals the expert asked for during this reply's turn (live only: the transcript does not keep them). */
   approvals?: ApprovalRequest[];
 }

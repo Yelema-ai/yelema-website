@@ -390,7 +390,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
               case "response.output_text.delta": {
                 if (run.timing) mark(run.timing, "first", performance.now());
                 const t = str(data.text);
-                if (t) patchRun(run, (m) => ({ ...m, content: m.content + t }));
+                if (t) patchRun(run, (m) => ({ ...m, compacting: false, content: m.content + t }));
                 break;
               }
               case "response.tool_call.generating":
@@ -404,7 +404,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
                 }
                 const said = run.assistant.content.trim();
                 if (said) run.narration.push(said);
-                patchRun(run, (m) => ({ ...m, content: "", tools: openTool(m.tools, { tool, status: "running", phrase: toolPhrase(tool, args), generating }) }));
+                patchRun(run, (m) => ({ ...m, compacting: false, content: "", tools: openTool(m.tools, { tool, status: "running", phrase: toolPhrase(tool, args), generating }) }));
                 break;
               }
               case "response.tool_call.completed":
@@ -415,6 +415,14 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
                 break;
               case "response.tool_call.failed":
                 patchRun(run, (m) => ({ ...m, tools: closeTool(m.tools, str(data.tool) ?? "tool", "error") }));
+                break;
+              // The conversation grew too long: the runtime summarises its start before answering, which can take a
+              // minute or two. Said while it happens (Leslie, 09/11: « on aurait pu être prévenu »), not afterwards.
+              case "response.compaction.started":
+                patchRun(run, (m) => ({ ...m, compacting: true }));
+                break;
+              case "response.compaction.completed":
+                patchRun(run, (m) => ({ ...m, compacting: false }));
                 break;
               case "response.approval_requested": {
                 const a = parseApproval(data);
