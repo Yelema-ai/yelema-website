@@ -21,6 +21,7 @@ import {
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { EnterpriseSidebar } from "@/components/enterprise/EnterpriseSidebar";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
+import { useSalonsOpen } from "@/components/app/useSalonsOpen";
 import { AccountMenu } from "@/components/AccountMenu";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { ExpertItem } from "@/components/experts/ExpertItem";
@@ -51,7 +52,7 @@ export function Sidebar(props: SidebarProps) {
 
 function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   const pathname = usePathname();
-  const { echanges } = usePublicConfig();
+  const salons = useSalonsOpen(usePublicConfig().echanges);
   // Lit at the click, before the next page is there.
   const here = useShownPath();
   const { current } = useWorkspace();
@@ -166,7 +167,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         <Blocks className="size-5 shrink-0" strokeWidth={1.9} />
         {!collapsed && "Intégrations"}
       </Link>
-      {echanges && (
+      {salons && (
         <Link
           href="/echanges"
           onClick={onNavigate}

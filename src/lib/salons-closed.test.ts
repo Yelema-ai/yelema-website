@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { closedSalons } from "./salons-closed.ts";
+import { closedSalons, salonsNotOpen } from "./salons-closed.ts";
 
 test("Salons pas encore ouverts : message calme, rien à réessayer", () => {
   const c = closedSalons("Le partage n’est pas encore ouvert pour cette entreprise.");
@@ -14,4 +14,10 @@ test("Accès en cours d'activation ou panne : on peut réessayer", () => {
   const other = closedSalons("Le relais ne répond pas.");
   assert.equal(other.retry, true);
   assert.equal(other.text, "Le relais ne répond pas.");
+});
+
+test("Le menu ne cache les Salons que s'ils ne sont pas ouverts, jamais sur une panne", () => {
+  assert.equal(salonsNotOpen("Le partage n’est pas encore ouvert pour cette entreprise."), true);
+  assert.equal(salonsNotOpen("Le relais ne répond pas."), false);
+  assert.equal(salonsNotOpen(undefined), false);
 });
