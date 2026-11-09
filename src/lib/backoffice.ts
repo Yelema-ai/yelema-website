@@ -83,7 +83,12 @@ export interface BoMe {
   workspace: { id: string; name: string; logoUrl: string | null; brandColor?: string | null };
   instance: { id: string } | null;
   /** `entreprise`: company chat only — no Experts, no instance of one's own. `equipe`: Experts on a team instance. */
-  access?: "instance" | "entreprise" | "equipe";
+  access?: "instance" | "entreprise" | "equipe" | { salons?: boolean };
+  /**
+   * Salons open for the company (feature `salons` checked AND an active relay). The back office says it in
+   * `access.salons` or here at the top level; read through `salonsOfMe`. Absent from an older back office.
+   */
+  salons?: boolean;
 }
 
 export interface BoInstanceView {
