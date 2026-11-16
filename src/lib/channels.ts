@@ -83,8 +83,8 @@ export function isConnectableChannel(channel: MessagingPlatform): boolean {
 // WhatsApp is off the list (Leslie, 16/11): it shows only once already connected.
 export const FEATURED_CHANNELS = ["telegram", "slack", "teams", "discord", "google_chat"] as const;
 
-// Not tested yet with clients (Leslie, 16/11): shown as « Bientôt », with no button, until connected.
-export const SOON_CHANNELS = ["slack", "teams"] as const;
+// Not tested yet with clients (Leslie, 16/11; Discord and Google Chat added the same day): shown as « Bientôt », with no button, until connected.
+export const SOON_CHANNELS = ["slack", "teams", "discord", "google_chat"] as const;
 
 export function isSoonChannel(id: string): boolean {
   return (SOON_CHANNELS as readonly string[]).includes(id);
