@@ -326,8 +326,8 @@ export function ChatView({
         </div>
       </header>
       {messages.length > 0 && <GoogleDocsRow docs={google} />}
-      {/* Top: scrolling transcript when there are messages; the centered welcome heading when
-          empty (justify-end seats it just above the composer). */}
+      {/* Top: scrolling transcript when there are messages; when empty, the welcome heading centered in
+          the space above the composer, which stays at the bottom as in a conversation (Leslie, 16/11). */}
       <div
         ref={scrollRef}
         onScroll={onScroll}
@@ -336,7 +336,7 @@ export function ChatView({
         onKeyDown={release}
         className={cn(
           "min-h-0",
-          showWelcome ? "flex flex-1 flex-col items-center justify-end px-4 pb-4" : "flex-1 overflow-y-auto"
+          showWelcome ? "flex flex-1 flex-col items-center justify-center px-4 pb-4" : "flex-1 overflow-y-auto"
         )}
       >
         {loadingHistory ? (
@@ -360,12 +360,12 @@ export function ChatView({
 
       {/* Composer wrapper — the STABLE 2nd child. Docked, it leaves the bottom-right corner to Yélé. Its chrome (docked vs bare centered) is a
           className swap so the ChatComposer inside never changes tree position. */}
-      <div onFocusCapture={() => wakeInstance(agentId)} className={cn("relative", showWelcome ? "w-full px-4 sm:px-6" : "bg-background px-4 py-3 sm:py-4 sm:pl-6 sm:pr-24")}>
+      <div onFocusCapture={() => wakeInstance(agentId)} className="relative bg-background px-4 py-3 sm:py-4 sm:pl-6 sm:pr-24">
         {/* No hard divider — a short fade dissolves the transcript into the composer instead. */}
         {!showWelcome && (
           <div className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-background to-transparent" />
         )}
-        <div className={cn("mx-auto w-full", showWelcome ? "max-w-2xl" : "max-w-3xl")} aria-live="polite">
+        <div className="mx-auto w-full max-w-3xl" aria-live="polite">
           {error && <p className="mb-2 rounded-xl bg-ko-pale px-3 py-2 text-[13px] text-ko">{error}</p>}
         </div>
         {profile && showWelcome && (
@@ -378,26 +378,13 @@ export function ChatView({
             onCommand={(text) => void send(text)}
             onStage={setPrepStage}
             onOpenTools={() => router.push("/integrations/connecteurs")}
-            className={cn("mb-3", showWelcome && "max-w-2xl")}
+            className="mx-auto mb-3 max-w-3xl"
           />
         )}
-        <ChatComposer
-          agentId={agentId}
-          isStreaming={isStreaming}
-          att={att}
-          onSend={send}
-          onStop={stop}
-          large={showWelcome}
-          focusToken={composerFocusToken}
-        />
-      </div>
-
-      {/* Bottom: balances the vertical centering and carries the welcome subtitle. */}
-      {showWelcome && (
-        <div className="flex flex-1 flex-col items-center px-4 pt-3">
-          {/* Only « Faire connaissance », and only for a while: the catalogue's requests are gone, and nothing
-              takes their place, no help sentence either (Leslie, 03/11: « simplifier au max »). */}
-          {showIntro && (
+        {/* Only « Faire connaissance », and only for a while: the catalogue's requests are gone, and nothing
+            takes their place, no help sentence either (Leslie, 03/11: « simplifier au max »). */}
+        {showWelcome && showIntro && (
+          <div className="mx-auto mb-3 flex w-full max-w-3xl justify-center">
             <button
               type="button"
               onClick={() => void send("/onboarding")}
@@ -405,9 +392,19 @@ export function ChatView({
             >
               <Sparkles className="size-4" /> Faire connaissance avec {agentName}
             </button>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+        <ChatComposer
+          agentId={agentId}
+          isStreaming={isStreaming}
+          att={att}
+          onSend={send}
+          onStop={stop}
+          large={false}
+          focusToken={composerFocusToken}
+        />
+      </div>
+
     </div>
       {hasComputer && (
         <>
