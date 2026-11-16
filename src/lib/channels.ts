@@ -80,7 +80,15 @@ export function isConnectableChannel(channel: MessagingPlatform): boolean {
 
 // The channels the Messaging tab leads with, in this order. Everything else the harness supports is
 // still offered, folded under "More channels".
-export const FEATURED_CHANNELS = ["telegram", "slack", "teams", "whatsapp", "discord", "google_chat"] as const;
+// WhatsApp is off the list (Leslie, 16/11): it shows only once already connected.
+export const FEATURED_CHANNELS = ["telegram", "slack", "teams", "discord", "google_chat"] as const;
+
+// Not tested yet with clients (Leslie, 16/11): shown as « Bientôt », with no button, until connected.
+export const SOON_CHANNELS = ["slack", "teams"] as const;
+
+export function isSoonChannel(id: string): boolean {
+  return (SOON_CHANNELS as readonly string[]).includes(id);
+}
 
 // These connect through their own panel; the rest take the credentials form.
 export const GUIDED_CHANNELS = ["telegram", "whatsapp", "teams", "slack"] as const;

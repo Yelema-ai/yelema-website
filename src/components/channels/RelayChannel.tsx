@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import type { RelayChannel as Channel, RelayLink, RelayStatus } from "@/lib/agent37";
@@ -56,6 +57,17 @@ export function RelayChannel({ agentId, channel, canManage }: { agentId: string;
   const install = link?.installUrl ?? link?.appUrl ?? link?.botUrl ?? null;
 
   if (!status) return <div className="h-20 animate-pulse rounded-lg border bg-card" />;
+  // Slack and Teams are not tested yet with clients (Leslie, 16/11): « Bientôt » until an account is linked.
+  if (channel !== "telegram" && !status.accounts)
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-lg border bg-card p-4">
+        <div>
+          <p className="text-sm font-semibold">{l.title}</p>
+          <p className="text-xs text-muted-foreground">{l.intro}</p>
+        </div>
+        <Badge variant="muted">Bientôt</Badge>
+      </div>
+    );
   return (
     <div className="space-y-3 rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">

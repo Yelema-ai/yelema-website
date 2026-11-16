@@ -10,6 +10,7 @@ import {
   channelStateLabel,
   isChannelConnected,
   isFeaturedChannel,
+  isSoonChannel,
   type ChannelsResponse,
   type MessagingPlatform,
 } from "@/lib/channels";
@@ -243,8 +244,8 @@ const placeholder = (id: string, name: string): MessagingPlatform => ({
   home_channel: null,
   env_vars: [],
 });
-// In the order of the page (Telegram, Slack, Teams, then WhatsApp).
-const PLACEHOLDERS = [placeholder("telegram", "Telegram"), placeholder("slack", "Slack"), placeholder("teams", "Microsoft Teams"), placeholder("whatsapp", "WhatsApp")];
+// In the order of the page (Telegram, Slack, Teams).
+const PLACEHOLDERS = [placeholder("telegram", "Telegram"), placeholder("slack", "Slack"), placeholder("teams", "Microsoft Teams")];
 
 function ChannelRow({
   channel,
@@ -285,6 +286,14 @@ function ChannelRow({
         {connected ? <Badge variant="success">Connecté</Badge> : <Badge variant="warning">À vérifier</Badge>}
         <ChevronRight className="h-4 w-4 shrink-0 text-ink-3" />
       </button>
+    );
+  }
+  if (isSoonChannel(channel.id)) {
+    return (
+      <div className="flex min-h-[68px] items-center gap-3 px-4 py-3">
+        {body}
+        <Badge variant="muted">Bientôt</Badge>
+      </div>
     );
   }
   if (checking) {
