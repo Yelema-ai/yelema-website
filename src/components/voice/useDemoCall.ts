@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CallPhase } from "@/lib/call-turns";
+import { sound, type EndedBy } from "@/lib/end-tone";
 import type { Caption, UseVoiceCall } from "./useVoiceCall";
 import { playHangupTone } from "./useRingback";
 
@@ -49,11 +50,14 @@ export function useDemoCall(): UseVoiceCall {
     timers.current = [];
   }, []);
 
-  const end = useCallback(() => {
-    stop();
-    playHangupTone();
-    setPhase("ended");
-  }, [stop]);
+  const end = useCallback(
+    (by: EndedBy) => {
+      stop();
+      sound(playHangupTone, "ended", by, true);
+      setPhase("ended");
+    },
+    [stop]
+  );
 
   const start = useCallback<UseVoiceCall["start"]>(() => {
     stop();
@@ -100,7 +104,7 @@ export function useDemoCall(): UseVoiceCall {
   }, [stop]);
 
   useEffect(() => {
-    (window as unknown as { __yelemaDemoCall?: { end: () => void } }).__yelemaDemoCall = { end };
+    (window as unknown as { __yelemaDemoCall?: { end: () => void } }).__yelemaDemoCall = { end: () => end("remote") };
     return stop;
   }, [end, stop]);
 
@@ -114,7 +118,7 @@ export function useDemoCall(): UseVoiceCall {
     captions,
     tool,
     start,
-    hangUp: end,
+    hangUp: () => end("member"),
     setMuted,
     toggleLonger: () => {
       flags.current.longer = !flags.current.longer;

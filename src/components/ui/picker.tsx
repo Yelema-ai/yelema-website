@@ -40,7 +40,7 @@ export function Picker({
           type="button"
           aria-label={`${label} : ${current?.label ?? placeholder}`}
           className={cn(
-            "inline-flex h-11 min-w-0 max-w-full items-center justify-between gap-2 rounded-[12px] border border-line bg-surface px-3 text-left text-[14px] text-ink hover:bg-soft focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15 sm:h-9 sm:text-[13px]",
+            "inline-flex h-11 min-w-0 max-w-full items-center justify-between gap-2 rounded-full border border-line bg-surface px-3.5 text-left text-[14px] text-ink hover:bg-soft focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15 sm:h-9 sm:text-[13px]",
             !current && "text-ink-3",
             className
           )}

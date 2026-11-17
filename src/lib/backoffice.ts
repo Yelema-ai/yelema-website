@@ -6,6 +6,7 @@ import type { ComposioCall } from "@/lib/composio-usage";
 import { voiceKeyPath, type VoiceKeysOverview } from "@/lib/voice-keys";
 import { isServerId, mcpScopePath, mcpServerPath, type McpOauthQuery, type McpOauthServer, type McpOverview, type McpToolsOverview, type McpToolsReport, type McpServerDraft, type McpWritten } from "@/lib/mcp-servers";
 import type { UnipileAccount, UnipileDraft, UnipileStatus } from "@/lib/unipile";
+import type { TriggersOverview, TriggerWithKey } from "@/lib/triggers";
 import { vaultPath, type VaultDraft, type VaultEntry, type VaultItem, type VaultList, type VaultOverview, type VaultRef, type VaultScope } from "@/lib/vault";
 import { scopePath, type LlmModelChoice, type LlmOverview, type LlmWritten, type SettingScope } from "@/lib/llm";
 import { isExpertKey, isMailAgentId, mailPath, type CreateMailInboxInput, type MailDetail, type MailDraft, type MailInbox, type MailRights, type MailRightsPatch, type MailSummary } from "@/lib/mail";
@@ -14,6 +15,8 @@ import { backofficeUrl, resolverToken } from "@/lib/runtime-config";
 import { SIGNALING_METHOD, type CallRecord, type SignalingStep, type VoiceOption } from "@/lib/voice";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 import type { BuzzOverview } from "@/lib/buzz";
+import type { GuestFile, GuestParticipant, GuestSessionView } from "@/lib/guest-access";
+import type { GuestRefusal, SalonGuest } from "@/lib/salon-guests";
 import type { ClaudeAuth, ClaudeAuthStatus, ClaudeLogin, ClaudeUsage } from "@/lib/claude-code-auth";
 
 // The Yelema back office's API for this app (`/api/v1/app/*`, guide: yelema-platform
@@ -80,7 +83,12 @@ export interface BoMe {
   workspace: { id: string; name: string; logoUrl: string | null; brandColor?: string | null };
   instance: { id: string } | null;
   /** `entreprise`: company chat only — no Experts, no instance of one's own. `equipe`: Experts on a team instance. */
-  access?: "instance" | "entreprise" | "equipe";
+  access?: "instance" | "entreprise" | "equipe" | { salons?: boolean };
+  /**
+   * Salons open for the company (feature `salons` checked AND an active relay). The back office says it in
+   * `access.salons` or here at the top level; read through `salonsOfMe`. Absent from an older back office.
+   */
+  salons?: boolean;
 }
 
 export interface BoInstanceView {
@@ -115,7 +123,8 @@ export interface BoInstanceView {
 }
 
 /** A file an expert of a salon put in its `Salons/<id>/` folder; `url` is signed and short-lived. */
-export interface SalonDeliverable { id: string; expertId: string; title: string; kind: string; updatedAt: string; url: string | null; folder: string; auteur: string }
+import type { SalonDeliverable } from "@/lib/salon-deliverables";
+export type { SalonDeliverable };
 
 export interface TeamRoster { name: string; members: { name: string | null; email: string; you: boolean; experts: string[] }[] }
 
@@ -196,6 +205,8 @@ export interface BoMemberRoom {
   quota: { used: number; allowed: number | null };
   seats: { used: number; cap: number } | null;
   enterpriseOpen: boolean;
+  /** The company's own e-mail domains, when the back office serves them (asked of Sélim on 07/11). */
+  allowedDomains?: string[];
 }
 
 export type BoOpenedSession = { session: BoSession } & BoMe;
@@ -247,6 +258,9 @@ function invoicePath(id: string, rest: string): string {
   return `/app/billing/invoices/${id}${rest}`;
 }
 
+// A guest's invitation link is a credential: never in a log line.
+const logPath = (path: string): string => path.replace(/\/guest\/invites\/[^/]+/, "/guest/invites/…");
+
 // The one way out to the back office: its address, the request's workspace, a deadline, and an
 // outage read as one (503, a sentence for the member).
 async function send(path: string, init: { method?: string; workspace?: string; timeoutMs?: number; headers: Record<string, string>; body?: BodyInit }): Promise<Response> {
@@ -262,7 +276,7 @@ async function send(path: string, init: { method?: string; workspace?: string; t
       signal: AbortSignal.timeout(init.timeoutMs ?? TIMEOUT_MS),
     });
   } catch (e) {
-    console.error(`[backoffice] ${path} unreachable:`, e instanceof Error ? e.message : e);
+    console.error(`[backoffice] ${logPath(path)} unreachable:`, e instanceof Error ? e.message : e);
     throw new BackofficeError(503, "unavailable", "Le service est momentanément indisponible. Réessayez dans un instant.");
   }
 }
@@ -293,7 +307,7 @@ async function call<T>(path: string, init: { method?: string; token?: string | n
   if (!res.ok) {
     const err = (data as { error?: { code?: string; message?: string; suggestions?: unknown } } | null)?.error;
     const retry = Number(res.headers.get("retry-after"));
-    if (!err) console.error(`[backoffice] ${path}: ${res.status}`, text.slice(0, 300));
+    if (!err) console.error(`[backoffice] ${logPath(path)}: ${res.status}`, text.slice(0, 300));
     throw new BackofficeError(
       res.status,
       err?.code ?? (res.status >= 500 ? "unavailable" : "error"),
@@ -303,6 +317,18 @@ async function call<T>(path: string, init: { method?: string; token?: string | n
     );
   }
   return data as T;
+}
+
+// The guest routes take this server's resolver token as their secret; without it, an outage, never a call.
+function guestCall<T>(path: string, init: { ip: string; session?: string; method?: string; body?: unknown; timeoutMs?: number }): Promise<T> {
+  const secret = resolverToken();
+  if (!secret) return Promise.reject(new BackofficeError(503, "unavailable", "Le service est momentanément indisponible. Réessayez dans un instant."));
+  return call<T>(path, {
+    method: init.method,
+    body: init.body,
+    timeoutMs: init.timeoutMs,
+    headers: { "X-Yelema-Site-Secret": secret, ...(init.ip ? { "X-Yelema-Client-Ip": init.ip } : {}), ...(init.session ? { Authorization: `Guest ${init.session}` } : {}) },
+  });
 }
 
 /** The tool executions of one request through the Composio proxy, as the back office records them. */
@@ -402,6 +428,9 @@ export const backoffice = {
   // Whether Yelema's team is shipping an update right now (switched on before a push, off after).
   // Public and per workspace; a short timeout: it is asked every minute by every open page.
   platformStatus: () => call<{ maintenance?: boolean }>("/app/platform-status", { timeoutMs: 4_000 }),
+  // The tab's first read in one call (contract §3): each block has the shape of its own route. A back
+  // office without it answers 404, and the app asks the routes one by one.
+  bootstrap: (token: string) => call<{ me?: unknown; preferences?: MemberPrefs; platform?: { maintenance?: boolean }; instance?: unknown }>("/app/bootstrap", { token, timeoutMs: 4_000 }),
   me: (token: string) => call<BoMe>("/app/me", { token }),
   updateMe: (token: string, patch: MePatch) => call<BoMe>("/app/me", { method: "PATCH", token, body: patch }),
   // The member's own photo (multipart, field `file`): the back office checks the type and the size,
@@ -599,6 +628,11 @@ export const backoffice = {
   clearUnipile: (token: string) => call<{ ok: true }>("/app/unipile", { method: "DELETE", token, timeoutMs: 60_000 }),
   // A one-click Unipile link, made by the instance (it alone holds the key), to link a broken account again.
   reconnectUnipile: (token: string, accountId: string) => call<{ url: string }>("/app/unipile/reconnect", { method: "POST", token, body: { accountId }, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
+  // The member's « quand… alors… » triggers; a webhook key comes back once, never kept here.
+  triggers: (token: string) => call<TriggersOverview>("/app/triggers", { token }),
+  createTrigger: (token: string, body: Record<string, unknown>) => call<TriggerWithKey>("/app/triggers", { method: "POST", token, body, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
+  updateTrigger: (token: string, id: string, body: Record<string, unknown>) => call<TriggerWithKey>(`/app/triggers/${encodeURIComponent(id)}`, { method: "PATCH", token, body, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
+  deleteTrigger: (token: string, id: string) => call<{ ok: true }>(`/app/triggers/${encodeURIComponent(id)}`, { method: "DELETE", token, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
   mcp: (token: string) => call<McpOverview>("/app/mcp", { token }),
   addMcpServer: (token: string, scope: SettingScope, draft: McpServerDraft) => {
     const path = mcpScopePath(scope);
@@ -676,7 +710,27 @@ export const backoffice = {
   buzzDeleteSalon: (token: string, id: string) => call<{ ok: true }>(`/app/buzz/salons/${encodeURIComponent(id)}`, { method: "DELETE", token, timeoutMs: 60_000 }),
   buzzAddSalonMembers: (token: string, id: string, cles: string[]) => call<{ ok: true; ajoutes: number }>(`/app/buzz/salons/${encodeURIComponent(id)}/membres`, { method: "POST", token, body: { cles }, timeoutMs: 90_000 }),
   buzzSalonDeliverables: (token: string, id: string) => call<{ items: SalonDeliverable[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/livrables`, { token, timeoutMs: 30_000 }),
-  buzzSent: (token: string, sent: { kind: string; recipients: string[] }) => call<{ ok: true }>("/app/buzz/outbox", { method: "POST", token, body: sent }),
+  buzzSalonGuests: (token: string, id: string) => call<{ data: SalonGuest[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/guests`, { token }),
+  buzzInviteGuests: (token: string, id: string, body: { emails: string[]; days: number }) =>
+    call<{ data: SalonGuest[]; refused: GuestRefusal[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/guests`, { method: "POST", token, body, timeoutMs: 60_000 }),
+  buzzExtendGuest: (token: string, id: string, guest: string, days: number) =>
+    call<{ data: SalonGuest }>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}`, { method: "PATCH", token, body: { days } }),
+  buzzRemoveGuest: (token: string, id: string, guest: string) =>
+    call<unknown>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}`, { method: "DELETE", token, timeoutMs: 60_000 }),
+  buzzResetGuestDevices: (token: string, id: string, guest: string) =>
+    call<unknown>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}/devices`, { method: "DELETE", token, timeoutMs: 60_000 }),
+  // An external guest's routes: called by this server only, with its secret and the visitor's address.
+  guestCode: (invite: string, email: string, ip: string) => guestCall<unknown>(`/guest/invites/${encodeURIComponent(invite)}/code`, { ip, method: "POST", body: { email } }),
+  guestVerify: (invite: string, body: { email: string; code: string; pubkey: string }, ip: string) =>
+    guestCall<GuestSessionView & { session: string }>(`/guest/invites/${encodeURIComponent(invite)}/verify`, { ip, method: "POST", body }),
+  guestSession: (session: string, ip: string) => guestCall<GuestSessionView>("/guest/session", { ip, session }),
+  guestDeliverables: (session: string, ip: string) => guestCall<{ data: GuestFile[] }>("/guest/salon/deliverables", { ip, session, timeoutMs: 30_000 }),
+  guestFile: (session: string, ip: string, drivePath: string) =>
+    guestCall<{ data: { url: string } }>(`/guest/salon/file?${new URLSearchParams({ p: drivePath }).toString()}`, { ip, session, timeoutMs: 30_000 }),
+  guestParticipants: (session: string, ip: string) => guestCall<{ data: GuestParticipant[] }>("/guest/salon/participants", { ip, session }),
+  guestLogout: (session: string, ip: string) => guestCall<unknown>("/guest/logout", { ip, session, method: "POST" }),
+  // `ajout`: the recipients were just added to the salon `salon` (named `nom`), to be told so.
+  buzzSent: (token: string, sent: { kind: string; recipients: string[]; salon?: string; nom?: string }) => call<{ ok: true }>("/app/buzz/outbox", { method: "POST", token, body: sent }),
   memoryItems: (token: string) => call<MemoryList>("/app/memory/items", { token }),
   createMemoryNote: (token: string, note: MemoryNote) => call<{ id: string }>("/app/memory/items", { method: "POST", token, body: note }),
   uploadMemoryDocument: (token: string, form: FormData) => call<{ id: string }>("/app/memory/items", { method: "POST", token, form, timeoutMs: MAIL_SEND_TIMEOUT_MS }),

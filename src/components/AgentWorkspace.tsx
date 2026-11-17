@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Copy, FolderOpen, Mail, MessageSquare, Pencil, Phone, Repeat, X } from "lucide-react";
@@ -15,6 +15,7 @@ import { ExpertRoutines } from "@/components/experts/ExpertRoutines";
 import { ExpertReadiness } from "@/components/experts/ExpertReadiness";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { useCatalogueExpert } from "@/components/experts/useCatalogue";
+import { readExpertScreen } from "@/components/experts/expert-preload";
 import { useMailInboxes } from "@/components/experts/useMailInboxes";
 import { expertDisplayName } from "@/lib/experts";
 import { DRIVE_ROOT } from "@/lib/drive-paths";
@@ -22,8 +23,9 @@ import { inboxOf } from "@/lib/mail";
 import { ChatProvider } from "@/components/chat/ChatProvider";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatView, hasScreen } from "@/components/chat/ChatView";
-import { ComputerButton } from "@/components/experts/ExpertComputer";
-import { DashboardButtonFace } from "@/components/experts/ExpertDashboard";
+import { ComputerMenuItem } from "@/components/experts/ExpertComputer";
+import { ExpertMoreMenu } from "@/components/experts/ExpertMoreMenu";
+import { DashboardMenuFace } from "@/components/experts/ExpertDashboard";
 import { setChatFull, useChatFull, useChatListHidden, useChatSidePanel } from "@/components/chat/chat-layout";
 import { FilesTab } from "@/components/files/FilesTab";
 import { cn } from "@/lib/utils";
@@ -83,6 +85,10 @@ export function AgentWorkspace({
   // The expert this page is about, dressed by the catalogue; its own folder is where Livrables opens.
   const { experts } = useExpertsContext();
   const expert = experts.find((e) => e.agentId === agentId && e.profileId === profileId) ?? null;
+  // One call for the page's first reads (models, preparation, catalogue entry), before its parts ask
+  // (layout effects run before theirs); what the menu read ahead is not asked again.
+  const catalogueKey = expert?.catalogueKey ?? null;
+  useLayoutEffect(() => void readExpertScreen(agentId, profileId, catalogueKey), [agentId, profileId, catalogueKey]);
   const driveFolder = expert?.driveFolder ? `${DRIVE_ROOT}/${expert.driveFolder}` : undefined;
   // The expert's own inbox, when the back office gives this member one to read.
   const mail = useMailInboxes(agentId);
@@ -158,8 +164,10 @@ export function AgentWorkspace({
 
   // The open chat thread rides the URL as `?session=` (a query param — the agent route only accepts
   // 0–1 tab segments). Read it on mount (refresh / shared link) and on Back/Forward (popstate). Lifted
-  // here (out of the Chat pane) so ChatProvider can wrap both this rail and the pane.
-  const [urlSessionId, setUrlSessionId] = useState<string | null>(null);
+  // here (out of the Chat pane) so ChatProvider can wrap both this rail and the pane. Known from the
+  // first render, so a thread never paints the new-chat welcome before its messages.
+  const searchSession = useSearchParams().get("session");
+  const [urlSessionId, setUrlSessionId] = useState<string | null>(searchSession);
   useEffect(() => {
     const read = () => setUrlSessionId(new URLSearchParams(window.location.search).get("session"));
     read();
@@ -167,7 +175,6 @@ export function AgentWorkspace({
     return () => window.removeEventListener("popstate", read);
   }, []);
   // A link into one thread from elsewhere in the app (« Modifier avec » on a file) arrives by router.push.
-  const searchSession = useSearchParams().get("session");
   useEffect(() => {
     if (searchSession) setUrlSessionId(searchSession);
   }, [searchSession]);
@@ -176,7 +183,7 @@ export function AgentWorkspace({
   const canEdit = usePublicConfig().authVia === "backoffice" && !!expert?.catalogueKey;
   const [editOpen, setEditOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
-  // The header's place for Ordinateur and Tableau (the chat renders them there).
+  // The header's place for the « … » of Ordinateur and Tableau (the chat renders it there).
   const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
   const [dashboardAsked, setDashboardAsked] = useState(false);
   // The phone's tab pills scroll: the current one is brought into view.
@@ -313,18 +320,14 @@ export function AgentWorkspace({
             </nav>
             {expert && (
               <div className="order-2 flex shrink-0 items-center gap-2 pr-4 pt-1.5 lg:order-3 lg:p-0">
-                {/* Ordinateur and Tableau, placed here by the chat (they open its panels). */}
+                {/* « … » with Ordinateur and Tableau, placed here by the chat (they open its panels). */}
                 <span ref={setActionsSlot} className="flex items-center gap-2">
-                  {/* Until the chat is first opened, the same buttons open it there. */}
+                  {/* Until the chat is first opened, the same menu opens it there. */}
                   {profileId && !chatOpened && (
-                    <>
-                      {hasScreen(agents.find((a) => a.agent37_id === agentId) ?? null) && (
-                        <span className="contents" onClickCapture={() => selectTab("chat")}>
-                          <ComputerButton inHeader />
-                        </span>
-                      )}
-                      <DashboardButtonFace inHeader onClick={() => { setDashboardAsked(true); selectTab("chat"); }} />
-                    </>
+                    <ExpertMoreMenu onAction={() => selectTab("chat")}>
+                      {hasScreen(agents.find((a) => a.agent37_id === agentId) ?? null) && <ComputerMenuItem />}
+                      <DashboardMenuFace onSelect={() => setDashboardAsked(true)} />
+                    </ExpertMoreMenu>
                   )}
                 </span>
                 {callee && <CallButton expert={callee} iconOnly className="size-11 shrink-0 rounded-full lg:hidden" />}

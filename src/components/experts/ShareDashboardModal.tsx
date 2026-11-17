@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { useDashboard, type ShareMode } from "./DashboardProvider";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { personToAdd } from "@/lib/dashboard-people";
+import { DEFAULT_SHARE_EXPIRY, SHARE_EXPIRIES, shareExpiryOf, type ShareExpiry } from "@/lib/dashboard-expiry";
 import { toast } from "sonner";
 
 export function ShareDashboardModal() {
@@ -40,6 +41,7 @@ export function ShareDashboardModal() {
     data,
     updateSharing,
     stopSharing,
+    setShareExpiry,
   } = useDashboard();
 
   const workspaceCtx = useWorkspace();
@@ -49,6 +51,7 @@ export function ShareDashboardModal() {
   const [emails, setEmails] = useState<string[]>([]);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [copied, setCopied] = useState(false);
+  const [expiry, setExpiry] = useState<ShareExpiry>(DEFAULT_SHARE_EXPIRY);
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Les membres de l'espace que le propriétaire peut choisir, tels que le back-office les donne
@@ -64,6 +67,7 @@ export function ShareDashboardModal() {
     if (shareModalOpen && data) {
       setAccesMode(data.share?.mode ?? "team");
       setEmails(data.share?.people ?? []);
+      setExpiry(data.shareExpiry ?? DEFAULT_SHARE_EXPIRY);
       setEmailInput("");
       setSuggestionsOpen(false);
       setSaveStatus("idle");
@@ -114,6 +118,17 @@ export function ShareDashboardModal() {
     setSaveStatus(ok ? "saved" : "idle");
     if (ok) toast.success("Nouveau lien créé : l'ancien ne fonctionne plus.");
   };
+
+  const handleExpiry = async (value: ShareExpiry) => {
+    setExpiry(value);
+    setSaveStatus("saving");
+    const ok = await setShareExpiry(value);
+    setSaveStatus(ok ? "saved" : "idle");
+  };
+
+  const expiresOn = data?.shareExpiresAt
+    ? `Expire le ${new Date(data.shareExpiresAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}`
+    : "Sans date de fin";
 
   const handleStop = async () => {
     setSaveStatus("saving");
@@ -489,6 +504,28 @@ export function ShareDashboardModal() {
             {data?.sharing === false && (
               <p className="text-[11px] text-ink-3">Le partage n’est pas disponible sur cet espace.</p>
             )}
+            {data?.sharing !== false && (
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <label htmlFor="share-expiry" className="font-medium text-ink">Validité du lien</label>
+                  <select
+                    id="share-expiry"
+                    value={expiry}
+                    onChange={(e) => void handleExpiry(shareExpiryOf(e.target.value))}
+                    disabled={saveStatus === "saving"}
+                    className="h-8 rounded-lg border border-line bg-surface px-2 text-xs text-ink"
+                  >
+                    {SHARE_EXPIRIES.map((x) => (
+                      <option key={x} value={x}>{EXPIRY_LABELS[x]}</option>
+                    ))}
+                  </select>
+                  {shared && effectiveShareLink && <span className="text-ink-3">{expiresOn}</span>}
+                </div>
+                {shared && (
+                  <p className="text-[11px] text-ink-4">Un lien déjà envoyé garde sa date : régénérez-le pour le couper.</p>
+                )}
+              </div>
+            )}
             {data?.sharing !== false && !shared && (
               <Button
                 type="button"
@@ -623,3 +660,5 @@ export function ShareDashboardModal() {
     </Dialog>
   );
 }
+
+const EXPIRY_LABELS: Record<ShareExpiry, string> = { "7": "7 jours", "30": "30 jours", "90": "90 jours", none: "Sans fin" };

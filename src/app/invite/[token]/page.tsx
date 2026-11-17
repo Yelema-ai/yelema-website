@@ -5,14 +5,22 @@ import { authViaBackoffice } from "@/lib/runtime-config";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 import { AcceptInvite } from "@/components/AcceptInvite";
 import { AuthShell, AuthHeading } from "@/components/auth/AuthShell";
+import { GuestEntry } from "@/components/guest/GuestEntry";
+import { INVITE_TOKEN } from "@/lib/guest-access";
 
 type Ctx = { params: Promise<{ token: string }> };
 
+// The link is personal: never indexed, never sent on as a referrer.
+export const metadata = { robots: { index: false, follow: false }, referrer: "no-referrer" as const };
+
 export default async function InvitePage({ params }: Ctx) {
   const { token } = await params;
-  // Invitations only exist with this app's own (Supabase) sign-in: through the back office, members
-  // are created there, and this address leads nowhere.
-  if (authViaBackoffice()) notFound();
+  // Through the back office, members are created there: this address is an external guest's entry to one
+  // salon (shown even when Échanges is off for members). Otherwise, an invitation to this app's workspace.
+  if (authViaBackoffice()) {
+    if (!INVITE_TOKEN.test(token)) notFound();
+    return <GuestEntry token={token} />;
+  }
   const { user } = await getSession();
   if (!user) redirect(`/login?next=${encodeURIComponent(`/invite/${token}`)}`);
 

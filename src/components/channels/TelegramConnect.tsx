@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
+import { useRef, useState } from "react";
 import { CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
@@ -19,7 +20,6 @@ import { TelegramQrConnect } from "@/components/channels/TelegramQrConnect";
 import { useAsyncAction } from "@/components/useAsyncAction";
 import { DisconnectButton } from "@/components/channels/DisconnectButton";
 
-const OWNER_POLL_MS = 3000;
 
 type Step = "qr" | "token" | "owner" | "connected";
 
@@ -87,44 +87,20 @@ export function TelegramConnect({
 
   // Watch the bot's inbox while the screen asks its owner to say hello. The first message connects the
   // agent on its own, so there is no button to press after Telegram.
-  useEffect(() => {
-    if (step !== "owner" || !bot || owner || ownerUnavailable) return;
-
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      if (cancelled) return;
-      // Hidden: nothing is asked until the tab shows again.
-      if (document.hidden) return void (timer = setTimeout(() => void poll(), OWNER_POLL_MS));
-      try {
-        const result = await post<{ owner: TelegramOwner | null; unavailable: boolean }>({ action: "owner", token });
-        if (cancelled) return;
-        if (result.unavailable) {
-          setOwnerUnavailable(true);
-          return;
-        }
-        if (result.owner) {
-          setOwner(result.owner);
-          if (!connecting.current) {
-            connecting.current = true;
-            void connect(result.owner);
-          }
-          return;
-        }
-      } catch {
-        // A miss is normal here (Telegram rate limits, a slow network): keep waiting rather than
-        // throwing the user back to the token field.
-      }
-      if (!cancelled) timer = setTimeout(() => void poll(), OWNER_POLL_MS);
-    };
-
-    timer = setTimeout(() => void poll(), OWNER_POLL_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, bot, owner, ownerUnavailable, token]);
+  // A miss is normal here (Telegram rate limits, a slow network): the wait goes on rather than throwing
+  // the user back to the token field.
+  usePoll(
+    async () => {
+      const result = await post<{ owner: TelegramOwner | null; unavailable: boolean }>({ action: "owner", token });
+      if (result.unavailable) return setOwnerUnavailable(true);
+      if (!result.owner) return;
+      setOwner(result.owner);
+      if (connecting.current) return;
+      connecting.current = true;
+      void connect(result.owner);
+    },
+    { enabled: step === "owner" && Boolean(bot) && !owner && !ownerUnavailable, everyMs: WAIT_POLL_MS, immediate: false, runOnShow: true, wake: { types: ["job.done"], kind: "telegram" } }
+  );
 
   const disconnect = () =>
     run(async () => {
@@ -210,9 +186,9 @@ export function TelegramConnect({
         {view === "owner" && bot && (
           <div className="space-y-4">
             <p className="text-sm">
-              Ouvrez <span className="font-medium">@{bot.username}</span> et envoyez-lui un message. La première personne
-              qui lui écrit est la seule à qui vos Experts répondront en privé ; dans le groupe des Experts, tous ses
-              membres pourront leur écrire.
+              Ouvrez <span className="font-medium">@{bot.username}</span> et envoyez-lui un message. Vos Experts ne
+              répondront en privé qu’à la première personne qui lui écrit. Dans le groupe, tous les membres pourront
+              leur écrire.
             </p>
             <div className="flex items-center gap-2">
               <Button asChild variant="outline">

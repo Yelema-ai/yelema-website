@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { cached, cachedFetch, remember } from "@/lib/client-cache";
+import { cached, cachedFetch } from "@/lib/client-cache";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import type { CatalogueExpertDetail, CatalogueResponse } from "@/lib/types";
 
@@ -61,10 +61,10 @@ export function useCatalogueExpert(key: string | null | undefined): CatalogueExp
     const known = cached<CatalogueExpertDetail>(`fiche:${key}`);
     setExpert(known ?? null);
     if (known) return;
-    apiFetch<{ expert: CatalogueExpertDetail }>(`/api/catalogue/${encodeURIComponent(key)}`)
+    // Joins the expert page's grouped read (expert-preload) when one is under way.
+    cachedFetch(`fiche:${key}`, () => apiFetch<{ expert: CatalogueExpertDetail }>(`/api/catalogue/${encodeURIComponent(key)}`).then((d) => d.expert))
       .then((d) => {
-        remember(`fiche:${key}`, d.expert);
-        if (alive) setExpert(d.expert);
+        if (alive) setExpert(d);
       })
       .catch(() => alive && setExpert(false));
     return () => {

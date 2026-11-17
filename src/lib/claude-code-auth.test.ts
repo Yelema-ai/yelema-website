@@ -5,8 +5,8 @@ import { CLAUDE_CODE_RE, describeClaudeAuth, safeLoginUrl, secretKind, usageByEx
 const auth = { loggedIn: true, method: "claude.ai", email: "a@b.ci", plan: "max" };
 
 test("la clé passe devant l’abonnement ; l’abonnement nomme son forfait", () => {
-  assert.equal(describeClaudeAuth({ auth, key: true, login: null }), "Clé API Anthropic");
-  assert.equal(describeClaudeAuth({ auth, key: false, login: null }), "Claude Max · a@b.ci");
+  assert.equal(describeClaudeAuth({ auth, key: true, login: null }), "Clé Anthropic");
+  assert.equal(describeClaudeAuth({ auth, key: false, login: null }), "Claude Max (a@b.ci)");
   assert.equal(describeClaudeAuth({ auth: { loggedIn: false, method: "none", email: null, plan: null }, key: false, login: null }), "Aucun modèle connecté");
 });
 
@@ -24,9 +24,9 @@ const out = { loggedIn: false, method: "none", email: null, plan: null };
 test("le premier compte disponible est en service ; un compte à court passe la main", () => {
   const now = Date.parse("2026-10-24T10:00:00Z");
   const credentials = [cred("a1b2c3d4e5f6", "oauth_token", "2026-10-24T13:00:00Z", "Max de Koffi"), cred("a1b2c3d4e5f7", "api_key")];
-  assert.equal(describeClaudeAuth({ auth: out, key: true, credentials, login: null }, now), "Clé API · …x9Qa");
+  assert.equal(describeClaudeAuth({ auth: out, key: true, credentials, login: null }, now), "Clé Anthropic (…x9Qa)");
   assert.equal(describeClaudeAuth({ auth: out, key: false, credentials: [credentials[0]!], login: null }, now), "Tous les comptes sont à court");
-  assert.equal(describeClaudeAuth({ auth, key: false, credentials: [credentials[0]!], login: null }, now), "Claude Max · a@b.ci");
+  assert.equal(describeClaudeAuth({ auth, key: false, credentials: [credentials[0]!], login: null }, now), "Claude Max (a@b.ci)");
 });
 
 test("la forme du secret dit son type", () => {

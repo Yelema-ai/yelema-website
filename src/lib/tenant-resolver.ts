@@ -1,4 +1,5 @@
 import "server-only";
+import { waitUntil } from "@vercel/functions";
 import { memo } from "@/lib/memo";
 import { backofficeUrl, resolverToken } from "@/lib/runtime-config";
 import type { ResolvedTenant } from "@/lib/tenant-header";
@@ -22,8 +23,10 @@ export class TenantError extends Error {
 }
 
 const TIMEOUT_MS = 10_000;
-// A client's name, logo or suspension is felt within this delay (a suspension also by the back office on /me).
-const TTL_MS = 5 * 60_000;
+// A client's name, logo or suspension is felt within this delay (a suspension also by the back office on
+// /me): past it, the kept answer is still served once while a new one is asked behind (up to STALE_MS).
+const TTL_MS = 10 * 60_000;
+const STALE_MS = 60 * 60_000;
 // A host that is no client's yet is asked again sooner: it may be one being created.
 const MISS_TTL_MS = 60_000;
 // When the back office does not answer, the last known answer keeps a host served this long.
@@ -37,7 +40,16 @@ export function hostOf(headers: { get(name: string): string | null }): string | 
 }
 
 // Unknown hosts are kept too (anyone can ask for any sub-domain): the oldest go first past the cap.
-const hosts = memo<ResolvedTenant | null>({ ttlMs: TTL_MS, ttlOf: (v) => (v ? TTL_MS : MISS_TTL_MS), staleOnErrorMs: STALE_ON_ERROR_MS, maxEntries: 1000, maxFlightMs: TIMEOUT_MS + 2_000 });
+// Identical lookups in flight share one call; a revalidation keeps the function alive until it settles.
+const hosts = memo<ResolvedTenant | null>({
+  ttlMs: TTL_MS,
+  ttlOf: (v) => (v ? TTL_MS : MISS_TTL_MS),
+  staleMs: STALE_MS,
+  staleOnErrorMs: STALE_ON_ERROR_MS,
+  maxEntries: 1000,
+  maxFlightMs: TIMEOUT_MS + 2_000,
+  background: (settled) => waitUntil(settled),
+});
 
 async function ask(host: string): Promise<ResolvedTenant | null> {
   const base = backofficeUrl();

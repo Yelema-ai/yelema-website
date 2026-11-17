@@ -4,8 +4,9 @@ import { cookies } from "next/headers";
 import { after } from "next/server";
 import { cache } from "react";
 import { backoffice, BackofficeError, type BoInstance, type BoInstanceReading, type BoMe, type BoSession } from "@/lib/backoffice";
-import { tokenKid, verifyEs256, type Jwk } from "@/lib/jwt";
+import { tokenKid, verifyEs256, type Jwk, type VerifiedClaims } from "@/lib/jwt";
 import { memo } from "@/lib/memo";
+import { salonsOfMe } from "@/lib/salons-closed";
 import { deployVersion, supabaseAnonKey, supabaseUrl } from "@/lib/runtime-config";
 import { sharedCacheOn, sharedLayer, throughShared, vercelRuntimeCache } from "@/lib/shared-cache";
 import { pinnedWorkspaceId } from "@/lib/tenant";
@@ -184,7 +185,7 @@ async function readJwks(base: string): Promise<Jwk[]> {
 }
 
 /** The account a session's token names, checked against the project's keys; null when it cannot be told here. */
-async function localClaims(token: string): Promise<{ sub: string; email: string | null } | null> {
+export async function verifiedAccessToken(token: string): Promise<VerifiedClaims | null> {
   const base = supabaseUrl()?.replace(/\/+$/, "");
   if (!base) return null;
   const expect = { issuer: `${base}/auth/v1`, audience: "authenticated" };
@@ -198,7 +199,7 @@ async function localClaims(token: string): Promise<{ sub: string; email: string 
       keys = await jwks.get(base, () => readJwks(base));
     }
     const check = verifyEs256(token, keys, expect);
-    return check.ok ? { sub: check.claims.sub, email: check.claims.email } : null;
+    return check.ok ? check.claims : null;
   } catch {
     return null;
   }
@@ -212,7 +213,7 @@ async function localClaims(token: string): Promise<{ sub: string; email: string 
 export const currentUserId = cache(async (): Promise<string | null> => {
   const session = await readSession();
   if (!session) return null;
-  const local = await localClaims(session.accessToken);
+  const local = await verifiedAccessToken(session.accessToken);
   if (local) return local.sub;
   return (await currentPrincipal())?.user.id ?? null;
 });
@@ -226,7 +227,13 @@ export const currentInstallation = cache(async (): Promise<Pick<BoInstanceReadin
   return reading ? { installation: reading.installation, failedExperts: reading.failedExperts } : null;
 });
 
+// Only when the back office says it: an older one leaves the field out, and the browser keeps what it knew.
+function salonsField(me: BoMe): { salons?: boolean } {
+  const salons = salonsOfMe(me);
+  return salons === null ? {} : { salons };
+}
+
 /** The one workspace of a user signed in through the back office, in this app's shape. */
 export function workspaceOfMe(me: BoMe): WorkspaceWithRole {
-  return { id: me.workspace.id, name: me.workspace.name, owner_id: "", created_at: "", role: me.user.role, logo_url: me.workspace.logoUrl, brand_color: me.workspace.brandColor ?? null, access: me.access ?? "instance" };
+  return { id: me.workspace.id, name: me.workspace.name, owner_id: "", created_at: "", role: me.user.role, logo_url: me.workspace.logoUrl, brand_color: me.workspace.brandColor ?? null, access: typeof me.access === "string" ? me.access : "instance", ...salonsField(me) };
 }

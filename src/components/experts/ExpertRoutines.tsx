@@ -9,9 +9,22 @@ import type { Routine } from "@/lib/routines";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { ExpertTriggers } from "./ExpertTriggers";
 import { RoutineDialog, type RoutineExpert } from "./RoutineDialog";
 import { RoutineHistoryDialog } from "./RoutineHistoryDialog";
+import { RoutineKindDialog } from "./RoutineKindDialog";
 import { RoutinesList } from "./RoutinesList";
+import { SendDialog } from "./SendDialog";
+import { useRouter } from "next/navigation";
+import { agentTabPath } from "@/lib/expert-tabs";
+
+// One screen, two tabs: what runs at a time, what an event sets off. Objectives are gone (Leslie, 16/11:
+// nothing the back office does not serve yet); an automatic sending is written to the expert in its chat.
+const VIEWS = [
+  { id: "schedule", label: "À une heure" },
+  { id: "event", label: "Quand un événement arrive" },
+] as const;
+type View = (typeof VIEWS)[number]["id"];
 
 export function ExpertRoutines({ agentId, expert, active: shown = true }: { agentId: string; expert: RoutineExpert; active?: boolean }) {
   const expertKey = expert.profileId;
@@ -22,6 +35,11 @@ export function ExpertRoutines({ agentId, expert, active: shown = true }: { agen
   const [editing, setEditing] = useState<{ routine: Routine | null; key: number } | null>(null);
   const [removing, setRemoving] = useState<Routine | null>(null);
   const [history, setHistory] = useState<Routine | null>(null);
+  const [view, setView] = useState<View>("schedule");
+  const [choosing, setChoosing] = useState(false);
+  const [newTrigger, setNewTrigger] = useState<number | null>(null);
+  const [sendingRoutine, setSendingRoutine] = useState(false);
+  const router = useRouter();
 
   const base = `/api/agents/${agentId}/routines`;
 
@@ -128,12 +146,29 @@ export function ExpertRoutines({ agentId, expert, active: shown = true }: { agen
             Ce que {expert.name} fait sans qu’on le demande. Le résultat arrive dans tous ses canaux.
           </p>
         </div>
-        <Button onClick={() => setEditing({ routine: null, key: Date.now() })} className="self-start">
+        <Button onClick={() => setChoosing(true)} className="self-start">
           <Plus /> Nouvelle routine
         </Button>
       </div>
 
-      {!routines ? (
+      <div className="mt-4 flex w-fit max-w-full overflow-x-auto rounded-xl bg-soft p-1" role="tablist" aria-label="Routines">
+        {VIEWS.map((v) => (
+          <button
+            key={v.id}
+            type="button"
+            role="tab"
+            aria-selected={view === v.id}
+            onClick={() => setView(v.id)}
+            className={cn("shrink-0 rounded-[10px] px-3 py-1.5 text-[13px] font-semibold", view === v.id ? "bg-card text-ink shadow-sm" : "text-ink-2")}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+
+      {view === "event" ? (
+        <ExpertTriggers agentId={agentId} expert={{ profileId: expertKey, name: expert.name }} createKey={newTrigger} />
+      ) : !routines ? (
         <div className={cn(panel, "flex flex-col items-center gap-3 py-12 text-center text-sm text-ink-3")}>
           {loadError ? (
             <>
@@ -154,6 +189,37 @@ export function ExpertRoutines({ agentId, expert, active: shown = true }: { agen
         <section className={panel}>
           <p className="text-sm text-ink-3">Aucune routine pour l’instant. Créez la première.</p>
         </section>
+      )}
+
+      {choosing && (
+        <RoutineKindDialog
+          expertName={expert.name}
+          onClose={() => setChoosing(false)}
+          onPick={(kind) => {
+            setChoosing(false);
+            if (kind === "send") {
+              setSendingRoutine(true);
+            } else if (kind === "schedule") {
+              setView("schedule");
+              setEditing({ routine: null, key: Date.now() });
+            } else {
+              setView("event");
+              setNewTrigger(Date.now());
+            }
+          }}
+        />
+      )}
+
+      {sendingRoutine && (
+        <SendDialog
+          mode="routine"
+          expertName={expert.name}
+          onClose={() => setSendingRoutine(false)}
+          onSend={(text) => {
+            setSendingRoutine(false);
+            router.push(`${agentTabPath(agentId, "chat", expertKey)}?dire=${encodeURIComponent(text)}`);
+          }}
+        />
       )}
 
       {editing && (

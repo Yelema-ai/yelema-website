@@ -1,5 +1,6 @@
 "use client";
 
+import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -10,7 +11,6 @@ import { ChannelPanelHeader } from "@/components/channels/ChannelCredentialsForm
 import { useAsyncAction } from "@/components/useAsyncAction";
 import { DisconnectButton } from "@/components/channels/DisconnectButton";
 
-const POLL_MS = 2500;
 
 // WhatsApp links a phone instead of taking a token: the agent opens a WhatsApp session and prints the
 // same QR code the phone app expects, and this panel relays it. The code rotates every few seconds, so
@@ -38,12 +38,15 @@ export function WhatsAppConnect({
   const started = useRef<Promise<WhatsappPairingState> | null>(null);
 
   const alreadyConnected = isChannelConnected(channel);
+  // The next look at the pairing under way (usePoll times it); null while none is due.
+  const look = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     if (alreadyConnected) return;
 
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
+    // The pairing the next look is for; null while a look is out or none is due.
+    let waiting: string | null = null;
     setError(null);
 
     const pair = (body: Record<string, unknown>) =>
@@ -60,7 +63,7 @@ export function WhatsAppConnect({
         setError("Ce code a expiré. Recommencez.");
         return;
       }
-      timer = setTimeout(() => void poll(result.pairing_id), POLL_MS);
+      waiting = result.pairing_id;
     };
 
     const fail = (cause: unknown) => {
@@ -78,8 +81,7 @@ export function WhatsAppConnect({
 
     const poll = async (pairingId: string, finish = false) => {
       if (cancelled) return;
-      // Hidden: the code is not asked again until the tab shows (the save of a scan still goes out).
-      if (document.hidden && !finish) return void (timer = setTimeout(() => void poll(pairingId), POLL_MS));
+      waiting = null;
       try {
         settle(await pair({ pairing_id: pairingId, ...(finish ? { finish: true } : {}) }));
       } catch (cause) {
@@ -90,12 +92,16 @@ export function WhatsAppConnect({
     if (!started.current) started.current = pair({});
     started.current.then((result) => !cancelled && settle(result)).catch(fail);
 
+    look.current = () => (waiting ? poll(waiting) : Promise.resolve());
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      look.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId, attempt, alreadyConnected]);
+
+  // Hidden: the code is not asked again until the tab shows (the save of a scan still goes out).
+  usePoll(() => look.current?.(), { enabled: !alreadyConnected, everyMs: WAIT_POLL_MS, immediate: false, runOnShow: true, wake: { types: ["job.done"], kind: "channels" } });
 
   const disconnect = () =>
     run(async () => {
@@ -147,7 +153,7 @@ export function WhatsAppConnect({
           <ol className="list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
             <li>Sur votre téléphone, ouvrez WhatsApp.</li>
             <li>
-              Allez dans <span className="font-medium text-foreground">Réglages, Appareils connectés, Connecter un appareil</span>.
+              Allez dans <span className="font-medium text-foreground">Réglages › Appareils connectés › Connecter un appareil</span>.
             </li>
             <li>Pointez votre téléphone vers le code ci-dessous.</li>
           </ol>

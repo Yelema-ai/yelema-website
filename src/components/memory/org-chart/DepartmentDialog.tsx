@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { orderUnits, type OrgUnit } from "@/lib/memory";
 import { canMoveUnit } from "@/lib/org-chart";
-import { FIELD } from "./styles";
+import { Picker } from "@/components/ui/picker";
 
 export type DepartmentDraft = { name: string; parent: string | null };
 
@@ -57,15 +57,15 @@ export function DepartmentDialog({
             <Input id="dept-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} placeholder="RH, Design, Ventes…" required autoFocus />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="dept-parent">Dépend de</Label>
-            <select id="dept-parent" className={`${FIELD} h-11 w-full rounded-xl px-3 text-[15px]`} value={parent} onChange={(e) => setParent(e.target.value)}>
-              <option value={TOP}>Aucun, directement sous l’entreprise</option>
-              {parents.map(({ unit: u, depth }) => (
-                <option key={u.id} value={u.id}>
-                  {`${"  ".repeat(depth)}${u.name}`}
-                </option>
-              ))}
-            </select>
+            <Label>Dépend de</Label>
+            <Picker
+              label="Dépend de"
+              placeholder="Aucun, directement sous l’entreprise"
+              value={parent}
+              onChange={setParent}
+              groups={[{ options: [{ value: TOP, label: "Aucun, directement sous l’entreprise" }, ...parents.map(({ unit: u, depth }) => ({ value: u.id, label: `${"\u00a0\u00a0".repeat(depth)}${u.name}` }))] }]}
+              className="w-full sm:h-11 sm:text-[15px]"
+            />
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

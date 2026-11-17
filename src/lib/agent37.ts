@@ -1,5 +1,6 @@
 import "server-only";
 import { coldStartWait } from "./cold-start";
+import type { ApprovalChoice } from "./approval";
 import type { DriveTree } from "./drive-paths";
 import { EXEC_TIMEOUT_MS, JSON_TIMEOUT_MS, withTimeout } from "./fetch-timeout";
 import { authViaBackoffice } from "./runtime-config";
@@ -315,6 +316,13 @@ export const agent37 = {
       `/v1/responses/${encodeURIComponent(responseId)}/steer`,
       { method: "POST", body: JSON.stringify({ text, ...(key ? { client_message_id: key } : {}) }) }
     ),
+  // Answer an approval asked during a running turn (yelema-hermes I65; older images answer 404, a settled one 409).
+  approveResponse: (id: string, responseId: string, requestId: string, choice: ApprovalChoice) =>
+    instanceCall<{ id: string; request_id: string; choice: ApprovalChoice; resolved: number }>(
+      id,
+      `/v1/responses/${encodeURIComponent(responseId)}/approval`,
+      { method: "POST", body: JSON.stringify({ request_id: requestId, choice }) }
+    ),
 
   // ---- Per-instance file browser (Agents API /v1/files) — JSON surfaces only. The byte surfaces
   // (GET/PUT /v1/files/content, GET /v1/files/archive) stream and so go through instanceFetch. ----
@@ -365,6 +373,18 @@ export const agent37 = {
     return instanceFetch(id, `/v1/files/content?path=${encodeURIComponent(`~/.hermes/profiles/${profile}/${name}`)}`, withTimeout(undefined, JSON_TIMEOUT_MS));
   },
 
+  // The same file for several experts in one call (gateway only); null where the gateway lacks the route.
+  expertFiles: async (id: string, profiles: string[], name: string): Promise<unknown> => {
+    const gw = runtimeGateway();
+    if (!gw) return null;
+    const res = await gatewayJson(gw, `/v1/instances/${urlId(id)}/experts/files/${encodeURIComponent(name)}?profiles=${profiles.map(encodeURIComponent).join(",")}`);
+    if (res.status === 404 || res.status === 405) {
+      await res.body?.cancel();
+      return null;
+    }
+    return parseAgent37<unknown>(res);
+  },
+
   // Telegram of an instance (Hermes or Claude Code), through the runtime gateway: a t.me link that has the
   // member create their own bot, then its forum group with one topic per expert.
   telegramHub: {
@@ -392,6 +412,19 @@ export const agent37 = {
     if (!runtimeGateway()) return null;
     const q = `${profileQuery ? `${profileQuery}&` : "?"}ids=${ids.map(encodeURIComponent).join(",")}`;
     return (await instanceCall<{ outcomes: Record<string, RunOutcome> }>(id, `/v1/routine-outcomes${q}`)).outcomes ?? {};
+  },
+
+  // Several profiles' sessions and routine outcomes in one call (contract §3); `null` direct, or when the
+  // gateway does not have the route yet.
+  sessionsByProfile: async (id: string, profiles: string[]): Promise<unknown> => {
+    if (!runtimeGateway()) return null;
+    const q = profiles.length ? `?profiles=${profiles.map(encodeURIComponent).join(",")}` : "";
+    const res = await instanceFetch(id, `/v1/sessions/by-profile${q}`, withTimeout({ headers: { Accept: "application/json" } }, JSON_TIMEOUT_MS));
+    if (res.status === 404 || res.status === 405) {
+      await res.body?.cancel();
+      return null;
+    }
+    return parseAgent37<unknown>(res);
   },
 
   // A team member's screen: the tabs of their own experts, through the gateway (which reads their screen token).

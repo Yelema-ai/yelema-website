@@ -199,7 +199,7 @@ export const cleanModel = (v: string): string | null => (MODEL.test(v.trim()) ? 
 
 export const ACCOUNT_REFUSALS: Record<string, string> = {
   too_many_accounts: "Vous avez atteint le nombre maximum de comptes (20).",
-  instance_only: "Un compte se branche sur une instance, jamais pour toute l’entreprise.",
+  instance_only: "Un compte d’IA se branche pour un membre, pas pour toute l’entreprise.",
   bad_layout: "Cet ordre n’a pas pu être enregistré. Rechargez la page et recommencez.",
 };
 

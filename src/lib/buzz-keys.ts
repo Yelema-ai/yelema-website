@@ -8,19 +8,19 @@ import { apiFetch } from "@/lib/api";
 
 const STORE = "yelema.buzz.key";
 
-function stored(): Uint8Array | null {
+function stored(store = STORE): Uint8Array | null {
   try {
-    const hex = localStorage.getItem(STORE);
+    const hex = localStorage.getItem(store);
     return hex && /^[0-9a-f]{64}$/.test(hex) ? hexToBytes(hex) : null;
   } catch {
     return null;
   }
 }
 
-function fresh(): Uint8Array {
+function fresh(store = STORE): Uint8Array {
   const sk = generateSecretKey();
   try {
-    localStorage.setItem(STORE, bytesToHex(sk));
+    localStorage.setItem(store, bytesToHex(sk));
   } catch {
     /* private window: the key lives for this tab only */
   }

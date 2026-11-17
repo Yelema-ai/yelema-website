@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Check, Info, Loader2, Mic, Send, Square, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Check, Info, Loader2, Mic, Send, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { AttachButton, AttachmentTray } from "./Attachments";
 import { EffortMenu } from "./EffortMenu";
@@ -19,6 +20,7 @@ import { useVoices } from "@/components/voice/useVoices";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { commandsOf, filterCommands, missingFor, type ExpertCommand } from "@/lib/expert-commands";
 import { CommandMenu } from "./CommandMenu";
+import { UpdateSpinner, useDeployPhase } from "@/components/app/DeployStatus";
 
 interface Props {
   agentId: string;
@@ -30,9 +32,11 @@ interface Props {
   // Prominent welcome-state composer (vs the compact docked composer).
   large?: boolean;
   focusToken?: number;
+  /** Text put in the composer (an approval « Modifier »); a new token puts it again. */
+  draft?: { text: string; token: number } | null;
 }
 
-export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large = false, focusToken = 0 }: Props) {
+export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large = false, focusToken = 0, draft = null }: Props) {
   const [text, setText] = useState("");
   // model + provider are always chosen together (one selection); effort is independent. Group
   // them as the composer's outgoing ChatSettings so send is just `{ ...settings, files }`.
@@ -63,6 +67,20 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
     return () => cancelAnimationFrame(frame);
   }, [focusToken]);
 
+  useEffect(() => {
+    if (!draft) return;
+    setText(draft.text);
+    const frame = requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(draft.text.length, draft.text.length);
+      grow(el);
+    });
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.token]);
+
   // The model switcher is a persistent control, shown once the instance reports at least one model
   // (the older metered gateway exposes a single "default"; current builds expose the full catalog).
   // It stays hidden until the list resolves and hides if the call returns nothing (e.g. fetch
@@ -86,6 +104,9 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
   const { experts } = useExpertsContext();
   const expert = experts.find((e) => e.agentId === agentId && e.profileId === profile);
   const expertKey = expert?.catalogueKey ?? null;
+  // While an update runs, said where the member writes, so a slow or missing answer is not taken for
+  // the Expert's fault (Leslie, 06/11: « il faut que ça se voie même dans le chat »).
+  const updating = useDeployPhase() === "maintenance";
   // « / » opens the Expert's commands; a command picked shows as a chip and says what it still needs.
   const commands = useMemo(() => commandsOf(expertKey, expert?.driveFolder ?? expert?.displayName), [expertKey, expert?.driveFolder, expert?.displayName]);
   const [chosen, setChosen] = useState<ExpertCommand | null>(null);
@@ -168,14 +189,36 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
     }
   };
 
+  const modelMenu = groups.length > 0 && (
+    <ModelMenu
+      groups={groups}
+      model={settings.model}
+      defaultModel={defaultModel}
+      defaultLabel={defaultLabel}
+      onChange={(model, provider) => setSettings((s) => ({ ...s, model, provider }))}
+    />
+  );
+  const effortMenu = (
+    <EffortMenu value={settings.reasoningEffort} onChange={(reasoningEffort) => setSettings((s) => ({ ...s, reasoningEffort }))} />
+  );
+
   return (
     <div
       className={cn(
         "@container mx-auto w-full rounded-[22px] border border-line bg-surface shadow-[0_8px_30px_rgb(48_22_103_/_0.06)] transition-[border-color,box-shadow] focus-within:border-brand/30",
-        large ? "max-w-2xl" : "max-w-3xl",
+        // Docked, the bar takes the whole width (Leslie, 16/11); centred, it stays a reading width.
+        large && "max-w-2xl",
         "relative"
       )}
     >
+      {updating && (
+        <p role="status" data-update-note="" className="flex items-center gap-2 rounded-t-[21px] border-b border-amber-200 bg-amber-50 px-5 py-2.5 text-[13px] font-medium leading-snug text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+          <UpdateSpinner />
+          <span>
+            Mise à jour en cours : {expert ? expert.displayName : "vos Experts"} {expert ? "peut" : "peuvent"} répondre plus lentement ou reprendre après la mise à jour. Vos messages sont gardés.
+          </span>
+        </p>
+      )}
       {menuOpen && (
         <CommandMenu
           name={expert?.displayName ?? "l’Expert"}
@@ -242,21 +285,14 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
         <DictationBar dictation={dictation} />
       ) : (
       <div className="flex items-center gap-2 px-3 pb-3">
-        <div className="flex min-w-0 shrink items-center gap-1.5">
-          {groups.length > 0 && (
-            <ModelMenu
-              groups={groups}
-              model={settings.model}
-              defaultModel={defaultModel}
-              defaultLabel={defaultLabel}
-              onChange={(model, provider) => setSettings((s) => ({ ...s, model, provider }))}
-            />
-          )}
-          <EffortMenu
-            value={settings.reasoningEffort}
-            onChange={(reasoningEffort) => setSettings((s) => ({ ...s, reasoningEffort }))}
-          />
+        <div className="flex min-w-0 shrink items-center gap-1.5 max-sm:hidden">
+          {modelMenu}
+          {effortMenu}
         </div>
+        <PhoneSettings
+          model={modelMenu}
+          effort={<EffortMenu value={settings.reasoningEffort} emptyLabel="Par défaut" onChange={(reasoningEffort) => setSettings((s) => ({ ...s, reasoningEffort }))} />}
+        />
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <AttachButton onFiles={att.addFiles} />
           {canDictate && (
@@ -337,5 +373,43 @@ export function DictationBar({ dictation }: { dictation: ReturnType<typeof useDi
         </>
       )}
     </div>
+  );
+}
+
+// On a phone, one icon for the model and the effort (Leslie, 04/11, point 7): the field keeps its room.
+function PhoneSettings({ model, effort }: { model: ReactNode; effort: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Modèle et effort"
+        title="Modèle et effort"
+        className="grid size-10 shrink-0 place-items-center rounded-full bg-secondary/70 text-ink-2 hover:text-ink sm:hidden"
+      >
+        <SlidersHorizontal className="size-[18px]" />
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent
+          aria-describedby={undefined}
+          className="max-sm:bottom-0 max-sm:left-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-[22px]"
+        >
+          <DialogTitle className="text-[17px] font-bold text-ink">Modèle et effort</DialogTitle>
+          <div className="space-y-3 pb-2">
+            {model && (
+              <div className="flex min-h-11 items-center justify-between gap-3">
+                <span className="text-[14px] font-semibold text-ink-2">Modèle</span>
+                <span className="min-w-0">{model}</span>
+              </div>
+            )}
+            <div className="flex min-h-11 items-center justify-between gap-3">
+              <span className="text-[14px] font-semibold text-ink-2">Effort</span>
+              {effort}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

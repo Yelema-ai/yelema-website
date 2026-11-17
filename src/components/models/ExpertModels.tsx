@@ -46,7 +46,7 @@ export function ExpertModels({ scope, setup, yelema, models, groupName, onChange
   if (!withAccounts && !yelemaOnly) {
     return (
       <Shell>
-        <p className="text-xs text-ink-3">Les Experts de cette instance utilisent le modèle par défaut du moteur Yelema.</p>
+        <p className="text-xs text-ink-3">Vos Experts utilisent le modèle par défaut du moteur Yelema.</p>
       </Shell>
     );
   }
@@ -85,12 +85,12 @@ export function ExpertModels({ scope, setup, yelema, models, groupName, onChange
       <Row label="Tous les Experts">
         <ModelPicker label="Modèle de tous les Experts" groups={withAccounts ? accountOptions : yelemaOptions} value={allValue} nullLabel={withAccounts ? undefined : defaultLabel} disabled={busy} onChange={pickAll} />
       </Row>
-      {withAccounts && <p className="text-[11px] max-sm:text-[12px] text-ink-3">Un modèle d’un autre fournisseur fait passer ce fournisseur en compte principal.</p>}
+      {withAccounts && <p className="text-[11px] max-sm:text-[12px] text-ink-3">Choisir le modèle d’un autre fournisseur fait de ce fournisseur votre compte principal.</p>}
 
       {experts.length > 0 && (
         <div className="border-t border-line pt-3">
           <button type="button" aria-expanded={open} onClick={() => setToggled(!open)} className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink-3 hover:text-ink">
-            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-90" : ""}`} /> Par expert
+            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-90" : ""}`} /> Par Expert
           </button>
           {open && (
             <div className="mt-3 space-y-2">

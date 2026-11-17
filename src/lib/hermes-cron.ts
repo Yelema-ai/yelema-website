@@ -4,6 +4,7 @@ import { agent37, instanceFetch, instancePortFetch } from "@/lib/agent37";
 import { ApiError } from "@/lib/http";
 import { composePrompt, splitPrompt, summarize, type Routine } from "@/lib/routines";
 import { runPool } from "@/lib/bulk";
+import { parseGoals, type Goal } from "@/lib/objectifs";
 import { currentInstance } from "@/lib/session";
 
 // Hermes's own scheduler: each expert's routines live in its profile, the instance's gateway runs
@@ -205,6 +206,16 @@ export const hermesCron = {
   hermesName: async (agentId: string, profile: string, id: string): Promise<string> => {
     const { job } = await hermes<{ job: HermesJob }>(agentId, "GET", jobPath(profile, id));
     return job.name ?? "";
+  },
+
+  // The expert's objectives, read-only (image I68); null on an image without them (404).
+  objectifs: async (agentId: string, profile: string): Promise<Goal[] | null> => {
+    try {
+      return parseGoals(await hermes<unknown>(agentId, "GET", `/p/${encodeURIComponent(profile)}/api/objectifs`));
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
+    }
   },
 
   remove: (agentId: string, profile: string, id: string) =>

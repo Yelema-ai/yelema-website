@@ -4,7 +4,9 @@ import { createHash } from "node:crypto";
 import { backoffice, BackofficeError, type BoOpenedSession } from "@/lib/backoffice";
 import { memo } from "@/lib/memo";
 import { authViaBackoffice, deploymentWorkspaceId, multiTenant, resolverToken, siteUrl, supabaseAnonKey, supabaseUrl } from "@/lib/runtime-config";
-import { decodeSession, encodeSession, LEGACY_SESSION_COOKIE, secondsLeft, SESSION_COOKIE, sessionCookieOptions, sessionCookieValue } from "@/lib/session";
+import { bearerDecision } from "@/lib/bearer-access";
+import { guestCookieApplies, guestCookieName } from "@/lib/guest-access";
+import { decodeSession, encodeSession, LEGACY_SESSION_COOKIE, secondsLeft, SESSION_COOKIE, sessionCookieOptions, sessionCookieValue, verifiedAccessToken } from "@/lib/session";
 import { publicSiteOrigin } from "@/lib/site-url";
 import { sealTenant, writeTenantHeader } from "@/lib/tenant-header";
 import { hostOf, resolveHost, TenantError, type ResolvedTenant } from "@/lib/tenant-resolver";
@@ -12,6 +14,8 @@ import { hostOf, resolveHost, TenantError, type ResolvedTenant } from "@/lib/ten
 export async function updateSession(request: NextRequest) {
   // Only this proxy writes the resolved client: whatever the browser sent is dropped.
   writeTenantHeader(request.headers, null);
+  // An external guest's cookie is for /invite only: no other route ever sees it, even a stray one.
+  if (request.cookies.has(GUEST_COOKIE) && !guestCookieApplies(request.nextUrl.pathname)) request.cookies.delete(GUEST_COOKIE);
   // Health checks come from the back-office, carry no session, and must answer even when the
   // Supabase variables are missing — so they skip the auth client entirely.
   if (request.nextUrl.pathname === "/api/health") return NextResponse.next({ request });
@@ -63,7 +67,9 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/invite") ||
     pathname.startsWith("/dashboards") ||
     pathname.startsWith("/api/dashboards/shared") ||
-    pathname.startsWith("/api/dashboards/frame");
+    pathname.startsWith("/api/dashboards/frame") ||
+    pathname.startsWith("/api/dashboards/file") ||
+    SIGNED_FILE.test(pathname);
 
   if (!user && !isPublic) {
     if (pathname.startsWith("/api/")) {
@@ -102,6 +108,8 @@ async function tenantGate(request: NextRequest): Promise<NextResponse | { tenant
   return { tenant, host: host! };
 }
 
+const GUEST_COOKIE = guestCookieName(process.env.NODE_ENV === "production");
+
 // Renew the access token this long before it expires, so a request never leaves with a dead one.
 const RENEW_BEFORE_S = 120;
 
@@ -110,6 +118,9 @@ const RENEW_BEFORE_S = 120;
 const renewals = memo<BoOpenedSession>({ ttlMs: 30_000, maxEntries: 2000, maxFlightMs: 20_000 });
 const renew = (refreshToken: string, workspace: string | undefined) =>
   renewals.get(`${workspace ?? ""}:${createHash("sha256").update(refreshToken).digest("hex")}`, () => backoffice.refresh(refreshToken, workspace));
+
+// A deliverable's signed link carries its own proof (lib/file-link.ts): no session.
+const SIGNED_FILE = /^\/api\/agents\/[A-Za-z0-9_-]{1,64}\/files\/signed$/;
 
 function isPublicPath(pathname: string): boolean {
   return (
@@ -121,7 +132,9 @@ function isPublicPath(pathname: string): boolean {
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/dashboards") ||
     pathname.startsWith("/api/dashboards/shared") ||
-    pathname.startsWith("/api/dashboards/frame")
+    pathname.startsWith("/api/dashboards/frame") ||
+    pathname.startsWith("/api/dashboards/file") ||
+    SIGNED_FILE.test(pathname)
   );
 }
 
@@ -134,6 +147,17 @@ async function updateBackofficeSession(request: NextRequest, workspace: string |
   let session = decodeSession(sessionCookieValue(request.cookies));
   let renewed: string | null = null;
   let dropped = false;
+
+  // The mobile app: the token rides this request only (never renewed or set as a cookie here).
+  const bearer = await bearerDecision(
+    { method: request.method, pathname, hasCookieSession: Boolean(session), authorization: request.headers.get("authorization"), workspaceHeader: request.headers.get("x-workspace-id"), workspace },
+    verifiedAccessToken
+  );
+  if (bearer && "refuse" in bearer) return NextResponse.json({ error: { code: bearer.refuse.code, message: bearer.refuse.message } }, { status: bearer.refuse.status });
+  if (bearer) {
+    request.cookies.set(SESSION_COOKIE, encodeSession(bearer.session));
+    return NextResponse.next({ request });
+  }
 
   if (session && secondsLeft(session) < RENEW_BEFORE_S) {
     try {

@@ -50,7 +50,7 @@ export function CompanyLogos({ profile, onProfile }: { profile: CompanyProfile; 
         added += 1;
         changed((await res.json()) as CompanyProfile);
       } else {
-        toast.error(`${file.name} : ${await readApiError(res, "l’image n’a pas pu être enregistrée.")}`);
+        toast.error(`${file.name} : ${await readApiError(res, "L’image n’a pas pu être enregistrée")}`);
       }
       setSending({ done: added, total: valid.length });
     }

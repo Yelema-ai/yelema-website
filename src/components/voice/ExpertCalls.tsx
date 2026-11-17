@@ -67,7 +67,8 @@ export function ExpertCalls({ expert }: { expert: Expert }) {
   }, [load]);
 
   const pending = calls?.some((c) => c.subjectPending || c.status === "open") ?? false;
-  usePoll(load, { everyMs: PENDING_POLL_MS, immediate: false, enabled: pending });
+  // A call's summary on its way: `job.done` (voice) says when, a 15 s net while the stream is down.
+  usePoll(load, { everyMs: PENDING_POLL_MS, immediate: false, enabled: pending, live: true, wake: { types: ["job.done"], kind: "voice" } });
 
   const shown = calls?.find((c) => c.id === openId) ?? null;
   if (shown) return <CallPage call={shown} expert={expert} onBack={() => setOpenId(null)} />;

@@ -1,3 +1,6 @@
+import { wipeDevice } from "@/lib/device-cache-client";
+import { within } from "@/lib/first-screen";
+
 // What the user reads when an answer carries no sentence of its own (a host's error page, a
 // crashed route): never a status code or a raw body.
 const FAILED = "Une erreur est survenue. Réessayez dans un instant.";
@@ -13,7 +16,8 @@ function leaveIfSignedOut(res: Response): boolean {
   if (res.status !== 401 || typeof window === "undefined") return false;
   if (PUBLIC_PAGES.test(window.location.pathname)) return false;
   const here = window.location.pathname + window.location.search;
-  window.location.assign(`/login?expired=1&next=${encodeURIComponent(here)}`);
+  // Nothing of the ended session stays on the device, even if the sign-in page never loads (1 s at most).
+  void within(wipeDevice(), 1_000).finally(() => window.location.assign(`/login?expired=1&next=${encodeURIComponent(here)}`));
   return true;
 }
 
@@ -21,6 +25,18 @@ const EXPIRED = "Votre session a expiré. Reconnectez-vous.";
 
 // A form or a file sets its own type (multipart boundary); anything else is sent as JSON.
 const ownType = (body: RequestInit["body"]) => typeof FormData !== "undefined" && (body instanceof FormData || body instanceof Blob || body instanceof URLSearchParams || body instanceof ArrayBuffer);
+
+/** A refusal of this app's API: its sentence, and the code and status it came with (`salons_closed`…). */
+export class ApiFetchError extends Error {
+  status: number;
+  code: string | null;
+  constructor(message: string, status: number, code: string | null) {
+    super(message);
+    this.name = "ApiFetchError";
+    this.status = status;
+    this.code = code;
+  }
+}
 
 /** `fallback`: the sentence (without its full stop) when a refusal carries none of its own. */
 export async function apiFetch<T>(url: string, init?: RequestInit, fallback?: string): Promise<T> {
@@ -42,8 +58,9 @@ export async function apiFetch<T>(url: string, init?: RequestInit, fallback?: st
   }
   if (!res.ok) {
     if (leaveIfSignedOut(res)) throw new Error(EXPIRED);
-    const message = (data as { error?: { message?: string } })?.error?.message;
-    throw new Error(message || (fallback ? `${fallback}.` : FAILED));
+    const error = (data as { error?: { message?: string; code?: unknown } })?.error;
+    const code = typeof error?.code === "string" ? error.code : null;
+    throw new ApiFetchError(error?.message || (fallback ? asSentence(fallback) : FAILED), res.status, code);
   }
   return data as T;
 }
@@ -53,5 +70,13 @@ export async function apiFetch<T>(url: string, init?: RequestInit, fallback?: st
 export async function readApiError(res: Response, fallback: string): Promise<string> {
   if (leaveIfSignedOut(res)) return EXPIRED;
   const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-  return body?.error?.message || `${fallback}.`;
+  return asSentence(body?.error?.message || fallback);
+}
+
+// A capital first, one final stop: never « .. » when the text already ends a sentence.
+export function asSentence(text: string): string {
+  const t = text.trim();
+  if (!t) return t;
+  const head = t.charAt(0).toUpperCase() + t.slice(1);
+  return /[.!?…]$/.test(head) ? head : `${head}.`;
 }

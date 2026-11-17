@@ -1,0 +1,38 @@
+// The mobile app reads its instance here with the back office's access token in `Authorization: Bearer`,
+// no cookie. Only these GET routes, and only without a session cookie; the token is checked against the
+// project's keys first, then goes down the cookie's own path (same access checks). Pure, so it is tested.
+// Contract: docs/plans/mobile-par-la-passerelle.md.
+import type { VerifiedClaims } from "./jwt.ts";
+
+const ROUTES = /^\/api\/agents\/[A-Za-z0-9_-]{1,64}\/(deliverables|files\/tree|files\/content|files\/thumb|events)$/;
+
+export const bearerRoute = (method: string, pathname: string): boolean => (method === "GET" || method === "HEAD") && ROUTES.test(pathname);
+
+export interface BearerRequest {
+  method: string;
+  pathname: string;
+  hasCookieSession: boolean;
+  authorization: string | null;
+  workspaceHeader: string | null;
+  /** The workspace this request is pinned to; undefined only in the legacy single-database mode. */
+  workspace: string | undefined;
+}
+
+export type BearerDecision =
+  | null
+  | { refuse: { status: 401 | 404; code: string; message: string } }
+  | { session: { accessToken: string; refreshToken: string; expiresAt: number } };
+
+/** null: not a bearer request, the usual gate decides. Otherwise the session to read it with, or a refusal. */
+export async function bearerDecision(r: BearerRequest, verify: (token: string) => Promise<VerifiedClaims | null>): Promise<BearerDecision> {
+  if (r.hasCookieSession || !bearerRoute(r.method, r.pathname)) return null;
+  const token = /^Bearer ([A-Za-z0-9._-]{20,8000})$/.exec(r.authorization?.trim() ?? "")?.[1];
+  if (!token) return null;
+  if (r.workspaceHeader && r.workspace && r.workspaceHeader.trim() !== r.workspace) {
+    return { refuse: { status: 404, code: "not_found", message: "Cet espace n’existe pas." } };
+  }
+  const claims = await verify(token).catch(() => null);
+  if (!claims) return { refuse: { status: 401, code: "unauthorized", message: "Sign in required" } };
+  // No refresh token: the phone renews its own session, this server never does it for it.
+  return { session: { accessToken: token, refreshToken: "", expiresAt: claims.exp } };
+}

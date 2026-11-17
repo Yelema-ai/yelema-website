@@ -237,9 +237,10 @@ export async function mintMcpSession(userId: string, pins: Record<string, string
   const session = await client().create(userId, {
     ...(Object.keys(pins).length ? { connectedAccounts: pins } : {}),
     // Keep the manage-connections tool so an expert can hand out a sign-in link in chat, allow
-    // several accounts per toolkit, and drop Composio's remote sandbox.
+    // several accounts per toolkit (a call without `account` takes the default instead of failing), and drop
+    // Composio's remote sandbox.
     manageConnections: { waitForConnections: true },
-    multiAccount: { enable: true },
+    multiAccount: { enable: true, requireExplicitSelection: false },
     sandbox: { enable: false },
     toolkits: { disable: [...HIDDEN_TOOLKITS] },
     mcp: true,

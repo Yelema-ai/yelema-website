@@ -21,11 +21,12 @@ import {
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { EnterpriseSidebar } from "@/components/enterprise/EnterpriseSidebar";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
+import { useSalonsOpen } from "@/components/app/useSalonsOpen";
 import { AccountMenu } from "@/components/AccountMenu";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { ExpertItem } from "@/components/experts/ExpertItem";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
-import { READ_AHEAD, useReadAhead } from "@/components/experts/expert-preload";
+import { READ_AHEAD, useReadAhead, useWarmMenu } from "@/components/experts/expert-preload";
 import { useOwnAgentId } from "@/components/conversations/useAllConversations";
 import { useChatMarks } from "@/components/conversations/useChatMarks";
 import { arrange } from "@/lib/chat-marks";
@@ -51,6 +52,7 @@ export function Sidebar(props: SidebarProps) {
 
 function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   const pathname = usePathname();
+  const salons = useSalonsOpen(usePublicConfig().echanges);
   // Lit at the click, before the next page is there.
   const here = useShownPath();
   const { current } = useWorkspace();
@@ -66,6 +68,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   const shown = groupByCycle(experts).flatMap((g) => g.experts);
   const ahead = new Set(shown.slice(0, READ_AHEAD).map((e) => `${e.agentId}:${e.profileId}`));
   useReadAhead(shown);
+  useWarmMenu(ownAgentId, shown);
   // Each cycle the member folded (true) or opened (false), remembered per browser. Past FOLD_FROM Experts,
   // a cycle they never touched starts folded, except the one of the Expert on screen (Leslie, 01/11 : gagner
   // de la place à gauche sans perdre l'accès en un clic).
@@ -164,18 +167,20 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         <Blocks className="size-5 shrink-0" strokeWidth={1.9} />
         {!collapsed && "Intégrations"}
       </Link>
-      <Link
-        href="/echanges"
-        onClick={onNavigate}
-        className={cn(
-          "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors",
-          here.startsWith("/echanges") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
-          collapsed && RAIL_SQUARE
-        )}
-      >
-        <MessagesSquare className="size-5 shrink-0" strokeWidth={1.9} />
-        {!collapsed && "Échanges"}
-      </Link>
+      {salons && (
+        <Link
+          href="/echanges"
+          onClick={onNavigate}
+          className={cn(
+            "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors",
+            here.startsWith("/echanges") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
+            collapsed && RAIL_SQUARE
+          )}
+        >
+          <MessagesSquare className="size-5 shrink-0" strokeWidth={1.9} />
+          {!collapsed && "Salons"}
+        </Link>
+      )}
       {current?.access === "equipe" && (
         <Link
           href="/equipe"

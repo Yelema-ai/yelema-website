@@ -3,7 +3,8 @@
 // after) and the deployment's `version`. From them, what the member sees.
 
 /** How often a visible page asks; hidden, never, and once when it shows again if a tick was due. */
-export const DEPLOY_POLL_MS = 150_000;
+// 60 s (was 150 s): an update of the Experts can be short, and was over before some pages saw it (Leslie, 06/11).
+export const DEPLOY_POLL_MS = 60_000;
 
 export interface DeployStatus {
   version: string;
@@ -13,8 +14,10 @@ export interface DeployStatus {
 /**
  * `maintenance`: the banner, « Mise à jour » on the expert, a held reply said to be received.
  * `updated`: the update is over and this page runs the previous version, « Actualiser ».
+ * `done`: the update this page saw is over and the page is current (an update of the Experts only):
+ * said until the member closes it, so it is not missed (Leslie, 06/11).
  */
-export type DeployPhase = "idle" | "maintenance" | "updated";
+export type DeployPhase = "idle" | "maintenance" | "updated" | "done";
 
 /** `loaded` is the version the page started with, `current` what the server says now. */
 export function deployPhase(loaded: string | null, current: DeployStatus | null): DeployPhase {

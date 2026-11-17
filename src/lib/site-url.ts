@@ -55,6 +55,13 @@ export function publicSiteOrigin(siteUrl: string | null | undefined, fallbackOri
   return fallback || configured || "http://localhost:3000";
 }
 
+// The origin of links this request hands out. One deployment for every client: the request's own host,
+// since the client (and what a signed link is bound to) is read from it; SITE_URL would point elsewhere.
+export function requestSiteOrigin(multiTenant: boolean, siteUrl: string | null | undefined, host: string | null, requestOrigin: string): string {
+  if (multiTenant) return host ? `https://${host}` : requestOrigin;
+  return publicSiteOrigin(siteUrl, host ?? requestOrigin);
+}
+
 // An address typed as https://user:pw@host makes Firefox refuse every relative fetch ("url with
 // embedded credentials"): login and every screen fail. Reload the same page without them. Firefox
 // hides them from `location`; only `document.URL` still carries them.

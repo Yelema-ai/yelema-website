@@ -49,7 +49,9 @@ export function YeleBubble() {
   // An expert's workspace keeps its chat composer at the bottom: there the bubble is a round in the
   // corner, beside the composer (which leaves it the room), never on its Envoyer button. On a phone it
   // is in the top bar on every page (YeleTopButton).
-  const raised = usePathname()?.startsWith("/experts/") ?? false;
+  // Échanges has the same composer at the bottom: same round, same room.
+  const path = usePathname() ?? "";
+  const raised = path.startsWith("/experts/") || path.startsWith("/echanges");
   useEffect(() => {
     const show = () => setOpen(true);
     window.addEventListener(OPEN_EVENT, show);

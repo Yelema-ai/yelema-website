@@ -61,7 +61,7 @@ export function AccountRow({ account, rank, kind, isLogin, onChanged }: { accoun
         open={removing}
         onOpenChange={setRemoving}
         title={`Retirer « ${name} » ?`}
-        description="Ce compte sera retiré de cette instance. Les Experts passeront au compte suivant. La conversation en cours sera interrompue."
+        description="Ce compte sera retiré. Vos Experts passeront au compte suivant. La conversation en cours sera interrompue."
         confirmText="Retirer"
         destructive
         onConfirm={async () => {
@@ -103,7 +103,7 @@ function EditDialog({ account, field, onClose, onSaved }: { account: LlmAccount;
           <DialogHeader>
             <DialogTitle className="text-base">{field === "label" ? "Renommer le compte" : "Changer la clé"}</DialogTitle>
           </DialogHeader>
-          <Input autoFocus autoComplete="off" spellCheck={false} type={field === "secret" ? "password" : "text"} maxLength={field === "label" ? 60 : 4200} value={value} onChange={(e) => setValue(e.target.value)} placeholder={field === "label" ? "Compta, Abonnement de Selim…" : "Nouvelle clé"} className={field === "secret" ? "font-mono text-xs" : "text-sm"} />
+          <Input autoFocus autoComplete="off" spellCheck={false} type={field === "secret" ? "password" : "text"} maxLength={field === "label" ? 60 : 4200} value={value} onChange={(e) => setValue(e.target.value)} placeholder={field === "label" ? "Compta, Abonnement de l’équipe…" : "Nouvelle clé"} className={field === "secret" ? "font-mono text-xs" : "text-sm"} />
           {error && <p role="alert" className="rounded-xl bg-ko-pale px-3 py-2 text-xs text-ko">{error}</p>}
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Annuler</Button>

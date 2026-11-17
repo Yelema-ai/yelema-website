@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import type { RelayChannel as Channel, RelayLink, RelayStatus } from "@/lib/agent37";
 import { DisconnectButton } from "@/components/channels/DisconnectButton";
+import { StatePill } from "@/components/integrations/StatePill";
 
 const LABELS: Record<Channel, { title: string; intro: string; install: string }> = {
-  slack: { title: "Slack", intro: "Écrivez à vos experts en message direct au bot Yelema, ou mentionnez-le dans un canal.", install: "Ajouter à Slack" },
-  teams: { title: "Microsoft Teams", intro: "Écrivez à vos experts depuis Teams, en message privé ou dans vos équipes.", install: "Ouvrir Yelema dans Teams" },
-  telegram: { title: "Telegram", intro: "Écrivez à vos experts en message privé au bot de votre équipe, depuis votre propre compte Telegram.", install: "Ouvrir le bot de l’équipe" },
+  slack: { title: "Slack", intro: "Écrivez à vos Experts en message direct au bot Yelema, ou mentionnez-le dans un canal.", install: "Ajouter à Slack" },
+  teams: { title: "Microsoft Teams", intro: "Écrivez à vos Experts depuis Teams, en message privé ou dans vos équipes.", install: "Ouvrir Yelema dans Teams" },
+  telegram: { title: "Telegram", intro: "Écrivez à vos Experts en message privé au bot de votre équipe, depuis votre compte Telegram.", install: "Ouvrir le bot de l’équipe" },
 };
 const SAFE = /^https:\/\/(slack\.com|teams\.microsoft\.com|t\.me)\//;
 
@@ -56,12 +57,23 @@ export function RelayChannel({ agentId, channel, canManage }: { agentId: string;
   const install = link?.installUrl ?? link?.appUrl ?? link?.botUrl ?? null;
 
   if (!status) return <div className="h-20 animate-pulse rounded-lg border bg-card" />;
+  // Slack and Teams are not tested yet with clients (Leslie, 16/11): « Bientôt » until an account is linked.
+  if (channel !== "telegram" && !status.accounts)
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-lg border bg-card p-4">
+        <div>
+          <p className="text-sm font-semibold">{l.title}</p>
+          <p className="text-xs text-muted-foreground">{l.intro}</p>
+        </div>
+        <StatePill state="soon" />
+      </div>
+    );
   return (
     <div className="space-y-3 rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-semibold">{l.title}</p>
-          <p className="text-xs text-muted-foreground">{status.enabled ? (status.accounts ? `${status.accounts} compte(s) relié(s) à cet espace.` : l.intro) : `${l.title} n’est pas encore ouvert sur cette plateforme.`}</p>
+          <p className="text-xs text-muted-foreground">{status.enabled ? (status.accounts ? `${status.accounts} ${status.accounts > 1 ? "comptes reliés" : "compte relié"} à cet espace.` : l.intro) : `${l.title} n’est pas encore disponible pour votre entreprise.`}</p>
         </div>
         {canManage && status.enabled && (
           <div className="flex gap-2">
@@ -79,7 +91,7 @@ export function RelayChannel({ agentId, channel, canManage }: { agentId: string;
             <a className="inline-flex items-center gap-1 font-semibold text-brand hover:underline" href={link.createUrl} target="_blank" rel="noopener noreferrer">Créer le bot de l’équipe <ExternalLink className="h-3 w-3" /></a>{" "}
             (une seule fois pour l’équipe ; vous êtes relié d’office).
           </li>
-          <li>Écrivez-lui ensuite en commençant par le nom d’un expert (« Mamadou, … »). Vos collègues le relient depuis cette page.</li>
+          <li>Écrivez-lui ensuite en commençant par le nom d’un Expert (« Mamadou, … »). Vos collègues le relient depuis cette page.</li>
         </ol>
       )}
       {link?.code && (
@@ -100,7 +112,7 @@ export function RelayChannel({ agentId, channel, canManage }: { agentId: string;
             </span>{" "}
             (valable 15 minutes).
           </li>
-          <li>Commencez ensuite un message par le nom d’un expert pour lui écrire (« Djénéba, … »).</li>
+          <li>Pour écrire à un Expert, commencez votre message par son nom (« Djénéba, … »).</li>
         </ol>
       )}
     </div>

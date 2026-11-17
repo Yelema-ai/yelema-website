@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArchiveRestore, CheckCheck, Lock, Pin, Repeat, Search } from "lucide-react";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
@@ -12,7 +12,10 @@ import { convKey } from "@/lib/activity";
 import { arrange } from "@/lib/chat-marks";
 import { fold, useAllConversations, useOwnAgentId, type ConversationRow } from "./useAllConversations";
 import { useChatMarks } from "./useChatMarks";
+import { prefetchThread } from "@/components/chat/useChat";
+import { intentOf } from "@/components/usePrefetch";
 import type { ChatSession } from "@/components/chat/types";
+import type { ServerReading } from "@/components/useServerReading";
 
 type Filter = "tout" | "non-lues" | "routines" | "archivees";
 const DAY = 86_400_000;
@@ -42,7 +45,7 @@ const time = (at: number) =>
 // with a search, Tout / Non lues / Routines / Archivées, the Expert and the dates. Pinned ones head
 // the list; archived ones only show under « Archivées », where they can be brought back. A row opens
 // the conversation in its space; « Tout marquer comme lu » clears the bell's marks.
-export function AllConversations({ initial = null }: { initial?: Record<string, ChatSession[]> | null }) {
+export function AllConversations({ initial = null }: { initial?: ServerReading<Record<string, ChatSession[]>> }) {
   const ownAgentId = useOwnAgentId();
   const { experts } = useExpertsContext();
   const rows = useAllConversations(ownAgentId, experts, true, initial);
@@ -54,6 +57,9 @@ export function AllConversations({ initial = null }: { initial?: Record<string, 
   const { marks, mark } = useChatMarks();
   const keyOf = (r: ConversationRow) => convKey(r.expert?.agentId ?? ownAgentId ?? "", r.expert?.profileId ?? null, r.session.session_id);
   const archivedKeys = new Set(marks.archived);
+  // A row about to be clicked: its thread is read ahead, so it opens filled.
+  const rowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ahead = (r: ConversationRow) => intentOf(rowTimer, () => prefetchThread(r.expert?.agentId ?? ownAgentId ?? "", r.expert?.profileId ?? null, r.session.session_id));
 
   const unreadIds = useMemo(() => new Set(bell.items.filter((i) => i.unread).map((i) => i.sessionId)), [bell.items]);
   const needle = fold(q.trim());
@@ -165,7 +171,7 @@ export function AllConversations({ initial = null }: { initial?: Record<string, 
                 const key = keyOf(r);
                 return (
                   <div key={r.href} className="flex items-center border-b border-line last:border-b-0 hover:bg-soft">
-                  <Link href={r.href} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2.5">
+                  <Link href={r.href} {...(ownAgentId || r.expert ? ahead(r) : {})} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2.5">
                     {r.expert ? (
                       <ExpertAvatar expert={{ ...r.expert, gateway: null }} size="sm" />
                     ) : (

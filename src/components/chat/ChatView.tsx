@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Plus, Sparkles } from "lucide-react";
-import { ComputerButton, ComputerDialog, ComputerPanel } from "@/components/experts/ExpertComputer";
+import { ArrowRight, Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
+import { ComputerButton, ComputerDialog, ComputerMenuItem, ComputerPanel } from "@/components/experts/ExpertComputer";
+import { ExpertMoreMenu } from "@/components/experts/ExpertMoreMenu";
 import { DashboardProvider } from "@/components/experts/DashboardProvider";
-import { DashboardButton, DashboardPanel, DashboardDialog, OpenDashboardOnMount, ShareDashboardModal, SidePanelSync } from "@/components/experts/ExpertDashboard";
+import { DashboardButton, DashboardMenuItem, DashboardPanel, DashboardDialog, OpenDashboardOnMount, ShareDashboardModal, SidePanelSync } from "@/components/experts/ExpertDashboard";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { expertDisplayName } from "@/lib/experts";
 import { cn } from "@/lib/utils";
 import { agentTabPath } from "@/lib/expert-tabs";
-import { citedFolder, type TurnDoc } from "@/lib/drive-links";
+import { citedFolder, deliverableCount, type TurnDoc } from "@/lib/drive-links";
+import { driveTree } from "@/lib/drive-store";
 import { ConversationDocs } from "./ConversationDocs";
 import { PreviewSiblings } from "@/components/files/preview-siblings";
 import { GoogleDocsRow, PinnedDocsProvider, usePinnedDocs } from "./GoogleDocs";
@@ -27,6 +29,7 @@ import { ChatSessionsPanel } from "./ChatSessionsPanel";
 import { setChatFull, setChatListHidden, useChatFull, useChatListHidden, useChatSidePanel } from "./chat-layout";
 import { useChatContext } from "./ChatProvider";
 import { useChat } from "./useChat";
+import { MODIFY_PREFIX } from "@/lib/approval";
 import { wakeInstance } from "@/components/app/wake";
 import { useChatAttachments } from "./useChatAttachments";
 import { rememberedSettings } from "./rememberedSettings";
@@ -41,7 +44,7 @@ const SCREEN_TEMPLATE = "yelema-hermes";
 const SCREEN_MIN_REVISION = 5;
 
 
-/** Conversations after which « Faire connaissance » is no longer offered. */
+/** Deliverables after which « Faire connaissance » is no longer offered. */
 const INTRO_MAX = 10;
 export const hasScreen = (instance: { image: { template: string; revision: number | null } | null } | null) =>
   instance?.image?.template === SCREEN_TEMPLATE && (instance.image.revision ?? 0) >= SCREEN_MIN_REVISION;
@@ -79,7 +82,7 @@ export function ChatView({
     bumpSession,
     threadVersion,
   } = useChatContext();
-  const { messages, isStreaming, loadingHistory, error, send, stop, killRun, unqueue } = useChat({
+  const { messages, isStreaming, loadingHistory, refreshing, error, send, stop, killRun, unqueue, answerApproval } = useChat({
     agentId,
     profile,
     sessionId: activeSessionId,
@@ -98,6 +101,15 @@ export function ChatView({
   // dropped anywhere over the transcript or composer lands in the same tray. A landed attachment
   // refocuses the composer through the same shared signal selecting/creating a thread uses.
   const att = useChatAttachments(agentId, requestComposerFocus);
+  // « Modifier » on an approval: the action is refused and the member says what to change instead.
+  const [draft, setDraft] = useState<{ text: string; token: number } | null>(null);
+  const modifyApproval = useCallback(
+    (id: string, rid: string) => {
+      void answerApproval(id, rid, "deny");
+      setDraft((d) => ({ text: MODIFY_PREFIX, token: (d?.token ?? 0) + 1 }));
+    },
+    [answerApproval]
+  );
   const { clearFiles } = att;
 
   // Switching threads / starting a new chat empties the staged tray, so a file picked for one
@@ -130,6 +142,18 @@ export function ChatView({
     window.history.replaceState(window.history.state, "", url);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refParam]);
+
+  // « Envoyer » on a deliverable, « Envoi automatique » in the routines (?dire=): the instruction is
+  // written in the field, for the member to read and send; dropped from the address so a refresh does
+  // not write it again.
+  const sayParam = params.get("dire");
+  useEffect(() => {
+    if (!sayParam) return;
+    setDraft((d) => ({ text: sayParam, token: (d?.token ?? 0) + 1 }));
+    const url = new URL(window.location.href);
+    url.searchParams.delete("dire");
+    window.history.replaceState(window.history.state, "", url);
+  }, [sayParam]);
 
   // A message handed over by the home page ("Demander à mon équipe") is sent once, into a new
   // thread, and dropped from the URL so a refresh does not send it again.
@@ -190,6 +214,7 @@ export function ChatView({
   }, []);
 
   const showWelcome = !loadingHistory && messages.length === 0;
+  const centered = showWelcome && !profile;
   // Memoized so the per-token re-renders during streaming don't re-scan the thread list.
   const activeTitle = useMemo(
     () => {
@@ -212,10 +237,21 @@ export function ChatView({
   const pronoun = expert?.catalogueKey ? voiceExpert(expert.catalogueKey).pronoun : null;
   // Before « Faire connaissance », it is the one action shown: the catalogue's requests wait (Leslie, 31/10).
   const [prepStage, setPrepStage] = useState<Stage | null>(null);
-  // « Faire connaissance » goes once done, or once the member has had INTRO_MAX conversations with the
-  // expert without it: by then they know each other (Leslie, 03/11: « il doit disparaître après un certain temps »).
-  const conversations = sessions.filter((x) => !x.routine).length;
-  const showIntro = Boolean(profile) && prepStage === "intro" && conversations < INTRO_MAX;
+  // « Faire connaissance » goes once done, or once the expert has made INTRO_MAX deliverables: a conversation
+  // that counts is one that produced something, and by then they know each other (Leslie, 04/11).
+  const [made, setMade] = useState(0);
+  const wantsIntro = Boolean(profile) && prepStage === "intro";
+  useEffect(() => {
+    if (!wantsIntro || !driveFolder) return;
+    let cancelled = false;
+    driveTree(agentId)
+      .then((tree) => !cancelled && setMade(deliverableCount(tree.entries, driveFolder)))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [wantsIntro, agentId, driveFolder]);
+  const showIntro = wantsIntro && made < INTRO_MAX;
   const instance = useMemo(() => agents.find((x) => x.agent37_id === agentId) ?? null, [agents, agentId]);
   // The expert's name when the chat targets one; the company chat otherwise (never the instance's
   // name, which the back office writes as the list of its Experts).
@@ -288,10 +324,10 @@ export function ChatView({
         {profile && messages.length > 0 && <ConversationDocs agentId={agentId} docs={docs} google={google} folderHref={docsHref} />}
         {inHeader && actionsSlot ? (
           createPortal(
-            <span className="contents" onClickCapture={onAction}>
-              {hasComputer && <ComputerButton inHeader />}
-              <DashboardButton inHeader />
-            </span>,
+            <ExpertMoreMenu onAction={onAction}>
+              {hasComputer && <ComputerMenuItem />}
+              <DashboardMenuItem />
+            </ExpertMoreMenu>,
             actionsSlot
           )
         ) : (
@@ -336,7 +372,7 @@ export function ChatView({
         onKeyDown={release}
         className={cn(
           "min-h-0",
-          showWelcome ? "flex flex-1 flex-col items-center justify-end px-4 pb-4" : "flex-1 overflow-y-auto"
+          showWelcome ? cn("flex flex-1 flex-col items-center px-4 pb-4", profile ? "justify-center" : "justify-end") : "flex-1 overflow-y-auto"
         )}
       >
         {loadingHistory ? (
@@ -344,9 +380,17 @@ export function ChatView({
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : messages.length > 0 ? (
+          <>
+          {/* The last known copy is on screen while the thread is read again: said, without moving anything. */}
+          {refreshing && (
+            <div role="status" className="pointer-events-none sticky top-0 z-10 h-0">
+              <span className="absolute left-1/2 top-2 -translate-x-1/2 rounded-full bg-soft px-2.5 py-0.5 text-[12px] text-ink-3 shadow-sm">Mise à jour…</span>
+            </div>
+          )}
           <div ref={contentRef}>
-            <ChatMessages messages={messages} isStreaming={isStreaming} face={face} driveFolder={driveFolder} onReply={(text) => void send(text)} onShowEarlier={showEarlier} onUnqueue={unqueue} onDocs={setDocs} onGoogle={setGoogle} routine={sessions.find((s) => s.session_id === activeSessionId)?.routine ?? null} pronoun={pronoun} />
+            <ChatMessages messages={messages} isStreaming={isStreaming} face={face} driveFolder={driveFolder} onReply={(text) => void send(text)} onShowEarlier={showEarlier} onUnqueue={unqueue} onApproval={(id, rid, c) => void answerApproval(id, rid, c)} onModifyApproval={modifyApproval} onDocs={setDocs} onGoogle={setGoogle} routine={sessions.find((s) => s.session_id === activeSessionId)?.routine ?? null} pronoun={pronoun} />
           </div>
+          </>
         ) : (
           <>
             {face && !profile && <ExpertAvatar expert={face} size="lg" className="mb-4 max-sm:hidden" />}
@@ -360,12 +404,14 @@ export function ChatView({
 
       {/* Composer wrapper — the STABLE 2nd child. Docked, it leaves the bottom-right corner to Yélé. Its chrome (docked vs bare centered) is a
           className swap so the ChatComposer inside never changes tree position. */}
-      <div onFocusCapture={() => wakeInstance(agentId)} className={cn("relative", showWelcome ? "w-full px-4 sm:px-6" : "bg-background px-4 py-3 sm:py-4 sm:pl-6 sm:pr-24")}>
+      {/* An expert's chat keeps its bar at the bottom, full width, from the first screen on; only the company chat
+          centres it (Leslie, 16/11). */}
+      <div onFocusCapture={() => wakeInstance(agentId)} className={cn("relative", centered ? "w-full px-4 sm:px-6" : "bg-background px-4 py-3 sm:py-4 sm:pl-6 sm:pr-24")}>
         {/* No hard divider — a short fade dissolves the transcript into the composer instead. */}
-        {!showWelcome && (
+        {!centered && (
           <div className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-background to-transparent" />
         )}
-        <div className={cn("mx-auto w-full", showWelcome ? "max-w-2xl" : "max-w-3xl")} aria-live="polite">
+        <div className={cn("mx-auto w-full", centered && "max-w-2xl")} aria-live="polite">
           {error && <p className="mb-2 rounded-xl bg-ko-pale px-3 py-2 text-[13px] text-ko">{error}</p>}
         </div>
         {profile && showWelcome && (
@@ -378,8 +424,24 @@ export function ChatView({
             onCommand={(text) => void send(text)}
             onStage={setPrepStage}
             onOpenTools={() => router.push("/integrations/connecteurs")}
-            className={cn("mb-3", showWelcome && "max-w-2xl")}
+            className={cn("mb-3", centered && "max-w-2xl")}
           />
+        )}
+        {/* Only « Faire connaissance », and only for a while: the catalogue's requests are gone, and nothing
+            takes their place, no help sentence either (Leslie, 03/11: « simplifier au max »). Just above the bar. */}
+        {showWelcome && showIntro && (
+          <button
+            type="button"
+            onClick={() => void send("/onboarding")}
+            data-faire-connaissance
+            className="mb-3 flex w-full items-center gap-3.5 rounded-[18px] border-[1.5px] border-brand bg-tint p-3.5 text-left text-ink transition-colors hover:bg-brand/15"
+          >
+            {face && <ExpertAvatar expert={face} size="md" />}
+            <span className="min-w-0 flex-1 text-[16px] font-bold leading-snug">Faire connaissance avec {agentName}</span>
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-on-brand">
+              <ArrowRight className="size-[18px]" />
+            </span>
+          </button>
         )}
         <ChatComposer
           agentId={agentId}
@@ -387,27 +449,14 @@ export function ChatView({
           att={att}
           onSend={send}
           onStop={stop}
-          large={showWelcome}
+          large={centered}
           focusToken={composerFocusToken}
+          draft={draft}
         />
       </div>
 
-      {/* Bottom: balances the vertical centering and carries the welcome subtitle. */}
-      {showWelcome && (
-        <div className="flex flex-1 flex-col items-center px-4 pt-3">
-          {/* Only « Faire connaissance », and only for a while: the catalogue's requests are gone, and nothing
-              takes their place, no help sentence either (Leslie, 03/11: « simplifier au max »). */}
-          {showIntro && (
-            <button
-              type="button"
-              onClick={() => void send("/onboarding")}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-brand bg-tint px-3.5 py-1.5 text-[13.5px] font-semibold text-brand-ink transition-colors hover:bg-brand hover:text-on-brand"
-            >
-              <Sparkles className="size-4" /> Faire connaissance avec {agentName}
-            </button>
-          )}
-        </div>
-      )}
+      {/* Bottom: balances the vertical centering of the company chat. */}
+      {centered && <div className="flex-1" />}
     </div>
       {hasComputer && (
         <>

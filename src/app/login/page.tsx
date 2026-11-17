@@ -7,6 +7,7 @@ import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { AuthShell, AuthHeading } from "@/components/auth/AuthShell";
 import { Field, PasswordField } from "@/components/auth/Field";
 import { readApiError } from "@/lib/api";
+import { wipeDevice } from "@/lib/device-cache-client";
 import { publicSiteOrigin, safeNextPath } from "@/lib/site-url";
 import { toast } from "sonner";
 
@@ -28,6 +29,8 @@ const RESEND_DELAY = 30;
 
 export default function LoginPage() {
   const supabase = useSupabase();
+  // Signed out (or the session ended): nothing of the last account stays on this device.
+  useEffect(() => void wipeDevice(), []);
   const { siteUrl } = usePublicConfig();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");

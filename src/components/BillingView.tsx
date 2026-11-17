@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
@@ -26,6 +26,8 @@ function money(amount: number, currency: string): string {
   }
 }
 
+// Back on the tab, the invoices are read again only past this age (or after a payment).
+const STALE_MS = 5 * 60_000;
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : "—");
 
 // "2026-10" -> "octobre 2026".
@@ -43,6 +45,8 @@ export function BillingView() {
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState<string | null>(null);
 
+  // The member left for the payment page: the return reads the invoices whatever their age.
+  const leftToPay = useRef(false);
   const load = useCallback(async () => {
     try {
       setData(await apiFetch<{ billing: Billing; invoices: Invoice[] }>("/api/billing"));
@@ -54,9 +58,13 @@ export function BillingView() {
 
   useEffect(() => {
     void load();
-    // Back from the payment tab: one reading (not one for the focus and one for the visibility).
+    // Back from the payment tab: one reading. Any other return reads only once the screen is old.
+    let lastRead = Date.now();
     const onBack = () => {
-      if (document.visibilityState === "visible") void load();
+      if (document.visibilityState !== "visible" || (!leftToPay.current && Date.now() - lastRead < STALE_MS)) return;
+      leftToPay.current = false;
+      lastRead = Date.now();
+      void load();
     };
     document.addEventListener("visibilitychange", onBack);
     return () => document.removeEventListener("visibilitychange", onBack);
@@ -64,6 +72,7 @@ export function BillingView() {
 
   async function pay(invoice: Invoice) {
     // Opened on the click itself: a tab opened after the answer would be blocked as a pop-up.
+    leftToPay.current = true;
     const tab = window.open("", "_blank");
     setPaying(invoice.id);
     try {

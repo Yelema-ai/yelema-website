@@ -1,0 +1,70 @@
+import assert from "node:assert/strict";
+import { generateKeyPairSync, sign } from "node:crypto";
+import { describe, it } from "node:test";
+
+import { bearerDecision, bearerRoute, type BearerRequest } from "./bearer-access.ts";
+import { verifyEs256, type Jwk } from "./jwt.ts";
+
+const ISS = "https://ref.supabase.co/auth/v1";
+const NOW_S = 1_762_000_000;
+const b64 = (v: unknown) => Buffer.from(JSON.stringify(v)).toString("base64url");
+const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+const jwk: Jwk = { ...(publicKey.export({ format: "jwk" }) as Jwk), kid: "k1", alg: "ES256" };
+function token(payload: Record<string, unknown>): string {
+  const input = `${b64({ alg: "ES256", kid: "k1", typ: "JWT" })}.${b64({ aud: "authenticated", iss: ISS, sub: "user-1", ...payload })}`;
+  return `${input}.${sign("sha256", Buffer.from(input), { key: privateKey, dsaEncoding: "ieee-p1363" }).toString("base64url")}`;
+}
+// The real check of the session cookie's token (lib/session.ts verifiedAccessToken), at a fixed time.
+const verify = async (t: string) => {
+  const c = verifyEs256(t, [jwk], { issuer: ISS, audience: "authenticated", nowS: NOW_S });
+  return c.ok ? c.claims : null;
+};
+const good = token({ exp: NOW_S + 3600 });
+const req = (over: Partial<BearerRequest> = {}): BearerRequest => ({
+  method: "GET", pathname: "/api/agents/inst00001/deliverables", hasCookieSession: false, authorization: `Bearer ${good}`, workspaceHeader: "ws1", workspace: "ws1", ...over,
+});
+
+describe("🔒 jeton de l'app mobile sur les routes d'instance", () => {
+  it("un jeton valide devient la session de cette seule requête (mêmes contrôles d'accès que le cookie ensuite)", async () => {
+    assert.deepEqual(await bearerDecision(req(), verify), { session: { accessToken: good, refreshToken: "", expiresAt: NOW_S + 3600 } });
+    for (const p of ["files/tree", "files/content", "files/thumb", "events"]) assert.ok(bearerRoute("GET", `/api/agents/inst00001/${p}`), p);
+  });
+
+  it("le cookie garde la main : un jeton à côté ne change rien", async () => {
+    assert.equal(await bearerDecision(req({ hasCookieSession: true }), verify), null);
+    assert.equal(await bearerDecision(req({ hasCookieSession: true, authorization: "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxx" }), verify), null);
+  });
+
+  it("jeton expiré, d'une autre clé ou illisible : 401", async () => {
+    const refused = { refuse: { status: 401, code: "unauthorized", message: "Sign in required" } };
+    assert.deepEqual(await bearerDecision(req({ authorization: `Bearer ${token({ exp: NOW_S - 1 })}` }), verify), refused);
+    const other = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const input = `${b64({ alg: "ES256", kid: "k1" })}.${b64({ aud: "authenticated", iss: ISS, sub: "u", exp: NOW_S + 60 })}`;
+    const forged = `${input}.${sign("sha256", Buffer.from(input), { key: other.privateKey, dsaEncoding: "ieee-p1363" }).toString("base64url")}`;
+    assert.deepEqual(await bearerDecision(req({ authorization: `Bearer ${forged}` }), verify), refused);
+    assert.deepEqual(await bearerDecision(req({ authorization: "Bearer aaaaaaaaaaaaaaaaaaaaaaaaa.bbbb.cccc" }), verify), refused);
+    assert.deepEqual(await bearerDecision(req(), async () => { throw new Error("jwks down"); }), refused);
+  });
+
+  it("autre espace que celui de l'adresse : 404, sans même vérifier le jeton", async () => {
+    let checked = false;
+    const d = await bearerDecision(req({ workspaceHeader: "ws2" }), async (t) => ((checked = true), verify(t)));
+    assert.deepEqual(d, { refuse: { status: 404, code: "not_found", message: "Cet espace n’existe pas." } });
+    assert.equal(checked, false);
+  });
+
+  it("jamais ailleurs : écriture, autre route, autre forme d'en-tête ⇒ la porte habituelle (401 sans cookie)", async () => {
+    for (const over of [
+      { method: "PUT", pathname: "/api/agents/inst00001/files/content" },
+      { method: "DELETE", pathname: "/api/agents/inst00001/files" },
+      { pathname: "/api/agents/inst00001/chat" },
+      { pathname: "/api/agents/inst00001/files" },
+      { pathname: "/api/agents/inst00001/files/tree/x" },
+      { pathname: "/api/me" },
+      { authorization: `Basic ${good}` },
+      { authorization: null },
+    ] satisfies Partial<BearerRequest>[]) {
+      assert.equal(await bearerDecision(req(over), verify), null, JSON.stringify(over));
+    }
+  });
+});

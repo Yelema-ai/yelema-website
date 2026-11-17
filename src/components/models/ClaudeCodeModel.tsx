@@ -62,7 +62,7 @@ export function ClaudeCodeModel({ status, member, picker, onChanged }: { status:
   const saveKey = () =>
     run("key", async () => {
       await apiFetch(`/api/claude-code/auth/key${query}`, { method: "PUT", body: JSON.stringify({ key: key.trim(), label: label.trim() || undefined }) });
-      toast.success(secretKind(key.trim()) === "oauth_token" ? "Jeton d’abonnement ajouté" : "Clé API ajoutée");
+      toast.success(secretKind(key.trim()) === "oauth_token" ? "Clé d’abonnement ajoutée" : "Clé Anthropic ajoutée");
       setKey("");
       setLabel("");
       await onChanged();
@@ -92,7 +92,7 @@ export function ClaudeCodeModel({ status, member, picker, onChanged }: { status:
     <section className="space-y-4 rounded-[22px] border border-line bg-surface p-5">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-[15px] font-semibold text-ink">Modèle de l’instance</h2>
+          <h2 className="text-[15px] font-semibold text-ink">Modèle de vos Experts</h2>
           <p className="text-xs text-ink-3">
             En service : <span className="font-semibold text-ink">{describeClaudeAuth(status)}</span>
           </p>
@@ -136,10 +136,10 @@ export function ClaudeCodeModel({ status, member, picker, onChanged }: { status:
 
       <div className="space-y-3 rounded-2xl border border-line p-4">
         <div className="flex items-center gap-2 text-[13px] font-semibold text-ink">
-          <KeyRound className="h-4 w-4 text-brand" /> Comptes : clés API et jetons d’abonnement
+          <KeyRound className="h-4 w-4 text-brand" /> Comptes : clés Anthropic et clés d’abonnement
         </div>
         <p className="text-xs text-ink-3">
-          Ils servent dans cet ordre, avant l’abonnement connecté. Quand l’un atteint sa limite, le suivant prend la main jusqu’à sa reprise. Un jeton d’abonnement se crée sur votre ordinateur avec <code className="rounded bg-soft px-1">claude setup-token</code>.
+          Ils servent dans cet ordre, avant l’abonnement connecté. Quand l’un atteint sa limite, le suivant prend la main jusqu’à sa reprise. Une clé d’abonnement se crée depuis votre ordinateur avec la commande <code className="rounded bg-soft px-1">claude setup-token</code>, à demander à votre équipe tech.
         </p>
         {credentials.length > 0 && (
           <ul className="divide-y divide-line rounded-xl border border-line">
@@ -147,7 +147,7 @@ export function ClaudeCodeModel({ status, member, picker, onChanged }: { status:
               <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs">
                 <span>
                   <span className="font-semibold text-ink">{c.label ?? KIND_LABELS[c.kind]}</span>
-                  <span className="text-ink-3"> · {KIND_LABELS[c.kind]} · …{c.last4}</span>
+                  <span className="text-ink-3"> ({KIND_LABELS[c.kind]}, se termine par {c.last4})</span>
                   {c.exhaustedUntil && Date.parse(c.exhaustedUntil) > Date.now() && <span className="ml-2 rounded-full bg-ko-pale px-2 py-0.5 text-ko">À court jusqu’à {new Date(c.exhaustedUntil).toLocaleString("fr-FR", { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span>}
                 </span>
                 <span className="flex gap-1">
@@ -164,7 +164,7 @@ export function ClaudeCodeModel({ status, member, picker, onChanged }: { status:
             onSubmit={(e) => {
               e.preventDefault();
               if (secretKind(key.trim())) void saveKey();
-              else setError("Collez une clé API (sk-ant-api…) ou un jeton d’abonnement (sk-ant-oat…).");
+              else setError("Collez une clé Anthropic (sk-ant-api…) ou une clé d’abonnement (sk-ant-oat…).");
             }}
           >
             <Input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="sk-ant-api03-… ou sk-ant-oat01-…" autoComplete="off" spellCheck={false} className="min-w-[14rem] flex-1 font-mono text-xs" />
@@ -195,12 +195,12 @@ function UsageCard({ query }: { query: string }) {
   return (
     <div className="space-y-2 rounded-2xl border border-line p-4 text-xs">
       <p className="text-[13px] font-semibold text-ink">Consommation du mois</p>
-      <p className="text-ink-3">Estimation de Claude Code sur vos comptes : {cost.toLocaleString("fr-FR", { style: "currency", currency: "USD" })}. Yelema ne la refacture pas.</p>
+      <p className="text-ink-3">Dépense estimée sur vos comptes Claude : {cost.toLocaleString("fr-FR", { style: "currency", currency: "USD" })}. Yelema ne la refacture pas.</p>
       <ul className="space-y-1">
         {lines.map((l) => (
           <li key={l.profile} className="flex justify-between gap-2">
-            <span className="text-ink">{l.profile || "Instance"}</span>
-            <span className="text-ink-3">{l.turns.toLocaleString("fr-FR")} tours · {l.tokens.toLocaleString("fr-FR")} jetons · {l.costUsd.toLocaleString("fr-FR", { style: "currency", currency: "USD" })}</span>
+            <span className="text-ink">{l.profile || "Sans Expert"}</span>
+            <span className="text-ink-3">{l.turns.toLocaleString("fr-FR")} échanges, {l.tokens.toLocaleString("fr-FR")} jetons, {l.costUsd.toLocaleString("fr-FR", { style: "currency", currency: "USD" })}</span>
           </li>
         ))}
       </ul>

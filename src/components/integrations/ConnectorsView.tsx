@@ -1,7 +1,8 @@
 "use client";
 
+import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Loader2, MoreHorizontal, Pencil, Plus, RotateCw, Search, Star, Trash2, Unplug } from "lucide-react";
+import { Loader2, MoreHorizontal, Pencil, Plus, RotateCw, Search, Star, Trash2, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { cached, remember } from "@/lib/client-cache";
@@ -35,15 +36,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ToolLogo } from "./ToolLogo";
+import { StatePill } from "./StatePill";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import type { ExpertTool } from "@/lib/expert-tools";
 import { forWhom, recommendTools } from "@/lib/recommended-tools";
+import { expertCycle } from "@/lib/expert-cycle";
 import { runPool } from "@/lib/bulk";
+import { keptExpertTools, teamTools } from "@/lib/expert-tools-client";
+import { useInView } from "@/components/usePrefetch";
 
 const SEARCH_DEBOUNCE_MS = 250;
 const MIN_SEARCH = 3; // the toolkits route 400s a non-empty query shorter than this
-const POLL_INTERVAL_MS = 2000;
-const POLL_TIMEOUT_MS = 45000;
+const POLL_TIMEOUT_MS = 3 * 60_000;
 
 function slugKey(slug: string | null | undefined): string {
   return (slug || "").toLowerCase();
@@ -89,15 +93,14 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
   // The connections read last time this visit show at once (Leslie, 28/10); the live list follows.
   const [connections, setConnections] = useState<IntegrationConnection[] | null>(() => cached<IntegrationConnection[]>(`conns:${agentId}`) ?? null);
   const [connecting, setConnecting] = useState<string | null>(null);
-  const [pending, setPending] = useState<string | null>(null);
+  // The tool whose sign-in is awaited, its accounts before it, and when the wait stops.
+  const [watch, setWatch] = useState<{ toolkit: IntegrationToolkit; baseline: number; until: number } | null>(null);
+  const pending = watch ? slugKey(watch.toolkit.slug) : null;
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [open, setOpen] = useState<IntegrationToolkit | null>(null);
   // The catalog's filter by use; « Tous » is null.
   const [group, setGroup] = useState<string | null>(null);
   const searchBox = useRef<HTMLInputElement>(null);
-
-  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollDeadline = useRef(0);
 
   const fetchConnections = useCallback(async () => {
     const { connections: list } = await apiFetch<IntegrationConnectionsResult>(
@@ -108,22 +111,12 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
     return list;
   }, [agentId]);
 
-  const stopPolling = useCallback(() => {
-    if (pollTimer.current) {
-      clearInterval(pollTimer.current);
-      pollTimer.current = null;
-    }
-    setPending(null);
-  }, []);
-
   useEffect(() => {
     fetchConnections().catch((e) => {
       setConnections([]);
       toast.error((e as Error).message);
     });
   }, [fetchConnections]);
-
-  useEffect(() => () => stopPolling(), [stopPolling]);
 
   const q = search.trim();
 
@@ -153,38 +146,33 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
     for (const [k, list] of all) if (splitAccounts(list).accounts.length === 0) all.delete(k);
     return all;
   }, [connections]);
-  // Every account to sign in again, with the tool it belongs to: the banner at the bottom names each one.
-  const broken = useMemo(
-    () => [...accounts.entries()].flatMap(([slug, list]) => list.filter(needsReconnect).map((c) => ({ slug, account: c, index: splitAccounts(list).accounts.indexOf(c) }))),
-    [accounts]
-  );
-  const [reconnecting, setReconnecting] = useState(false);
-  const bannerRef = useRef<HTMLDivElement>(null);
-
   // « Conseillés pour vos Experts »: what the member's Experts list in their pack (outils-recommandes.json).
   const { experts: team } = useExpertsContext();
   const mineExperts = useMemo(() => team.filter((e) => e.agentId === agentId), [team, agentId]);
-  const [packs, setPacks] = useState<{ expert: string; tools: ExpertTool[] }[] | null>(() => cached(`packs:${agentId}`) ?? null);
+  const label = (e: (typeof mineExperts)[number]) => expertCycle(e)?.name ?? e.displayName;
+  // The lists last read (this tab or this device) paint at once; all of them, or none.
+  const keptPacks = () => {
+    const kept = mineExperts.map((e) => keptExpertTools(agentId, e.profileId));
+    return kept.every(Boolean) ? mineExperts.map((e, i) => ({ expert: label(e), tools: kept[i]! })) : null;
+  };
+  const [packs, setPacks] = useState<{ expert: string; tools: ExpertTool[] }[] | null>(keptPacks);
   const teamKey = mineExperts.map((e) => e.profileId).join(",");
+  // Read once the catalog's place is on screen and the page is idle, not with the page's own first reads.
+  const [wanted, setWanted] = useState(false);
+  const catalogRef = useInView<HTMLElement>(() => setWanted(true));
   useEffect(() => {
-    if (!teamKey) return;
+    if (!teamKey || !wanted) return;
     let cancelled = false;
-    Promise.all(
-      mineExperts.map((e) =>
-        apiFetch<{ outils: ExpertTool[] }>(`/api/agents/${agentId}/experts/${encodeURIComponent(e.profileId)}/outils`)
-          .then((r) => ({ expert: e.displayName, tools: r.outils }))
-          .catch(() => ({ expert: e.displayName, tools: [] as ExpertTool[] }))
-      )
-    ).then((lists) => {
-      if (cancelled) return;
-      remember(`packs:${agentId}`, lists);
-      setPacks(lists);
+    const kept = keptPacks();
+    if (kept) setPacks(kept);
+    void teamTools(agentId, mineExperts.map((e) => e.profileId)).then((lists) => {
+      if (!cancelled) setPacks(mineExperts.map((e, i) => ({ expert: label(e), tools: lists[i] })));
     });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId, teamKey]);
+  }, [agentId, teamKey, wanted]);
 
   // The panel closes once its last account is gone.
   useEffect(() => {
@@ -223,30 +211,18 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
   }, [q, base, remote, accounts]);
 
   // Watch the connections until this tool gains an account (the sign-in happens in another tab) or
-  // the deadline passes.
-  function startPolling(toolkit: IntegrationToolkit, baseline: number) {
-    setPending(slugKey(toolkit.slug));
-    pollDeadline.current = Date.now() + POLL_TIMEOUT_MS;
-    if (pollTimer.current) clearInterval(pollTimer.current);
-    pollTimer.current = setInterval(async () => {
-      // The sign-in tab is in front: asked again once this one shows.
-      if (document.hidden) {
-        if (Date.now() > pollDeadline.current) stopPolling();
-        return;
-      }
-      try {
-        const conns = await fetchConnections();
-        if (activeCount(conns, toolkit.slug) > baseline) {
-          stopPolling();
-          toast.success(`${toolkit.name} est connecté`);
-          return;
-        }
-      } catch {
-        // transient; keep polling until the deadline
-      }
-      if (Date.now() > pollDeadline.current) stopPolling();
-    }, POLL_INTERVAL_MS);
-  }
+  // the deadline passes: at once back on this tab or on the back office's word, else every 15 s.
+  usePoll(
+    async () => {
+      if (!watch) return;
+      if (Date.now() > watch.until) return setWatch(null);
+      const conns = await fetchConnections();
+      if (activeCount(conns, watch.toolkit.slug) <= watch.baseline) return;
+      setWatch(null);
+      toast.success(`${watch.toolkit.name} est connecté`);
+    },
+    { enabled: Boolean(watch), round: watch?.until, everyMs: WAIT_POLL_MS, immediate: false, runOnShow: true, wake: { types: ["job.done"], kind: "connectors" } }
+  );
 
   async function connect(toolkit: IntegrationToolkit) {
     setConnecting(slugKey(toolkit.slug));
@@ -256,7 +232,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
         body: JSON.stringify({ toolkit: toolkit.slug }),
       });
       window.open(redirectUrl, "_blank", "noopener,noreferrer");
-      startPolling(toolkit, activeCount(connections ?? [], toolkit.slug));
+      setWatch({ toolkit, baseline: activeCount(connections ?? [], toolkit.slug), until: Date.now() + POLL_TIMEOUT_MS });
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -292,9 +268,8 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
     }
   }
 
-  // Page (Leslie, 03/11, second pass): « Vos outils » on one line, the state on the logo (a red « ! »: an
-  // account to sign in again); the tools the Experts need; the whole catalog, each with a small Connecter;
-  // and at the very bottom one banner naming every account to sign in again.
+  // Page (Leslie, 04/11): three lists of the same card: « Vos outils » (state on the logo), the tools the
+  // Experts need, the whole catalog; at the bottom each account to sign in again, with its choice.
   const mine = q ? [] : visible.filter((t) => accounts.has(slugKey(t.slug)));
   const inGroup = (t: IntegrationToolkit) => !group || (INTEGRATION_GROUPS.find((g) => g.label === group)?.slugs.includes(slugKey(t.slug)) ?? false);
   const recommended = useMemo(() => {
@@ -306,28 +281,29 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
   }, [packs, accounts, connections]);
   const suggested = new Set(recommended.map((r) => slugKey(r.toolkit.slug)));
   const catalog = q ? visible : visible.filter((t) => !accounts.has(slugKey(t.slug)) && !suggested.has(slugKey(t.slug)) && inGroup(t));
-  const toolOf = (slug: string) => base.find((t) => slugKey(t.slug) === slug) ?? catalogToolkit(slug);
 
   return (
     <div className="space-y-7">
       {mine.length > 0 && (
         <section>
           <h2 className="mb-3 text-[17px] font-bold text-ink">Vos outils</h2>
-          <div className="flex flex-wrap gap-2.5">
-            {mine.map((t) => (
-              <MyTool
-                key={slugKey(t.slug)}
-                toolkit={t}
-                accounts={accounts.get(slugKey(t.slug)) ?? []}
-                waiting={connecting === slugKey(t.slug) || pending === slugKey(t.slug)}
-                onOpen={() => {
-                  // A red one leads to the banner that names the account to sign in again.
-                  const k = slugKey(t.slug);
-                  if (broken.some((b) => b.slug === k)) bannerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                  else setOpen(t);
-                }}
-              />
-            ))}
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {mine.map((t) => {
+              const k = slugKey(t.slug);
+              const list = accounts.get(k) ?? [];
+              return (
+                <AddTool
+                  key={k}
+                  toolkit={t}
+                  detail={accountSummary(list)}
+                  accounts={list}
+                  waiting={connecting === k || pending === k}
+                  onConnect={() => connect(t)}
+                  onOpen={() => setOpen(t)}
+                  mine
+                />
+              );
+            })}
           </div>
         </section>
       )}
@@ -335,7 +311,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
       {!q && recommended.length > 0 && (
         <section>
           <h2 className="mb-3 text-[17px] font-bold text-ink">Conseillés pour vos Experts</h2>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
             {recommended.map(({ toolkit: t, who }) => {
               const k = slugKey(t.slug);
               return (
@@ -347,7 +323,6 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
                   waiting={connecting === k || pending === k}
                   onConnect={() => connect(t)}
                   onOpen={() => setOpen(t)}
-                  recommended
                 />
               );
             })}
@@ -355,7 +330,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
         </section>
       )}
 
-      <section className="space-y-3.5">
+      <section ref={catalogRef} className="space-y-3.5">
         <h2 className="text-[17px] font-bold text-ink">
           Tous les outils <span className="ml-1.5 text-[13.5px] font-normal text-ink-3">Plus de 1 000</span>
         </h2>
@@ -391,7 +366,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
         )}
 
         {catalog.length > 0 ? (
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
             {catalog.map((t) => {
               const k = slugKey(t.slug);
               const mineToo = accounts.get(k) ?? [];
@@ -399,7 +374,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
                 <AddTool
                   key={k}
                   toolkit={t}
-                  detail={t.description}
+                  detail={null}
                   accounts={connections === null ? null : mineToo}
                   waiting={connecting === k || pending === k}
                   onConnect={() => connect(t)}
@@ -421,7 +396,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
             )}
           </div>
         ) : searching ? (
-          <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="h-16 animate-pulse rounded-[18px] border bg-soft" />
             ))}
@@ -436,58 +411,6 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
           </div>
         )}
       </section>
-
-      {!q && broken.length > 0 && (
-        <div ref={bannerRef} id="a-reconnecter" className="flex items-center gap-3 rounded-[18px] bg-coral-pale px-4 py-3.5 max-sm:flex-col max-sm:items-stretch">
-          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#dc2626] text-[14px] font-extrabold text-white max-sm:hidden">!</span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[14.5px] font-semibold text-coral-ink">
-              {broken.length > 1 ? `${broken.length} comptes à reconnecter` : "1 compte à reconnecter"} : vos Experts ne peuvent plus s’en servir
-            </p>
-            <p className="mt-0.5 text-[13px] leading-relaxed text-coral-ink/85">
-              {broken.map((b) => `${toolOf(b.slug)?.name ?? b.slug} (${accountTitle(b.account, b.index)})`).join(", ")}
-            </p>
-          </div>
-          <Button onClick={() => setReconnecting(true)} className="shrink-0">
-            <RotateCw />
-            Reconnecter
-          </Button>
-        </div>
-      )}
-
-      {reconnecting && (
-        <Dialog open onOpenChange={(o) => !o && setReconnecting(false)}>
-          <DialogContent className="max-w-[560px]">
-            <DialogTitle className="text-[19px] font-bold text-ink">
-              {broken.length > 1 ? `${broken.length} comptes à reconnecter` : "1 compte à reconnecter"}
-            </DialogTitle>
-            <DialogDescription className="text-[13.5px] text-ink-3">
-              Un clic ouvre la page de connexion de l’outil. Revenez ici une fois connecté.
-            </DialogDescription>
-            <ul className="divide-y">
-              {broken.map((b) => {
-                const t = toolOf(b.slug);
-                if (!t) return null;
-                const state = accountState(b.account);
-                return (
-                  <li key={b.account.id} className="flex items-center gap-3 py-3">
-                    <ToolLogo logo={t.logo} name={t.name} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[15px] font-semibold text-ink">{t.name}</p>
-                      <p className="truncate text-[13px] text-ink-2">{accountTitle(b.account, b.index)}</p>
-                      <p className="text-[12.5px] font-semibold text-coral-ink">{state === "disabled" ? "Accès coupé" : "Connexion expirée"}</p>
-                    </div>
-                    <Button size="sm" onClick={() => connect(t)} disabled={connecting === b.slug || pending === b.slug}>
-                      {pending === b.slug ? <Loader2 className="animate-spin" /> : <RotateCw />}
-                      Reconnecter
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
-          </DialogContent>
-        </Dialog>
-      )}
 
       {open && (
         <AccountsPanel
@@ -527,44 +450,6 @@ const dateFr = (ms: number | null | undefined): string => {
   return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", ...year });
 };
 
-// The state of a connected tool, on its logo: a green check, or a red « ! » when an account has to be
-// signed in again (Leslie, 03/11: « une icône plutôt, et rouge »).
-function StateBadge({ accounts }: { accounts: IntegrationConnection[] }) {
-  const broken = accounts.some(needsReconnect);
-  return broken ? (
-    <span
-      title="Un compte est à reconnecter"
-      className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-full bg-[#dc2626] text-[12px] font-extrabold leading-none text-white ring-2 ring-card"
-    >
-      !
-    </span>
-  ) : (
-    <span className="absolute -bottom-1 -right-1 grid size-[18px] place-items-center rounded-full bg-ok text-white ring-2 ring-card">
-      <Check className="size-2.5" strokeWidth={4} />
-    </span>
-  );
-}
-
-// One of « Vos outils »: logo, name, state; a click opens its accounts.
-function MyTool({ toolkit, accounts, waiting, onOpen }: { toolkit: IntegrationToolkit; accounts: IntegrationConnection[]; waiting: boolean; onOpen: () => void }) {
-  const broken = accounts.some(needsReconnect);
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={`${toolkit.name}${broken ? " : un compte à reconnecter" : ""}`}
-      className="inline-flex min-h-12 items-center gap-2.5 rounded-2xl border bg-card py-1.5 pl-1.5 pr-3.5 transition-colors hover:border-ink-3/40"
-    >
-      <span className="relative shrink-0">
-        <ToolLogo logo={toolkit.logo} name={toolkit.name} className="size-9 rounded-[10px]" imgClassName="size-5" />
-        {waiting ? null : <StateBadge accounts={accounts} />}
-      </span>
-      <span className="text-[14px] font-semibold text-ink">{toolkit.name}</span>
-      {waiting && <Loader2 className="size-4 animate-spin text-ink-3" />}
-    </button>
-  );
-}
-
 // A tool of the catalog: the whole card connects it, with a small « Connecter » on the right (Leslie,
 // 03/11: « le petit bouton Connecter »). In a search, a tool already connected opens its accounts instead.
 function AddTool({
@@ -574,11 +459,12 @@ function AddTool({
   waiting,
   onConnect,
   onOpen,
-  recommended,
+  mine = false,
 }: {
+  /** A card of « Vos outils »: no state pill, the list says it. */
+  mine?: boolean;
   toolkit: IntegrationToolkit;
   detail?: string | null;
-  recommended?: boolean;
   // null while the connections are still loading
   accounts: IntegrationConnection[] | null;
   waiting: boolean;
@@ -592,24 +478,32 @@ function AddTool({
       onClick={connected ? onOpen : onConnect}
       disabled={waiting || accounts === null}
       aria-label={connected ? `Comptes ${toolkit.name}` : `Connecter ${toolkit.name}`}
-      className={cn(
-        "flex min-h-16 min-w-0 items-center gap-3 rounded-[18px] border p-3 text-left transition-colors hover:border-ink-3/40 disabled:cursor-default",
-        recommended ? "border-primary/25 bg-primary/[0.03]" : "bg-card"
-      )}
+      className="flex min-h-16 min-w-0 items-center gap-3 rounded-[18px] border bg-card p-3 text-left transition-colors hover:border-ink-3/40 disabled:cursor-default"
     >
       <span className="relative shrink-0">
         <ToolLogo logo={toolkit.logo} name={toolkit.name} />
-        {connected && <StateBadge accounts={accounts} />}
+        {/* A small red dot when an account is to sign in again; « Reconnecter » or « Retirer » are in its accounts,
+            behind the click (Leslie, 05/11: no section « À reconnecter », no big badge). */}
+        {connected && accounts.some(needsReconnect) && (
+          <span title="Un compte est à reconnecter" className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#dc2626] ring-2 ring-card" />
+        )}
       </span>
+      {/* The name, then the state beside it on the right (Leslie, 07/11: « plutôt à côté »). A long name goes on two
+          lines, never cut inside a word: three cards a row where the button sits beside the name, four in « Vos outils ». */}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14.5px] font-semibold leading-snug text-ink">{toolkit.name}</span>
-        {detail && <span className="block truncate text-[12.5px] text-ink-3">{detail}</span>}
+        <span className="line-clamp-2 text-[14.5px] font-semibold leading-snug text-ink">{toolkit.name}</span>
+        {detail && <span className="mt-0.5 block truncate text-[12.5px] leading-snug text-ink-3">{detail}</span>}
       </span>
-      {waiting ? (
-        <Loader2 className="size-4 shrink-0 animate-spin text-ink-3" />
-      ) : connected ? null : (
-        <span className="inline-flex h-9 shrink-0 items-center rounded-full border bg-card px-3 text-[13px] font-semibold text-ink">Connecter</span>
-      )}
+      <span className="flex shrink-0 items-center">
+        {waiting ? (
+          <Loader2 className="size-4 animate-spin text-ink-3" />
+        ) : connected ? (
+          // In « Vos outils » the list says it is connected; elsewhere (a search), « Connecté » as in Canaux.
+          mine ? null : <StatePill state="connected" className="h-8 min-w-0 px-3.5 text-[12.5px]" />
+        ) : (
+          <StatePill state="connect" className="h-8 min-w-0 px-3.5 text-[12.5px]" />
+        )}
+      </span>
     </button>
   );
 }
@@ -665,7 +559,7 @@ function AccountsPanel({
 
         <div className="flex-1 px-5 py-2">
           {listed.length > 1 && !listed.some((a) => a.isDefault) && (
-            <p className="pt-2 text-[13px] text-ink-3">Plusieurs comptes : choisissez celui que vos Experts utilisent (menu « … », Utiliser par défaut).</p>
+            <p className="pt-2 text-[13px] text-ink-3">Vous avez plusieurs comptes : choisissez celui de vos Experts avec « … » puis « Utiliser par défaut ».</p>
           )}
           <ul className="divide-y">
             {listed.map((a) => {
@@ -777,14 +671,14 @@ function AccountsPanel({
                 onClick={() =>
                   setConfirm({
                     ids: unfinished.map((c) => c.id),
-                    title: "Faire le ménage ?",
+                    title: "Retirer les connexions non terminées ?",
                     description: "Les connexions jamais terminées sont retirées. Vos comptes connectés ne bougent pas.",
                   })
                 }
                 className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 font-semibold text-ink transition-colors hover:bg-card disabled:opacity-60"
               >
                 <Trash2 className="h-4 w-4" />
-                Faire le ménage
+                Retirer
               </button>
             </div>
           )}

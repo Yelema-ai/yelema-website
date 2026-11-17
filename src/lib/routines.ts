@@ -273,6 +273,37 @@ function hourlyLabel(f: string[]): string | null {
   return null;
 }
 
+const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const andList = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} et ${xs[xs.length - 1]}` : xs[0]);
+const dayNum = (d: string) => (Number(d) === 1 ? "1er" : String(Number(d)));
+
+// Any other expression with a fixed hour, read in words rather than shown raw (Leslie, 06/11:
+// « Horaire : 45 8 2 1,4,7,10 * »): days of the month and months as lists, days of the week as a
+// list or a range. « Le 2 janvier, avril, juillet et octobre à 8 h 45 ». Null when it is not one.
+function fixedTimeLabel(f: string[]): string | null {
+  if (!/^\d{1,2}$/.test(f[0]) || !/^\d{1,2}$/.test(f[1])) return null;
+  const [, , dom, mon, dow] = f;
+  const list = /^\d{1,2}(,\d{1,2})*$/;
+  if ((dom !== "*" && !list.test(dom)) || (mon !== "*" && !list.test(mon))) return null;
+  const months = mon === "*" ? null : mon.split(",").map((m) => MONTHS[Number(m) - 1]);
+  if (months?.some((m) => !m)) return null;
+  let days: string | null = null;
+  if (dow !== "*") {
+    const range = /^([0-7])-([0-7])$/.exec(dow);
+    if (range) days = `du ${DAYS[Number(range[1]) % 7]} au ${DAYS[Number(range[2]) % 7]}`;
+    else if (/^[0-7](,[0-7])*$/.test(dow)) days = `le ${andList(dow.split(",").map((d) => DAYS[Number(d) % 7]))}`;
+    else return null;
+  }
+  const at = `à ${frTime(`${f[1]}:${f[0]}`)}`;
+  if (dom !== "*") {
+    const dates = dom.split(",").map(dayNum);
+    const head = dates.length > 1 ? `Les ${andList(dates)}` : `Le ${dates[0]}`;
+    return `${head} ${months ? andList(months) : "du mois"}${days ? `, ${days}` : ""} ${at}`;
+  }
+  if (months) return `${days ? `Chaque semaine ${days}` : "Chaque jour"} en ${andList(months)} ${at}`;
+  return days ? `Chaque semaine ${days} ${at}` : null;
+}
+
 // "Chaque lundi à 7 h 30", "Le 6 octobre à 9 h, une fois".
 export function scheduleLabel(schedule: string): string {
   if (isOneOff(schedule)) {
@@ -283,7 +314,8 @@ export function scheduleLabel(schedule: string): string {
   }
   const parts = cronParts(schedule);
   if (parts) return `${recurrenceOf(parts)} à ${frTime(parts.time)}`;
-  return hourlyLabel(schedule.trim().split(/\s+/)) ?? `Horaire : ${schedule}`;
+  const f = schedule.trim().split(/\s+/);
+  return (f.length === 5 && (hourlyLabel(f) ?? fixedTimeLabel(f))) || `Horaire : ${schedule}`;
 }
 
 // A run's day and hour, in words and in the routines' time zone (UTC): « aujourd’hui à 17 h »,

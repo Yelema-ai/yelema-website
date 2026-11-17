@@ -19,12 +19,24 @@ export function ReplyChoices({ choices, note, onSend }: { choices: ReplyChoice[]
             )}
           >
             <span className={cn("grid size-7 shrink-0 place-items-center rounded-lg text-xs font-bold", c.isDefault ? "bg-surface" : "bg-soft")}>{c.letter}</span>
-            <span className="min-w-0 [overflow-wrap:anywhere]">{c.label}</span>
-            {c.isDefault && <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold">par défaut</span>}
+            <ChoiceLabel label={c.label} />
+            {c.isDefault && <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold">{c.mark ?? "par défaut"}</span>}
           </button>
         ))}
       </div>
       {note && <p className="mt-2 text-[13px] text-ink-3">{note}</p>}
     </div>
+  );
+}
+
+// « Notion ou Slack : vos Experts suivent vos projets » : the choice in bold, its explanation lighter.
+function ChoiceLabel({ label }: { label: string }) {
+  const cut = label.indexOf(" : ");
+  if (cut < 1) return <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>;
+  return (
+    <span className="min-w-0 [overflow-wrap:anywhere]">
+      {label.slice(0, cut)}
+      <span className="block text-[12.5px] font-normal leading-snug text-ink-3">{label.slice(cut + 3)}</span>
+    </span>
   );
 }

@@ -92,7 +92,7 @@ export function SharedConversation({ token }: { token: string }) {
                     <span className="text-[11.5px] text-ink-3">
                       {data.owner || "Membre"}, {when(m.at)}
                     </span>
-                    <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-brand px-4 py-2.5 text-[15px] text-white">{m.content}</div>
+                    <div className="max-w-[min(85%,70ch)] whitespace-pre-wrap rounded-2xl rounded-br-md bg-brand px-4 py-2.5 text-[15px] text-white">{m.content}</div>
                   </li>
                 ) : (
                   <li key={m.id} className="flex flex-col gap-1">

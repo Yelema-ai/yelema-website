@@ -90,7 +90,12 @@ export class BuzzConnection {
 
   /** Every stored event matching `filter`, up to the relay's end-of-stored-events. */
   query(filter: Filter): Promise<Event[]> {
-    return this.req(filter);
+    return this.req([filter]);
+  }
+
+  /** Events matching any of `filters` in ONE request, each filter with its own limit (NIP-01). */
+  queryAny(filters: Filter[]): Promise<Event[]> {
+    return this.req(filters);
   }
 
   /**
@@ -112,7 +117,11 @@ export class BuzzConnection {
 
   /** Signs and sends; resolves with the relay's verdict (`message` carries Buzz's `response:{…}`). */
   publish(template: EventTemplate): Promise<{ ok: boolean; message: string; id: string }> {
-    const event = this.sign(template);
+    return this.publishSigned(this.sign(template));
+  }
+
+  /** Sends an event already signed with this connection's key. */
+  publishSigned(event: Event): Promise<{ ok: boolean; message: string; id: string }> {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.publishes.delete(event.id);
@@ -124,7 +133,7 @@ export class BuzzConnection {
     });
   }
 
-  private req(filter: Filter): Promise<Event[]> {
+  private req(filters: Filter[]): Promise<Event[]> {
     const id = `q${++this.serial}`;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -133,7 +142,7 @@ export class BuzzConnection {
         this.drop();
       }, TIMEOUT_MS);
       this.queries.set(id, { events: [], resolve, reject, timer });
-      this.send(["REQ", id, filter]);
+      this.send(["REQ", id, ...filters]);
     });
   }
 
@@ -179,7 +188,8 @@ const now = (): number => Math.floor(Date.now() / 1000);
 const tag = (e: Event, name: string): string | undefined => e.tags.find((t) => t[0] === name)?.[1];
 
 export interface Conversation { id: string; name: string; members: string[] }
-export interface Message { id: string; author: string; text: string; at: number; replyTo: string | null; mentions: string[] }
+/** `root`: the event's NIP-10 `root` marker, null when absent (a reply-only message: see threadRoot). */
+export interface Message { id: string; author: string; text: string; at: number; replyTo: string | null; root: string | null; mentions: string[] }
 
 /** The channels (salons and direct messages) the key belongs to, with their name and members. */
 export async function conversations(c: BuzzConnection, me: string): Promise<Conversation[]> {
@@ -194,12 +204,15 @@ export async function conversations(c: BuzzConnection, me: string): Promise<Conv
   });
 }
 
+export const marked = (e: Event, marker: string): string | null => e.tags.find((t) => t[0] === "e" && t[3] === marker)?.[1] ?? null;
+
 export const toMessage = (e: Event): Message => ({
   id: e.id,
   author: e.pubkey,
   text: e.content,
   at: e.created_at,
-  replyTo: e.tags.find((t) => t[0] === "e" && t[3] === "reply")?.[1] ?? null,
+  replyTo: marked(e, "reply"),
+  root: marked(e, "root"),
   mentions: e.tags.filter((t) => t[0] === "p" && typeof t[1] === "string").map((t) => t[1] as string),
 });
 
@@ -234,9 +247,65 @@ export const watchRosters = (c: BuzzConnection, me: string, onChange: () => void
   c.subscribe({ kinds: [39002], "#p": [me], since: now() }, onChange);
 
 /** `mentions` : clés d'Experts interpellés (étiquette `p`) ; un Expert ne travaille que si son propriétaire le mentionne. */
-export function sendMessage(c: BuzzConnection, channel: string, text: string, replyTo: string | null, mentions: string[] = []) {
-  const tags = [["h", channel], ...(replyTo ? [["e", replyTo, "", "reply"]] : []), ...mentions.map((k) => ["p", k])];
-  return c.publish({ kind: 9, created_at: now(), tags, content: text });
+type Target = Pick<Message, "id" | "root" | "replyTo">;
+type Relay = Pick<BuzzConnection, "publish" | "query">;
+const MAX_HOPS = 64;
+const ROOT_MISMATCH = /root tag does not match/i;
+
+/**
+ * The thread's root, which the relay stores transitively and checks: a `root` marker wins, else the chain of
+ * parents in `thread` is walked; an ancestor not loaded leaves its id, the deepest one known (best effort).
+ */
+export function threadRoot(target: Target, thread: readonly Message[] = []): string {
+  const byId = new Map(thread.map((m) => [m.id, m]));
+  let m: Target = target;
+  for (let hop = 0; !m.root && m.replyTo && hop < MAX_HOPS; hop++) {
+    const parent = byId.get(m.replyTo);
+    if (!parent) return m.replyTo;
+    m = parent;
+  }
+  return m.root ?? m.replyTo ?? m.id;
+}
+
+/** NIP-10 tags of a reply to `target`: the thread's root (the relay checks it against its ancestry), then the parent. */
+export const replyTags = (target: Target, thread: readonly Message[] = [], root = threadRoot(target, thread)): string[][] => [
+  ["e", root, "", "root"],
+  ["e", target.id, "", "reply"],
+];
+
+/** The root read from the relay itself, parent by parent from `id`, until a `root` marker or a message replying to none. */
+export async function relayRoot(c: Pick<BuzzConnection, "query">, channel: string, id: string): Promise<string> {
+  for (let hop = 0; hop < MAX_HOPS; hop++) {
+    const [e] = await c.query({ ids: [id], "#h": [channel] });
+    if (!e) return id;
+    const root = marked(e, "root");
+    if (root) return root;
+    const parent = marked(e, "reply");
+    if (!parent) return id;
+    id = parent;
+  }
+  return id;
+}
+
+export async function sendMessage(c: Relay, channel: string, text: string, replyTo: Target | null, mentions: string[] = [], thread: readonly Message[] = []) {
+  const publish = (root?: string) =>
+    c.publish({ kind: 9, created_at: now(), tags: [["h", channel], ...(replyTo ? replyTags(replyTo, thread, root) : []), ...mentions.map((k) => ["p", k])], content: text });
+  const r = await publish();
+  if (r.ok || !replyTo || !ROOT_MISMATCH.test(r.message)) return r;
+  // The loaded thread missed an ancestor: ask the relay once for the real root.
+  const root = await relayRoot(c, channel, replyTo.id).catch(() => null);
+  return root && root !== threadRoot(replyTo, thread) ? publish(root) : r;
+}
+
+const REFUSALS: [RegExp, string][] = [
+  [/thread depth limit/i, "Ce fil est trop long pour y répondre : écrivez un nouveau message."],
+  [/root tag does not match/i, "Cette réponse n’a pas pu être rattachée au fil. Réessayez."],
+];
+
+/** A relay refusal (`invalid: …`) as the member reads it. */
+export function refusalText(message: string): string {
+  const raw = message.replace(/^[a-z-]+: /, "");
+  return REFUSALS.find(([re]) => re.test(raw))?.[1] ?? (raw || "Message refusé.");
 }
 
 /** Opens (or reuses) a direct conversation; Buzz answers with the channel it created. */
@@ -245,4 +314,37 @@ export async function openDirect(c: BuzzConnection, pubkeys: string[]): Promise<
   const id = /"channel_id":"([0-9a-f-]{36})"/.exec(r.message)?.[1];
   if (!r.ok || !id) throw new Error(r.message.replace(/^[a-z-]+: /, "") || "Conversation non ouverte.");
   return id;
+}
+
+/**
+ * The last message of each conversation, for the rail's preview and its unread mark: ONE request with a
+ * `limit: 1` filter per channel (one round trip, one render), then one subscription on all of them from now on.
+ */
+export function watchLast(c: BuzzConnection, ids: string[], onLasts: (lasts: Record<string, Message>) => void): Subscription {
+  let open = true;
+  const channelOf = (e: Event) => tag(e, "h");
+  if (ids.length)
+    void c.queryAny(ids.map((id) => ({ kinds: MESSAGE_KINDS, "#h": [id], limit: 1 }))).then(
+      (events) => {
+        const lasts: Record<string, Message> = {};
+        for (const e of events) {
+          const h = channelOf(e);
+          if (h && (!lasts[h] || e.created_at > lasts[h].at)) lasts[h] = toMessage(e);
+        }
+        if (open && Object.keys(lasts).length) onLasts(lasts);
+      },
+      () => undefined,
+    );
+  const live = ids.length
+    ? c.subscribe({ kinds: MESSAGE_KINDS, "#h": ids, since: now() }, (e) => {
+        const h = channelOf(e);
+        if (open && h) onLasts({ [h]: toMessage(e) });
+      })
+    : null;
+  return {
+    close: () => {
+      open = false;
+      live?.close();
+    },
+  };
 }

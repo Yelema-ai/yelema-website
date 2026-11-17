@@ -35,7 +35,7 @@ test("what is not clearly a question stays text", () => {
     "Tu préfères quoi ?\nA) Oui\nC) Non",
     "Tu préfères quoi ?\nB) Oui\nC) Non",
     "Le code :\n```\nA) x\nB) y",
-    `Tu préfères quoi ?\nA) ${"long ".repeat(30)}\nB) Non`,
+    `Tu préfères quoi ?\nA) ${"long ".repeat(40)}\nB) Non`,
     `Tu préfères quoi ?\nA) Oui\nB) Non\n${"suite ".repeat(40)}`,
     "Une réponse ordinaire.",
   ]) {
