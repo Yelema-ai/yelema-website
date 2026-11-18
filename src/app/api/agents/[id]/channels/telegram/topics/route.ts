@@ -1,5 +1,3 @@
-import { boostTelegramGroup } from "@/lib/telegram-boost";
-import { applyTelegramTopicIcons } from "@/lib/telegram-topic-icons-sync";
 import { agent37, instanceFetch } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { repointRoutines } from "@/lib/hermes-cron";
@@ -33,19 +31,7 @@ export async function POST(_request: Request, { params }: Ctx) {
     const { id } = await params;
     const { row } = await requireAgentAccess(id);
 
-    // Lecture du home_channel configuré pour ce groupe Telegram
-    let targetChatId: string | undefined;
-    try {
-      const checkHome = await agent37.exec(id, "hermes -p default config get platforms.telegram.home_channel.chat_id --raw 2>/dev/null || true");
-      targetChatId = checkHome.stdout?.trim();
-      if (targetChatId && /^-?\d+$/.test(targetChatId)) {
-        boostTelegramGroup(targetChatId).then((res) => {
-          if (res.ok) console.log(`[telegram/boost] Groupe ${targetChatId} boosté automatiquement:`, res);
-          else if (res.error !== "not_configured") console.warn(`[telegram/boost] Échec du boost automatique:`, res.message || res.error);
-        }).catch((e) => console.warn(`[telegram/boost] Erreur boost:`, e));
-      }
-    } catch {}
-
+    // Server-side write outside the drive on purpose: the script goes where the command runs it.
     const query = new URLSearchParams({ path: ROUTE_SCRIPT_FILE, overwrite: "true" });
     const upload = await instanceFetch(id, `/v1/files/content?${query.toString()}`, {
       method: "PUT",
@@ -74,16 +60,6 @@ export async function POST(_request: Request, { params }: Ctx) {
       console.error(`[telegram/topics] gateway restart failed on ${id}`, outputTail(restart.stdout, restart.stderr));
       return json<TelegramTopicsResult>({ ok: false, message: RESTART_FAILED, output: fullOutput });
     }
-
-    // Si le compte Premium Mstudio est présent dans le groupe, applique automatiquement les 12 visages officiels
-    // puis quitte le groupe pour ne pas encombrer le groupe client (les icônes restent permanentes).
-    if (targetChatId && /^-?\d+$/.test(targetChatId)) {
-      applyTelegramTopicIcons(targetChatId, { leaveAfter: true }).then((res) => {
-        if (res.ok) console.log(`[telegram/icons] Visages officiels appliqués sur ${targetChatId}:`, res.applied);
-        else if (res.error !== "not_configured") console.log(`[telegram/icons] Application directe ignorée (${targetChatId}):`, res.message || res.error);
-      }).catch((e) => console.warn(`[telegram/icons] Erreur application visages:`, e));
-    }
-
     // Routines that posted only in the app now post to their expert's topic too. Best effort: the
     // topics exist either way, and turning a routine on points it at them again.
     const { profiles } = await installedProfiles([row]);
