@@ -31,7 +31,8 @@ import { FilesTab } from "@/components/files/FilesTab";
 import { cn } from "@/lib/utils";
 import { CallButton } from "@/components/voice/CallButton";
 import { VoiceButton } from "@/components/voice/VoiceButton";
-import { ExpertCalls } from "@/components/voice/ExpertCalls";
+import { CallsAndMeetings } from "@/components/experts/meetings/CallsAndMeetings";
+import { isNotetaker } from "@/lib/meetings/notetaker";
 import { useVoices } from "@/components/voice/useVoices";
 import { NotificationBell } from "@/components/app/NotificationBell";
 
@@ -106,11 +107,12 @@ export function AgentWorkspace({
   // for catalogue experts whenever the workspace mail module is enabled (so the member can opt in).
   // Calls are offered where voice is on, for an expert of the catalogue.
   const voiceOn = useVoices().length > 0;
+  const takesNotes = profileId !== null && isNotetaker(profileId, expert?.catalogueKey);
   const tabs = TABS.filter((t) =>
     t.id === "routines" ? profileId !== null
     : t.id === "tools" ? profileId !== null
     : t.id === "emails" ? mail.enabled && Boolean(expert?.catalogueKey)
-    : t.id === "calls" ? voiceOn && Boolean(expert?.catalogueKey)
+    : t.id === "calls" ? (voiceOn || takesNotes) && Boolean(expert?.catalogueKey)
     : true
   );
   const sheet = useCatalogueExpert(expert?.catalogueKey);
@@ -435,7 +437,7 @@ export function AgentWorkspace({
           {opened.has("calls") && callee && (
             <div className={cn("min-h-0 flex-1 overflow-y-auto", currentTab !== "calls" && "hidden")}>
               <div className="mx-auto w-full max-w-4xl p-6 md:px-10 md:py-8">
-                <ExpertCalls expert={callee} />
+                <CallsAndMeetings agentId={agentId} profile={profileId} callee={callee} calls={voiceOn} meetings={takesNotes} />
               </div>
             </div>
           )}
