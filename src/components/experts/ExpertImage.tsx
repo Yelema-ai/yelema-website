@@ -3,27 +3,18 @@
 import { useState } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { optimizable } from "@/lib/expert-image";
 
 // An expert's picture from the back-office catalogue, resized for where it is shown.
 //
 // The catalogue serves each picture once, full size (a portrait is several hundred KB). Pictures
-// served by a Yelema host go through Next's image optimizer, which hands the browser a WebP at the
+// served by a Yelema host (`optimizable`, src/lib/expert-image.ts) go through Next's image optimizer, which hands the browser a WebP at the
 // size the layout needs and caches it. Any other address (a signed media URL, another CDN) is shown
 // as it is: those hosts are not known at build time, and a signed URL must not be rewritten.
 //
 // While it loads, the picture fades in over its parent's background instead of popping in. If the
 // optimizer cannot read it, the original address is tried once; if that fails too, nothing is
 // drawn (the parent's color or initial stays), never the browser's broken-image icon.
-//
-// Keep in sync with `images.remotePatterns` in next.config.ts.
-export function optimizable(src: string): boolean {
-  try {
-    const url = new URL(src);
-    return url.protocol === "https:" && url.hostname.endsWith(".yelema.ai") && (url.pathname.startsWith("/api/public/experts/") || url.pathname.startsWith("/api/public/expert-avatars/"));
-  } catch {
-    return false;
-  }
-}
 
 type Props = { src: string; className?: string; priority?: boolean } & (
   | { size: number; sizes?: never }

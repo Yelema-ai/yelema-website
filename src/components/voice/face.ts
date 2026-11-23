@@ -1,7 +1,7 @@
 "use client";
 
 import { getImageProps } from "next/image";
-import { optimizable } from "@/components/experts/ExpertImage";
+import { optimizable } from "@/lib/expert-image";
 
 // The expert's face in the call, at the portrait's size: a light picture through the image optimizer
 // when its host allows it, the original otherwise. The « Appeler » button loads it ahead (shown,
