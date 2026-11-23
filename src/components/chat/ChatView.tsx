@@ -28,7 +28,9 @@ import type { Stage } from "@/lib/jour-zero";
 import { isDjeneba } from "@/lib/expert-cycle";
 import { ChatMessages } from "./ChatMessages";
 import { ChatSessionsPanel } from "./ChatSessionsPanel";
-import { setChatFull, setChatListHidden, useChatFull, useChatListHidden, useChatSidePanel } from "./chat-layout";
+import { setChatFull, setChatListHidden, setProfilePanel, useChatFull, useChatListHidden, useChatSidePanel } from "./chat-layout";
+import { useDashboard } from "@/components/experts/DashboardProvider";
+import { useComputer } from "@/components/experts/ComputerProvider";
 import { useChatContext } from "./ChatProvider";
 import { useChat } from "./useChat";
 import { MODIFY_PREFIX } from "@/lib/approval";
@@ -267,7 +269,6 @@ export function ChatView({
   const face = profile ? { displayName: agentName, photoUrl: expert?.photoUrl ?? null, gateway: null } : null;
   // "Son ordinateur" needs the screen the yelema-hermes image streams, from its revision 5 on
   // (image v1.1.0); an instance on another image, or on an older revision, has none to show.
-  const listHidden = useChatListHidden();
   const full = useChatFull();
   const sidePanel = useChatSidePanel();
   const hasComputer = Boolean(profile) && hasScreen(instance);
@@ -310,15 +311,7 @@ export function ChatView({
         <div className="flex min-w-0 items-center gap-3">
           <ChatSessionsPanel />
           {/* Wide screen: the column of conversations folds away and comes back from here. */}
-          <button
-            type="button"
-            onClick={() => setChatListHidden(!listHidden)}
-            aria-label={listHidden ? "Afficher les conversations" : "Masquer les conversations"}
-            title={listHidden ? "Afficher les conversations" : "Masquer les conversations"}
-            className="-ml-1.5 hidden size-9 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-soft hover:text-ink xl:grid"
-          >
-            {listHidden ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-          </button>
+          <ConversationsToggle />
           {/* On an expert's page its photo and name already head the page: shown once. */}
           {face && !profile && <ExpertAvatar expert={face} size="sm" />}
           <div className="min-w-0">
@@ -485,5 +478,34 @@ export function ChatView({
     </PreviewSiblings.Provider>
     </PinnedDocsProvider>
     </DashboardProvider>
+  );
+}
+
+// The column of conversations also folds while a panel sits beside the chat (the profile, Son
+// ordinateur, Tableau de bord): the button then opens it and puts that panel away, instead of
+// doing nothing (Leslie, 23/11). The panel's own button brings it back.
+function ConversationsToggle() {
+  const folded = useChatListHidden();
+  const sidePanel = useChatSidePanel();
+  const dashboard = useDashboard();
+  const computer = useComputer();
+  const hidden = folded || sidePanel;
+  function toggle() {
+    if (!hidden) return setChatListHidden(true);
+    setChatListHidden(false);
+    setProfilePanel(false);
+    dashboard.setPanelOpen(false);
+    computer.setPanelOpen(false);
+  }
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={hidden ? "Afficher les conversations" : "Masquer les conversations"}
+      title={hidden ? "Afficher les conversations" : "Masquer les conversations"}
+      className="-ml-1.5 hidden size-9 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-soft hover:text-ink xl:grid"
+    >
+      {hidden ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+    </button>
   );
 }
