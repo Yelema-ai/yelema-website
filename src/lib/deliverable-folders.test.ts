@@ -86,6 +86,29 @@ test("a folder's glimpse: its best cover anywhere inside, else its newest three 
   assert.ok(r.first.every((x) => !x.folder));
   assert.equal(r.count, 3);
   assert.equal(peeks.get("~/Livrables/Djeneba/CFAO")!.cover, "~/Livrables/Djeneba/CFAO/Offre/visuel.png");
+  // The card's mosaic: what can be seen first (PDF, Word), then the rest, newest first; never a working file.
+  assert.deepEqual(r.tiles.map((x) => x.name), ["Ordre du jour.docx", "Plan.pdf", "compte-rendu.html"]);
+});
+
+test("a folder's mosaic holds four outputs at most, at any depth, pictures and documents before the rest", async () => {
+  const { folderPeeks } = await import("./deliverable-folders.ts");
+  const e = (path: string, modified: number, type = "file") => ({ name: path.split("/").pop()!, path, type, modified, depth: path.split("/").length - 3 });
+  const peeks = folderPeeks(
+    [
+      e("/home/node/Livrables/Kouassi", 9, "directory"),
+      e("/home/node/Livrables/Kouassi/revvo", 9, "directory"),
+      e("/home/node/Livrables/Kouassi/revvo/rapport.html", 9),
+      e("/home/node/Livrables/Kouassi/revvo/affiche.png", 3),
+      e("/home/node/Livrables/Kouassi/revvo/deck.pptx", 5),
+      e("/home/node/Livrables/Kouassi/_travail/brouillon.md", 9),
+      e("/home/node/Livrables/Kouassi/Revvo/offre.pdf", 7),
+      e("/home/node/Livrables/Kouassi/Revvo/chiffres.xlsx", 6),
+    ],
+    ["/home/node/Livrables/Kouassi"]
+  );
+  const k = peeks.get("/home/node/Livrables/Kouassi")!;
+  assert.deepEqual(k.tiles.map((x) => x.name), ["offre.pdf", "chiffres.xlsx", "deck.pptx", "affiche.png"]);
+  assert.equal(k.count, 5);
 });
 
 test("a folder that only holds a folder shows the output inside it, never the folder's name", async () => {

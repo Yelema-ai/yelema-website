@@ -993,7 +993,9 @@ function EntryCover({ agentId, entry, peek }: { agentId: string; entry: FileEntr
   const kind = target ? docKind(name) : null;
   return (
     <span className="relative block aspect-[4/3] w-full overflow-hidden bg-secondary/60">
-      {target && !failed ? (
+      {isDir(entry) && peek && peek.tiles.length >= 2 ? (
+        <FolderMosaic agentId={agentId} peek={peek} />
+      ) : target && !failed ? (
         kind === "image" ? (
           <ReducedImage
             thumb={thumbUrl(agentId, target.path, 480, target.modified)}
@@ -1014,11 +1016,64 @@ function EntryCover({ agentId, entry, peek }: { agentId: string; entry: FileEntr
           <EntryGlyph entry={entry} large />
         </span>
       )}
-      {isDir(entry) && target && !failed && (
+      {isDir(entry) && (peek?.tiles.length ?? 0) >= 2 ? (
+        <span className="absolute left-2 top-2 grid size-7 place-items-center rounded-md bg-background/90 text-primary shadow-sm">
+          <Folder className="size-4" />
+        </span>
+      ) : isDir(entry) && target && !failed && (
         <span className="absolute left-2 top-2 grid size-7 place-items-center rounded-md bg-background/90 text-primary shadow-sm">
           <Folder className="size-4" />
         </span>
       )}
+    </span>
+  );
+}
+
+// A folder holding two outputs or more: the outputs themselves side by side (a picture reduced on the server, a PDF's
+// first page, a slide…), up to four, and how many more it holds on the last one (Leslie, 23/11).
+function FolderMosaic({ agentId, peek }: { agentId: string; peek: FolderPeek }) {
+  const tiles = peek.tiles;
+  const more = peek.count - tiles.length;
+  return (
+    <span className={cn("grid size-full gap-0.5 bg-border/60", tiles.length === 2 ? "grid-cols-2" : "grid-cols-2 grid-rows-2")}>
+      {tiles.map((t, i) => (
+        <span key={t.path} className={cn("relative block min-h-0 overflow-hidden bg-background", tiles.length === 3 && i === 0 && "row-span-2")}>
+          <MosaicTile agentId={agentId} tile={t} />
+          {more > 0 && i === tiles.length - 1 && (
+            <span className="absolute inset-0 grid place-items-center bg-black/45 text-base font-semibold text-white">+{more}</span>
+          )}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function MosaicTile({ agentId, tile }: { agentId: string; tile: FolderPeek["tiles"][number] }) {
+  const [failed, setFailed] = useState(false);
+  const kind = docKind(tile.name);
+  if (!failed && kind === "image") {
+    return (
+      <ReducedImage
+        thumb={thumbUrl(agentId, tile.path, 320, tile.modified)}
+        original={thumbUrl(agentId, tile.path, 320)}
+        alt=""
+        className="size-full object-cover"
+        onFail={() => setFailed(true)}
+      />
+    );
+  }
+  if (!failed && coverRank(tile.name) > 0 && kind) {
+    return (
+      <span className="pointer-events-none block size-full">
+        <DocPreview agentId={agentId} doc={{ name: tile.name, path: tile.path, size: null, modified: tile.modified, kind }} />
+      </span>
+    );
+  }
+  // A page the app cannot draw small (a web page, a text): its name on a sheet.
+  return (
+    <span className="flex size-full flex-col items-center justify-center gap-1 p-2 text-center">
+      <FileIcon className="size-5 text-ink-3" />
+      <span className="line-clamp-2 break-all text-[11px] leading-tight text-ink-2">{tile.name}</span>
     </span>
   );
 }
