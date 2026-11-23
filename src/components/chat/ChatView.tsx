@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { citedFolder, deliverableCount, type TurnDoc } from "@/lib/drive-links";
 import { driveTree } from "@/lib/drive-store";
-import { ConversationDocs } from "./ConversationDocs";
+import { ConversationDocs, PinnedFileRow, fileKey } from "./ConversationDocs";
 import { PreviewSiblings } from "@/components/files/preview-siblings";
 import { GoogleDocsRow, PinnedDocsProvider, usePinnedDocs } from "./GoogleDocs";
 import type { GoogleDoc } from "@/lib/google-docs";
@@ -282,6 +282,7 @@ export function ChatView({
   }, [activeSessionId]);
   // The documents the client keeps first above this conversation (Leslie, 03/11).
   const pins = usePinnedDocs(activeSessionId ? `${agentId}:${profile ?? ""}:${activeSessionId}` : null);
+  const pinnedFile = docs.find((d) => pins.pinned.includes(fileKey(d))) ?? null;
   const docsFolder = (docs[0] && citedFolder(docs[0].path.slice(0, docs[0].path.lastIndexOf("/")))) || driveFolder;
   const docsHref = `${agentTabPath(agentId, "files", profile)}${docsFolder ? `?dossier=${encodeURIComponent(docsFolder)}` : ""}`;
   const inHeader = Boolean(profile && actionsSlot);
@@ -370,7 +371,8 @@ export function ChatView({
         {profilePanel && <ProfilePanelToggle />}
         </div>
       </header>
-      {messages.length > 0 && <GoogleDocsRow docs={google} />}
+      {messages.length > 0 &&
+        (pinnedFile ? <PinnedFileRow agentId={agentId} doc={pinnedFile} /> : <GoogleDocsRow docs={google} />)}
       {/* Top: scrolling transcript when there are messages; the centered welcome heading when
           empty (justify-end seats it just above the composer). */}
       <div
