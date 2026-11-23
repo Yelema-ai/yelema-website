@@ -33,7 +33,7 @@ export function Switch({ on, label, disabled, onChange }: { on: boolean; label: 
   );
 }
 
-function Check({ on, label, onChange }: { on: boolean; label: string; onChange: () => void }) {
+export function Check({ on, label, onChange }: { on: boolean; label: string; onChange: () => void }) {
   return <input type="checkbox" checked={on} onChange={onChange} aria-label={label} className="size-4 cursor-pointer accent-primary" />;
 }
 
