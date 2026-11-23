@@ -985,9 +985,9 @@ function EmptyFolder({
 // a slide, a page or a sheet drawn by the app, a project's cover, else its kind in large. Same covers as the general page.
 function EntryCover({ agentId, entry, peek }: { agentId: string; entry: FileEntry; peek?: FolderPeek }) {
   const [failed, setFailed] = useState(false);
-  // A folder of folders lists them (what is inside is the folders); a folder shows a picture, a PDF or a slide as its cover,
-  // else the names of what it holds: a page of text says less than the names.
-  const folderCover = peek?.cover && coverRank(peek.cover) >= 3 && !(peek.first.length && peek.first.every((f) => f.folder)) ? peek.cover : null;
+  // A folder shows a picture, a PDF or a slide it holds, at any depth, as its cover; else the names of its newest
+  // outputs (a page of text says less than the names); never its subfolders (Leslie, 23/11).
+  const folderCover = peek?.cover && coverRank(peek.cover) >= 3 ? peek.cover : null;
   const target = isDir(entry) ? (folderCover ? { path: folderCover, modified: peek!.coverModified } : null) : coverRank(entry.name) ? { path: entry.path, modified: entry.modified ?? 0 } : null;
   const name = target?.path.split("/").pop() ?? "";
   const kind = target ? docKind(name) : null;

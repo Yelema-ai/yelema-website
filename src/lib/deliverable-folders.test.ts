@@ -82,7 +82,26 @@ test("a folder's glimpse: its best cover anywhere inside, else its newest three 
   );
   const r = peeks.get("~/Livrables/Djeneba/Reunions")!;
   assert.equal(r.cover, "~/Livrables/Djeneba/Reunions/Plan.pdf");
-  assert.deepEqual(r.first.map((x) => x.name), ["261120-090116", "Ordre du jour.docx", "Plan.pdf"]);
-  assert.equal(r.count, 4);
+  assert.deepEqual(r.first.map((x) => x.name), ["compte-rendu.html", "Ordre du jour.docx", "Plan.pdf"]);
+  assert.ok(r.first.every((x) => !x.folder));
+  assert.equal(r.count, 3);
   assert.equal(peeks.get("~/Livrables/Djeneba/CFAO")!.cover, "~/Livrables/Djeneba/CFAO/Offre/visuel.png");
+});
+
+test("a folder that only holds a folder shows the output inside it, never the folder's name", async () => {
+  const { folderPeeks } = await import("./deliverable-folders.ts");
+  const e = (path: string, modified: number, type = "file") => ({ name: path.split("/").pop()!, path, type, modified, depth: path.split("/").length - 3 });
+  const peeks = folderPeeks(
+    [
+      e("~/Livrables/Djeneba/Mstudio", 9, "directory"),
+      e("~/Livrables/Djeneba/Mstudio/organigramme", 9, "directory"),
+      e("~/Livrables/Djeneba/Mstudio/organigramme/organigramme.html", 9),
+      e("~/Livrables/Djeneba/Mstudio/organigramme/donnees.json", 9),
+      e("~/Livrables/Djeneba/Vide", 2, "directory"),
+      e("~/Livrables/Djeneba/Vide/brouillons", 2, "directory"),
+    ],
+    ["~/Livrables/Djeneba/Mstudio", "~/Livrables/Djeneba/Vide"]
+  );
+  assert.deepEqual(peeks.get("~/Livrables/Djeneba/Mstudio")!.first, [{ name: "organigramme.html", folder: false }]);
+  assert.equal(peeks.get("~/Livrables/Djeneba/Vide")!.first.length, 0);
 });
