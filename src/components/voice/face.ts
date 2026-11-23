@@ -9,8 +9,10 @@ import { optimizable } from "@/components/experts/ExpertImage";
 
 export const FACE_PX = 176;
 
-export function faceProps(src: string) {
-  return getImageProps({ src, alt: "", width: FACE_PX, height: FACE_PX, unoptimized: !optimizable(src) }).props;
+// `original`: the picture as its host serves it, when the optimizer could not give it (Leslie, 23/11, QA :
+// an empty circle during the call, while the same face showed everywhere else through ExpertImage's fallback).
+export function faceProps(src: string, original = false) {
+  return getImageProps({ src, alt: "", width: FACE_PX, height: FACE_PX, unoptimized: original || !optimizable(src) }).props;
 }
 
 const loaded = new Set<string>();

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { HALO_COLOR, HALO_PULSE_MS, haloOf, tint, type CallPhase, type Halo } from "@/lib/call-turns";
 import type { Caption } from "./useVoiceCall";
 import { faceProps, FACE_PX } from "./face";
+import { optimizable } from "@/components/experts/ExpertImage";
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -187,7 +188,11 @@ function Portrait({ photoUrl, name, halo, dim }: { photoUrl: string | null; name
   const pulse = halo ? HALO_PULSE_MS[halo] : null;
   const breathe = halo === "parle" || halo === "ecoute";
   const turning = halo === "connexion" || halo === "reflechit";
-  const face = photoUrl ? faceProps(photoUrl) : null;
+  // Through the optimizer first, then the original, then the initial: never an empty circle.
+  const [attempt, setAttempt] = useState<{ url: string | null; step: 0 | 1 | 2 }>({ url: photoUrl, step: 0 });
+  const step = attempt.url === photoUrl ? attempt.step : 0;
+  const face = photoUrl && step < 2 ? faceProps(photoUrl, step === 1) : null;
+  const next = () => setAttempt({ url: photoUrl, step: step === 0 && photoUrl && optimizable(photoUrl) ? 1 : 2 });
   const size = FACE_PX + MARGIN * 2;
   return (
     <span className="relative grid place-items-center" style={{ width: size, height: size }} data-halo={halo ?? "aucun"}>
@@ -219,7 +224,7 @@ function Portrait({ photoUrl, name, halo, dim }: { photoUrl: string | null; name
         style={{ width: FACE_PX, height: FACE_PX }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        {face ? <img {...face} className={photoUrl?.startsWith("/yele/") ? "size-[78%] object-contain" : "size-full object-cover object-[50%_18%]"} /> : name.charAt(0)}
+        {face ? <img {...face} key={face.src} onError={next} className={photoUrl?.startsWith("/yele/") ? "size-[78%] object-contain" : "size-full object-cover object-[50%_18%]"} /> : name.charAt(0)}
       </span>
       {(halo === "cherche" || halo === "muet") && (
         <span
