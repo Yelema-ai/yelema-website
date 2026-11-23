@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { HALO_COLOR, HALO_PULSE_MS, haloOf, tint, type CallPhase, type Halo } from "@/lib/call-turns";
 import type { Caption } from "./useVoiceCall";
 import { faceProps, FACE_PX } from "./face";
-import { optimizable } from "@/components/experts/ExpertImage";
+import { optimizable } from "@/lib/expert-image";
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
