@@ -16,6 +16,16 @@ import { optimizable } from "@/lib/expert-image";
 // optimizer cannot read it, the original address is tried once; if that fails too, nothing is
 // drawn (the parent's color or initial stays), never the browser's broken-image icon.
 
+// The back office also serves each catalogue portrait at 96 and 256 px (« avatar-96.webp », under 2 KB, against
+// some 17 KB at 512): a small face loads that one directly, without the optimizer (Leslie, 23/11: letters instead of
+// faces in the menu, « tjr version très très light »). If it is missing, the usual chain takes over.
+const LIGHT_SIZES = [96, 256];
+export function lightPicture(src: string, size: number | undefined): string | null {
+  if (!size || !/\/avatar-512\.webp(\?|$)/.test(src)) return null;
+  const fit = LIGHT_SIZES.find((s) => s >= size * 2) ?? LIGHT_SIZES.find((s) => s >= size);
+  return fit ? src.replace("/avatar-512.webp", `/avatar-${fit}.webp`) : null;
+}
+
 type Props = { src: string; className?: string; priority?: boolean } & (
   | { size: number; sizes?: never }
   // Fills its (positioned) parent; `sizes` tells the browser how wide that is, as in <img sizes>.
@@ -33,22 +43,23 @@ export function ExpertImage({ src, className, priority, size, sizes }: Props) {
 }
 
 function Picture({ src, className, priority, size, sizes }: { src: string; className?: string; priority?: boolean; size?: number; sizes?: string }) {
-  const [attempt, setAttempt] = useState<"optimized" | "original" | "failed">(optimizable(src) ? "optimized" : "original");
+  const light = lightPicture(src, size);
+  const [attempt, setAttempt] = useState<"light" | "optimized" | "original" | "failed">(light ? "light" : optimizable(src) ? "optimized" : "original");
   const [loaded, setLoaded] = useState(() => shown.has(src));
   if (attempt === "failed") return null;
   const common = {
-    src,
+    src: attempt === "light" && light ? light : src,
     alt: "",
     priority,
     // A face is a few KB and always in sight (menu, header): never wait for the lazy loader.
     loading: priority ? undefined : ("eager" as const),
-    unoptimized: attempt === "original",
+    unoptimized: attempt === "original" || attempt === "light",
     className: cn(loaded ? "opacity-100" : "opacity-0 transition-opacity duration-150", className),
     onLoad: () => {
       shown.add(src);
       setLoaded(true);
     },
-    onError: () => setAttempt((a) => (a === "optimized" ? "original" : "failed")),
+    onError: () => setAttempt((a) => (a === "light" ? (optimizable(src) ? "optimized" : "original") : a === "optimized" ? "original" : "failed")),
   };
   return size ? <Image {...common} width={size} height={size} /> : <Image {...common} fill sizes={sizes} />;
 }

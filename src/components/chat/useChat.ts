@@ -414,7 +414,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
                 const said = run.assistant.content.trim();
                 if (said) run.narration.push(said);
                 lastStatus = null;
-                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, content: "", tools: openTool(m.tools, { tool, status: "running", phrase: toolPhrase(tool, args), generating }) }));
+                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, content: "", said: said ? [...(m.said ?? []), said] : m.said, tools: openTool(m.tools, { tool, status: "running", phrase: toolPhrase(tool, args), generating }) }));
                 break;
               }
               case "response.tool_call.completed":
@@ -474,7 +474,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
               case "response.completed": {
                 sawTerminal = true;
                 const final = str(data.output_text);
-                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, ...(final ? { content: finalReply(final, run.narration) } : {}) }));
+                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, said: undefined, ...(final ? { content: finalReply(final, run.narration) } : {}) }));
                 pendingSteer = str(data.pending_steer) ?? "";
                 break;
               }

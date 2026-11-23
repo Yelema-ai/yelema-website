@@ -420,8 +420,11 @@ const MessageRow = memo(function MessageRow({
     }
 
     const tools = m.tools ?? [];
-    // Once the expert works with tools, the turn shows one live step line; its reply appears when the turn ends.
-    const working = live && tools.length > 0;
+    // While a tool runs, one live step line; what the expert has written so far stays above it, and the reply
+    // it writes once its tools are done shows as it comes (Leslie, 23/11: the reply seemed to vanish mid-turn).
+    const toolRunning = tools.some((t) => t.status === "running");
+    const working = live && tools.length > 0 && (toolRunning || !m.content);
+    const said = live ? (m.said ?? []).filter(Boolean) : [];
     const showDots = live && !working && !m.content && !m.thinking;
     const waitShown = working || (showDots && !updating);
     // Only the conversation's last reply can still be answered in a click; an older question reads as written.
@@ -436,6 +439,7 @@ const MessageRow = memo(function MessageRow({
         {face && <ExpertAvatar expert={face} size="xs" className="mt-0.5" />}
         <div className="min-w-0 max-w-full flex-1 text-[15px] text-ink">
           {m.thinking && <ThinkingBlock content={m.thinking} live={live && !m.content} />}
+          {said.length > 0 && <Markdown content={cleanReply(said.join("\n\n"))} agentId={agentId} profileId={profile} />}
           {waitShown && <LiveWait tools={tools} name={face?.displayName ?? null} since={since} compacting={m.compacting} status={m.status?.message} />}
           {onApproval && onModifyApproval && m.approvals?.map((a) => (
             <ApprovalCard
