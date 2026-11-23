@@ -44,6 +44,9 @@ export interface ChatMessage {
   status?: TurnStatus;
   /** Approvals the expert asked for during this reply's turn (live only: the transcript does not keep them). */
   approvals?: ApprovalRequest[];
+  /** What the expert wrote before each tool of the turn, kept on screen while it works (live only): the reply
+   * never vanishes mid-turn (Leslie, 23/11 : « c'est comme si elle disparaissait »). The final reply replaces it. */
+  said?: string[];
 }
 
 export interface ModelOption {
