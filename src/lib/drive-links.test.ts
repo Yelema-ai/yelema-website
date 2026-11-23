@@ -113,6 +113,7 @@ test("an Expert's deliverables: its own finished files only", () => {
     f("/home/node/Livrables/Fatima/Post.pdf"),
   ];
   assert.equal(deliverableCount(entries, "/home/node/Livrables/Fatou"), 2);
+  assert.equal(deliverableCount(entries, "~/Livrables/Fatou"), 2);
 });
 
 test("cards: no pattern, no font, and no picture beside a delivered document (Leslie, 18/11)", () => {
