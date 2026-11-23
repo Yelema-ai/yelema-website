@@ -45,6 +45,14 @@ export function composioApiKey(): string | undefined {
   return read("COMPOSIO_API_KEY");
 }
 
+export function meetstreamApiKey(): string | undefined {
+  return read("MEETSTREAM_API_KEY");
+}
+
+export function meetstreamWebhookSecret(): string | undefined {
+  return read("MEETSTREAM_WEBHOOK_SECRET");
+}
+
 // The Yelema back office's public origin: it serves the expert catalogue (names, roles, photos,
 // videos). Optional: without it the app still works and shows each expert by its profile name.
 export function backofficeUrl(): string | undefined {

@@ -6,8 +6,8 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // api/composio-mcp, api/memory-mcp, api/yele-mcp and api/stt are the instances' traffic: no browser session, their own token.
+  // api/composio-mcp, api/memory-mcp, api/yele-mcp, api/stt and api/webhooks/meetstream are not browser traffic: no session, their own token or signature.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/composio-mcp|api/memory-mcp|api/yele-mcp|api/stt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/composio-mcp|api/memory-mcp|api/yele-mcp|api/stt|api/webhooks/meetstream|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4)$).*)",
   ],
 };

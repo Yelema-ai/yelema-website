@@ -37,8 +37,10 @@ function client(): Composio {
 // A connected Gmail is that person's, used by the experts on their own instance and by nobody
 // else in the company. An instance without an owner (older rows) is its own identity. Derived
 // server-side from the agents row, never from the caller.
+export const memberComposioId = (userId: string): string => `user:${userId}`;
+
 export function composioUserId(row: Pick<AgentRow, "agent37_id" | "owner_user_id">): string {
-  return row.owner_user_id ? `user:${row.owner_user_id}` : `agent:${row.agent37_id}`;
+  return row.owner_user_id ? memberComposioId(row.owner_user_id) : `agent:${row.agent37_id}`;
 }
 
 // The instance's MCP token is stored only as this hash (agents.apps_token_hash).
@@ -223,6 +225,24 @@ export async function deleteConnection(userId: string, connectedAccountId: strin
     throw new ApiError(502, "composio_error", "La déconnexion n’a pas été confirmée. Réessayez.");
   }
   return { id: connectedAccountId, deleted: true };
+}
+
+const TOOL_TIMEOUT_MS = 60_000;
+
+export interface ToolRun {
+  ok: boolean;
+  data: unknown;
+  error: string | null;
+}
+
+// One tool run on the member's own connected account, asked by the member in the app (never by an expert).
+export async function runMemberTool(userId: string, connectedAccountId: string, slug: string, args: Record<string, unknown>): Promise<ToolRun> {
+  const res = await client().tools.execute(
+    slug,
+    { userId, connectedAccountId, arguments: args, dangerouslySkipVersionCheck: true },
+    { signal: AbortSignal.timeout(TOOL_TIMEOUT_MS) }
+  );
+  return { ok: res.successful, data: res.data, error: res.successful ? null : (res.error ?? null) };
 }
 
 // ---- MCP tool sessions (what the proxy forwards to) ------------------------------------------
