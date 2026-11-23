@@ -1,5 +1,6 @@
 "use client";
 
+import { forTheMember } from "@/lib/narration";
 import { useSafeDashboard } from "@/components/experts/DashboardProvider";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -424,7 +425,7 @@ const MessageRow = memo(function MessageRow({
     // it writes once its tools are done shows as it comes (Leslie, 23/11: the reply seemed to vanish mid-turn).
     const toolRunning = tools.some((t) => t.status === "running");
     const working = live && tools.length > 0 && (toolRunning || !m.content);
-    const said = live ? (m.said ?? []).filter(Boolean) : [];
+    const said = live ? forTheMember(m.said ?? []) : [];
     const showDots = live && !working && !m.content && !m.thinking;
     const waitShown = working || (showDots && !updating);
     // Only the conversation's last reply can still be answered in a click; an older question reads as written.
