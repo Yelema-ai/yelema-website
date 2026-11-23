@@ -103,36 +103,43 @@ export interface FolderPeek {
   first: { name: string; folder: boolean }[];
   /** How many things lie directly inside. */
   count: number;
+  /** Up to four of its outputs, at any depth, shown side by side on the card: what can be seen first (a picture,
+   * a PDF, a slide…), newest first (Leslie, 23/11 : « montrer les fichiers, images etc à l'intérieur du folder »). */
+  tiles: { path: string; name: string; modified: number }[];
 }
 
 /** A glimpse of each of `folders` from the drive tree: its cover, else its first three entries; working files never shown. */
 export function folderPeeks(entries: readonly TreeEntry[], folders: readonly string[], shown = 3): Map<string, FolderPeek> {
+  // What a folder shows is what it holds as outputs, at any depth: never its subfolders (Leslie, 23/11, a
+  // card « Mstudio » showing only « organigramme » : « c'est pas un output »).
   const out = new Map<string, FolderPeek>();
-  const wanted = new Set(folders);
-  const kids = new Map<string, TreeEntry[]>();
+  const files = new Map<string, TreeEntry[]>();
   const skipped = (e: TreeEntry) => e.hidden || (e.type === "directory" ? NOT_DELIVERABLE_FOLDER.test(plain(e.name)) : WORKING_FILE.test(plain(e.name)));
-  for (const f of folders) out.set(f, { cover: null, coverModified: 0, first: [], count: 0 });
+  for (const f of folders) out.set(f, { cover: null, coverModified: 0, first: [], count: 0, tiles: [] });
   for (const e of entries) {
-    if (skipped(e)) continue;
-    const parent = parentOf(e.path);
-    if (wanted.has(parent)) kids.set(parent, [...(kids.get(parent) ?? []), e]);
-    if (e.type === "directory" || !coverRank(e.name)) continue;
-    // Every displayed ancestor may take it as its cover: a picture beats a PDF, a PDF a slide deck…
-    for (let p = parent; p.includes("/"); p = parentOf(p)) {
+    if (e.type === "directory" || skipped(e)) continue;
+    for (let p = parentOf(e.path); p.includes("/"); p = parentOf(p)) {
       const peek = out.get(p);
       if (!peek) continue;
       const below = e.path.slice(p.length + 1).split("/").slice(0, -1);
-      if (below.some((part) => NOT_DELIVERABLE_FOLDER.test(plain(part)))) continue;
+      // « _travail » and the like: the Expert's own drafts, never shown as an output.
+      if (below.some((part) => NOT_DELIVERABLE_FOLDER.test(plain(part)) || part.startsWith(".") || part.startsWith("_"))) continue;
+      files.set(p, [...(files.get(p) ?? []), e]);
+      // A picture beats a PDF, a PDF a slide deck…
       if (coverRank(e.name) > (peek.cover ? coverRank(peek.cover) : 0)) {
         peek.cover = e.path;
         peek.coverModified = e.modified || 0;
       }
     }
   }
-  for (const [f, list] of kids) {
+  for (const [f, list] of files) {
     const peek = out.get(f)!;
     peek.count = list.length;
-    peek.first = [...list].sort((a, b) => (b.modified || 0) - (a.modified || 0) || a.name.localeCompare(b.name, "fr")).slice(0, shown).map((e) => ({ name: e.name, folder: e.type === "directory" }));
+    peek.first = [...list].sort((a, b) => (b.modified || 0) - (a.modified || 0) || a.name.localeCompare(b.name, "fr")).slice(0, shown).map((e) => ({ name: e.name, folder: false }));
+    peek.tiles = [...list]
+      .sort((a, b) => Number(coverRank(b.name) > 0) - Number(coverRank(a.name) > 0) || (b.modified || 0) - (a.modified || 0) || a.name.localeCompare(b.name, "fr"))
+      .slice(0, 4)
+      .map((e) => ({ path: e.path, name: e.name, modified: e.modified || 0 }));
   }
   return out;
 }
