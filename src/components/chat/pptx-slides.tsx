@@ -326,7 +326,7 @@ export function SlideDrawing({ slide, n, of, badge = true }: { slide: SlideView;
         )}
       </svg>
       {badge && (
-        <span className="absolute bottom-1.5 right-2.5 rounded bg-white/80 px-1 text-[11px] font-semibold text-[#8a8a98]">
+        <span data-page-count className="absolute bottom-1.5 right-2.5 rounded bg-white/80 px-1 text-[11px] font-semibold text-[#8a8a98]">
           {n}/{of}
         </span>
       )}

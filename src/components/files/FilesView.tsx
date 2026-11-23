@@ -992,7 +992,8 @@ function EntryCover({ agentId, entry, peek }: { agentId: string; entry: FileEntr
   const name = target?.path.split("/").pop() ?? "";
   const kind = target ? docKind(name) : null;
   return (
-    <span className="relative block aspect-[4/3] w-full overflow-hidden bg-secondary/60">
+    // No « 1/2 pages » on a card: the card shows the document, not a reader (Leslie, 23/11 « visuellement tjr pas ouf »).
+    <span className="relative block aspect-[4/3] w-full overflow-hidden bg-secondary/60 [&_[data-page-count]]:hidden">
       {isDir(entry) && peek && peek.tiles.length >= 2 ? (
         <FolderMosaic agentId={agentId} peek={peek} />
       ) : target && !failed ? (
@@ -1016,13 +1017,10 @@ function EntryCover({ agentId, entry, peek }: { agentId: string; entry: FileEntr
           <EntryGlyph entry={entry} large />
         </span>
       )}
-      {isDir(entry) && (peek?.tiles.length ?? 0) >= 2 ? (
-        <span className="absolute left-2 top-2 grid size-7 place-items-center rounded-md bg-background/90 text-primary shadow-sm">
-          <Folder className="size-4" />
-        </span>
-      ) : isDir(entry) && target && !failed && (
-        <span className="absolute left-2 top-2 grid size-7 place-items-center rounded-md bg-background/90 text-primary shadow-sm">
-          <Folder className="size-4" />
+      {isDir(entry) && ((peek?.tiles.length ?? 0) >= 2 || (target && !failed)) && (
+        <span className="absolute bottom-2 left-2 inline-flex h-6 items-center gap-1 rounded-full bg-background/95 px-2 text-[11px] font-semibold text-ink-2 shadow-sm">
+          <Folder className="size-3.5 text-primary" />
+          {peek?.count ? peek.count : null}
         </span>
       )}
     </span>
@@ -1035,12 +1033,12 @@ function FolderMosaic({ agentId, peek }: { agentId: string; peek: FolderPeek }) 
   const tiles = peek.tiles;
   const more = peek.count - tiles.length;
   return (
-    <span className={cn("grid size-full gap-0.5 bg-border/60", tiles.length === 2 ? "grid-cols-2" : "grid-cols-2 grid-rows-2")}>
+    <span className={cn("grid size-full gap-1.5 bg-secondary/60 p-1.5", tiles.length === 2 ? "grid-cols-2" : "grid-cols-2 grid-rows-2")}>
       {tiles.map((t, i) => (
-        <span key={t.path} className={cn("relative block min-h-0 overflow-hidden bg-background", tiles.length === 3 && i === 0 && "row-span-2")}>
+        <span key={t.path} className={cn("relative block min-h-0 overflow-hidden rounded-md bg-white ring-1 ring-black/5", tiles.length === 3 && i === 0 && "row-span-2")}>
           <MosaicTile agentId={agentId} tile={t} />
           {more > 0 && i === tiles.length - 1 && (
-            <span className="absolute inset-0 grid place-items-center bg-black/45 text-base font-semibold text-white">+{more}</span>
+            <span className="absolute inset-0 grid place-items-center bg-black/50 text-[15px] font-semibold text-white">+{more}</span>
           )}
         </span>
       ))}
