@@ -30,6 +30,35 @@ describe("🔒 jeton de l'app mobile sur les routes d'instance", () => {
     for (const p of ["files/tree", "files/content", "files/thumb", "events"]) assert.ok(bearerRoute("GET", `/api/agents/inst00001/${p}`), p);
   });
 
+  it("le chat du téléphone : lire les conversations, écrire un tour, l'arrêter, répondre à une demande d'accord", () => {
+    for (const p of ["chat/sessions", "chat/sessions/20261118_101200_ab12cd", "chat/by-profile", "chat/responses/resp_abc123/stream"]) assert.ok(bearerRoute("GET", `/api/agents/inst00001/${p}`), p);
+    for (const p of ["chat/responses", "chat/responses/resp_abc123/cancel", "chat/responses/resp_abc123/approval", "chat/responses/resp_abc123/steer", "chat/files"]) assert.ok(bearerRoute("POST", `/api/agents/inst00001/${p}`), p);
+    for (const [m, p] of [
+      ["DELETE", "chat/sessions/s1"],
+      ["PATCH", "chat/sessions/s1"],
+      ["POST", "chat/sessions/s1/share"],
+      ["GET", "chat/sessions/s1/share"],
+      ["GET", "chat/files"],
+      ["GET", "chat/models"],
+      ["POST", "chat/sessions"],
+      ["GET", "chat/sessions/../../x"],
+    ] as const) assert.equal(bearerRoute(m, `/api/agents/inst00001/${p}`), false, `${m} ${p}`);
+  });
+
+  it("les salons du téléphone : l'aperçu Buzz, la clé du téléphone, ouvrir un salon, prévenir qu'on a écrit", () => {
+    for (const m of ["GET", "HEAD"] as const) assert.ok(bearerRoute(m, "/api/buzz"));
+    for (const p of ["devices", "salons", "sent"]) assert.ok(bearerRoute("POST", `/api/buzz/${p}`), p);
+    for (const [m, p] of [
+      ["DELETE", "/api/buzz/devices"],
+      ["PATCH", "/api/buzz/salons/0b2c3d4e-0000-4000-8000-000000000000"],
+      ["DELETE", "/api/buzz/salons/0b2c3d4e-0000-4000-8000-000000000000"],
+      ["POST", "/api/buzz/salons/0b2c3d4e-0000-4000-8000-000000000000/guests"],
+      ["POST", "/api/buzz"],
+      ["GET", "/api/buzz/devices"],
+      ["GET", "/api/buzzx"],
+    ] as const) assert.equal(bearerRoute(m, p), false, `${m} ${p}`);
+  });
+
   it("le cookie garde la main : un jeton à côté ne change rien", async () => {
     assert.equal(await bearerDecision(req({ hasCookieSession: true }), verify), null);
     assert.equal(await bearerDecision(req({ hasCookieSession: true, authorization: "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxx" }), verify), null);

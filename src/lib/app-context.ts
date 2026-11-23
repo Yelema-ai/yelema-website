@@ -87,6 +87,12 @@ export const appContext = cache(async () => {
   return { user, me, workspaces, initial };
 });
 
+export async function workspaceBrand(workspaceId: string): Promise<{ name: string | null; logoUrl: string | null; color: string | null }> {
+  const { workspaces } = await signedIn();
+  const workspace = workspaces.find((w) => w.id === workspaceId);
+  return { name: workspace?.name?.trim() || null, logoUrl: workspace?.logo_url ?? null, color: workspace?.brand_color ?? null };
+}
+
 /** The own instance and its experts, as `appContext` would find them, without the catalogue (the tab's bootstrap). */
 export async function ownExperts(): Promise<{ agentId: string | null; experts: UserExperts["experts"] } | null> {
   const { user, workspaces } = await signedIn();

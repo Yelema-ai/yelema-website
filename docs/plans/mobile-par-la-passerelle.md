@@ -14,8 +14,16 @@ pour les images d'aperçu, qu'il est seul à rendre (Gotenberg + `pdftoppm`).
 ## 2. Authentification : le jeton du back-office, sans cookie
 
 - En-têtes : `Authorization: Bearer <jeton d'accès de l'app>` + `X-Workspace-Id: <espace>`.
-- **Seulement** en `GET`/`HEAD`, **seulement** sur `/api/agents/<id>/deliverables`, `files/tree`,
-  `files/content`, `files/thumb` et `events` (`src/lib/bearer-access.ts`). Ailleurs, ou avec un cookie
+- **Seulement** en `GET`/`HEAD` sur `/api/agents/<id>/deliverables`, `files/tree`, `files/content`,
+  `files/thumb`, `events`, et pour le chat `chat/sessions`, `chat/sessions/<id>`, `chat/by-profile`,
+  `chat/responses/<id>/stream` ; en `POST` seulement sur `chat/files` (pièce jointe vers « Pièces jointes »), `chat/responses`, `chat/responses/<id>/cancel`,
+  `approval` et `steer` (`src/lib/bearer-access.ts`). Le téléphone lit et écrit ainsi les MÊMES
+  conversations que le web (gardées sur l'instance) ; ni suppression, ni renommage, ni partage.
+  Pour les salons : `GET /api/buzz` (adresse du relais, annuaire, salons) et `POST` sur
+  `/api/buzz/devices` (la clé publique du téléphone, la privée ne quitte pas le téléphone),
+  `/api/buzz/salons` (ouvrir un salon) et `/api/buzz/sent` (prévenir qu'on a écrit, jamais le texte).
+  Les messages vont du téléphone au relais, signés par sa clé, comme le navigateur ; ni renommage,
+  ni suppression de salon, ni invités depuis le téléphone. Ailleurs, ou avec un cookie
   de session présent, l'en-tête est ignoré : le cookie garde la main.
 - Le proxy (`src/lib/supabase/middleware.ts`) vérifie le jeton contre le JWKS du projet Supabase
   (signature ES256, émetteur, audience, échéance) : expiré, falsifié ou JWKS injoignable ⇒ `401`.

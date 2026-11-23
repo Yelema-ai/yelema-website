@@ -45,6 +45,14 @@ export function composioApiKey(): string | undefined {
   return read("COMPOSIO_API_KEY");
 }
 
+export function meetstreamApiKey(): string | undefined {
+  return read("MEETSTREAM_API_KEY");
+}
+
+export function meetstreamWebhookSecret(): string | undefined {
+  return read("MEETSTREAM_WEBHOOK_SECRET");
+}
+
 // The Yelema back office's public origin: it serves the expert catalogue (names, roles, photos,
 // videos). Optional: without it the app still works and shows each expert by its profile name.
 export function backofficeUrl(): string | undefined {
@@ -97,7 +105,8 @@ export function deployVersion(): string {
 // whether the deployment is complete — never which values it holds.
 export function missingRequired(): string[] {
   const required: [string, string | undefined][] = [
-    ["AGENT37_API_KEY", read("AGENT37_API_KEY")],
+    // Behind the runtime gateway the app never calls Agent37 itself: no key to hold (sensitive clients).
+    ["AGENT37_API_KEY", read("AGENT37_API_KEY") ?? (read("RUNTIME_GATEWAY_URL") && read("RUNTIME_GATEWAY_TOKEN") ? "gateway" : undefined)],
     ["SUPABASE_URL", supabaseUrl()],
     ["SUPABASE_ANON_KEY", supabaseAnonKey()],
     ["SUPABASE_SERVICE_ROLE_KEY", supabaseServiceRoleKey()],

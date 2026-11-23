@@ -14,6 +14,7 @@ import { isPublicId, type MemoryList, type MemoryNote, type MemoryPatch, type Or
 import { backofficeUrl, resolverToken } from "@/lib/runtime-config";
 import { SIGNALING_METHOD, type CallRecord, type SignalingStep, type VoiceOption } from "@/lib/voice";
 import { pinnedWorkspaceId } from "@/lib/tenant";
+import { requestTailnetClient } from "@/lib/tailnet-client";
 import type { BuzzOverview } from "@/lib/buzz";
 import type { GuestFile, GuestParticipant, GuestSessionView } from "@/lib/guest-access";
 import type { GuestRefusal, SalonGuest } from "@/lib/salon-guests";
@@ -112,6 +113,8 @@ export interface BoInstanceView {
     profile: string;
     key: string;
     version: string | null;
+    /** Its arrival on the instance (« Embauché le »), ISO 8601. */
+    since?: string | null;
     displayName?: string | null;
     avatarUrl?: string | null;
     cycle?: { key: string; label: string } | null;
@@ -270,7 +273,7 @@ async function send(path: string, init: { method?: string; workspace?: string; t
   try {
     return await fetch(`${base}/api/v1${path}`, {
       method: init.method ?? "GET",
-      headers: { "X-Workspace-Id": workspace, ...init.headers },
+      headers: { "X-Workspace-Id": workspace, ...(await requestTailnetClient()), ...init.headers },
       body: init.body,
       cache: "no-store",
       signal: AbortSignal.timeout(init.timeoutMs ?? TIMEOUT_MS),
@@ -570,6 +573,11 @@ export const backoffice = {
     call<LlmWritten>("/app/llm/own/model", { method: "PUT", token, body: choice, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
   setLlmSettings: (token: string, settings: { membersMayBringKey: boolean }) =>
     call<{ membersMayBringKey: boolean }>("/app/llm/settings", { method: "PUT", token, body: settings }),
+  // Answer check of the caller's own instance: provider and model only, the mode is set at Yelema.
+  answerCheck: (token: string) => call<unknown>("/app/judge", { token }),
+  setAnswerCheck: (token: string, choice: { provider: string; model: string }) =>
+    call<LlmWritten>("/app/judge", { method: "PUT", token, body: choice, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
+  resetAnswerCheck: (token: string) => call<LlmWritten>("/app/judge", { method: "DELETE", token, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
   // Several accounts per provider and their order (backup accounts and models). `scope` is checked
   // into `own`, `client` or a member id before it reaches a path.
   addLlmAccount: (token: string, scope: string, draft: AccountDraft) =>

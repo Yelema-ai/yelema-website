@@ -26,12 +26,13 @@ import { ChatView, hasScreen } from "@/components/chat/ChatView";
 import { ComputerMenuItem } from "@/components/experts/ExpertComputer";
 import { ExpertMoreMenu } from "@/components/experts/ExpertMoreMenu";
 import { DashboardMenuFace } from "@/components/experts/ExpertDashboard";
-import { setChatFull, useChatFull, useChatListHidden, useChatSidePanel } from "@/components/chat/chat-layout";
+import { setChatFull, setProfilePanel, useChatFull, useChatListHidden, useChatSidePanel, useProfilePanel } from "@/components/chat/chat-layout";
 import { FilesTab } from "@/components/files/FilesTab";
 import { cn } from "@/lib/utils";
 import { CallButton } from "@/components/voice/CallButton";
 import { VoiceButton } from "@/components/voice/VoiceButton";
-import { ExpertCalls } from "@/components/voice/ExpertCalls";
+import { CallsAndMeetings } from "@/components/experts/meetings/CallsAndMeetings";
+import { isNotetaker } from "@/lib/meetings/notetaker";
 import { useVoices } from "@/components/voice/useVoices";
 import { NotificationBell } from "@/components/app/NotificationBell";
 
@@ -106,11 +107,12 @@ export function AgentWorkspace({
   // for catalogue experts whenever the workspace mail module is enabled (so the member can opt in).
   // Calls are offered where voice is on, for an expert of the catalogue.
   const voiceOn = useVoices().length > 0;
+  const takesNotes = profileId !== null && isNotetaker(profileId, expert?.catalogueKey);
   const tabs = TABS.filter((t) =>
     t.id === "routines" ? profileId !== null
     : t.id === "tools" ? profileId !== null
     : t.id === "emails" ? mail.enabled && Boolean(expert?.catalogueKey)
-    : t.id === "calls" ? voiceOn && Boolean(expert?.catalogueKey)
+    : t.id === "calls" ? (voiceOn || takesNotes) && Boolean(expert?.catalogueKey)
     : true
   );
   const sheet = useCatalogueExpert(expert?.catalogueKey);
@@ -153,6 +155,15 @@ export function AgentWorkspace({
   }, [isChat]);
   useEffect(() => () => setChatFull(false), [pathname]);
   const isFiles = currentTab === "files";
+
+  // A click on the expert's photo or name opens its profile beside the chat, like the panel button (Selim, 18/11).
+  const profileOpen = useProfilePanel();
+  const profileButton = { title: `Profil de ${expertName}`, "aria-label": `Voir le profil de ${expertName}`, "aria-pressed": isChat && profileOpen };
+  function toggleProfile() {
+    if (isChat) return setProfilePanel(!profileOpen);
+    selectTab("chat");
+    setProfilePanel(true);
+  }
 
   function selectTab(tab: AgentTab) {
     const path = agentTabPath(agentId, tab, profileId);
@@ -242,8 +253,10 @@ export function AgentWorkspace({
               // (Leslie, 29/10): 288px column + the bar's 28px padding, less the header's 24px padding and 20px gap.
               <div className="order-1 flex min-w-0 flex-1 items-center gap-2.5 px-4 pb-1 pt-2.5 lg:w-[272px] lg:flex-none lg:p-0">
                 <span className="relative shrink-0">
-                  <ExpertAvatar expert={expert} size="sm" className="lg:hidden" />
-                  <ExpertAvatar expert={expert} size="md" className="max-lg:hidden" />
+                  <button type="button" onClick={toggleProfile} {...profileButton} className="block cursor-pointer rounded-full hover:opacity-90">
+                    <ExpertAvatar expert={expert} size="sm" className="lg:hidden" />
+                    <ExpertAvatar expert={expert} size="md" className="max-lg:hidden" />
+                  </button>
                   {(canEdit || (callee && voiceOn)) && (
                     <button
                       type="button"
@@ -258,7 +271,9 @@ export function AgentWorkspace({
                 </span>
                 <span className="ml-0.5 min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-2.5">
-                    <span className="truncate font-display text-sm font-bold leading-tight text-ink lg:text-[19px]">{expert.displayName}</span>
+                    <button type="button" onClick={toggleProfile} {...profileButton} className="min-w-0 cursor-pointer truncate text-left font-display text-sm font-bold leading-tight text-ink hover:opacity-80 lg:text-[19px]">
+                      {expert.displayName}
+                    </button>
                     {profileId && <ExpertReadiness variant="dot" agentId={agentId} profileId={profileId} expertName={expertName} onOpenTools={() => router.push("/integrations/connecteurs")} className="shrink-0 max-lg:text-[11px]" />}
                   </span>
                   <span className="mt-0.5 flex min-w-0 items-center gap-2 text-[10px] text-ink-3 lg:text-[13px]">
@@ -369,6 +384,29 @@ export function AgentWorkspace({
                   onAction={() => selectTab("chat")}
                   openDashboard={dashboardAsked}
                   onDashboardOpened={() => setDashboardAsked(false)}
+                  profilePanel={
+                    profileId && expert
+                      ? {
+                          expert: {
+                            agentId,
+                            profileId,
+                            name: expertName,
+                            role: expert.role ?? null,
+                            photoUrl: portrait,
+                            key: expert.catalogueKey ?? null,
+                            email: inbox?.address ?? null,
+                            company: current?.name ?? null,
+                            team: expert.cycle?.label ?? (sheet ? sheet.category?.label : null) ?? null,
+                            since: expert.since ?? null,
+                            folder: driveFolder ?? `${DRIVE_ROOT}/${expertName}`,
+                            hasComputer: hasScreen(agents.find((a) => a.agent37_id === agentId) ?? null),
+                            calls: Boolean(callee && voiceOn),
+                          },
+                          onTab: (tab) => selectTab(tab),
+                          onOpenCall: (id) => window.history.pushState(null, "", `${agentTabPath(agentId, "calls", profileId)}?appel=${encodeURIComponent(id)}`),
+                        }
+                      : null
+                  }
                 />
               </div>
             </div>
@@ -399,7 +437,7 @@ export function AgentWorkspace({
           {opened.has("calls") && callee && (
             <div className={cn("min-h-0 flex-1 overflow-y-auto", currentTab !== "calls" && "hidden")}>
               <div className="mx-auto w-full max-w-4xl p-6 md:px-10 md:py-8">
-                <ExpertCalls expert={callee} />
+                <CallsAndMeetings agentId={agentId} profile={profileId} callee={callee} calls={voiceOn} meetings={takesNotes} />
               </div>
             </div>
           )}
