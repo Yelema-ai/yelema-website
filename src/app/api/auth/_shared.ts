@@ -1,7 +1,11 @@
-import { BackofficeError } from "@/lib/backoffice";
+import { BackofficeError, type BoSession } from "@/lib/backoffice";
 import { clientIp, rateWindow } from "@/lib/guest-access";
-import { apiError } from "@/lib/http";
+import { apiError, json } from "@/lib/http";
+import { dropMfaTicket, keepMfaTicket } from "@/lib/mfa-cookie";
 import { authViaBackoffice } from "@/lib/runtime-config";
+import { writeSession } from "@/lib/session";
+import type { Opening } from "@/lib/signin-steps";
+import { hostOf } from "@/lib/tenant-resolver";
 
 // Shared by the /api/auth routes (not a route itself). They exist only when the back office owns
 // the sign-in; otherwise the pages talk to Supabase Auth themselves and these answer 404.
@@ -37,6 +41,8 @@ const WINDOW_MS = 10 * 60_000;
 const limits = {
   login: { account: rateWindow(20, WINDOW_MS), ip: rateWindow(60, WINDOW_MS) },
   forgot: { account: rateWindow(5, WINDOW_MS), ip: rateWindow(20, WINDOW_MS) },
+  // `account` is the ticket there: the back office destroys it after 5 wrong codes anyway.
+  mfa: { account: rateWindow(10, WINDOW_MS), ip: rateWindow(60, WINDOW_MS) },
 };
 
 /** The 429 to answer when this account or this address tried too often; null otherwise. */
@@ -50,4 +56,23 @@ export function tooManyTries(kind: keyof typeof limits, request: Request, email:
   const res = apiError(`Trop d’essais. Réessayez dans ${minutes} minute${minutes > 1 ? "s" : ""}.`, 429, "rate_limited");
   res.headers.set("Retry-After", String(hit.retryAfter));
   return res;
+}
+
+/** The host the ticket cookie is bound to; "" when the request names none (the cookie then opens nowhere else). */
+export const requestHost = (request: Request): string => hostOf(request.headers) ?? "";
+
+export const MFA_ASKED = "Entrez le code à 6 chiffres de votre application d’authentification.";
+
+/** A JSON sign-in route's answer: the session set, or the code step opened (403 `mfa_required`, no ticket in it). */
+export async function answerOpening(opening: Opening<BoSession>, request: Request): Promise<Response> {
+  if (opening.kind === "session") {
+    await writeSession(opening.session);
+    await dropMfaTicket();
+    return json({ ok: true });
+  }
+  if (opening.kind === "mfa") {
+    await keepMfaTicket(opening.ticket, opening.expiresIn, requestHost(request));
+    return apiError(MFA_ASKED, 403, "mfa_required");
+  }
+  throw opening.error;
 }
