@@ -28,9 +28,6 @@ export function formatCanauxEtTelegram(
     out += `- **🤖 Bot Telegram** : ${tg?.bot ? `\`@${tg.bot}\`${tg.botId ? ` (ID: \`${tg.botId}\`)` : ""}` : "non configuré"}\n`;
     out += `- **💬 Groupe Telegram (Forum)** : ${telegramGroup(tg)}\n`;
     out += `- **🧵 Topic / Fil de discussion dédié** : ${topicId ? `**Fil #${topicId}** (\`${cleanTarget}\`)` : "Non assigné"}\n`;
-    if (tg?.inviteLink) {
-      out += `- **🔗 Lien d'invitation au groupe** : ${tg.inviteLink}\n`;
-    }
     out += `- **✉️ E-mail d'entreprise** : ${email ? `\`${email}\`` : "aucune adresse configurée"}\n`;
     out += channelsBlock(channels);
     return masquerSecrets(out);
@@ -39,9 +36,6 @@ export function formatCanauxEtTelegram(
   let out = `### 📱 Canaux de Communication & Telegram de l'Équipe\n\n`;
   out += `- **💬 Groupe Telegram (Forum d'équipe)** : ${telegramGroup(tg)}\n`;
   out += `- **🤖 Bot Telegram** : ${tg?.bot ? `\`@${tg.bot}\` (phase : \`${tg.phase ?? "inconnue"}\`)` : "non configuré"}\n`;
-  if (tg?.inviteLink) {
-    out += `- **🔗 Lien d'invitation Telegram** : ${tg.inviteLink}\n`;
-  }
   out += `- **✉️ Messagerie** : ${mail?.addresses && Object.keys(mail.addresses).length > 0 ? `${Object.keys(mail.addresses).length} adresse(s) configurée(s)` : "aucune adresse configurée"}\n\n`;
 
   out += `#### 🧵 Répartition des Fils Telegram & E-mails par Expert :\n\n`;

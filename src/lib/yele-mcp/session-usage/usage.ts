@@ -53,9 +53,43 @@ const dimsAt = (r: unknown[], at: number): SessionDims => ({ profile: str(r[at])
 
 const callCounts = (v: unknown): CallCountRow[] => table(v).map((r) => ({ slot: str(r[0]), ...dimsAt(r, 1), name: str(r[5]), calls: num(r[6]) }));
 
+/** Les chiffres d'un profil, gardés tant que l'empreinte de son state.db ne change pas. */
+export interface ProfileReading {
+  stamp: string;
+  usage: SessionUsage;
+}
+
+const PARTS = ["rows", "totals", "tools", "skills", "composio"] as const;
+
+/**
+ * Le résultat du lecteur, profil par profil : un profil rendu `same` reprend la lecture gardée de même empreinte.
+ * Rend l'ensemble et ce qu'il faut garder pour la lecture suivante ; lève une exception si la forme est inattendue.
+ */
+export function parseSessionUsageByProfile(stdout: string, known: ReadonlyMap<string, ProfileReading> = new Map()): { usage: SessionUsage; readings: Map<string, ProfileReading> } {
+  const raw = JSON.parse(stdout) as Record<string, unknown>;
+  if (!Array.isArray(raw.profiles)) throw new Error("sortie inattendue");
+  const readings = new Map<string, ProfileReading>();
+  for (const p of raw.profiles as Record<string, unknown>[]) {
+    const name = str(p?.name);
+    const stamp = str(p?.stamp);
+    if (!name || !stamp) throw new Error("sortie inattendue");
+    const kept = known.get(name);
+    if (p.same) {
+      if (kept?.stamp !== stamp) throw new Error("sortie inattendue");
+      readings.set(name, kept);
+    } else readings.set(name, { stamp, usage: usageOf(p) });
+  }
+  const usage: SessionUsage = { rows: [], totals: [], tools: [], skills: [], composio: [], unreadable: Array.isArray(raw.unreadable) ? raw.unreadable.filter((p): p is string => typeof p === "string") : [] };
+  for (const r of readings.values()) for (const part of PARTS) (usage[part] as unknown[]).push(...r.usage[part]);
+  return { usage, readings };
+}
+
 /** Valide le résultat du lecteur ; lève une exception si sa forme est inattendue. */
 export function parseSessionUsage(stdout: string): SessionUsage {
-  const raw = JSON.parse(stdout) as Record<string, unknown>;
+  return usageOf(JSON.parse(stdout) as Record<string, unknown>);
+}
+
+function usageOf(raw: Record<string, unknown>): SessionUsage {
   if (!Array.isArray(raw.rows) || !Array.isArray(raw.totals)) throw new Error("sortie inattendue");
   return {
     rows: table(raw.rows).map((r): SessionUsageRow => ({ slot: str(r[0]), ...dimsAt(r, 1), ...metricsAt(r, 5) })),

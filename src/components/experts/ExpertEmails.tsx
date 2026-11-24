@@ -5,8 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, Check, Copy, Inbox, Loader2, Mail, Paperclip, Plus, RefreshCw, Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
-import { bareAddress, isSent, parseRecipients, sandboxedMail, type CreateMailInboxInput, type MailDetail, type MailInbox, type MailOutgoingAttachment, type MailSummary } from "@/lib/mail";
+import { bareAddress, hasRemoteImages, isSent, parseRecipients, sandboxedMail, type CreateMailInboxInput, type MailDetail, type MailInbox, type MailOutgoingAttachment, type MailSummary } from "@/lib/mail";
 import { MAX_UPLOAD_BYTES } from "@/lib/upload-limit";
+import { mailMessagePath } from "@/lib/api-paths";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { AssignInboxDialog } from "@/components/experts/AssignInboxDialog";
@@ -114,7 +115,7 @@ export function ExpertEmails({
     if (!expert) return;
     setOpen({ id, message: null });
     try {
-      const message = await apiFetch<MailDetail>(`/api/mail/${expert}/messages/${id}`);
+      const message = await apiFetch<MailDetail>(mailMessagePath(expert, id));
       setOpen((current) => (current?.id === id ? { id, message } : current));
     } catch (e) {
       toast.error((e as Error).message);
@@ -318,6 +319,7 @@ export function ExpertEmails({
         <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
           {open?.message ? (
             <MessageView
+              key={open.message.id}
               expert={inbox.expert}
               message={open.message}
               canReply={inbox.canSend && !isSent(open.message.labels)}
@@ -368,6 +370,9 @@ export function ExpertEmails({
 }
 
 function MessageView({ expert, message, canReply, onReply, onBack }: { expert: string; message: MailDetail; canReply: boolean; onReply: () => void; onBack: () => void }) {
+  // Remote pictures tell the sender the message was read: shown only when asked, for this message.
+  const [images, setImages] = useState(false);
+  const remote = Boolean(message.html) && hasRemoteImages(message.html);
   return (
     <div className="space-y-4">
       <DialogHeader className="items-start gap-3 text-left">
@@ -383,9 +388,21 @@ function MessageView({ expert, message, canReply, onReply, onBack }: { expert: s
         </DialogDescription>
       </DialogHeader>
 
+      {remote && !images && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-soft/40 px-3 py-2 text-xs text-ink-2">
+          <span>Les images distantes de ce message sont masquées : les afficher signale à l’expéditeur que vous l’avez ouvert.</span>
+          <Button variant="outline" size="sm" onClick={() => setImages(true)}>
+            Afficher les images
+          </Button>
+        </div>
+      )}
       {message.html ? (
         // Empty `sandbox`: no script, no form, no access to this page; `sandboxedMail` sets the document's policy.
-        <iframe title="Contenu du message" sandbox="" referrerPolicy="no-referrer" srcDoc={sandboxedMail(message.html)} className="h-[46vh] w-full rounded-xl border border-line bg-white" />
+        images ? (
+          <iframe title="Contenu du message" sandbox="" referrerPolicy="no-referrer" src={mailMessagePath(expert, message.id, "frame")} className="h-[46vh] w-full rounded-xl border border-line bg-white" />
+        ) : (
+          <iframe title="Contenu du message" sandbox="" referrerPolicy="no-referrer" srcDoc={sandboxedMail(message.html)} className="h-[46vh] w-full rounded-xl border border-line bg-white" />
+        )
       ) : (
         <div className="whitespace-pre-wrap rounded-xl border border-line bg-soft/30 p-4 text-sm leading-relaxed text-ink">{message.text}</div>
       )}
@@ -394,7 +411,7 @@ function MessageView({ expert, message, canReply, onReply, onBack }: { expert: s
         <ul className="flex flex-wrap gap-2">
           {message.attachments.map((a) => (
             <li key={a.id}>
-              <a href={`/api/mail/${expert}/messages/${message.id}/attachments/${a.id}`} download={a.filename} className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-[13px] font-semibold text-ink hover:bg-soft">
+              <a href={mailMessagePath(expert, message.id, "attachments", a.id)} download={a.filename} className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-[13px] font-semibold text-ink hover:bg-soft">
                 <Paperclip className="h-3.5 w-3.5" />
                 <span className="max-w-[220px] truncate">{a.filename}</span>
                 <span className="font-normal text-ink-3">{weight(a.size)}</span>
@@ -434,7 +451,7 @@ function ComposeDialog({ inbox, expertName, replyTo, onClose, onSent }: { inbox:
     setRefusal(null);
     try {
       const attachments = await Promise.all(files.map(encode));
-      const url = replyTo ? `/api/mail/${inbox.expert}/messages/${replyTo.id}/reply` : `/api/mail/${inbox.expert}/messages`;
+      const url = replyTo ? mailMessagePath(inbox.expert, replyTo.id, "reply") : `/api/mail/${inbox.expert}/messages`;
       await apiFetch(url, { method: "POST", body: JSON.stringify(replyTo ? { text, attachments } : { to: recipients, subject, text, attachments }) });
       toast.success("E-mail envoyé.");
       onSent();

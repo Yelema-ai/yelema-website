@@ -1,5 +1,5 @@
 import QRCode from "qrcode";
-import { requireAgentAccess } from "@/lib/auth";
+import { requireChannelWrite } from "@/lib/auth";
 import { ApiError, handleError, json, readJson } from "@/lib/http";
 import {
   applyTelegramPairing,
@@ -13,7 +13,7 @@ import {
 } from "@/lib/hermes-messaging";
 import { assertBotTokenShape, checkBotToken, findBotOwner } from "@/lib/telegram";
 import { checkChannelCredentials } from "@/lib/channel-checks";
-import { prepareChannelWrite } from "@/lib/channel-rules";
+import { isPairingId, prepareChannelWrite } from "@/lib/channel-rules";
 import type { MessagingPlatform, TelegramPairingState, WhatsappPairing, WhatsappPairingState } from "@/lib/channels";
 
 // Every handler here is one or more execs into the instance, and a write also restarts the agent's
@@ -31,13 +31,13 @@ async function refreshed(agentId: string, channelId: string): Promise<MessagingP
 }
 
 // Connect (or re-configure) a channel: write its credentials, switch it on, and let the harness
-// restart its gateway. Admin-only, because a channel is a door into the agent. Nothing is written
+// restart its gateway. The owner on their own instance, an admin on a shared one. Nothing is written
 // without an allowlist, and every new credential is checked with its provider first: the messaging
 // gateway refuses to start on a bad one, which would take every other channel down with it.
 export async function PUT(request: Request, { params }: Ctx) {
   try {
     const { id, channel } = await params;
-    await requireAgentAccess(id);
+    await requireChannelWrite(id);
 
     const body = await readJson<{ env?: Record<string, unknown>; enabled?: boolean }>(request);
     const platform = await getPlatform(id, channel);
@@ -57,7 +57,7 @@ export async function PUT(request: Request, { params }: Ctx) {
 export async function DELETE(_request: Request, { params }: Ctx) {
   try {
     const { id, channel } = await params;
-    await requireAgentAccess(id);
+    await requireChannelWrite(id);
 
     const platform = await getPlatform(id, channel);
     await writePlatform(id, channel, { enabled: false, clear_env: platform.env_vars.map((f) => f.key) });
@@ -72,9 +72,10 @@ export async function DELETE(_request: Request, { params }: Ctx) {
 export async function POST(request: Request, { params }: Ctx) {
   try {
     const { id, channel } = await params;
-    await requireAgentAccess(id);
+    await requireChannelWrite(id);
 
     const body = await readJson<{ action?: string; token?: string; pairing_id?: string; finish?: boolean; bot_name?: string }>(request);
+    if (body.pairing_id !== undefined && body.pairing_id !== "" && !isPairingId(body.pairing_id)) throw new ApiError(400, "invalid_request", "Cette connexion a expiré. Recommencez.");
 
     if (channel === "telegram" && body.action === "check") {
       return json(await checkBotToken(assertBotTokenShape(body.token ?? "")));

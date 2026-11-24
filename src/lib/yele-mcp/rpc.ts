@@ -1,10 +1,11 @@
 // Protocole MCP JSON-RPC 2.0 du serveur de Yélé : reçoit un message, appelle l'outil demandé sur le backend.
 
+import { toolFailure } from "./tool-error.ts";
 import { YELE_TOOLS } from "./tools.ts";
 
 export interface YeleBackend {
   analyserActivite(periode?: string): Promise<string>;
-  lireRapportJournalier(date?: string): Promise<string>;
+  lireRapportJournalier(date?: string, page?: number): Promise<string>;
   auditerOutils(expert?: string): Promise<string>;
   consulterLivrables(limite?: number): Promise<string>;
   statistiquesAnalytique(vue?: string): Promise<string>;
@@ -13,7 +14,7 @@ export interface YeleBackend {
   analyserConsommationTokens(expert?: string, periode?: string): Promise<string>;
   consulterRoutines(expert?: string): Promise<string>;
   consulterHistoriqueRoutine(expert?: string): Promise<string>;
-  consulterAlertesIncidents(expert?: string): Promise<string>;
+  consulterAlertesIncidents(expert?: string, page?: number): Promise<string>;
   consulterAppelsEtVoix(expert?: string): Promise<string>;
   rechercherDansLaMemoire(requete: string, expert?: string): Promise<string>;
   consulterSkillsExperts(expert?: string): Promise<string>;
@@ -23,8 +24,16 @@ export interface YeleBackend {
 type Rpc = { jsonrpc?: string; id?: string | number | null; method?: string; params?: Record<string, unknown> };
 type RpcAnswer = { jsonrpc: "2.0"; id: string | number | null; result?: unknown; error?: { code: number; message: string } };
 
+/** Taille maximale, en caractères, de ce qu'un appel d'outil rend au modèle. */
+export const MAX_TOOL_CHARS = 12_000;
+const NOT_READ = "\n\n(suite non lue)";
+
+export const capped = (value: string): string => (value.length > MAX_TOOL_CHARS ? value.slice(0, MAX_TOOL_CHARS - NOT_READ.length) + NOT_READ : value);
+
+const pageOf = (v: unknown): number | undefined => (typeof v === "number" && Number.isInteger(v) && v >= 1 ? v : undefined);
+
 const text = (value: string, isError = false) => ({
-  content: [{ type: "text", text: value }],
+  content: [{ type: "text", text: capped(value) }],
   ...(isError ? { isError: true } : {}),
 });
 
@@ -36,7 +45,7 @@ async function callTool(backend: YeleBackend, name: unknown, args: Record<string
     }
     case "lire_rapport_journalier": {
       const d = typeof args.date === "string" ? args.date : undefined;
-      return text(await backend.lireRapportJournalier(d));
+      return text(await backend.lireRapportJournalier(d, pageOf(args.page)));
     }
     case "auditer_outils_connecteurs": {
       const e = typeof args.expert === "string" ? args.expert : undefined;
@@ -69,7 +78,7 @@ async function callTool(backend: YeleBackend, name: unknown, args: Record<string
     }
     case "consulter_alertes_et_incidents": {
       const e = typeof args.expert === "string" ? args.expert : undefined;
-      return text(await backend.consulterAlertesIncidents(e));
+      return text(await backend.consulterAlertesIncidents(e, pageOf(args.page)));
     }
     case "consulter_appels_et_voix": {
       const e = typeof args.expert === "string" ? args.expert : undefined;
@@ -126,7 +135,7 @@ export async function answerRpc(message: unknown, backend: YeleBackend): Promise
         return ok(await callTool(backend, rpc.params?.name, args && typeof args === "object" ? (args as Record<string, unknown>) : {}));
       } catch (e) {
         if ((e as { status?: number }).status === 401) throw e;
-        return ok(text(e instanceof Error && e.message ? e.message : "Erreur lors de l'exécution de l'outil.", true));
+        return ok(text(toolFailure("Erreur lors de l'exécution de l'outil", e), true));
       }
     }
     default:

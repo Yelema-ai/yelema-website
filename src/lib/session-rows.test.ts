@@ -32,6 +32,21 @@ describe("session rows", () => {
     assert.equal(rail[1].routine, null);
   });
 
+  it("rail: a background task's conversation sits with the routines, named in French, whatever its outcome", () => {
+    const data = [
+      { id: "chat", title: "Bonjour", last_active: 1 },
+      { id: "w1", title: null, preview: "work kanban task t_f98bdda9", last_active: 3 },
+      { id: "w2", title: "Relance des impayés", preview: "work kanban task t_0a1b2c3d", last_active: 2 },
+    ];
+    const rail = railOf(data, new Map());
+    assert.deepEqual(rail.map((s) => [s.session_id, s.routine ?? null, s.background ?? false]), [
+      ["w1", "Tâche de fond", true],
+      ["w2", "Tâche de fond : Relance des impayés", true],
+      ["chat", null, false],
+    ]);
+    assert.equal(runsOf(data, new Map()).length, 0);
+  });
+
   it("runs: outcome known says silent or not; unknown is pending; capped", () => {
     const data = Array.from({ length: 30 }, (_, i) => routineSession(`r${i}`, i));
     const runs = runsOf([...data, { id: "chat", title: "Bonjour" }], new Map<string, RunOutcome>([["cron_veille_r29", "sent"], ["cron_veille_r28", "failed"]]));
@@ -46,4 +61,16 @@ describe("session rows", () => {
     assert.equal(spaceProfile("default"), "");
     assert.equal(spaceProfile("c__x"), "c__x");
   });
+});
+
+it("le fil : la conversation d'un appel y est, nommée « Appel du … » ; les autres sessions d'appel non (Leslie, 20/11)", () => {
+  const rows = railOf(
+    [
+      { id: "c1", title: "Transcription appel vocal", preview: "Transcription exacte de l'appel vocal du 20/11/2026 à 14:05 UTC (pour mémoire…)", last_active: 3 },
+      { id: "c2", title: null, preview: "Demande faite pendant un appel vocal : ta réponse sera lue", last_active: 2 },
+      { id: "c3", title: null, preview: "Exact transcript of the voice call", started_at: Date.UTC(2026, 10, 19, 9, 30) / 1000, last_active: 1 },
+    ],
+    new Map()
+  );
+  assert.deepEqual(rows.map((r) => [r.session_id, r.title]), [["c1", "Appel du 20 nov. à 14:05"], ["c3", "Appel du 19 nov. à 09:30"]]);
 });

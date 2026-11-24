@@ -5,7 +5,8 @@ import type { DriveTree } from "./drive-paths";
 import { EXEC_TIMEOUT_MS, JSON_TIMEOUT_MS, withTimeout } from "./fetch-timeout";
 import { authViaBackoffice } from "./runtime-config";
 import type { RunOutcome } from "./routines";
-import { gatewayFetch, gatewayInstancePath, gatewayPortHeaders, runtimeGateway, type RuntimeGateway } from "./runtime-gateway";
+import { gatewayFetch, gatewayInstancePath, gatewayPortHeaders, runtimeGateway, withMemberSession, type RuntimeGateway } from "./runtime-gateway";
+import { gatewayUser, gatewayUserMode, serviceCaller } from "./service-call";
 import type {
   Agent,
   Budget,
@@ -83,7 +84,7 @@ export type RelayStatus = { enabled: boolean; accounts: number; bot?: string | n
 const relayPath = (channel: RelayChannel): string => (channel === "telegram" ? "telegram-relay" : channel);
 
 // The gateway's own JSON routes (Telegram, relays, capabilities, pack files): never a stream.
-const gatewayJson = (gw: RuntimeGateway, path: string, init?: RequestInit) => gatewayFetch(gw, path, withTimeout(init, JSON_TIMEOUT_MS));
+const gatewayJson = async (gw: RuntimeGateway, path: string, init?: RequestInit) => gatewayFetch(gw, path, await asUser(withTimeout(init, JSON_TIMEOUT_MS)));
 
 function requireGateway(): RuntimeGateway {
   const gw = runtimeGateway();
@@ -140,17 +141,33 @@ async function parseAgent37<T>(res: Response, augment402 = false): Promise<T> {
   return data as T;
 }
 
+// The signed-in member's session token for the gateway (`X-Yelema-Session`); outside a request, none.
+export async function asMember(init: RequestInit): Promise<RequestInit> {
+  if (new Headers(init.headers).has("X-Yelema-Session")) return init;
+  const token = await (authViaBackoffice()
+    ? import("./session").then((m) => m.readSession()).then((s) => s?.accessToken ?? null)
+    : import("./supabase/server").then((m) => m.createClient()).then((c) => c.auth.getSession()).then((r) => r.data.session?.access_token ?? null)
+  ).catch(() => null);
+  return withMemberSession(init, token);
+}
+
 // The signed-in account, named to the runtime gateway: on an enterprise instance it picks that member's
-// agent and confines the call to it. Outside a request (no session), nothing is added.
+// agent and confines the call to it. No account and no named service (lib/service-call): the call is refused.
 async function asUser(init: RequestInit): Promise<RequestInit> {
+  const headers = new Headers(init.headers);
+  if (headers.has("X-Yelema-User")) return asMember(init);
   const id = await (authViaBackoffice()
     ? import("./session").then((m) => m.currentUserId())
     : import("./auth").then((m) => m.getSession()).then((s) => s.user?.id ?? null)
   ).catch(() => null);
-  if (!id) return init;
-  const headers = new Headers(init.headers);
-  if (!headers.has("X-Yelema-User")) headers.set("X-Yelema-User", id);
-  return { ...init, headers };
+  const who = gatewayUser(null, id, serviceCaller(), gatewayUserMode(process.env.GATEWAY_USER_MODE));
+  if ("refuse" in who) throw new Agent37Error(401, "no_verified_user", "No verified account for this instance call");
+  if (!who.send) {
+    if (!serviceCaller()) console.warn("[gateway-user] instance call without a verified account (report mode)");
+    return asMember(init);
+  }
+  headers.set("X-Yelema-User", who.send);
+  return asMember({ ...init, headers });
 }
 
 // `gatewayPath`: the same call on the runtime gateway; absent = not offered there.
@@ -235,12 +252,13 @@ export async function instancePortFetch(id: string, port: number, path: string, 
 // JSON helper against an instance's Agents API — same parse + Agent37Error semantics as `call`,
 // without the 402 wallet hint (a data-plane 402 is budget exhaustion mid-chat, not wallet funding).
 async function instanceCall<T>(id: string, path: string, init?: RequestInit): Promise<T> {
+  const started = Date.now();
   for (let attempt = 0; ; attempt += 1) {
     const res = await instanceFetch(id, path, withTimeout({
       ...init,
       headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
     }, JSON_TIMEOUT_MS));
-    const wait = coldStartWait(init?.method, res.status, attempt);
+    const wait = coldStartWait(init?.method, res.status, attempt, Date.now() - started);
     if (wait === null) return parseAgent37<T>(res);
     await res.body?.cancel();
     await new Promise((r) => setTimeout(r, wait));

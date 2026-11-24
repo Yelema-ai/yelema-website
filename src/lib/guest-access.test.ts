@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { clientIp, DEVICE_LIMIT, guestCookieApplies, guestCookieKey, guestCookieName, guestCookieOptions, guestDeliverables, guestDirectory, guestFileHref, guestRefusal, guestView, openGuestCookie, sealGuestCookie, rateWindow, sameOriginPost } from "./guest-access.ts";
+import { clientIp, sharedWindow, slots, trustedHops, DEVICE_LIMIT, guestCookieApplies, guestCookieKey, guestCookieName, guestCookieOptions, guestDeliverables, guestDirectory, guestFileHref, guestRefusal, guestView, openGuestCookie, sealGuestCookie, rateWindow, sameOriginPost } from "./guest-access.ts";
 import { salonDeliverableFor } from "./salon-deliverables.ts";
 
 const headers = (h: Record<string, string>) => ({ get: (n: string) => h[n.toLowerCase()] ?? null });
@@ -89,6 +89,44 @@ test("adresse du visiteur : celle du saut de confiance, jamais l'entrée de gauc
   // Ailleurs : l'entrée ajoutée par le mandataire le plus proche.
   assert.equal(clientIp(headers({ "x-forwarded-for": "6.6.6.6, 41.202.1.2", "x-real-ip": "7.7.7.7" }), false), "41.202.1.2");
   assert.equal(clientIp(headers({ "x-forwarded-for": "1.1.1.1, <script>" }), false), "");
+});
+
+test("derrière deux mandataires à nous, l'adresse est celle que le plus extérieur a ajoutée", () => {
+  const h = headers({ "x-forwarded-for": "6.6.6.6, 41.202.1.2, 172.18.0.1" });
+  assert.equal(clientIp(h, false), "172.18.0.1");
+  assert.equal(clientIp(h, false, 2), "41.202.1.2");
+  // Moins d'entrées que de sauts annoncés : inconnue, jamais l'entrée du client.
+  assert.equal(clientIp(headers({ "x-forwarded-for": "6.6.6.6" }), false, 2), "");
+  assert.equal(clientIp(headers({}), false, 2), "");
+  assert.equal(trustedHops("2"), 2);
+  for (const raw of [undefined, "", "0", "-1", "6", "1.5", "abc"]) assert.equal(trustedHops(raw), 1);
+});
+
+test("limite partagée : le compte suit le magasin commun, d'une instance à l'autre", async () => {
+  const kept = new Map<string, { n: number; until: number }>();
+  const store = { read: async (k: string) => kept.get(k), write: async (k: string, v: { n: number; until: number }) => void kept.set(k, v) };
+  const [a, b] = [sharedWindow(store, 2, 60_000), sharedWindow(store, 2, 60_000)];
+  assert.deepEqual(await a("ip", 0), { ok: true });
+  assert.deepEqual(await b("ip", 1_000), { ok: true });
+  assert.deepEqual(await a("ip", 30_000), { ok: false, retryAfter: 30 });
+  assert.deepEqual(await b("autre", 30_000), { ok: true });
+  assert.deepEqual(await b("ip", 60_000), { ok: true });
+  // Un magasin en panne (rien lu) ne refuse personne : la fenêtre locale reste seule juge.
+  const down = sharedWindow({ read: async () => undefined, write: async () => undefined }, 1, 60_000);
+  assert.deepEqual(await down("ip", 0), { ok: true });
+  assert.deepEqual(await down("ip", 1), { ok: true });
+});
+
+test("places ouvertes en même temps : la suivante est refusée, une place rendue se reprend, une seule fois", () => {
+  const take = slots(2);
+  const first = take("s");
+  assert.ok(first && take("s"));
+  assert.equal(take("s"), null);
+  assert.ok(take("autre"));
+  first();
+  first();
+  assert.ok(take("s"));
+  assert.equal(take("s"), null);
 });
 
 test("accès terminé (410 access_ended) et session morte (401) font tomber la session", () => {

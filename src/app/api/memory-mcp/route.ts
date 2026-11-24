@@ -1,6 +1,9 @@
+import { boundedText } from "@/lib/bounded-body";
+import { tokenLimit } from "@/lib/instance-limits";
 import { backoffice, BackofficeError } from "@/lib/backoffice";
 import { answerRpc, type MemoryBackend } from "@/lib/memory-mcp";
 import { isProfileId } from "@/lib/profile-id";
+import { instanceBearer } from "@/lib/profile-token";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 import { TenantError } from "@/lib/tenant-resolver";
@@ -12,6 +15,7 @@ import { TenantError } from "@/lib/tenant-resolver";
 export const maxDuration = 120;
 
 const MAX_BODY_BYTES = 32_768;
+const limit = tokenLimit(300);
 
 function errorJson(status: number, error: string): Response {
   return Response.json({ error }, { status });
@@ -20,6 +24,10 @@ function errorJson(status: number, error: string): Response {
 export async function POST(request: Request): Promise<Response> {
   const token = /^Bearer\s+(.+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]?.trim();
   if (!token) return errorJson(401, "missing bearer token");
+  const wait = limit(token);
+  if (wait !== null) return new Response(JSON.stringify({ error: "too many requests" }), { status: 429, headers: { "content-type": "application/json", "retry-after": String(wait) } });
+  const bearer = instanceBearer(token);
+  if (!bearer) return errorJson(401, "invalid token");
   if (!authViaBackoffice()) return errorJson(404, "not available");
 
   let workspace: string | undefined;
@@ -30,17 +38,18 @@ export async function POST(request: Request): Promise<Response> {
   }
   if (!workspace) return errorJson(404, "not available");
 
-  const raw = await request.text();
+  const raw = await boundedText(request, MAX_BODY_BYTES);
   let message: unknown;
   try {
-    if (raw.length > MAX_BODY_BYTES) throw new Error("too large");
+    if (raw === null) throw new Error("too large");
     message = JSON.parse(raw);
   } catch {
     return Response.json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }, { status: 400 });
   }
 
-  // The expert asking, if its instance names it; a malformed value is ignored, not trusted.
-  const header = request.headers.get("x-yelema-profile")?.trim() ?? "";
+  // The expert asking, if its instance names it; a malformed value is ignored, not trusted. A profile token
+  // (relayed as is: the back office checks it) names its own profile, and what the instance announces is not read.
+  const header = bearer.profile ? "" : (request.headers.get("x-yelema-profile")?.trim() ?? "");
   const profile = isProfileId(header) ? header : undefined;
   const backend: MemoryBackend = {
     ask: async (question) => (await backoffice.memoryAsk(token, workspace, question, profile)).answer,

@@ -141,8 +141,9 @@ export const isHiddenInChat = (path: string) =>
 
 /** How many deliverables an Expert has made in its folder: no folder, nothing the member brought, no working file. */
 export function deliverableCount(entries: readonly { path: string; type: string }[], folder: string): number {
-  const inside = `${folder.replace(/\/+$/, "")}/`;
-  return entries.filter((e) => e.type === "file" && e.path.startsWith(inside) && !isMemberUpload(e.path) && !isHiddenInChat(e.path)).length;
+  // Absolute or « ~/ », the same folder: the drive answers one, the app names it the other.
+  const inside = `${normDrivePath(folder).replace(/\/+$/, "")}/`;
+  return entries.filter((e) => e.type === "file" && normDrivePath(e.path).startsWith(inside) && !isMemberUpload(e.path) && !isHiddenInChat(e.path)).length;
 }
 
 /**

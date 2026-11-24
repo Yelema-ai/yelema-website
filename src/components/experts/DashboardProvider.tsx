@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from "react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
-import { isTrustedDashboardUrl as isTrustedFrameUrl } from "@/lib/dashboards";
+import { isModelPage, isTrustedDashboardUrl as isTrustedFrameUrl } from "@/lib/dashboards";
 import { usePoll } from "@/components/usePoll";
 import { instanceEvents, matches } from "@/lib/instance-events";
 import type { ChatMessage } from "@/components/chat/types";
@@ -11,6 +11,7 @@ import type { DashboardShareMode } from "@/lib/backoffice";
 import { DEFAULT_SHARE_EXPIRY, type ShareExpiry } from "@/lib/dashboard-expiry";
 
 const WIDE = "(min-width: 85rem)";
+const AUTO_AGAIN_MS = 30 * 60_000;
 
 export interface DashboardData {
   available: boolean;
@@ -59,6 +60,8 @@ interface DashboardContextValue {
   loading: boolean;
   isGenerating: boolean;
   triggerGeneration: () => Promise<void>;
+  /** The dashboard was already asked for on its own lately: the panel offers to try again, nothing more. */
+  autoAsked: boolean;
   activeUrl: string | null;
   embedUrl: string | null;
   copyShareLink: () => void;
@@ -89,8 +92,7 @@ export function useDashboard() {
 /** A frame of the dashboard host (36-hex id, lib/dashboards), or one of this app's own models. */
 export function isTrustedDashboardUrl(url: string | null | undefined): url is string {
   if (!url) return false;
-  if (url.startsWith("/modeles/")) return !url.includes("..") && !url.includes("//");
-  return isTrustedFrameUrl(url);
+  return isModelPage(url) || isTrustedFrameUrl(url);
 }
 
 /**
@@ -181,6 +183,20 @@ export function DashboardProvider({
     }
   }, [isGenerating, isStreaming, openDashboard, onTriggerTableau]);
 
+  // No « Préparer » button (Leslie, 23/11 : « une étape en plus qui n'est pas nécessaire »): opening the
+  // dashboard of an Expert who has none asks for it once. Never twice in 30 min for the same Expert, even
+  // after a reload: the chat's /tableau turn ends long before the page is written (03/11 : « beaucoup
+  // de commandes tableaux lancés »).
+  const autoKey = agentId && profile ? `yelema:tableau-auto:${agentId}:${profile}` : null;
+  const [autoAsked, setAutoAsked] = useState(false);
+  useEffect(() => {
+    let at = 0;
+    try {
+      at = autoKey ? Number(localStorage.getItem(autoKey)) || 0 : 0;
+    } catch {}
+    setAutoAsked(Date.now() - at < AUTO_AGAIN_MS);
+  }, [autoKey]);
+
   // Pendant la génération : relu à chaque tour fini ou fichier écrit sur l'instance (flux branché) ; sans
   // flux, toutes les 15 s (onglet visible), 10 min au plus, pour voir arriver le lien.
   usePoll(() => fetchDashboard(), { everyMs: 15_000, deadlineMs: 10 * 60_000, immediate: false, enabled: isGenerating, live: true, agentId });
@@ -225,6 +241,16 @@ export function DashboardProvider({
     }
     return activeUrl;
   }, [activeUrl, agentId, profile, data, activeTab]);
+
+  const open = panelOpen || dialogOpen;
+  useEffect(() => {
+    if (!open || !autoKey || autoAsked || !data || loading || embedUrl || isGenerating || isStreaming || activeTab !== "metier") return;
+    setAutoAsked(true);
+    try {
+      localStorage.setItem(autoKey, String(Date.now()));
+    } catch {}
+    void triggerGeneration();
+  }, [open, autoKey, autoAsked, data, loading, embedUrl, isGenerating, isStreaming, activeTab, triggerGeneration]);
 
   // Quand le lien (ou la page dans le drive) arrive alors qu'on generait
   useEffect(() => {
@@ -387,6 +413,7 @@ export function DashboardProvider({
         loading,
         isGenerating,
         triggerGeneration,
+        autoAsked,
         activeUrl,
         embedUrl,
         copyShareLink,

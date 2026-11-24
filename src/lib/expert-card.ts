@@ -1,6 +1,6 @@
 // The expert's profile panel beside its chat (Team design export, Myriel's choice A, Leslie 18/11): its last
 // deliverables, the lines of its card and what « Partager » hands on. Pure, so `node --test` runs it as is.
-import { isHiddenInChat } from "./drive-links.ts";
+import { isHiddenInChat, normDrivePath } from "./drive-links.ts";
 import { isMemberUpload } from "./drive-paths.ts";
 
 export interface PanelFile {
@@ -11,9 +11,13 @@ export interface PanelFile {
 
 /** The expert's last `n` deliverables in its folder, newest first: no folder, nothing the member brought, no working file, nothing archived. */
 export function lastDeliverables(entries: readonly { name: string; path: string; type: string; modified?: number | null; hidden?: boolean }[], folder: string, n = 4): PanelFile[] {
-  const inside = `${folder.replace(/\/+$/, "")}/`;
+  // The catalogue says « Djénéba », the expert may have written « Djeneba » or « djénéba »: the same folder.
+  // The drive answers « /home/node/Livrables/… », the app names the folder « ~/Livrables/… » (Leslie, 23/11:
+  // Djénéba and Kouassi had deliverables, the panel said « Pas encore de livrable »): both read alike.
+  const plain = (s: string) => normDrivePath(s).normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const inside = plain(`${folder.replace(/\/+$/, "")}/`);
   return entries
-    .filter((e) => e.type === "file" && !e.hidden && e.path.startsWith(inside) && !isMemberUpload(e.path) && !isHiddenInChat(e.path) && !/(^|\/)Archivées\//i.test(e.path))
+    .filter((e) => e.type === "file" && !e.hidden && plain(e.path).startsWith(inside) && !isMemberUpload(e.path) && !isHiddenInChat(e.path) && !/(^|\/)Archivées\//i.test(e.path))
     .map((e) => ({ name: e.name, path: e.path, modified: e.modified ?? 0 }))
     .sort((a, b) => b.modified - a.modified)
     .slice(0, n);

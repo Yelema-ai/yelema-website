@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useConversationStatus } from "@/components/activity/hooks";
-import { Archive, ChevronRight, Link2, Loader2, MoreHorizontal, Pencil, Pin, PinOff, Plus, Repeat, RotateCw, Search, Trash2, X } from "lucide-react";
+import { Archive, ChevronRight, Layers, Link2, Loader2, MoreHorizontal, Pencil, Pin, PinOff, Plus, Repeat, RotateCw, Search, Trash2, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNotifications } from "@/components/activity/ActivityProvider";
 import { convKey } from "@/lib/activity";
@@ -17,6 +17,7 @@ import { copyLater } from "@/lib/clipboard";
 import { profileQuery } from "@/lib/profile-id";
 import { useChatContext } from "./ChatProvider";
 import { prefetchThread } from "./useChat";
+import { sessionPath } from "@/lib/api-paths";
 import { intentOf, whenIdle } from "@/components/usePrefetch";
 import type { ChatSession } from "./types";
 import { toMs } from "@/lib/activity";
@@ -182,7 +183,7 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   async function copyLink(s: ChatSession) {
     const link = new URL(`${agentTabPath(agentId, "chat", profile)}?session=${encodeURIComponent(s.session_id)}`, window.location.origin);
     const mint = apiFetch<{ path: string; days: number }>(
-      `/api/agents/${agentId}/chat/sessions/${s.session_id}/share${profileQuery(profile)}`,
+      sessionPath(agentId, s.session_id, profileQuery(profile), "share"),
       { method: "POST", body: JSON.stringify({ title: s.routine ?? s.title ?? "" }) }
     ).then(
       (res) => ({ token: new URL(res.path, window.location.origin).searchParams.get("c"), days: res.days }),
@@ -263,7 +264,7 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
         >
           {/* A pinned thread carries its pin and a light tint (Leslie, 31/10): it stands out from the dates. */}
           {pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-brand-ink" aria-label="Épinglée" />}
-          {s.routine && <Repeat className="h-3.5 w-3.5 shrink-0 text-ink-3" aria-label="Routine" />}
+          {s.background ? <Layers className="h-3.5 w-3.5 shrink-0 text-ink-3" aria-label="Tâche de fond" /> : s.routine && <Repeat className="h-3.5 w-3.5 shrink-0 text-ink-3" aria-label="Routine" />}
           <span className="min-w-0 flex-1">
             <span className={cn("block truncate", status === "unread" && "font-semibold text-ink")}>{label}</span>
             {status && <ConversationBadge status={status} />}

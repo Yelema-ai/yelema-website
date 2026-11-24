@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from "sonner";
 import { useChatPresence } from "@/components/activity/hooks";
 import { apiFetch } from "@/lib/api";
+import { sessionPath } from "@/lib/api-paths";
 import { optimistic } from "@/lib/optimistic";
 import { remember } from "@/lib/client-cache";
 import { usePoll } from "@/components/usePoll";
@@ -253,7 +254,7 @@ export function ChatProvider({
           if (wasActive) setOpenThread(null);
         },
         // The other lists of this space (menu, Conversations) read it again.
-        run: () => apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`, { method: "DELETE" }).then(() => sessionsStore.invalidate(agentId, profile ?? "")),
+        run: () => apiFetch(sessionPath(agentId, sessionId, q), { method: "DELETE" }).then(() => sessionsStore.invalidate(agentId, profile ?? "")),
         // Only the removed row comes back (threads added meanwhile stay), and the open thread.
         rollback: () => {
           if (removed) setSessions((s) => (s.some((x) => x.session_id === sessionId) ? s : [removed, ...s]));
@@ -273,7 +274,7 @@ export function ChatProvider({
       const titled = (title: string | null) => setSessions((s) => s.map((x) => (x.session_id === sessionId ? { ...x, title } : x)));
       await optimistic({
         apply: () => titled(next),
-        run: () => apiFetch(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`, { method: "PATCH", body: JSON.stringify({ title: next }) }).then(() => sessionsStore.invalidate(agentId, profile ?? "")),
+        run: () => apiFetch(sessionPath(agentId, sessionId, q), { method: "PATCH", body: JSON.stringify({ title: next }) }).then(() => sessionsStore.invalidate(agentId, profile ?? "")),
         rollback: () => titled(prev),
         refused: (m) => toast.error(m),
       });

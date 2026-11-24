@@ -5,6 +5,7 @@ import { channelName } from "../labels.ts";
 import { masquerSecrets } from "../secrets.ts";
 import { sharePct, summarizeConsumption, type ConsumptionRow, type ConsumptionSummary } from "../summaries/consumption.ts";
 import type { DiscoveredExpert, ExpertUsageData } from "../types.ts";
+import { inline } from "./inline.ts";
 
 const n = (v: number) => v.toLocaleString("fr-FR");
 
@@ -43,13 +44,13 @@ function expertConsumption(single: ConsumptionRow, teamTokens: number, period: s
   const sources = Object.entries(single.sources ?? {}).sort((a, b) => b[1].tokens - a[1].tokens);
   if (sources.length > 0) {
     out += `#### 📡 Par canal :\n`;
-    for (const [source, c] of sources) out += `- **${channelName(source)}** : ${n(c.tokens)} tokens, ${n(c.sessions)} session(s)\n`;
+    for (const [source, c] of sources) out += `- **${inline(channelName(source), 60)}** : ${n(c.tokens)} tokens, ${n(c.sessions)} session(s)\n`;
     out += `\n`;
   }
   if (single.models && Object.keys(single.models).length > 0) {
     out += `#### 🧠 Répartition des modèles LLM :\n`;
     for (const [mName, cnt] of Object.entries(single.models)) {
-      out += `- **\`${mName}\`** : ${cnt} session(s)\n`;
+      out += `- **\`${inline(mName, 80)}\`** : ${cnt} session(s)\n`;
     }
   }
   return out;
@@ -67,7 +68,7 @@ function teamConsumption(s: ConsumptionSummary, period: string): string {
   if (s.channels.length > 0) {
     out += `#### 📡 Par canal :\n\n`;
     out += `| Canal | Sessions | Tokens | Part |\n| :--- | :---: | :---: | :---: |\n`;
-    for (const [source, c] of s.channels) out += `| ${channelName(source)} | ${n(c.sessions)} | ${n(c.tokens)} | ${sharePct(c.tokens, s.totalTokens)}% |\n`;
+    for (const [source, c] of s.channels) out += `| ${inline(channelName(source), 60)} | ${n(c.sessions)} | ${n(c.tokens)} | ${sharePct(c.tokens, s.totalTokens)}% |\n`;
     out += `\n`;
   }
 

@@ -6,7 +6,7 @@ import { relativeFr } from "@/lib/fr-dates";
 import { deliveryLabel, isUpkeep, nextRunChip, runDayLabel, scheduleLabel, type Routine } from "@/lib/routines";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { RowMenu, Switch, type RoutineActions } from "./RoutinesTable";
+import { Check, RowMenu, Switch, type RoutineActions } from "./RoutinesTable";
 
 // The expert's routines as white cards, as in the mockup: its work (the switch says its state), the
 // ones it proposes (« Voir la consigne » and « Activer »), then « Entretien » folded at the bottom: the
@@ -26,6 +26,33 @@ export function RoutinesList({ routines, expertName, ...act }: { routines: Routi
   const suggested = work.filter((r) => r.suggested);
   const lastUpkeep = Math.max(...upkeep.map((r) => (r.lastRunAt ? Date.parse(r.lastRunAt) : Number.NaN)).filter((t) => !Number.isNaN(t)));
   const card = "overflow-hidden rounded-2xl border border-line bg-card";
+
+  // Several routines at once (Leslie, 23/11: « sélectionner toutes les routines d'entretien en une fois, et non
+  // une par une ») : a box on each row, a bar that acts on the ticked ones, and one button at the head of Travail
+  // and of Entretien that turns the whole section on or off.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const chosen = routines.filter((r) => picked.has(r.id));
+  const pick = (id: string) =>
+    setPicked((s) => {
+      const next = new Set(s);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  // Pausing never touches a proposed routine: it is not installed, there is nothing to pause.
+  const pausable = (list: Routine[]) => list.filter((r) => !r.suggested && r.enabled);
+  async function apply(list: Routine[], enabled: boolean) {
+    if (await act.onBulk(enabled ? list : pausable(list), enabled)) setPicked(new Set());
+  }
+  const box = (r: Routine) => <Check on={picked.has(r.id)} label={`Sélectionner ${r.name}`} onChange={() => pick(r.id)} />;
+  // « Tout activer » while one routine of the section is off, else « Tout mettre en pause ».
+  const allButton = (list: Routine[], what: string) => {
+    const allOn = list.every((r) => !r.suggested && r.enabled);
+    return (
+      <Button size="sm" variant="ghost" disabled={act.bulkBusy} aria-label={`${allOn ? "Mettre en pause" : "Activer"} toutes les routines ${what}`} onClick={() => void apply(list, !allOn)}>
+        {act.bulkBusy && <Loader2 className="animate-spin" />} {allOn ? "Tout mettre en pause" : "Tout activer"}
+      </Button>
+    );
+  };
 
   const consigne = (r: Routine) =>
     open.has(r.id) && (
@@ -71,8 +98,31 @@ export function RoutinesList({ routines, expertName, ...act }: { routines: Routi
 
   return (
     <div className="mt-5">
-      {own.length > 0 && upkeep.length > 0 && (
-        <p className="mb-2 text-[12px] font-bold uppercase tracking-wider text-ink-3">Travail</p>
+      {chosen.length > 0 && (
+        <div className="sticky top-2 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-card px-3 py-2 text-[13px] text-ink-2 shadow-sm">
+          <span className="font-semibold text-ink">
+            {chosen.length} sélectionnée{chosen.length > 1 ? "s" : ""}
+          </span>
+          <span className="ml-auto flex flex-wrap gap-1.5">
+            <Button size="sm" disabled={act.bulkBusy} onClick={() => void apply(chosen, true)}>
+              {act.bulkBusy && <Loader2 className="animate-spin" />} Activer
+            </Button>
+            {pausable(chosen).length > 0 && (
+              <Button size="sm" variant="outline" disabled={act.bulkBusy} onClick={() => void apply(chosen, false)}>
+                Mettre en pause
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" disabled={act.bulkBusy} onClick={() => setPicked(new Set())}>
+              Désélectionner
+            </Button>
+          </span>
+        </div>
+      )}
+      {own.length > 0 && (upkeep.length > 0 || own.length > 1) && (
+        <div className="mb-2 flex min-h-8 items-center justify-between gap-2">
+          <p className="text-[12px] font-bold uppercase tracking-wider text-ink-3">{upkeep.length > 0 ? "Travail" : ""}</p>
+          {own.length > 1 && allButton(own, "de travail")}
+        </div>
       )}
       {own.length > 0 && (
         <div className={card}>
@@ -81,6 +131,7 @@ export function RoutinesList({ routines, expertName, ...act }: { routines: Routi
             return (
               <div key={r.id} className="border-b border-line last:border-0">
                 <div className="flex items-center gap-3 px-4 py-3.5">
+                  {box(r)}
                   {/* On a phone the text needs the width: no icon, a name on two lines rather than cut. */}
                   <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-tint text-brand-ink max-sm:hidden">
                     <Repeat className="size-[17px]" />
@@ -124,7 +175,8 @@ export function RoutinesList({ routines, expertName, ...act }: { routines: Routi
               return (
                 <div key={r.id} className="border-b border-line last:border-0">
                   <div className="flex items-center gap-3 px-4 py-3.5">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-soft text-ink-3">
+                    {box(r)}
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-soft text-ink-3 max-sm:hidden">
                       <Sparkles className="size-[17px]" />
                     </span>
                     <div className="min-w-0 flex-1 leading-tight">
@@ -146,24 +198,28 @@ export function RoutinesList({ routines, expertName, ...act }: { routines: Routi
 
       {upkeep.length > 0 && (
         <div className={cn(card, "mt-7")}>
+          {/* The fold and « Tout activer » side by side: a button cannot hold another. */}
+          <div className="flex items-center gap-1 pr-3 hover:bg-soft/60">
           <button
             type="button"
             aria-expanded={upkeepOpen}
             onClick={() => setUpkeepOpen((v) => !v)}
-            className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-soft/60"
+            className="flex min-w-0 flex-1 items-center gap-3 py-3.5 pl-4 text-left"
           >
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-soft text-ink-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-soft text-ink-3 max-sm:hidden">
               <Wrench className="size-[17px]" />
             </span>
             <span className="min-w-0 flex-1 leading-tight">
               <span className="block text-[14.5px] font-semibold text-ink">Entretien</span>
               <span className="mt-0.5 block text-[12.5px] text-ink-3">
                 {upkeep.length} routine{upkeep.length > 1 ? "s" : ""} en coulisse, sans conversation
-                {Number.isFinite(lastUpkeep) ? ` · dernière ${relativeFr(lastUpkeep)}` : ""}
+                {Number.isFinite(lastUpkeep) && <span className="max-sm:hidden"> · dernière {relativeFr(lastUpkeep)}</span>}
               </span>
             </span>
             <ChevronDown className={cn("size-4 shrink-0 text-ink-3 transition-transform", upkeepOpen && "rotate-180")} />
           </button>
+          {upkeep.length > 1 && allButton(upkeep, "d'entretien")}
+          </div>
           {upkeepOpen &&
             upkeep.map((r) => {
               const busy = act.busyId === r.id;
@@ -171,7 +227,8 @@ export function RoutinesList({ routines, expertName, ...act }: { routines: Routi
               return (
                 <div key={r.id} className="border-t border-line bg-soft/40">
                   <div className="flex items-center gap-3 px-4 py-3">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-soft text-ink-3">
+                    {box(r)}
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-soft text-ink-3 max-sm:hidden">
                       <Wrench className="size-[17px]" />
                     </span>
                     <div className="min-w-0 flex-1 leading-tight">

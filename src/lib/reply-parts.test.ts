@@ -65,3 +65,12 @@ test("numbered choices work like lettered ones", () => {
     assert.deepEqual(replyParts(t).choices, [], t);
   }
 });
+
+test("« ⭐ » marks the recommended choice, like « (recommandé) »", () => {
+  const p = replyParts("Par quel Expert commencer ?\nA) Kouassi : commercial ⭐\nB) Fatima : marketing\nC) Mamadou : finance");
+  assert.equal(p.choices.length, 3);
+  assert.equal(p.choices[0].label, "Kouassi : commercial");
+  assert.equal(p.choices[0].isDefault, true);
+  assert.equal(p.choices[0].mark, "recommandé");
+  assert.equal(p.choices[1].isDefault, false);
+});

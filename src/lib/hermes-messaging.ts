@@ -1,8 +1,10 @@
 import "server-only";
-import { agent37 } from "@/lib/agent37";
+import { randomBytes } from "node:crypto";
+import { agent37, instanceFetch } from "@/lib/agent37";
 import { ApiError } from "@/lib/http";
 import { memo } from "@/lib/memo";
 import type { MessagingPlatform, TelegramPairing, WhatsappPairing } from "@/lib/channels";
+import { OUTPUT_MARKER, script } from "@/lib/hermes-script";
 
 // Hermes serves its own messaging API on a LOOPBACK port inside the instance (9119), so it is
 // reachable only from inside the sandbox, which is exactly what POST /v1/instances/{id}/exec gives
@@ -12,39 +14,42 @@ import type { MessagingPlatform, TelegramPairing, WhatsappPairing } from "@/lib/
 // Its session token is minted per dashboard start and injected into that SPA's HTML, so each call
 // scrapes it first. That is Hermes's own auth, not ours: this app's own auth already happened in the
 // BFF route before we got here.
-const DASHBOARD_ORIGIN = "http://127.0.0.1:9119";
-const OUTPUT_MARKER = "A37_HERMES_JSON:";
+const UNAVAILABLE = "Les canaux de vos Experts ne répondent pas pour le moment. Réessayez dans un instant.";
 
-function quote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-function script(method: string, path: string, body?: unknown): string {
-  const payload = body === undefined ? "" : ` -H 'content-type: application/json' -d ${quote(JSON.stringify(body))}`;
-  return [
-    `token=$(curl -sS --max-time 10 ${DASHBOARD_ORIGIN}/ | grep -o '__HERMES_SESSION_TOKEN__="[^"]*"' | head -1 | cut -d'"' -f2)`,
-    // No marker printed: an unreachable dashboard has to read as "try again", never as a bad answer.
-    `[ -n "$token" ] || { echo 'no hermes session token' >&2; exit 1; }`,
-    `printf '%s' '${OUTPUT_MARKER}'`,
-    `curl -sS --max-time 90 -X ${method} -H "X-Hermes-Session-Token: $token"${payload} ${quote(`${DASHBOARD_ORIGIN}${path}`)}`,
-  ].join("\n");
+// A body is written to the instance first (0600, removed by the command that reads it): the exec's command line is
+// what its logs and `ps` keep. CHANNEL_BODY_IN_COMMAND=on restores the body in the command.
+async function stageBody(agentId: string, body: unknown): Promise<string | undefined> {
+  if (process.env.CHANNEL_BODY_IN_COMMAND === "on") return undefined;
+  const name = `.yelema/.channel-${randomBytes(12).toString("hex")}.json`;
+  const res = await instanceFetch(agentId, `/v1/files/content?${new URLSearchParams({ path: `~/${name}`, overwrite: "true" }).toString()}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: JSON.stringify(body),
+  });
+  await res.body?.cancel().catch(() => undefined);
+  if (!res.ok) {
+    console.error(`[channels] body upload failed on ${agentId}: ${res.status}`);
+    throw new ApiError(502, "channel_unavailable", UNAVAILABLE);
+  }
+  return `$HOME/${name}`;
 }
 
 // Run one call against the instance's own messaging API. Throws ApiError when the sandbox could not
 // be reached or answered with something that is not JSON. The caller's channel UI shows that as
 // "try again", which is the honest reading of a gateway that is still booting.
-async function dashboard<T>(agentId: string, method: string, path: string, body?: unknown): Promise<T> {
-  const result = await agent37.exec(agentId, script(method, path, body));
+// `secret`: the body carries credentials (a channel write) and goes by file.
+async function dashboard<T>(agentId: string, method: string, path: string, body?: unknown, secret = false): Promise<T> {
+  const result = await agent37.exec(agentId, script(method, path, body, secret ? await stageBody(agentId, body) : undefined));
   const marked = result.stdout.indexOf(OUTPUT_MARKER);
   if (marked < 0) {
     console.error(`[channels] ${method} ${path} failed on ${agentId}`, result.stderr || result.stdout);
-    throw new ApiError(502, "channel_unavailable", "Les canaux de vos Experts ne répondent pas pour le moment. Réessayez dans un instant.");
+    throw new ApiError(502, "channel_unavailable", UNAVAILABLE);
   }
   try {
     return JSON.parse(result.stdout.slice(marked + OUTPUT_MARKER.length).trim()) as T;
   } catch {
     console.error(`[channels] ${method} ${path} returned no JSON on ${agentId}`, result.stdout.slice(marked, marked + 500));
-    throw new ApiError(502, "channel_unavailable", "Les canaux de vos Experts ne répondent pas pour le moment. Réessayez dans un instant.");
+    throw new ApiError(502, "channel_unavailable", UNAVAILABLE);
   }
 }
 
@@ -104,7 +109,8 @@ export async function writePlatform(
     agentId,
     "PUT",
     `/api/messaging/platforms/${encodeURIComponent(platformId)}`,
-    update
+    update,
+    true
   );
   if (result.ok !== true) {
     console.error(`[channels] ${platformId} refused on ${agentId}`, result.detail);

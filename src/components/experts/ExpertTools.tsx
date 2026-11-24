@@ -13,6 +13,7 @@ import type { IntegrationConnection, IntegrationConnectionsResult, IntegrationCo
 import { cn } from "@/lib/utils";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { Button } from "@/components/ui/button";
+import { httpsUrl } from "@/lib/markdown-safety";
 
 interface Loaded {
   tools: ExpertTool[];
@@ -80,7 +81,9 @@ export function ExpertTools({ agentId, profileId, expertName }: { agentId: strin
         method: "POST",
         body: JSON.stringify({ toolkit: t.composio }),
       });
-      window.open(redirectUrl, "_blank", "noopener,noreferrer");
+      const page = httpsUrl(redirectUrl);
+      if (!page) throw new Error("La connexion n’a pas pu démarrer. Réessayez dans un instant.");
+      window.open(page, "_blank", "noopener,noreferrer");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {

@@ -1,3 +1,4 @@
+import { sha256Hex } from "./sha256.ts";
 // What a screen last showed, kept on the device so it paints at once on the next visit, then refreshes.
 // One account + space at a time: opening another wipes everything, and a tab of another one stops writing.
 // A row older than MAX_AGE_MS (a day for message content) is dropped. Never tokens, secrets or file contents.
@@ -252,6 +253,14 @@ export function flushOnHide(cache: Pick<DeviceCache, "flush">, target: EventTarg
   target.addEventListener("visibilitychange", () => hidden() && now());
 }
 
+/** The backend `pick` names at each call: a sensitive space moves to memory without rebuilding the cache. */
+export const pickBackend = (pick: () => CacheBackend): CacheBackend => ({
+  getAll: () => pick().getAll(),
+  put: (rows, meta) => pick().put(rows, meta),
+  delete: (keys) => pick().delete(keys),
+  clear: () => pick().clear(),
+});
+
 /** A Map in place of IndexedDB (tests, or a browser without it). */
 export function memoryBackend(seed: CacheRow[] = []): CacheBackend & { rows: Map<string, CacheRow> } {
   const m = new Map(seed.map((r) => [r.key, r]));
@@ -268,9 +277,5 @@ export function memoryBackend(seed: CacheRow[] = []): CacheBackend & { rows: Map
   };
 }
 
-/** A short stable name for the account (FNV-1a): the device does not keep the address in clear. */
-export function accountHash(s: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
-  return (h >>> 0).toString(36);
-}
+/** A stable name for the account (SHA-256, 128 bits kept): no address in clear on the device, no second address made to share it. */
+export const accountHash = (s: string): string => sha256Hex(s).slice(0, 32);

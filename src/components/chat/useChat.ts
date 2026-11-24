@@ -22,6 +22,7 @@ import { FILES_ONLY_PROMPT, type SessionDetail } from "@/lib/types";
 import { uid, type ChatMessage, type ChatSettings, type MessageAttachment, type ToolEvent, type ToolStatus } from "./types";
 import { toMs } from "@/lib/activity";
 import { frameBatch } from "@/lib/frame-batch";
+import { responsePath, sessionPath } from "@/lib/api-paths";
 
 export interface SendSettings extends Partial<ChatSettings> {
   files?: string[];
@@ -221,7 +222,7 @@ function keepThread(key: string, startedAt: number, history: ChatMessage[]): Cha
 type Read = SessionDetail & { startedAt: number };
 const fetchThread = (agentId: string, q: string, sessionId: string): Promise<Read> => {
   const startedAt = Date.now();
-  return apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`).then((res) => ({ ...res, startedAt }));
+  return apiFetch<SessionDetail>(sessionPath(agentId, sessionId, q)).then((res) => ({ ...res, startedAt }));
 };
 function readThread(agentId: string, q: string, sessionId: string): Promise<Read> {
   const k = aheadKey(historyKey(agentId, q, sessionId));
@@ -325,7 +326,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
   // does NOT stop server-side generation (only the cancel endpoint does).
   const cancelUpstream = useCallback(
     (rid: string | null) => {
-      if (rid) apiFetch(`/api/agents/${agentId}/chat/responses/${rid}/cancel`, { method: "POST" }).catch(() => {});
+      if (rid) apiFetch(responsePath(agentId, rid, "cancel"), { method: "POST" }).catch(() => {});
     },
     [agentId]
   );
@@ -414,7 +415,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
                 const said = run.assistant.content.trim();
                 if (said) run.narration.push(said);
                 lastStatus = null;
-                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, content: "", tools: openTool(m.tools, { tool, status: "running", phrase: toolPhrase(tool, args), generating }) }));
+                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, content: "", said: said ? [...(m.said ?? []), said] : m.said, tools: openTool(m.tools, { tool, status: "running", phrase: toolPhrase(tool, args), generating }) }));
                 break;
               }
               case "response.tool_call.completed":
@@ -451,7 +452,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
                   // Sent from « Envoyer »: that click was the member's yes (Leslie, 17/11). Given at once, said on the card.
                   patchRun(run, (m) => ({ ...m, approvals: addApproval(m.approvals, { ...a, auto: true, state: "sending", choice: "once" }) }));
                   const settle = (state: ApprovalState) => patchRun(run, (m) => ({ ...m, approvals: settleApproval(m.approvals, a.requestId, state, "once") }));
-                  void fetch(`/api/agents/${agentId}/chat/responses/${encodeURIComponent(run.responseId)}/approval`, {
+                  void fetch(responsePath(agentId, run.responseId, "approval"), {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ request_id: a.requestId, choice: "once" }),
@@ -474,7 +475,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
               case "response.completed": {
                 sawTerminal = true;
                 const final = str(data.output_text);
-                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, ...(final ? { content: finalReply(final, run.narration) } : {}) }));
+                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, said: undefined, ...(final ? { content: finalReply(final, run.narration) } : {}) }));
                 pendingSteer = str(data.pending_steer) ?? "";
                 break;
               }
@@ -563,7 +564,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
       void (async () => {
         let attached = false;
         try {
-          const res = await fetch(`/api/agents/${agentId}/chat/responses/${encodeURIComponent(responseId)}/stream`, {
+          const res = await fetch(responsePath(agentId, responseId, "stream"), {
             signal: run.abort.signal,
           });
           if (!res.ok || !res.body) {
@@ -606,7 +607,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
         runsRef.current.delete(sid);
         turns.cancel(run);
       } else if (!run) {
-        apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sid}${q}`)
+        apiFetch<SessionDetail>(sessionPath(agentId, sid, q))
           .then((res) => cancelUpstream(res.active_response_id ?? null))
           .catch(() => {});
       }
@@ -818,7 +819,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
         if (isViewed(run)) setMessages((prev) => [...prev.filter((m) => m.id !== queued.id), queued]);
       };
       const body = JSON.stringify({ text: item.user.content, client_message_id: newMessageKey() });
-      const post = () => apiFetch<{ accepted?: boolean }>(`/api/agents/${agentId}/chat/responses/${run.responseId}/steer`, { method: "POST", body });
+      const post = () => apiFetch<{ accepted?: boolean }>(responsePath(agentId, run.responseId ?? "", "steer"), { method: "POST", body });
       // Sent again once if the answer was lost: the gateway answers a resent steer without adding it twice.
       const p = post()
         .catch((e: unknown) => (isNetworkError(e) ? new Promise((r) => setTimeout(r, RESEND_WAITS_MS[0])).then(post) : Promise.reject(e)))
@@ -871,7 +872,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
       };
       if (!run?.responseId) return settle("expired");
       settle("sending", choice);
-      const outcome = await fetch(`/api/agents/${agentId}/chat/responses/${encodeURIComponent(run.responseId)}/approval`, {
+      const outcome = await fetch(responsePath(agentId, run.responseId, "approval"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ request_id: requestId, choice }),

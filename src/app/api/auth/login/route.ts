@@ -1,7 +1,7 @@
 import { backoffice } from "@/lib/backoffice";
 import { apiError, json, readJson } from "@/lib/http";
 import { writeSession } from "@/lib/session";
-import { authFailure, notEnabled } from "../_shared";
+import { authFailure, notEnabled, tooManyTries } from "../_shared";
 
 // Sign in through the back office: it checks the password, then that the member and the client
 // are not suspended. The session it returns is kept in an httpOnly cookie; the page gets none of it.
@@ -12,6 +12,8 @@ export async function POST(request: Request) {
     const { email, password } = await readJson<{ email?: string; password?: string }>(request);
     const mail = (email ?? "").trim();
     if (!mail || !password) return apiError("Adresse ou mot de passe incorrect.", 401, "unauthorized");
+    const limited = tooManyTries("login", request, mail);
+    if (limited) return limited;
 
     const opened = await backoffice.login(mail, password);
     await writeSession(opened.session);

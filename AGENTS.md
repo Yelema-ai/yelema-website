@@ -206,6 +206,15 @@ Browser ─▶ Next.js (this app) ─▶ control plane  https://api.agent37.com/
 | `src/lib/composio-usage.ts` (+ `.test.ts`) | The tool executions inside one request to Composio (a multi-execution counts once per tool), by name only: what the proxy declares to the back office |
 | `src/lib/profile-id.ts`, `src/lib/profiles.ts` | The profile a chat targets: shape, `?profile=`, and the check against the instance's real profiles |
 | `src/lib/tenant-resolver.ts`, `src/lib/tenant.ts`, `src/app/espace-*` | The client a request is for when one deployment serves every client: host lookup at the back office, the workspace a request is confined to, and the pages for an unknown or suspended client |
+| `src/proxy.ts`, `src/lib/csrf.ts`, `csp.ts`, `proxy-matcher.ts` (+ `.test.ts`), `src/app/api/csp-report/` | What the proxy does before the session: a write from another site's page is refused (`CSRF_MODE`), every page gets its Content-Security-Policy (`CSP_MODE`, report-only by default), and which paths skip the proxy |
+| `src/lib/markdown-safety.ts` (+ `.test.ts`) | A text from a model or another person never makes the browser load a remote picture (it becomes a link); `safeHref` for an address that comes from data |
+| `src/lib/instance-limits.ts` (+ `.test.ts`) | The routes an instance calls with its own token: a ceiling per token and a bounded body |
+| `src/lib/hermes-script.ts` (+ `.test.ts`) | The shell script of one call to the instance's messaging API; a channel's credentials go by a 0600 file, not in the command |
+| `src/lib/session-renewal.ts` (+ `.test.ts`) | How long before its end the proxy renews the session: early on a page, late on a send or a stream |
+| `src/lib/service-call.ts` (+ `.test.ts`) | Whom a gateway call names: the account given, else the session's; with neither, only a route that named itself as a service (`asService`) leaves, any other is refused (`GATEWAY_USER_MODE`) |
+| `src/lib/profile-token.ts` (+ `.test.ts`), `profile-token-server.ts` | The bearer of an instance: its apps token, or a profile token `yprof1.<h>.<profil>.<sceau>` (found by `h`, believed only once the back office accepted it) |
+| `src/lib/markdown-render.test.ts` | The chat's real rendering chain (the installed Streamdown's plugins + `strictSchema`) fed hostile HTML: run it after any Streamdown upgrade |
+| `src/lib/buzz-key-store.ts`, `oauth-host.ts`, `client-error.ts` (+ `.test.ts`) | The messaging key bound to its account and erased at sign-out; an authorization page off the server's own domain waits for the member; a client error as one bounded log line |
 | `src/lib/memo.ts` (+ `.test.ts`) | The one server cache: one load in flight per key, failures never kept, a bound, a stuck load not shared; stale-while-revalidate and last-known-value-on-outage as options. Used by the session, the host resolver, the catalogue, capabilities, channels, dashboards, the tool proxy |
 | `src/lib/dashboard-files.ts`, `dashboard-token.ts`, `dashboard-expiry.ts` (+ `.test.ts`), `dashboard-access.ts`, `src/app/api/dashboards/**` | A shared expert dashboard (`/dashboards/view?s=`): sealed link with an end (7/30/90 days or none, 30 by default, in the token: the back office keeps no end), checked by the back office on each opening, then ONLY `Livrables/<prénom>/tableau-de-bord/tableau-de-bord.{html,pdf}` read on the instance (or the state's `fichier`/`pdf` inside that folder), kept 5 min per `maj`, framed with no outbound loads (`FRAME_CSP`), 60 openings/min per link and 30 per address. A legacy state naming only a Render `lien` keeps its Render frame |
 | `src/lib/tenant-header.ts` (+ `.test.ts`) | The client the proxy resolved, handed to the route in `x-yelema-tenant`: always rewritten by the proxy, sealed with `APP_RESOLVER_TOKEN` and bound to the host, so a route never asks the back office again |
@@ -337,8 +346,10 @@ Dockerfile goes away once every client is on Vercel.
   log it and answer a French sentence written here; a new route does the same.
 - **A file served from the drive cannot run script with the member's session.** Anything but a
   picture, a PDF, audio, video or plain text is answered with `Content-Security-Policy: sandbox`.
-- **A file sent from the browser is at most 4 MB** (`src/lib/upload-limit.ts`): the host refuses a
-  larger request before any route sees it.
+- **A request body from the browser is at most 4 MB** (`src/lib/upload-limit.ts`): the host refuses a
+  larger request before any route sees it. A document (chat attachment, drive, company memory) up to 25 MB goes in
+  parts of 3 MB that the back office puts back together (`src/lib/upload-parts.ts`, `src/app/api/uploads/`,
+  `docs/plans/envois-en-morceaux.md`); pictures, logos and e-mail attachments stay at 4 MB.
 - **A file path from the browser is checked before it reaches the instance** (`assertInDrive`). The attachments of a chat turn are such paths too.
   Server code that must read outside the drive (the routines key file) does so itself, never
   through a path the caller supplied.

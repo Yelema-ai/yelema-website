@@ -3,6 +3,7 @@
 import { expertRole, formatExpertDisplayName } from "../experts.ts";
 import { masquerSecrets } from "../secrets.ts";
 import type { DiscoveredExpert, ExpertSkillInfo } from "../types.ts";
+import { inline } from "./inline.ts";
 
 export function formatSkillsExperts(
   skills: ExpertSkillInfo[] | null,
@@ -26,13 +27,13 @@ export function formatSkillsExperts(
     if (item.specific && item.specific.length > 0) {
       out += `#### 💼 Modes Opératoires et Fiches Métier Spécifiques (${item.specific.length}) :\n`;
       for (const s of item.specific) {
-        out += `- **\`${s}\`**\n`;
+        out += `- **\`${inline(s, 80)}\`**\n`;
       }
       out += `\n`;
     }
     if (item.shared && item.shared.length > 0) {
       out += `#### 🛠️ Compétences Transverses & Outils Disponibles :\n`;
-      out += item.shared.map((s) => `- \`${s}\``).join("\n") + "\n";
+      out += item.shared.map((s) => `- \`${inline(s, 80)}\``).join("\n") + "\n";
     }
 
     return masquerSecrets(out);

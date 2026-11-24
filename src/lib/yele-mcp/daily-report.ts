@@ -21,9 +21,13 @@ export function reportDate(dateStr?: string, now = Date.now()): string | null {
 export const reportPaths = (date: string): string[] => dailyReportFiles(date);
 
 /** Le premier rapport non vide trouvé pour le jour demandé, secrets masqués. */
+/** Caractères d'un rapport rendus par appel ; la suite se lit page par page. */
+export const REPORT_PAGE_CHARS = 10_000;
+
 export async function readDailyReport(
   fetchFileContent: (path: string) => Promise<string | null>,
-  dateStr?: string
+  dateStr?: string,
+  page = 1
 ): Promise<string> {
   const targetDate = reportDate(dateStr);
   if (!targetDate) {
@@ -34,7 +38,13 @@ export async function readDailyReport(
     try {
       const content = await fetchFileContent(p);
       if (content && content.trim()) {
-        return `### 📝 Rapport Journalier de Mémoire (${targetDate})\n\n${masquerSecrets(content.trim())}`;
+        const whole = masquerSecrets(content.trim());
+        const pages = Math.ceil(whole.length / REPORT_PAGE_CHARS);
+        if (page > pages) return `Le rapport du **${targetDate}** n'a que ${pages} page(s).`;
+        const part = whole.slice((page - 1) * REPORT_PAGE_CHARS, page * REPORT_PAGE_CHARS);
+        const where = pages > 1 ? `, page ${page}/${pages}` : "";
+        const next = page < pages ? `\n\n(suite : rappeler l'outil avec page=${page + 1})` : "";
+        return `### 📝 Rapport Journalier de Mémoire (${targetDate}${where})\n\n${part}${next}`;
       }
     } catch {}
   }

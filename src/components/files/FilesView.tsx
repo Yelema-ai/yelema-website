@@ -17,6 +17,7 @@ import {
   Link2,
   List,
   Loader2,
+  MessageSquare,
   Pencil,
   RefreshCw,
   Search,
@@ -35,7 +36,7 @@ import { FilePreview, ReducedImage } from "./FilePreview";
 import { Preview as DocPreview } from "@/components/chat/DocumentCards";
 import { docKind } from "@/lib/drive-links";
 import { driveTree } from "@/lib/drive-store";
-import { coverRank, deliverableItems } from "@/lib/deliverable-folders";
+import { coverRank, folderPeeks, type FolderPeek } from "@/lib/deliverable-folders";
 import { GoogleGlyph } from "@/components/chat/GoogleDocs";
 import { shortcutKind } from "@/lib/google-docs";
 import { MoveDialog } from "./MoveDialog";
@@ -66,6 +67,7 @@ export function FilesView({
   openFile,
   inbox,
   home,
+  onAsk,
 }: {
   agentId: string;
   initialPath?: string;
@@ -75,6 +77,8 @@ export function FilesView({
   /** The Expert's own folder: its Livrables stop there, nothing above it (Leslie, 16/11: « on est censé être dans les
    * livrables d'un expert, pourquoi est-ce qu'on a tous les experts »). The general page lists everyone's. */
   home?: string;
+  /** Opens the Expert's chat: an empty folder of its own asks it for a first deliverable (Leslie, 23/11). */
+  onAsk?: () => void;
 }) {
   const fb = useFileBrowser(agentId, initialPath, inbox);
   // A folder named in the address (« ?dossier= », from a path cited in the chat) opens here.
@@ -240,22 +244,20 @@ export function FilesView({
     if (!home || !fb.path || !(fb.path === home || fb.path.startsWith(`${home}/`))) return all;
     return all.filter((c) => c.path.length >= home.length).map((c) => (c.path === home ? { ...c, label: "Livrables" } : c));
   }, [fb.path, home]);
-  // A project folder shows its cover, picked like on the general page: its newest picture or PDF.
-  const [covers, setCovers] = useState<Map<string, { path: string; modified: number }>>(new Map());
+  // Every folder shows a glimpse of what it holds: its best cover anywhere inside (a picture, a PDF's first page…),
+  // else the names of its newest three entries (Leslie, 20/11 : « qu'on entrevoie ce qu'il y a à l'intérieur »).
+  const [peeks, setPeeks] = useState<Map<string, FolderPeek>>(new Map());
+  const shownFolders = useMemo(() => fb.visibleEntries.filter(isDir).map((e) => e.path), [fb.visibleEntries]);
   useEffect(() => {
     let live = true;
+    if (!shownFolders.length) return;
     driveTree(agentId)
-      .then((tree) => {
-        if (!live) return;
-        const m = new Map<string, { path: string; modified: number }>();
-        for (const it of deliverableItems(tree.entries)) if (it.folder && it.cover) m.set(it.path, { path: it.cover, modified: it.coverModified });
-        setCovers(m);
-      })
+      .then((tree) => live && setPeeks(folderPeeks(tree.entries, shownFolders.map((p) => normTreePath(p, tree.entries)))))
       .catch(() => undefined);
     return () => {
       live = false;
     };
-  }, [agentId, fb.entries]);
+  }, [agentId, fb.entries, shownFolders]);
   // A folder of visuals in variants shows by visual first (« Tous les fichiers » for the plain list),
   // and the editable « source » folder always comes last (Myriel, Leslie 30/10).
   const variants = useMemo(() => groupVariants(fb.visibleEntries.filter((e) => !isDir(e))), [fb.visibleEntries]);
@@ -486,6 +488,7 @@ export function FilesView({
                 canCreate={!!fb.path}
                 uploading={fb.uploading}
                 onUpload={() => uploadRef.current?.click()}
+                onAsk={onAsk}
               />
             ) : (
               <>
@@ -591,7 +594,7 @@ export function FilesView({
                       )}
                       {...entryHandlers(entry)}
                     >
-                      <EntryCover agentId={agentId} entry={entry} cover={covers.get(entry.path)} />
+                      <EntryCover agentId={agentId} entry={entry} peek={peekOf(peeks, entry.path)} />
                       <div className="min-w-0 flex-1 px-3 pt-2.5">
                         {editing ? (
                           <RenameInput
@@ -944,12 +947,17 @@ function EmptyFolder({
   canCreate,
   uploading,
   onUpload,
+  onAsk,
 }: {
   owner: string | null;
   canCreate: boolean;
   uploading: boolean;
   onUpload: () => void;
+  onAsk?: () => void;
 }) {
+  // The Expert's own folder on the first day: its deliverables are its to make, so the first gesture asks it for one
+  // (Leslie, 23/11); importing stays, second.
+  const ask = owner && onAsk;
   return (
     <div className="flex min-h-[20rem] flex-col items-center justify-center rounded-lg border border-dashed bg-secondary/20 p-8 text-center">
       <span className="mb-4 inline-flex size-12 items-center justify-center rounded-md bg-background text-primary shadow-sm">
@@ -957,6 +965,12 @@ function EmptyFolder({
       </span>
       <p className="text-sm font-medium text-foreground">{owner ? `Les livrables de ${owner} arriveront ici.` : "Ce dossier est vide."}</p>
       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        {ask && (
+          <Button size="sm" onClick={onAsk}>
+            <MessageSquare className="h-4 w-4" />
+            Demander un premier livrable
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={onUpload} disabled={!canCreate || uploading}>
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
           Importer des fichiers
@@ -969,14 +983,20 @@ function EmptyFolder({
 
 // What a card shows above its name: the deliverable itself (a picture reduced on the server, a PDF's first page),
 // a slide, a page or a sheet drawn by the app, a project's cover, else its kind in large. Same covers as the general page.
-function EntryCover({ agentId, entry, cover }: { agentId: string; entry: FileEntry; cover?: { path: string; modified: number } }) {
+function EntryCover({ agentId, entry, peek }: { agentId: string; entry: FileEntry; peek?: FolderPeek }) {
   const [failed, setFailed] = useState(false);
-  const target = isDir(entry) ? cover ?? null : coverRank(entry.name) ? { path: entry.path, modified: entry.modified ?? 0 } : null;
+  // A folder shows a picture, a PDF or a slide it holds, at any depth, as its cover; else the names of its newest
+  // outputs (a page of text says less than the names); never its subfolders (Leslie, 23/11).
+  const folderCover = peek?.cover && coverRank(peek.cover) >= 3 ? peek.cover : null;
+  const target = isDir(entry) ? (folderCover ? { path: folderCover, modified: peek!.coverModified } : null) : coverRank(entry.name) ? { path: entry.path, modified: entry.modified ?? 0 } : null;
   const name = target?.path.split("/").pop() ?? "";
   const kind = target ? docKind(name) : null;
   return (
-    <span className="relative block aspect-[4/3] w-full overflow-hidden bg-secondary/60">
-      {target && !failed ? (
+    // No « 1/2 pages » on a card: the card shows the document, not a reader (Leslie, 23/11 « visuellement tjr pas ouf »).
+    <span className="relative block aspect-[4/3] w-full overflow-hidden bg-secondary/60 [&_[data-page-count]]:hidden">
+      {isDir(entry) && peek && peek.tiles.length >= 2 ? (
+        <FolderMosaic agentId={agentId} peek={peek} />
+      ) : target && !failed ? (
         kind === "image" ? (
           <ReducedImage
             thumb={thumbUrl(agentId, target.path, 480, target.modified)}
@@ -990,19 +1010,94 @@ function EntryCover({ agentId, entry, cover }: { agentId: string; entry: FileEnt
             <DocPreview agentId={agentId} doc={{ name, path: target.path, size: null, modified: target.modified, kind: kind! }} />
           </span>
         )
+      ) : isDir(entry) && peek?.first.length ? (
+        <FolderGlimpse peek={peek} />
       ) : (
         <span className="grid size-full place-items-center">
           <EntryGlyph entry={entry} large />
         </span>
       )}
-      {isDir(entry) && target && !failed && (
-        <span className="absolute left-2 top-2 grid size-7 place-items-center rounded-md bg-background/90 text-primary shadow-sm">
-          <Folder className="size-4" />
+      {isDir(entry) && ((peek?.tiles.length ?? 0) >= 2 || (target && !failed)) && (
+        <span className="absolute bottom-2 left-2 inline-flex h-6 items-center gap-1 rounded-full bg-background/95 px-2 text-[11px] font-semibold text-ink-2 shadow-sm">
+          <Folder className="size-3.5 text-primary" />
+          {peek?.count ? peek.count : null}
         </span>
       )}
     </span>
   );
 }
+
+// A folder holding two outputs or more: the outputs themselves side by side (a picture reduced on the server, a PDF's
+// first page, a slide…), up to four, and how many more it holds on the last one (Leslie, 23/11).
+function FolderMosaic({ agentId, peek }: { agentId: string; peek: FolderPeek }) {
+  const tiles = peek.tiles;
+  const more = peek.count - tiles.length;
+  return (
+    <span className={cn("grid size-full gap-1.5 bg-secondary/60 p-1.5", tiles.length === 2 ? "grid-cols-2" : "grid-cols-2 grid-rows-2")}>
+      {tiles.map((t, i) => (
+        <span key={t.path} className={cn("relative block min-h-0 overflow-hidden rounded-md bg-white ring-1 ring-black/5", tiles.length === 3 && i === 0 && "row-span-2")}>
+          <MosaicTile agentId={agentId} tile={t} />
+          {more > 0 && i === tiles.length - 1 && (
+            <span className="absolute inset-0 grid place-items-center bg-black/50 text-[15px] font-semibold text-white">+{more}</span>
+          )}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function MosaicTile({ agentId, tile }: { agentId: string; tile: FolderPeek["tiles"][number] }) {
+  const [failed, setFailed] = useState(false);
+  const kind = docKind(tile.name);
+  if (!failed && kind === "image") {
+    return (
+      <ReducedImage
+        thumb={thumbUrl(agentId, tile.path, 320, tile.modified)}
+        original={thumbUrl(agentId, tile.path, 320)}
+        alt=""
+        className="size-full object-cover"
+        onFail={() => setFailed(true)}
+      />
+    );
+  }
+  if (!failed && coverRank(tile.name) > 0 && kind) {
+    return (
+      <span className="pointer-events-none block size-full">
+        <DocPreview agentId={agentId} doc={{ name: tile.name, path: tile.path, size: null, modified: tile.modified, kind }} />
+      </span>
+    );
+  }
+  // A page the app cannot draw small (a web page, a text): its name on a sheet.
+  return (
+    <span className="flex size-full flex-col items-center justify-center gap-1 p-2 text-center">
+      <FileIcon className="size-5 text-ink-3" />
+      <span className="line-clamp-2 break-all text-[11px] leading-tight text-ink-2">{tile.name}</span>
+    </span>
+  );
+}
+
+// A folder without a picture or a document to show: the names of its newest entries, on small sheets, and how many it holds.
+function FolderGlimpse({ peek }: { peek: FolderPeek }) {
+  return (
+    <span className="flex size-full flex-col justify-center gap-1.5 px-4 py-3">
+      {peek.first.map((f) => (
+        <span key={f.name} className="flex min-w-0 items-center gap-2 rounded-md bg-background/90 px-2.5 py-1.5 text-xs text-ink-2 shadow-sm">
+          {f.folder ? <Folder className="size-3.5 shrink-0 text-primary" /> : <FileIcon className="size-3.5 shrink-0 text-ink-3" />}
+          <span className="truncate">{f.name}</span>
+        </span>
+      ))}
+      {peek.count > peek.first.length && <span className="pl-1 text-[11px] text-ink-3">et {peek.count - peek.first.length} de plus</span>}
+    </span>
+  );
+}
+
+// The tree spells the drive « ~/Livrables/… » or « /home/node/Livrables/… »: a folder of the list is matched either way.
+function normTreePath(path: string, entries: readonly { path: string }[]): string {
+  const home = entries.find((e) => e.path.includes("/Livrables"))?.path ?? "";
+  const tilde = home.startsWith("~/");
+  return tilde ? path.replace(/^\/home\/node\//, "~/") : path.replace(/^~\//, "/home/node/");
+}
+const peekOf = (peeks: Map<string, FolderPeek>, path: string) => peeks.get(path) ?? peeks.get(path.replace(/^\/home\/node\//, "~/")) ?? peeks.get(path.replace(/^~\//, "/home/node/"));
 
 // The version that goes out, beside the latest of a document with older versions (Leslie, 16/11).
 function KeptPill({ className }: { className?: string }) {

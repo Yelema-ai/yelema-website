@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { citedFolder, deliverableCount, type TurnDoc } from "@/lib/drive-links";
 import { driveTree } from "@/lib/drive-store";
-import { ConversationDocs } from "./ConversationDocs";
+import { ConversationDocs, PinnedFileRow, fileKey } from "./ConversationDocs";
 import { PreviewSiblings } from "@/components/files/preview-siblings";
 import { GoogleDocsRow, PinnedDocsProvider, usePinnedDocs } from "./GoogleDocs";
 import type { GoogleDoc } from "@/lib/google-docs";
@@ -27,13 +27,17 @@ import { useVoiceExpert } from "@/components/voice/useVoiceExpert";
 import type { Stage } from "@/lib/jour-zero";
 import { ChatMessages } from "./ChatMessages";
 import { ChatSessionsPanel } from "./ChatSessionsPanel";
-import { setChatFull, setChatListHidden, useChatFull, useChatListHidden, useChatSidePanel } from "./chat-layout";
+import { setChatFull, setChatListHidden, setProfilePanel, useChatFull, useChatListHidden, useChatSidePanel } from "./chat-layout";
+import { useDashboard } from "@/components/experts/DashboardProvider";
+import { useComputer } from "@/components/experts/ComputerProvider";
 import { useChatContext } from "./ChatProvider";
 import { useChat } from "./useChat";
 import { MODIFY_PREFIX } from "@/lib/approval";
 import { wakeInstance } from "@/components/app/wake";
 import { useChatAttachments } from "./useChatAttachments";
 import { rememberedSettings } from "./rememberedSettings";
+import type { Handoff } from "@/lib/chat-handoff";
+import { drivePathFault } from "@/lib/drive-paths";
 
 // The conversation pane, rendered full-height in the chat tab's main column. Empty state = a
 // centered welcome (heading + big composer + subtitle); once there are messages it becomes a
@@ -45,7 +49,7 @@ const SCREEN_TEMPLATE = "yelema-hermes";
 const SCREEN_MIN_REVISION = 5;
 
 
-/** Deliverables after which « Faire connaissance » is no longer offered. */
+/** Deliverables after which « Bien démarrer » is no longer offered. */
 const INTRO_MAX = 10;
 export const hasScreen = (instance: { image: { template: string; revision: number | null } | null } | null) =>
   instance?.image?.template === SCREEN_TEMPLATE && (instance.image.revision ?? 0) >= SCREEN_MIN_REVISION;
@@ -60,7 +64,7 @@ export function ChatView({
   onDashboardOpened,
   profilePanel = null,
 }: {
-  initialMessage?: string | null;
+  initialMessage?: Handoff | null;
   driveFolder?: string | null;
   /** On an expert's page, its header: « Ordinateur » and « Tableau » sit there, beside its name (Leslie, 28/10). */
   actionsSlot?: HTMLElement | null;
@@ -70,7 +74,7 @@ export function ChatView({
   openDashboard?: boolean;
   onDashboardOpened?: () => void;
   /** On an expert's page: its profile panel beside the chat, and what its links open. */
-  profilePanel?: { expert: ProfilePanelExpert; onTab: (tab: "files" | "calls") => void; onOpenCall: (id: string) => void } | null;
+  profilePanel?: { expert: ProfilePanelExpert; onTab: (tab: "files" | "calls" | "emails") => void; onOpenCall: (id: string) => void } | null;
 }) {
   const {
     agentId,
@@ -140,10 +144,12 @@ export function ChatView({
   useEffect(() => {
     if (!refParam) return;
     const url = new URL(window.location.href);
-    pinned.current = { path: refParam, session: url.searchParams.get("session") };
-    if ((activeSessionId ?? null) === pinned.current.session) addReference(refParam);
     url.searchParams.delete("ref");
     window.history.replaceState(window.history.state, "", url);
+    // Only a file of the drive is ever pinned, as the files routes and the turn itself accept.
+    if (drivePathFault(refParam)) return;
+    pinned.current = { path: refParam, session: url.searchParams.get("session") };
+    if ((activeSessionId ?? null) === pinned.current.session) addReference(refParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refParam]);
 
@@ -160,17 +166,21 @@ export function ChatView({
   }, [sayParam]);
 
   // A message handed over by the home page ("Demander à mon équipe") is sent once, into a new
-  // thread, and dropped from the URL so a refresh does not send it again.
+  // thread, and dropped from the URL so a refresh does not send it again. A `?q=` our own screens
+  // did not hand over is only written in the field, for the member to read and send.
   const sentInitial = useRef(false);
   useEffect(() => {
-    if (!initialMessage || sentInitial.current || activeSessionId) return;
+    if (!initialMessage || sentInitial.current) return;
+    if (initialMessage.send && activeSessionId) return;
     sentInitial.current = true;
     const url = new URL(window.location.href);
     url.searchParams.delete("q");
+    url.searchParams.delete("n");
     window.history.replaceState(window.history.state, "", url);
+    if (!initialMessage.send) return setDraft((d) => ({ text: initialMessage.text, token: (d?.token ?? 0) + 1 }));
     // Sent with the model and effort chosen on the home's chat bar.
     const { model, provider, reasoningEffort } = rememberedSettings();
-    void send(initialMessage, { model, provider, reasoningEffort });
+    void send(initialMessage.text, { model, provider, reasoningEffort });
   }, [initialMessage, activeSessionId, send]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -239,9 +249,9 @@ export function ChatView({
     [experts, agentId, profile]
   );
   const pronoun = expert?.catalogueKey ? voiceExpert(expert.catalogueKey).pronoun : null;
-  // Before « Faire connaissance », it is the one action shown: the catalogue's requests wait (Leslie, 31/10).
+  // Before « Bien démarrer », it is the one action shown: the catalogue's requests wait (Leslie, 31/10).
   const [prepStage, setPrepStage] = useState<Stage | null>(null);
-  // « Faire connaissance » goes once done, or once the expert has made INTRO_MAX deliverables: a conversation
+  // « Bien démarrer » goes once done, or once the expert has made INTRO_MAX deliverables: a conversation
   // that counts is one that produced something, and by then they know each other (Leslie, 04/11).
   const [made, setMade] = useState(0);
   const wantsIntro = Boolean(profile) && prepStage === "intro";
@@ -255,7 +265,9 @@ export function ChatView({
       cancelled = true;
     };
   }, [wantsIntro, agentId, driveFolder]);
-  const showIntro = wantsIntro && made < INTRO_MAX;
+  // At every Expert again (Leslie, 23/11 evening: « remettre le bien démarrer chez chaque expert »): it runs
+  // /onboarding, which plays its installation in full until it is done, after Djénéba's common welcome.
+  const showIntro = wantsIntro && made < INTRO_MAX && Boolean(profile);
   const instance = useMemo(() => agents.find((x) => x.agent37_id === agentId) ?? null, [agents, agentId]);
   // The expert's name when the chat targets one; the company chat otherwise (never the instance's
   // name, which the back office writes as the list of its Experts).
@@ -264,7 +276,6 @@ export function ChatView({
   const face = profile ? { displayName: agentName, photoUrl: expert?.photoUrl ?? null, gateway: null } : null;
   // "Son ordinateur" needs the screen the yelema-hermes image streams, from its revision 5 on
   // (image v1.1.0); an instance on another image, or on an older revision, has none to show.
-  const listHidden = useChatListHidden();
   const full = useChatFull();
   const sidePanel = useChatSidePanel();
   const hasComputer = Boolean(profile) && hasScreen(instance);
@@ -279,6 +290,7 @@ export function ChatView({
   }, [activeSessionId]);
   // The documents the client keeps first above this conversation (Leslie, 03/11).
   const pins = usePinnedDocs(activeSessionId ? `${agentId}:${profile ?? ""}:${activeSessionId}` : null);
+  const pinnedFile = docs.find((d) => pins.pinned.includes(fileKey(d))) ?? null;
   const docsFolder = (docs[0] && citedFolder(docs[0].path.slice(0, docs[0].path.lastIndexOf("/")))) || driveFolder;
   const docsHref = `${agentTabPath(agentId, "files", profile)}${docsFolder ? `?dossier=${encodeURIComponent(docsFolder)}` : ""}`;
   const inHeader = Boolean(profile && actionsSlot);
@@ -307,16 +319,7 @@ export function ChatView({
         <div className="flex min-w-0 items-center gap-3">
           <ChatSessionsPanel />
           {/* Wide screen: the column of conversations folds away and comes back from here. */}
-          <button
-            type="button"
-            onClick={() => setChatListHidden(!listHidden)}
-            aria-label={listHidden ? "Afficher les conversations" : "Masquer les conversations"}
-            title={listHidden ? "Afficher les conversations" : "Masquer les conversations"}
-            className="-ml-1.5 hidden size-9 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-soft hover:text-ink xl:grid"
-          >
-            {listHidden ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-          </button>
-          {profilePanel && <ProfilePanelToggle />}
+          <ConversationsToggle />
           {/* On an expert's page its photo and name already head the page: shown once. */}
           {face && !profile && <ExpertAvatar expert={face} size="sm" />}
           <div className="min-w-0">
@@ -364,9 +367,12 @@ export function ChatView({
         >
           {full ? <Minimize2 className="h-[18px] w-[18px]" /> : <Maximize2 className="h-[18px] w-[18px]" />}
         </button>
+        {/* The profile opens on the right: its button sits on that side, last (Leslie, 20/11). */}
+        {profilePanel && <ProfilePanelToggle />}
         </div>
       </header>
-      {messages.length > 0 && <GoogleDocsRow docs={google} />}
+      {messages.length > 0 &&
+        (pinnedFile ? <PinnedFileRow agentId={agentId} doc={pinnedFile} /> : <GoogleDocsRow docs={google} />)}
       {/* Top: scrolling transcript when there are messages; the centered welcome heading when
           empty (justify-end seats it just above the composer). */}
       <div
@@ -432,7 +438,7 @@ export function ChatView({
             className={cn("mb-3", centered && "max-w-2xl")}
           />
         )}
-        {/* Only « Faire connaissance », and only for a while: the catalogue's requests are gone, and nothing
+        {/* Only « Bien démarrer », and only for a while: the catalogue's requests are gone, and nothing
             takes their place, no help sentence either (Leslie, 03/11: « simplifier au max »). Just above the bar. */}
         {showWelcome && showIntro && (
           <button
@@ -442,7 +448,7 @@ export function ChatView({
             className="mb-3 flex w-full items-center gap-3.5 rounded-[18px] border-[1.5px] border-brand bg-tint p-3.5 text-left text-ink transition-colors hover:bg-brand/15"
           >
             {face && <ExpertAvatar expert={face} size="md" />}
-            <span className="min-w-0 flex-1 text-[16px] font-bold leading-snug">Faire connaissance avec {agentName}</span>
+            <span className="min-w-0 flex-1 text-[16px] font-bold leading-snug">Bien démarrer</span>
             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-on-brand">
               <ArrowRight className="size-[18px]" />
             </span>
@@ -481,5 +487,34 @@ export function ChatView({
     </PreviewSiblings.Provider>
     </PinnedDocsProvider>
     </DashboardProvider>
+  );
+}
+
+// The column of conversations also folds while a panel sits beside the chat (the profile, Son
+// ordinateur, Tableau de bord): the button then opens it and puts that panel away, instead of
+// doing nothing (Leslie, 23/11). The panel's own button brings it back.
+function ConversationsToggle() {
+  const folded = useChatListHidden();
+  const sidePanel = useChatSidePanel();
+  const dashboard = useDashboard();
+  const computer = useComputer();
+  const hidden = folded || sidePanel;
+  function toggle() {
+    if (!hidden) return setChatListHidden(true);
+    setChatListHidden(false);
+    setProfilePanel(false);
+    dashboard.setPanelOpen(false);
+    computer.setPanelOpen(false);
+  }
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={hidden ? "Afficher les conversations" : "Masquer les conversations"}
+      title={hidden ? "Afficher les conversations" : "Masquer les conversations"}
+      className="-ml-1.5 hidden size-9 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-soft hover:text-ink xl:grid"
+    >
+      {hidden ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+    </button>
   );
 }

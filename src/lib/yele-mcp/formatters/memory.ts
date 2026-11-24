@@ -4,14 +4,17 @@ import { formatExpertDisplayName } from "../experts.ts";
 import { masquerSecrets } from "../secrets.ts";
 import type { DiscoveredExpert, MemorySearchResult } from "../types.ts";
 
+/** Une lettre ou deux ramèneraient toute la mémoire de tous les experts. */
+export const MIN_QUERY_CHARS = 3;
+
 export function formatRechercheMemoire(
   query: string,
   results: MemorySearchResult[] | null,
   experts?: DiscoveredExpert[],
   targetExpert?: string
 ): string {
-  if (!query || !query.trim()) {
-    return "Veuillez préciser un terme ou mot-clé de recherche (ex: 'réunion', 'budget', 'client').";
+  if (!query || query.trim().length < MIN_QUERY_CHARS) {
+    return `Veuillez préciser un terme ou mot-clé de recherche d'au moins ${MIN_QUERY_CHARS} caractères (ex: 'réunion', 'budget', 'client').`;
   }
 
   const cleanTarget = targetExpert ? targetExpert.trim().toLowerCase() : undefined;

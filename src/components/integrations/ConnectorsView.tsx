@@ -44,6 +44,7 @@ import { expertCycle } from "@/lib/expert-cycle";
 import { runPool } from "@/lib/bulk";
 import { keptExpertTools, teamTools } from "@/lib/expert-tools-client";
 import { useInView } from "@/components/usePrefetch";
+import { httpsUrl } from "@/lib/markdown-safety";
 
 const SEARCH_DEBOUNCE_MS = 250;
 const MIN_SEARCH = 3; // the toolkits route 400s a non-empty query shorter than this
@@ -231,7 +232,9 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
         method: "POST",
         body: JSON.stringify({ toolkit: toolkit.slug }),
       });
-      window.open(redirectUrl, "_blank", "noopener,noreferrer");
+      const page = httpsUrl(redirectUrl);
+      if (!page) throw new Error("La connexion n’a pas pu démarrer. Réessayez dans un instant.");
+      window.open(page, "_blank", "noopener,noreferrer");
       setWatch({ toolkit, baseline: activeCount(connections ?? [], toolkit.slug), until: Date.now() + POLL_TIMEOUT_MS });
     } catch (e) {
       toast.error((e as Error).message);

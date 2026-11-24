@@ -27,6 +27,11 @@ export const YELE_TOOLS = [
           type: "string",
           description: "La date au format YYYY-MM-DD, ou 'aujourdhui', ou 'hier'.",
         },
+        page: {
+          type: "integer",
+          minimum: 1,
+          description: "Optionnel : la page d'un rapport long (1 par défaut) ; la réponse dit s'il y a une suite.",
+        },
       },
     },
   },
@@ -141,6 +146,11 @@ export const YELE_TOOLS = [
           type: "string",
           description: "Optionnel : filtrer les alertes et l'état de santé pour un expert précis.",
         },
+        page: {
+          type: "integer",
+          minimum: 1,
+          description: "Optionnel : la page des incidents, les plus récents d'abord (1 par défaut).",
+        },
       },
     },
   },
@@ -167,7 +177,8 @@ export const YELE_TOOLS = [
       properties: {
         requete: {
           type: "string",
-          description: "Le mot-clé ou la phrase à rechercher (ex: 'réunion', 'budget', 'client', 'partenariat').",
+          minLength: 3,
+          description: "Le mot-clé ou la phrase à rechercher, 3 caractères au moins (ex: 'réunion', 'budget', 'client', 'partenariat').",
         },
         expert: {
           type: "string",

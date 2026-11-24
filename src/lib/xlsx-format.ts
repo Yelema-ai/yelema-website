@@ -126,3 +126,57 @@ export function formatNumber(value: number, format: string | null | undefined): 
 
 /** Whether a format draws a number, so that it sits right as in Excel. */
 export const isTextFormat = (format: string | null | undefined): boolean => format === "@";
+
+// A file says how far its column widths and merges reach: bounded here by the area drawn, never by the file.
+
+/** The columns (from 0) a `<col min max>` covers within the drawn ones; empty when out of them. */
+export function colRange(min: string | null, max: string | null, maxCols: number): [number, number] {
+  return [Math.max(0, Number(min ?? 1) - 1), Math.min(Number(max ?? 1) - 1, maxCols)];
+}
+
+/** Past this many references a formula is not worked out: each one walks every cell drawn. */
+export const MAX_FORMULA_REFS = 64;
+
+/** SUM, AVERAGE, MIN, MAX or COUNT over cell ranges (« A1:B3 »), its ranges in order; null for anything else. */
+export function formulaRefs(formula: string): { fn: string; refs: [string, string][] } | null {
+  const m = /^\s*(SUM|AVERAGE|MIN|MAX|COUNT)\(([A-Z$0-9:,\s]+)\)\s*$/i.exec(formula);
+  if (!m) return null;
+  const parts = m[2]!.replace(/\$/g, "").split(",");
+  if (parts.length > MAX_FORMULA_REFS) return null;
+  const refs: [string, string][] = [];
+  for (const part of parts) {
+    const [a, b = a] = part.trim().split(":");
+    if (!/^[A-Z]+\d+$/i.test(a!) || !/^[A-Z]+\d+$/i.test(b!)) return null;
+    refs.push([a!.toUpperCase(), b!.toUpperCase()]);
+  }
+  return { fn: m[1]!.toUpperCase(), refs };
+}
+
+export interface Merge {
+  r0: number;
+  c0: number;
+  r1: number;
+  c1: number;
+}
+
+/**
+ * The cells merges hide and the spans of their first cells, within `rows` × `cols`. Merges past twice the area
+ * drawn are dropped: a file of overlapping merges would otherwise walk the area once per merge.
+ */
+export function coverMerges(merges: Merge[], rows: number, cols: number): { covered: Set<string>; spanAt: Map<string, { rowSpan: number; colSpan: number }> } {
+  const covered = new Set<string>();
+  const spanAt = new Map<string, { rowSpan: number; colSpan: number }>();
+  let budget = 2 * rows * cols;
+  for (const m of merges) {
+    const r0 = Math.max(0, m.r0);
+    const c0 = Math.max(0, m.c0);
+    const r1 = Math.min(m.r1, rows - 1);
+    const c1 = Math.min(m.c1, cols - 1);
+    if (r1 < r0 || c1 < c0) continue;
+    budget -= (r1 - r0 + 1) * (c1 - c0 + 1);
+    if (budget < 0) break;
+    spanAt.set(`${r0}:${c0}`, { rowSpan: r1 - r0 + 1, colSpan: c1 - c0 + 1 });
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (r !== r0 || c !== c0) covered.add(`${r}:${c}`);
+  }
+  return { covered, spanAt };
+}

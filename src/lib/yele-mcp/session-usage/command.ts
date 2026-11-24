@@ -4,6 +4,8 @@
 // - tools, skills, composio : nombre d'appels par créneau (comme rows), profil, canal, modèle et routine
 //   de la session, et nom de l'outil, de la compétence ou de l'action Composio.
 // Un profil illisible n'est pas compté et figure dans `unreadable`.
+// Chaque profil est rendu avec l'empreinte de son state.db (jour UTC, date et taille du fichier et de son
+// journal) ; un profil dont l'empreinte est celle de `known` n'est pas relu : `same`, sans chiffres.
 
 import { hermesReader, type InstanceReader } from "../hermes-layout.ts";
 import { METRIC_KEYS } from "./usage.ts";
@@ -148,20 +150,30 @@ class Profile:
                         if isinstance(t, dict) and isinstance(t.get("tool_slug"), str):
                             self.count(self.composio, slot, m["session_id"], t["tool_slug"])
 
-rows, totals, tools, skills, composio, unreadable = {}, {}, {}, {}, {}, []
+KNOWN = P.get("known") or {}
 
-def merge(into, acc):
-    for k, v in acc.items():
-        if isinstance(v, dict):
-            cur = into.setdefault(k, dict.fromkeys(METRICS, 0))
-            for m in METRICS:
-                cur[m] += v[m]
-        else:
-            into[k] = into.get(k, 0) + v
+def stamp_of(db):
+    # Les créneaux (heure ou jour) dépendent du jour UTC : il fait partie de l'empreinte.
+    parts = [str(int(time.time() // 86400))]
+    for f in (db, db + "-wal"):
+        try:
+            st = _os.stat(f)
+            parts.append("%d:%d" % (st.st_mtime_ns, st.st_size))
+        except OSError:
+            parts.append("-")
+    return "/".join(parts)
+
+figures = lambda acc: [list(k) + [acc[k][m] for m in METRICS] for k in acc]
+counts = lambda acc: [list(k) + [n] for k, n in acc.items()]
+profiles, unreadable = [], []
 
 for name, home in hermes_homes():
     db = _os.path.join(home, L["hermes"]["stateDb"])
     if not _os.path.exists(db):
+        continue
+    stamp = stamp_of(db)
+    if KNOWN.get(name) == stamp:
+        profiles.append({"name": name, "stamp": stamp, "same": True})
         continue
     p = Profile(name)
     try:
@@ -174,20 +186,19 @@ for name, home in hermes_homes():
     except Exception:
         unreadable.append(name)
         continue
-    for into, acc in ((rows, p.rows), (totals, p.totals), (tools, p.tools), (skills, p.skills), (composio, p.composio)):
-        merge(into, acc)
+    profiles.append({
+        "name": name,
+        "stamp": stamp,
+        "rows": figures(p.rows),
+        "totals": figures(p.totals),
+        "tools": counts(p.tools),
+        "skills": counts(p.skills),
+        "composio": counts(p.composio),
+    })
 
-figures = lambda acc: [list(k) + [acc[k][m] for m in METRICS] for k in acc]
-counts = lambda acc: [list(k) + [n] for k, n in acc.items()]
-emit({
-    "rows": figures(rows),
-    "totals": figures(totals),
-    "tools": counts(tools),
-    "skills": counts(skills),
-    "composio": counts(composio),
-    "unreadable": unreadable,
-})
+emit({"profiles": profiles, "unreadable": unreadable})
 `;
 
-export const sessionUsageReader = (): InstanceReader =>
-  hermesReader(SCRIPT, { metrics: METRIC_KEYS, keepDays: KEEP_DAYS, hourlyDays: HOURLY_DAYS });
+/** `known` : profil → empreinte de la lecture que l'appelant a gardée. */
+export const sessionUsageReader = (known: Record<string, string> = {}): InstanceReader =>
+  hermesReader(SCRIPT, { metrics: METRIC_KEYS, keepDays: KEEP_DAYS, hourlyDays: HOURLY_DAYS, known });

@@ -24,7 +24,8 @@ export interface ReplyParts {
 
 const OPTION = /^\s*(?:[-*•]\s+)?(?:\*\*|__)?([A-F]|[1-9])(?:\*\*|__)?\s*(?:[).:–—-]|\s:)\s*(?:\*\*|__)?\s*(\S.*)$/;
 // « (par défaut) » or « (recommandé) », at the end or before a « : » that explains the option.
-const DEFAULT_MARK = /\s*[([]?\s*(?:par défaut|recommandée?)\s*[)\]]?\s*[.,]?\s*(?=$|:)/i;
+// The packs' older « ⭐ » says the same (hermes-experts, onboarding cards).
+const DEFAULT_MARK = /\s*(?:[([]?\s*(?:par défaut|recommandée?)\s*[)\]]?|⭐\uFE0F?)\s*[.,]?\s*(?=$|:)/i;
 // An option often explains itself after « : » (Yélé, 06/11: 105 signs, its choices stayed text).
 const MAX_LABEL = 180;
 const MAX_NOTE = 140;
@@ -92,8 +93,12 @@ function readChoices(lines: string[]): { items: ReplyChoice[]; note: string | nu
 
 function markOf(label: string): string | undefined {
   const m = label.match(/(par défaut|recommandée?)/i);
-  return m ? m[1].toLowerCase() : undefined;
+  if (m) return m[1].toLowerCase();
+  return label.includes("⭐") ? "recommandé" : undefined;
 }
+
+/** Past this many choices, the buttons give way to a list (Leslie, 23/11: « des drop-down dynamiques »). */
+export const MAX_CHOICE_BUTTONS = 4;
 
 /** What the member's click sends: the letter for the expert, the words for whoever reads the thread. */
 export const choiceMessage = (c: ReplyChoice) => `${c.letter} : ${c.label}`;

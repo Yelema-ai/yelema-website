@@ -17,6 +17,7 @@ import { RoutinesList } from "./RoutinesList";
 import { SendDialog } from "./SendDialog";
 import { useRouter } from "next/navigation";
 import { agentTabPath } from "@/lib/expert-tabs";
+import { routinePath } from "@/lib/api-paths";
 
 // One screen, two tabs: what runs at a time, what an event sets off. Objectives are gone (Leslie, 16/11:
 // nothing the back office does not serve yet); an automatic sending is written to the expert in its chat.
@@ -46,7 +47,7 @@ export function ExpertRoutines({ agentId, expert, active: shown = true }: { agen
   const load = useCallback(async () => {
     setLoadError(false);
     try {
-      const res = await apiFetch<{ routines: Routine[] }>(`${base}?expert=${expertKey}`);
+      const res = await apiFetch<{ routines: Routine[] }>(`${base}?expert=${encodeURIComponent(expertKey)}`);
       setRoutines(res.routines);
     } catch {
       setLoadError(true);
@@ -70,7 +71,7 @@ export function ExpertRoutines({ agentId, expert, active: shown = true }: { agen
   async function toggle(r: Routine, enabled: boolean) {
     setBusyId(r.id);
     try {
-      const res = await apiFetch<{ routine: Routine }>(`${base}/${r.id}`, {
+      const res = await apiFetch<{ routine: Routine }>(routinePath(agentId, r.id), {
         method: "PATCH",
         body: JSON.stringify({ expert: expertKey, enabled }),
       });
@@ -90,7 +91,7 @@ export function ExpertRoutines({ agentId, expert, active: shown = true }: { agen
     setBulkBusy(true);
     try {
       const results = await runPool(todo, 3, (r) =>
-        apiFetch<{ routine: Routine }>(`${base}/${r.id}`, { method: "PATCH", body: JSON.stringify({ expert: expertKey, enabled }) })
+        apiFetch<{ routine: Routine }>(routinePath(agentId, r.id), { method: "PATCH", body: JSON.stringify({ expert: expertKey, enabled }) })
       );
       for (const res of results) if (res.status === "fulfilled") replace(res.value.routine);
       const failed = results.filter((res) => res.status === "rejected").length;
@@ -106,7 +107,7 @@ export function ExpertRoutines({ agentId, expert, active: shown = true }: { agen
   async function runNow(r: Routine) {
     setBusyId(r.id);
     try {
-      await apiFetch(`${base}/${r.id}/run`, { method: "POST", body: JSON.stringify({ expert: expertKey }) });
+      await apiFetch(routinePath(agentId, r.id, "run"), { method: "POST", body: JSON.stringify({ expert: expertKey }) });
       toast.success(`${expert.name} lance « ${r.name} » dans la minute. Le résultat arrive dans ses conversations et sur ses canaux.`);
     } catch (e) {
       toast.error((e as Error).message);
@@ -118,7 +119,7 @@ export function ExpertRoutines({ agentId, expert, active: shown = true }: { agen
   async function remove() {
     if (!removing) return;
     const r = removing;
-    await apiFetch(`${base}/${r.id}?expert=${expertKey}`, { method: "DELETE" });
+    await apiFetch(`${routinePath(agentId, r.id)}?expert=${encodeURIComponent(expertKey)}`, { method: "DELETE" });
     setRoutines((list) => list && list.filter((x) => x.id !== r.id));
     toast.success("Routine supprimée.");
   }

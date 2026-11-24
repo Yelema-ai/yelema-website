@@ -4,7 +4,7 @@ import { Picker } from "@/components/ui/picker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FileText, Globe, Loader2, NotebookPen, Palette, Plus, X } from "lucide-react";
 import { toast } from "sonner";
-import { apiFetch, readApiError } from "@/lib/api";
+import { apiFetch, readApiError, errorText } from "@/lib/api";
 import type { MemoryItem, MemoryList } from "@/lib/memory";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { HiddenFileInput } from "@/components/HiddenFileInput";
@@ -14,17 +14,31 @@ import { MemoryGroups } from "./MemoryGroups";
 import { EssentialTile } from "@/components/company/EssentialTile";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { usePoll } from "@/components/usePoll";
 import { runPool } from "@/lib/bulk";
-import { MAX_UPLOAD_BYTES, tooLarge } from "@/lib/upload-limit";
+import { MAX_DOCUMENT_BYTES, MAX_UPLOAD_BYTES, needsParts, PART_BYTES, tooLargeDocument } from "@/lib/upload-limit";
+import { PartsError, sendInParts, type UploadDestination } from "@/lib/upload-parts";
 
 // The limit said in every refusal of a too large file (Leslie, 07/11): the host refuses it before the app sees it.
-const LIMIT_MB = Math.round(MAX_UPLOAD_BYTES / (1024 * 1024));
-const tooBig = (what: string) => `${what} dépasse ${LIMIT_MB} Mo, la taille maximale d’un envoi. Réduisez-la (un PDF compressé, par exemple) puis réessayez.`;
+// 25 MB in parts (lib/upload-parts.ts); 4 MB while the back office does not take parts.
+const LIMIT_MB = Math.round(MAX_DOCUMENT_BYTES / (1024 * 1024));
+const SINGLE_MB = Math.round(MAX_UPLOAD_BYTES / (1024 * 1024));
+const tooBig = (what: string, mb = LIMIT_MB) => `${what} dépasse ${mb} Mo, la taille maximale d’un envoi. Réduisez-la (un PDF compressé, par exemple) puis réessayez.`;
+
+/** A document over 4 MB, in parts: null once filed, else what to tell (`what` names it in the sentence). */
+async function sendLarge(file: File, to: UploadDestination, what: string): Promise<string | null> {
+  try {
+    await sendInParts(file, to, { partBytes: PART_BYTES });
+    return null;
+  } catch (e) {
+    return e instanceof PartsError && e.status === 404 ? tooBig(what, SINGLE_MB) : (e as Error).message;
+  }
+}
 import { driveTree } from "@/lib/drive-store";
 import { expertPath } from "@/lib/expert-tabs";
+import { handoffQuery } from "@/lib/chat-handoff";
 
 // The company memory: what the experts know of the company. Everyone sees the deposits of their own
 // compartments; whoever may deposit adds a note or a document. The back office sends each deposit
@@ -69,7 +83,7 @@ export function MemoryView({
     () =>
       apiFetch<MemoryList>("/api/memory/items")
         .then(setList)
-        .catch((e: Error) => setError(e.message)),
+        .catch((e: Error) => setError(errorText(e))),
     []
   );
   useEffect(() => void load(), [load]);
@@ -88,6 +102,7 @@ export function MemoryView({
   // No brand book yet: Djénéba makes it, she is in every account (Leslie, 05/11: « tous les comptes n'ont pas
   // Koffi »). She hands it to Koffi when the team has him. The file may land in either one's Livrables.
   const { experts } = useExpertsContext();
+  const router = useRouter();
   const plainKey = (k?: string | null) => (k ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const isExpert = (e: (typeof experts)[number], name: string) => [e.catalogueKey, e.driveFolder, e.profileId].some((k) => plainKey(k).includes(name));
   const koffi = experts.find((e) => isExpert(e, "koffi"));
@@ -124,15 +139,20 @@ export function MemoryView({
       toast.success("C’est la charte de l’entreprise : vos Experts l’appliquent désormais.");
       await load();
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(errorText(e));
     } finally {
       setCopying(false);
     }
   }
 
   async function depositCharte(file: File) {
-    if (tooLarge(file)) return void toast.error(tooBig("La charte"));
+    if (tooLargeDocument(file)) return void toast.error(tooBig("La charte"));
     if (charte) return newVersion(charte, file);
+    if (needsParts(file)) {
+      const refused = await sendLarge(file, { kind: "memory", title: "Charte graphique" }, "La charte");
+      if (refused) toast.error(refused);
+      return void (await load());
+    }
     const form = new FormData();
     form.set("title", "Charte graphique");
     form.set("file", file);
@@ -143,7 +163,13 @@ export function MemoryView({
 
   // A new file for a deposited document: the back office keeps the old one as the previous version.
   async function newVersion(item: MemoryItem, file: File) {
-    if (tooLarge(file)) return void toast.error(tooBig(`« ${file.name} »`).replace("Réduisez-la", "Réduisez-le"));
+    if (tooLargeDocument(file)) return void toast.error(tooBig(`« ${file.name} »`).replace("Réduisez-la", "Réduisez-le"));
+    if (needsParts(file)) {
+      const refused = await sendLarge(file, { kind: "memory-version", item: item.id }, "La nouvelle version");
+      if (refused) toast.error(refused);
+      else toast.success(`${item.title} : nouvelle version déposée`);
+      return void (await load());
+    }
     const form = new FormData();
     form.set("file", file);
     const res = await fetch(`/api/memory/items/${item.id}/versions`, { method: "POST", body: form });
@@ -186,9 +212,14 @@ export function MemoryView({
       if (kind === "documents") {
         // Three documents at a time; the ones refused stay in the window, in their order.
         const sent = await runPool(files, 3, async (file) => {
-          if (tooLarge(file)) {
+          if (tooLargeDocument(file)) {
             toast.error(`${file.name} : ${tooBig("ce document").replace(/^ce/, "Ce").replace("Réduisez-la", "Réduisez-le")}`);
             return false;
+          }
+          if (needsParts(file)) {
+            const refused = await sendLarge(file, { kind: "memory", title: file.name, unit: unitId }, "Ce document");
+            if (refused) toast.error(`${file.name} : ${refused.replace("Réduisez-la", "Réduisez-le")}`);
+            return !refused;
           }
           const form = new FormData();
           form.set("title", file.name);
@@ -199,14 +230,14 @@ export function MemoryView({
           return res.ok;
         });
         sent.forEach((r, i) => {
-          if (r.status === "rejected") toast.error(`${files[i].name} : ${(r.reason as Error).message}`);
+          if (r.status === "rejected") toast.error(`${files[i].name} : ${errorText(r.reason)}`);
           if (r.status === "rejected" || !r.value) failed.push(files[i]);
         });
         setFiles(failed);
         if (failed.length === 0) setAdding(null);
       }
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(errorText(e));
     } finally {
       setBusy(false);
       await load();
@@ -219,7 +250,7 @@ export function MemoryView({
       await apiFetch(`/api/memory/items/${item.id}`, { method: "PATCH", body: JSON.stringify(body) });
       await load();
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(errorText(e));
     }
   }
 
@@ -262,8 +293,8 @@ export function MemoryView({
                   </Button>
                 )}
                 {!charte && !offer && designer && (
-                  <Button asChild size="sm">
-                    <Link href={`${expertPath(designer.agentId, designer.profileId)}/chat?q=${encodeURIComponent(charteRequest)}`}>La créer avec {designer.displayName}</Link>
+                  <Button size="sm" onClick={() => router.push(`${expertPath(designer.agentId, designer.profileId)}/chat?${handoffQuery(charteRequest)}`)}>
+                    La créer avec {designer.displayName}
                   </Button>
                 )}
                 <Button variant="outline" size="sm" onClick={() => chartePicker.current?.click()}>
@@ -328,7 +359,7 @@ export function MemoryView({
           )}
           {adding === "documents" && (
             <div>
-              <p className="text-[13px] text-ink-3">PDF ou texte, 4 Mo au plus chacun.</p>
+              <p className="text-[13px] text-ink-3">PDF ou texte, 25 Mo au plus chacun.</p>
               {files.length > 0 && (
                 <ul className="mt-2 space-y-1">
                   {files.map((f, i) => (

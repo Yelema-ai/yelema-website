@@ -75,3 +75,10 @@ describe("parseModelChoice", () => {
     assert.equal(modelChoiceRefusal("internal_error"), null);
   });
 });
+
+it("🔒 isAdminScope : les réglages de l'entreprise et d'un autre membre demandent un administrateur", async () => {
+  const { isAdminScope } = await import("./llm.ts");
+  assert.equal(isAdminScope({ kind: "own" }), false);
+  assert.equal(isAdminScope({ kind: "client" }), true);
+  assert.equal(isAdminScope({ kind: "member", id: "12" }), true);
+});

@@ -22,6 +22,7 @@ import { findModel, prettyModelLabel, type ChatSettings } from "@/components/cha
 import { rememberSettings, rememberedSettings } from "@/components/chat/rememberedSettings";
 import { expertCycle, expertRank, isDjeneba } from "@/lib/expert-cycle";
 import { agentTabPath } from "@/lib/expert-tabs";
+import { handoffQuery } from "@/lib/chat-handoff";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -201,7 +202,7 @@ function ExpertsHome() {
     const m = message.trim();
     if (!m) return;
     const path = to ? agentTabPath(to.agentId, "chat", to.profileId) : ownAgentId ? agentTabPath(ownAgentId, "chat") : null;
-    if (path) router.push(`${path}?q=${encodeURIComponent(m)}`);
+    if (path) router.push(`${path}?${handoffQuery(m)}`);
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {

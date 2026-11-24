@@ -33,8 +33,15 @@ function isLocalOrigin(origin: string): boolean {
 // Open-redirect guard for `?next=` params: only internal absolute paths (`/foo`) are
 // allowed — never protocol-relative (`//evil.com`) or absolute URLs. Falls back to
 // /dashboard. Shared by the login page and the /auth/callback route so the two can't drift.
+// A browser reads `/\x` and `/<tab>/x` as `//x` (another site), and a later decoding turns `/%2Fx` into it.
+const NEXT_BASE = "https://next.invalid";
 export function safeNextPath(raw?: string | null): string {
-  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/";
+  if (!raw || !raw.startsWith("/") || /[\\\u0000-\u001f\u007f]/.test(raw) || /^\/(?:\/|%2f|%5c)/i.test(raw)) return "/";
+  try {
+    return new URL(raw, NEXT_BASE).origin === NEXT_BASE ? raw : "/";
+  } catch {
+    return "/";
+  }
 }
 
 // `siteUrl` is the deployment's SITE_URL (runtime config): server code passes `siteUrl()` from

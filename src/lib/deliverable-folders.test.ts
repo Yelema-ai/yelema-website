@@ -60,3 +60,72 @@ test("a document shows itself when nothing better is there: slides before pages 
   assert.equal(items.find((i) => i.name === "Bilan")?.cover, `${R}/Fatima/Bilan/deck.pptx`);
   assert.equal(items.find((i) => i.name === "note.docx")?.cover, `${R}/Fatima/note.docx`);
 });
+
+test("a folder's glimpse: its best cover anywhere inside, else its newest three entries, working files left out", async () => {
+  const { folderPeeks } = await import("./deliverable-folders.ts");
+  const e = (path: string, modified: number, type = "file") => ({ name: path.split("/").pop()!, path, type, modified, depth: path.split("/").length - 3 });
+  const peeks = folderPeeks(
+    [
+      e("~/Livrables/Djeneba/Reunions", 9, "directory"),
+      e("~/Livrables/Djeneba/Reunions/261120-090116", 9, "directory"),
+      e("~/Livrables/Djeneba/Reunions/261120-090116/compte-rendu.html", 9),
+      e("~/Livrables/Djeneba/Reunions/261120-090116/compte-rendu.json", 9),
+      e("~/Livrables/Djeneba/Reunions/261119-140000", 5, "directory"),
+      e("~/Livrables/Djeneba/Reunions/notes.md", 8),
+      e("~/Livrables/Djeneba/Reunions/Ordre du jour.docx", 7),
+      e("~/Livrables/Djeneba/Reunions/Plan.pdf", 6),
+      e("~/Livrables/Djeneba/CFAO", 4, "directory"),
+      e("~/Livrables/Djeneba/CFAO/Offre/visuel.png", 4),
+      e("~/Livrables/Djeneba/CFAO/Recus/scan.png", 9),
+    ],
+    ["~/Livrables/Djeneba/Reunions", "~/Livrables/Djeneba/CFAO"]
+  );
+  const r = peeks.get("~/Livrables/Djeneba/Reunions")!;
+  assert.equal(r.cover, "~/Livrables/Djeneba/Reunions/Plan.pdf");
+  assert.deepEqual(r.first.map((x) => x.name), ["compte-rendu.html", "Ordre du jour.docx", "Plan.pdf"]);
+  assert.ok(r.first.every((x) => !x.folder));
+  assert.equal(r.count, 3);
+  assert.equal(peeks.get("~/Livrables/Djeneba/CFAO")!.cover, "~/Livrables/Djeneba/CFAO/Offre/visuel.png");
+  // The card's mosaic: what draws well small first (PDF), then the other documents, then the rest; never a working file.
+  assert.deepEqual(r.tiles.map((x) => x.name), ["Plan.pdf", "Ordre du jour.docx", "compte-rendu.html"]);
+});
+
+test("a folder's mosaic holds four outputs at most, at any depth, pictures, PDFs and slides alone when there are two", async () => {
+  const { folderPeeks } = await import("./deliverable-folders.ts");
+  const e = (path: string, modified: number, type = "file") => ({ name: path.split("/").pop()!, path, type, modified, depth: path.split("/").length - 3 });
+  const peeks = folderPeeks(
+    [
+      e("/home/node/Livrables/Kouassi", 9, "directory"),
+      e("/home/node/Livrables/Kouassi/revvo", 9, "directory"),
+      e("/home/node/Livrables/Kouassi/revvo/rapport.html", 9),
+      e("/home/node/Livrables/Kouassi/revvo/affiche.png", 3),
+      e("/home/node/Livrables/Kouassi/revvo/deck.pptx", 5),
+      e("/home/node/Livrables/Kouassi/_travail/brouillon.md", 9),
+      e("/home/node/Livrables/Kouassi/Revvo/offre.pdf", 7),
+      e("/home/node/Livrables/Kouassi/Revvo/chiffres.xlsx", 6),
+    ],
+    ["/home/node/Livrables/Kouassi"]
+  );
+  const k = peeks.get("/home/node/Livrables/Kouassi")!;
+  // Two pictures, PDFs or slides or more: only those (a sheet or a page of text reads as a grey smear at that size).
+  assert.deepEqual(k.tiles.map((x) => x.name), ["offre.pdf", "deck.pptx", "affiche.png"]);
+  assert.equal(k.count, 5);
+});
+
+test("a folder that only holds a folder shows the output inside it, never the folder's name", async () => {
+  const { folderPeeks } = await import("./deliverable-folders.ts");
+  const e = (path: string, modified: number, type = "file") => ({ name: path.split("/").pop()!, path, type, modified, depth: path.split("/").length - 3 });
+  const peeks = folderPeeks(
+    [
+      e("~/Livrables/Djeneba/Mstudio", 9, "directory"),
+      e("~/Livrables/Djeneba/Mstudio/organigramme", 9, "directory"),
+      e("~/Livrables/Djeneba/Mstudio/organigramme/organigramme.html", 9),
+      e("~/Livrables/Djeneba/Mstudio/organigramme/donnees.json", 9),
+      e("~/Livrables/Djeneba/Vide", 2, "directory"),
+      e("~/Livrables/Djeneba/Vide/brouillons", 2, "directory"),
+    ],
+    ["~/Livrables/Djeneba/Mstudio", "~/Livrables/Djeneba/Vide"]
+  );
+  assert.deepEqual(peeks.get("~/Livrables/Djeneba/Mstudio")!.first, [{ name: "organigramme.html", folder: false }]);
+  assert.equal(peeks.get("~/Livrables/Djeneba/Vide")!.first.length, 0);
+});

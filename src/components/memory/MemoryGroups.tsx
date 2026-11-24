@@ -1,5 +1,6 @@
 "use client";
 
+import { safeHref } from "@/lib/markdown-safety";
 import { useState } from "react";
 import { ChevronDown, FileText, Globe, MoreHorizontal, NotebookPen, Plus } from "lucide-react";
 import { groupByUnit, type MemoryItem, type MemoryList, type MemoryStatus } from "@/lib/memory";
@@ -149,7 +150,7 @@ function Item({ item, onToggle, onRemove, onNewVersion }: { item: MemoryItem } &
               "Note"
             ) : item.url ? (
               <>
-                <a href={item.url} target="_blank" rel="noreferrer" className="font-semibold text-brand-ink underline-offset-2 hover:underline">
+                <a href={safeHref(item.url)} target="_blank" rel="noreferrer" className="font-semibold text-brand-ink underline-offset-2 hover:underline">
                   {item.url.replace(/^https?:\/\//, "")}
                 </a>
                 , relu chaque semaine

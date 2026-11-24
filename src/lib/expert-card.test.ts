@@ -19,6 +19,24 @@ test("the panel shows the expert's last deliverables, not its notes, uploads or 
   assert.equal(lastDeliverables(entries, f, 2).length, 2);
 });
 
+test("the panel finds the expert's folder written without its accents or capital", () => {
+  const entries = [
+    { name: "CR.pdf", path: "~/Livrables/Djeneba/Comptes rendus/2026-11/CR.pdf", type: "file", modified: 5 },
+    { name: "B.pdf", path: "~/Livrables/djénéba/B.pdf", type: "file", modified: 4 },
+    { name: "Autre.pdf", path: "~/Livrables/Djenebax/Autre.pdf", type: "file", modified: 9 },
+  ];
+  assert.deepEqual(lastDeliverables(entries, "~/Livrables/Djénéba").map((e) => e.name), ["CR.pdf", "B.pdf"]);
+});
+
+test("the panel reads the drive's absolute paths for the app's « ~/Livrables » folder", () => {
+  const entries = [
+    { name: "CR.pdf", path: "/home/node/Livrables/Djénéba/Réunions/2026-11-23/CR.pdf", type: "file", modified: 5 },
+    { name: "Prospects.xlsx", path: "/home/node/Livrables/Kouassi/Prospects.xlsx", type: "file", modified: 7 },
+  ];
+  assert.deepEqual(lastDeliverables(entries, "~/Livrables/Djénéba").map((e) => e.name), ["CR.pdf"]);
+  assert.deepEqual(lastDeliverables(entries, "/home/node/Livrables/Kouassi").map((e) => e.name), ["Prospects.xlsx"]);
+});
+
 test("a file's kind and its day read short", () => {
   assert.equal(fileKind("Plan.pptx"), "Présentation");
   assert.equal(fileKind("x.zip"), "ZIP");

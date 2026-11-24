@@ -2,7 +2,7 @@ import { ApiError, readJson } from "@/lib/http";
 import { mcpRefusalMessage, parseServerDraft, type McpServerDraft } from "@/lib/mcp-servers";
 import { settingsError } from "../llm/_shared";
 
-export { noStore, settingsToken } from "../llm/_shared";
+export { noStore, scopeToken, settingsToken } from "../llm/_shared";
 
 export async function serverDraft(request: Request): Promise<McpServerDraft> {
   const draft = parseServerDraft(await readJson(request));

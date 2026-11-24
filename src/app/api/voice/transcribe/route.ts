@@ -16,6 +16,7 @@ export async function POST(request: Request) {
     const form = await request.formData().catch(() => null);
     const file = form?.get("file");
     if (!(file instanceof Blob)) throw new ApiError(400, "bad_request", "Enregistrement requis.");
+    if (file.size > MAX_BYTES) throw new ApiError(422, "unprocessable", "Morceau de dictée trop long.");
     const out = new FormData();
     out.append("file", file, "dictee.wav");
     out.append("language", form?.get("language") === "en" ? "en" : "fr");

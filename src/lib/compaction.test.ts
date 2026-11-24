@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isCompactionSummary, visibleHistory } from "./compaction.ts";
+import { isCompactionSummary, visibleHistory, withoutCompactionNote } from "./compaction.ts";
 
 test("a compaction summary is never a message, one marker per compaction", () => {
   const rows = [
@@ -47,4 +47,26 @@ test("a member's message saved several times at once shows once, the same words 
     visibleHistory(rows).map((r) => `${r.role}:${r.content.trim()}`),
     ["user:Le point des mails ?", "assistant:Trois mails attendent une réponse.", "user:?", "user:?"],
   );
+});
+
+test("the task list Hermes keeps across a compaction is never shown, and the marker shows once", () => {
+  const note = "[Your active task list was preserved across context compression]\n- [>] Draft the deck\nskill_view(name='salif/4-livrables/deck')";
+  const rows = [
+    { role: "user", content: "Le livrable ?" },
+    { role: "system", content: "📚 La conversation devenait longue…" },
+    { role: "user", content: note },
+    { role: "system", content: "📚 La conversation devenait longue…" },
+    { role: "assistant", content: "Le livrable est prêt." },
+  ];
+  assert.deepEqual(visibleHistory(rows).map((r) => r.role), ["user", "system", "assistant"]);
+  assert.ok(!isCompactionSummary("Your active task list, as I understand it: the deck."));
+});
+
+test("a compaction note folded at the end of a message is cut, the text before it kept", () => {
+  const rows = [
+    { role: "assistant", content: "Le deck est prêt.\n\n[Your active task list was preserved across context compression]\n- [>] Draft" },
+    { role: "assistant", content: "Le tableau [PRIOR CONTEXT] reste en ligne." },
+  ];
+  assert.deepEqual(visibleHistory(rows).map((r) => r.content), ["Le deck est prêt.", "Le tableau [PRIOR CONTEXT] reste en ligne."]);
+  assert.equal(withoutCompactionNote("Bonjour"), "Bonjour");
 });

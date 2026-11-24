@@ -14,7 +14,9 @@ import type { SettingScope } from "@/lib/llm";
 import { mcpPending, serverHost, serverTitle, type McpOauthServer, type McpOverview, type McpServer, type McpServerDraft, type McpToolsOverview, type McpToolsReport, type McpWritten } from "@/lib/mcp-servers";
 import { type McpOauthFlow } from "./McpOauthSteps";
 import { McpServerDialog } from "./McpServerDialog";
+import { branding } from "@/config/branding";
 import { directoryEntryFor } from "@/lib/mcp-directory";
+import { authorizationTarget } from "@/lib/oauth-host";
 import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
 
 // Une pose prend d'ordinaire moins d'une minute par instance ; au-delà, on cesse de relire seul.
@@ -146,6 +148,8 @@ export function McpView() {
   const [oauth, setOauth] = useState<Record<string, McpOauthServer>>({});
   const [flow, setFlow] = useState<McpOauthFlow | null>(null);
   const popup = useRef<Window | null>(null);
+  // The provider's page was sent to the window (a host the member had to confirm is sent at their click only).
+  const sent = useRef(false);
   const [tools, setTools] = useState<McpToolsOverview | null>(null);
   const [surveying, setSurveying] = useState(false);
   const [oauthTries, setOauthTries] = useState(0);
@@ -215,24 +219,34 @@ export function McpView() {
   }, []);
   useEffect(() => closePopup, [closePopup]);
 
-  function openAccess() {
-    if (!flow?.url) return;
-    if (popup.current && !popup.current.closed) popup.current.focus();
-    else window.open(flow.url, "mcp-oauth", "popup,width=600,height=750,noopener");
+  // The provider's page goes into the window opened at the click; once there, the button only brings it forward.
+  function showPage(url: string) {
+    const w = popup.current;
+    if (w && !w.closed && sent.current) return w.focus();
+    sent.current = true;
+    if (w && !w.closed) {
+      w.opener = null;
+      w.location.href = url;
+    } else window.open(url, "mcp-oauth", "popup,width=600,height=750,noopener");
   }
 
-  async function startAuth(serverId: string, name: string) {
-    setFlow({ serverId, name, step: "authorizing", url: null });
+  function openAccess() {
+    if (flow?.url) showPage(flow.url);
+  }
+
+  async function startAuth(serverId: string, name: string, serverUrl: string | null) {
+    setFlow({ serverId, name, step: "authorizing", url: null, host: null, expected: false });
     setOauthTries(0);
+    sent.current = false;
     try {
       const { authorizationUrl } = await apiFetch<{ authorizationUrl: string }>(`/api/mcp/oauth/${encodeURIComponent(serverId)}`, { method: "POST" });
-      if (!authorizationUrl.startsWith("https://")) throw new Error("Ce lien de connexion n’est pas sûr : il a été bloqué.");
-      setFlow((f) => (f?.serverId === serverId ? { ...f, url: authorizationUrl } : f));
-      const w = popup.current;
-      if (w && !w.closed) {
-        w.opener = null;
-        w.location.href = authorizationUrl;
-      }
+      // The address comes from the instance: off the server's own domain, it waits for the member to read its host.
+      const known = directoryEntryFor(serverUrl)?.domain;
+      const target = authorizationTarget(authorizationUrl, serverUrl, known ? [known] : []);
+      if (!target) throw new Error("Ce lien de connexion n’est pas sûr : il a été bloqué.");
+      setFlow((f) => (f?.serverId === serverId ? { ...f, ...target } : f));
+      if (target.expected) showPage(target.url);
+      else if (popup.current && !popup.current.closed) popup.current.document.body.textContent = `Vérifiez l’adresse affichée dans ${branding.appName}, puis continuez depuis là.`;
     } catch (e) {
       closePopup();
       setFlow(null);
@@ -242,7 +256,7 @@ export function McpView() {
 
   function authorize(server: McpServer) {
     openPopup(server.name);
-    void startAuth(server.id, server.name);
+    void startAuth(server.id, server.name, server.url);
   }
 
   function cancelFlow() {
@@ -255,7 +269,7 @@ export function McpView() {
   useEffect(() => {
     if (flow?.step !== "installing" || !data) return;
     const s = [...data.own, ...(data.client ?? [])].find((x) => x.id === flow.serverId);
-    if (s?.state === "applied") void startAuth(s.id, s.name);
+    if (s?.state === "applied") void startAuth(s.id, s.name, s.url);
     else if (!s || s.state === "failed") {
       closePopup();
       setFlow(null);
@@ -331,7 +345,7 @@ export function McpView() {
     if (authorizeNext) openPopup(draft.name);
     try {
       const out = await written(apiFetch<McpWritten>(scopeUrl(scope), { method: "POST", body: JSON.stringify(draft) }), `Serveur ${draft.name} enregistré`);
-      if (authorizeNext && out.server) setFlow({ serverId: out.server.id, name: out.server.name, step: "installing", url: null });
+      if (authorizeNext && out.server) setFlow({ serverId: out.server.id, name: out.server.name, step: "installing", url: null, host: null, expected: false });
       else closePopup();
     } catch (e) {
       closePopup();

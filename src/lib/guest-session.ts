@@ -2,9 +2,10 @@ import "server-only";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { backoffice, BackofficeError } from "@/lib/backoffice";
-import { clientIp, guestCookieKey, guestCookieName, guestCookieOptions, guestLimits, guestRefusal, openGuestCookie, sameOriginPost, sealGuestCookie, sessionTag, type GuestCookie, type GuestParticipant, type GuestSessionView } from "@/lib/guest-access";
+import { clientIp, GUEST_STREAMS_AT_ONCE, guestCookieKey, guestCookieName, guestCookieOptions, guestLimits, guestRefusal, openGuestCookie, sameOriginPost, sealGuestCookie, sessionTag, SHARED_GUEST_LIMITS, sharedWindow, slots, trustedHops, type GuestCookie, type GuestParticipant, type GuestSessionView } from "@/lib/guest-access";
 import { apiError, handleError } from "@/lib/http";
-import { resolverToken } from "@/lib/runtime-config";
+import { deployVersion, resolverToken } from "@/lib/runtime-config";
+import { sharedCacheOn, sharedLayer, vercelRuntimeCache } from "@/lib/shared-cache";
 
 // The guest routes' server side (`src/app/invite/**`): the sealed session cookie (httpOnly, path /invite, holds
 // the guest's relay key), the same-origin check of their POSTs and their limits. Member routes never read it.
@@ -15,7 +16,26 @@ export const ENDED = "Votre accès à ce salon a pris fin.";
 
 const LIMITS = guestLimits();
 
-export const ipOf = (request: Request): string => clientIp(request.headers, Boolean(process.env.VERCEL));
+export const ipOf = (request: Request): string => clientIp(request.headers, Boolean(process.env.VERCEL), trustedHops(process.env.TRUSTED_PROXY_HOPS));
+
+// Across the functions of a region when the shared cache is on; otherwise the local windows alone.
+type SharedKind = keyof typeof SHARED_GUEST_LIMITS;
+const across = sharedCacheOn(process.env) ? sharedLayer<{ n: number; until: number }>("guest-limit", 600, () => vercelRuntimeCache(deployVersion())) : null;
+const ACROSS = across && (Object.fromEntries(Object.entries(SHARED_GUEST_LIMITS).map(([kind, [limit, ms]]) => [kind, sharedWindow(across, limit, ms)])) as Record<SharedKind, ReturnType<typeof sharedWindow>>);
+
+/** `tooMany`, then the same count across server instances where they share a cache (one read, one write). */
+export async function tooManyAcross(kind: SharedKind, key: string): Promise<NextResponse | null> {
+  const local = tooMany(kind, key);
+  if (local || !ACROSS) return local;
+  const limit = await ACROSS[kind](`${kind}:${sessionTag(key || "?")}`, Date.now());
+  if (limit.ok) return null;
+  const res = apiError("Trop de demandes. Réessayez dans quelques minutes.", 429, "rate_limited");
+  res.headers.set("Retry-After", String(limit.retryAfter));
+  return res;
+}
+
+/** A place among the streams this guest session holds open; null when it already has its share. */
+export const takeStream = slots(GUEST_STREAMS_AT_ONCE);
 
 /** null to go on; otherwise a 429 for `key` (an address, or a session's tag). */
 export function tooMany(kind: keyof typeof LIMITS, key: string): NextResponse | null {
@@ -27,9 +47,9 @@ export function tooMany(kind: keyof typeof LIMITS, key: string): NextResponse | 
 }
 
 /** null to go on; otherwise the refusal (cross-site POST, too many tries from this address). */
-export function guardPost(request: Request, kind: "code" | "verify" | "logout" | "message"): NextResponse | null {
+export async function guardPost(request: Request, kind: "code" | "verify" | "logout" | "message"): Promise<NextResponse | null> {
   if (!sameOriginPost(request.headers)) return apiError("Requête refusée.", 403, "forbidden");
-  return kind === "code" || kind === "verify" ? tooMany(kind, ipOf(request)) : null;
+  return kind === "code" || kind === "verify" ? tooManyAcross(kind, ipOf(request)) : null;
 }
 
 /** null when the resolver token is missing: then no guest can enter (an outage, never a readable cookie). */

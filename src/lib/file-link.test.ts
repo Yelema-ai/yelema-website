@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { fileLinkKey, fileLinkQuery, LINK_TTL_MS, signFileLink, verifyFileLink } from "./file-link.ts";
+import { fileLinkKey, fileLinkQuery, fileLinkVerifyKeys, LINK_TTL_MS, signFileLink, verifyFileLink } from "./file-link.ts";
 
 const key = fileLinkKey({ AGENT37_API_KEY: "sk_live_0123456789abcdef" })!;
 const NOW = 1_762_000_000_000;
@@ -33,5 +33,18 @@ describe("🔒 lien signé d'un livrable", () => {
     const other = fileLinkKey({ AGENT37_API_KEY: "sk_live_autre_cle_0000000" })!;
     const exp = NOW + 60_000;
     assert.ok(!verifyFileLink(other, "ws1", "inst1", P, exp, signFileLink(key, "ws1", "inst1", P, exp), NOW));
+  });
+
+  it("avec son propre secret, la clé Agent37 ne signe plus ; elle est encore lue tant que le repli n'est pas coupé", () => {
+    const both = { FILE_LINK_SECRET: "un-secret-de-liens-0123456789", AGENT37_API_KEY: "sk_live_0123456789abcdef" };
+    const exp = NOW + 60_000;
+    const old = signFileLink(key, "ws1", "inst1", P, exp);
+    assert.ok(fileLinkVerifyKeys(both).some((k) => verifyFileLink(k, "ws1", "inst1", P, exp, old, NOW)));
+    const off = { ...both, FILE_LINK_FALLBACK: "off" };
+    assert.equal(fileLinkVerifyKeys(off).length, 1);
+    assert.ok(!fileLinkVerifyKeys(off).some((k) => verifyFileLink(k, "ws1", "inst1", P, exp, old, NOW)));
+    assert.equal(fileLinkKey({ AGENT37_API_KEY: "sk_live_0123456789abcdef", FILE_LINK_FALLBACK: "off" }), null);
+    assert.deepEqual(fileLinkVerifyKeys({ AGENT37_API_KEY: "sk_live_0123456789abcdef" }), [key]);
+    assert.deepEqual(fileLinkVerifyKeys({}), []);
   });
 });

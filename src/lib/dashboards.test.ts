@@ -41,3 +41,14 @@ describe("getDashboardMeta", () => {
     assert.ok(mamadou.kpis.includes("Marge brute"));
   });
 });
+
+describe("isModelPage", () => {
+  it("🔒 accepte un modèle de l'app, refuse ce qui en sort une fois l'adresse résolue", async () => {
+    const { isModelPage } = await import("./dashboards.ts");
+    assert.equal(isModelPage("/modeles/finance.html"), true);
+    assert.equal(isModelPage("/modeles/index-equipe.html#direction"), true);
+    for (const bad of ["/modeles/%2e%2e/api/agents/a1/files/content?path=x", "/modeles/%2E%2E/x", "/modeles/..%2fx", "/modeles/../x", "/modeles/x\\..\\..\\api", "/modeles//evil.example/x", "/modeles/a b", "https://evil.example/modeles/x", "/modeles%2f../x", null]) {
+      assert.equal(isModelPage(bad), false, String(bad));
+    }
+  });
+});

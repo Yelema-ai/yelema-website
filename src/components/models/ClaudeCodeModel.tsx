@@ -70,7 +70,7 @@ export function ClaudeCodeModel({ status, member, picker, onChanged }: { status:
 
   const remove = (what: "subscription" | ClaudeCredential) =>
     run("remove", async () => {
-      await apiFetch(what === "subscription" ? `/api/claude-code/auth${query}` : `/api/claude-code/auth/key${query}${query ? "&" : "?"}id=${what.id}`, { method: "DELETE" });
+      await apiFetch(what === "subscription" ? `/api/claude-code/auth${query}` : `/api/claude-code/auth/key${query}${query ? "&" : "?"}id=${encodeURIComponent(what.id)}`, { method: "DELETE" });
       toast.success(what === "subscription" ? "Abonnement déconnecté" : "Compte retiré");
       await onChanged();
     });

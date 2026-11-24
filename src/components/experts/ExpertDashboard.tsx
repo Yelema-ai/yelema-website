@@ -3,7 +3,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { setChatSidePanel } from "@/components/chat/chat-layout";
 import Image from "next/image";
-import { BarChart3, Download, ExternalLink, FileCode, FileText, Loader2, Maximize2, Minimize2, Presentation, RefreshCw, Share2, Sparkles, X } from "lucide-react";
+import { BarChart3, Download, ExternalLink, FileCode, FileText, Loader2, Maximize2, Minimize2, Presentation, RefreshCw, Share2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -221,7 +221,8 @@ function DashboardHeader({
   const majFormatted = formatMajDate(data?.maj);
 
   return (
-    <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-line px-4">
+    // The last button (✕) kept off the corner (Leslie, 20/11).
+    <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-line pl-4 pr-6">
       <div className="min-w-0 pr-2">
         <h2 className="truncate text-sm font-semibold text-ink">{title}</h2>
         <div className="flex min-w-0 items-center gap-2 text-xs text-ink-3">
@@ -251,9 +252,9 @@ function PoweredBy() {
 }
 
 function DashboardContent() {
-  const { embedUrl, loading, isGenerating, triggerGeneration, data } = useDashboard();
+  const { embedUrl, loading, isGenerating, triggerGeneration, autoAsked } = useDashboard();
 
-  if (loading && !embedUrl) {
+  if (loading && !embedUrl && !isGenerating) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
         <Loader2 className="mb-2 h-8 w-8 animate-spin text-brand" />
@@ -262,27 +263,25 @@ function DashboardContent() {
     );
   }
 
+  // No button to press first (Leslie, 23/11): the dashboard asks for itself on opening and shows up here.
+  // Only an attempt that ended without a page leaves a way to try again.
   if (!embedUrl) {
+    const waiting = isGenerating || !autoAsked;
     return (
       <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
         <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-soft text-ink-3">
-          <BarChart3 className="size-6 text-brand" />
+          {waiting ? <Loader2 className="size-6 animate-spin text-brand" /> : <BarChart3 className="size-6 text-brand" />}
         </div>
-        <h3 className="mb-1 text-sm font-semibold text-ink">{data?.title || "Pas encore de tableau de bord"}</h3>
-        <p className="mb-4 max-w-xs text-xs text-ink-3">{data?.role || "Aucun tableau de bord n'a encore été préparé pour cet Expert."}</p>
-        <Button size="sm" onClick={() => void triggerGeneration()} disabled={isGenerating} className="gap-2">
-          {isGenerating ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Préparation en cours…
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" />
-              Préparer le tableau de bord
-            </>
-          )}
-        </Button>
+        <h3 className="mb-1 text-sm font-semibold text-ink">{waiting ? "Votre tableau de bord se prépare" : "Pas encore prêt"}</h3>
+        <p className="max-w-xs text-xs text-ink-3">
+          {waiting ? "Il s'affiche ici dès qu'il est prêt, en quelques minutes." : "Revenez dans quelques minutes, ou relancez la préparation."}
+        </p>
+        {!waiting && (
+          <Button size="sm" variant="ghost" onClick={() => void triggerGeneration()} className="mt-3 gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Relancer
+          </Button>
+        )}
       </div>
     );
   }

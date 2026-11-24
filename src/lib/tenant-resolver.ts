@@ -1,7 +1,8 @@
 import "server-only";
 import { waitUntil } from "@vercel/functions";
 import { memo } from "@/lib/memo";
-import { backofficeUrl, resolverToken } from "@/lib/runtime-config";
+import { backofficeUrl, deployVersion, resolverToken } from "@/lib/runtime-config";
+import { sharedCacheOn, sharedLayer, throughShared, vercelRuntimeCache } from "@/lib/shared-cache";
 import type { ResolvedTenant } from "@/lib/tenant-header";
 
 // Which client a host name belongs to, asked of the back office (`GET /api/v1/app/tenant`). One
@@ -51,6 +52,9 @@ const hosts = memo<ResolvedTenant | null>({
   background: (settled) => waitUntil(settled),
 });
 
+// SHARED_SESSION_CACHE=on: a cold function reads the host from the region's cache (a minute old at most) before asking.
+const shared = sharedCacheOn(process.env) ? sharedLayer<ResolvedTenant | null>("tenant", 60, () => vercelRuntimeCache(deployVersion())) : null;
+
 async function ask(host: string): Promise<ResolvedTenant | null> {
   const base = backofficeUrl();
   const token = resolverToken();
@@ -75,7 +79,7 @@ async function ask(host: string): Promise<ResolvedTenant | null> {
 /** The client served on this host; null when the back office knows no such host. Throws on an outage with nothing to fall back on. */
 export async function resolveHost(host: string): Promise<ResolvedTenant | null> {
   try {
-    return await hosts.get(host, () => ask(host));
+    return await hosts.get(host, shared ? () => throughShared(shared, `tenant:${host}`, () => ask(host), () => false, (p) => waitUntil(p)) : () => ask(host));
   } catch (e) {
     if (e instanceof TenantError) throw e;
     console.error(`[tenant] ${host} could not be resolved:`, e instanceof Error ? e.message : e);

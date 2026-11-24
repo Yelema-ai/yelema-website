@@ -9,13 +9,14 @@ import { formatDiagnosticConfiguration } from "./formatters/config.ts";
 import { formatAuditOutils } from "./formatters/connectors.ts";
 import { formatConsommationTokens } from "./formatters/consumption.ts";
 import { formatLivrablesRecents } from "./formatters/deliverables.ts";
-import { formatRechercheMemoire } from "./formatters/memory.ts";
+import { formatRechercheMemoire, MIN_QUERY_CHARS } from "./formatters/memory.ts";
 import { formatHistoriqueRoutines, formatRoutinesPlanning } from "./formatters/routines.ts";
 import { formatSkillsExperts } from "./formatters/skills.ts";
 import { formatAppelsEtVoix } from "./formatters/voice.ts";
 import { HERMES_FILES, homeFile, INSTANCE_DIRS } from "./hermes-layout.ts";
 import { periodDays, usageForPeriod } from "./periods.ts";
 import type { YeleBackend } from "./rpc.ts";
+import { toolFailure } from "./tool-error.ts";
 import type { DiscoveredExpert, SupervisionDeps } from "./types.ts";
 
 /** La réponse de l'outil, ou la phrase qui dit pourquoi elle manque : une panne ne casse pas le serveur. */
@@ -23,7 +24,7 @@ async function attempt(failure: string, run: () => Promise<string>): Promise<str
   try {
     return await run();
   } catch (e) {
-    return `${failure} : ${e instanceof Error ? e.message : String(e)}`;
+    return toolFailure(failure, e);
   }
 }
 
@@ -61,8 +62,8 @@ export function createYeleSupervisionBackend(deps: SupervisionDeps): YeleBackend
       });
     },
 
-    lireRapportJournalier(dateStr?: string): Promise<string> {
-      return readDailyReport(deps.fetchFileContent, dateStr);
+    lireRapportJournalier(dateStr?: string, page?: number): Promise<string> {
+      return readDailyReport(deps.fetchFileContent, dateStr, page);
     },
 
     auditerOutils(targetExpert?: string): Promise<string> {
@@ -112,13 +113,13 @@ export function createYeleSupervisionBackend(deps: SupervisionDeps): YeleBackend
       });
     },
 
-    consulterAlertesIncidents(targetExpert?: string): Promise<string> {
+    consulterAlertesIncidents(targetExpert?: string, page?: number): Promise<string> {
       return attempt("Impossible de consulter les alertes et incidents", async () => {
         const [alerts, experts] = await Promise.all([
           deps.fetchIncidentAlerts ? deps.fetchIncidentAlerts() : Promise.resolve(null),
           installedExperts(deps),
         ]);
-        return formatAlertesEtIncidents(alerts, experts, targetExpert);
+        return formatAlertesEtIncidents(alerts, experts, targetExpert, page);
       });
     },
 
@@ -135,7 +136,8 @@ export function createYeleSupervisionBackend(deps: SupervisionDeps): YeleBackend
     rechercherDansLaMemoire(requete: string, targetExpert?: string): Promise<string> {
       return attempt("Impossible d'effectuer la recherche en mémoire", async () => {
         const [results, experts] = await Promise.all([
-          deps.searchMemories ? deps.searchMemories(requete, targetExpert) : Promise.resolve(null),
+          // Une requête trop courte ne lit rien sur l'instance : le formateur dit pourquoi.
+          deps.searchMemories && requete.trim().length >= MIN_QUERY_CHARS ? deps.searchMemories(requete, targetExpert) : Promise.resolve(null),
           installedExperts(deps),
         ]);
         return formatRechercheMemoire(requete, results, experts, targetExpert);
