@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createHash } from "node:crypto";
 import { backoffice, BackofficeError, type BoOpenedSession } from "@/lib/backoffice";
 import { memo } from "@/lib/memo";
+import { mfaCookie } from "@/lib/mfa-cookie";
+import { mfaChallenge } from "@/lib/signin-steps";
 import { authViaBackoffice, deploymentWorkspaceId, multiTenant, resolverToken, siteUrl, supabaseAnonKey, supabaseUrl } from "@/lib/runtime-config";
 import { bearerDecision } from "@/lib/bearer-access";
 import { guestCookieApplies, guestCookieName } from "@/lib/guest-access";
@@ -147,6 +149,7 @@ async function updateBackofficeSession(request: NextRequest, workspace: string |
   let session = decodeSession(sessionCookieValue(request.cookies));
   let renewed: string | null = null;
   let dropped = false;
+  let challenge: ReturnType<typeof mfaChallenge> = null;
 
   // The mobile app: the token rides this request only (never renewed or set as a cookie here).
   const bearer = await bearerDecision(
@@ -171,6 +174,8 @@ async function updateBackofficeSession(request: NextRequest, workspace: string |
     } catch (e) {
       const refused = e instanceof BackofficeError && (e.status === 401 || e.status === 403);
       // Refused: signed out. An outage keeps the cookie, even past expiry: it is renewed once the back office answers.
+      // A renewal that asks for a code leaves its ticket for /login, which then shows the code step.
+      challenge = mfaChallenge(e);
       if (refused) {
         session = null;
         dropped = true;
@@ -197,5 +202,9 @@ async function updateBackofficeSession(request: NextRequest, workspace: string |
   // The cookie's earlier name goes once its value lives under the new one, or is dropped.
   if ((renewed || dropped) && SESSION_COOKIE !== LEGACY_SESSION_COOKIE) response.cookies.delete(LEGACY_SESSION_COOKIE);
   if (dropped) response.cookies.delete(SESSION_COOKIE);
+  if (challenge) {
+    const c = mfaCookie(challenge.ticket, challenge.expiresIn, hostOf(request.headers) ?? "");
+    response.cookies.set(c.name, c.value, c.options);
+  }
   return response;
 }

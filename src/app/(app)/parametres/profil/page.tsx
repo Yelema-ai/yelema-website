@@ -6,6 +6,7 @@ import { PageBody } from "@/components/app/PageBody";
 import { ProfileDialog } from "@/components/ProfileDialog";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { SettingsCard, SettingsRow } from "@/components/settings/SettingsRows";
+import { TwoFactorSettings } from "@/components/settings/TwoFactorSettings";
 import { Button } from "@/components/ui/button";
 
 // Paramètres · Profil : qui je suis dans l'espace. Le nom, le poste et la photo se changent dans la
@@ -42,6 +43,7 @@ export default function Page() {
           <span className="text-sm font-semibold text-ink-2">{current?.name}</span>
         </SettingsRow>
       </SettingsCard>
+      <TwoFactorSettings />
       <ProfileDialog open={open} onOpenChange={setOpen} />
     </PageBody>
   );

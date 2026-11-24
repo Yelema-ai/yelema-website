@@ -56,13 +56,16 @@ export class BackofficeError extends Error {
   retryAfter: number | null;
   /** What a refusal carries besides its code: the models to propose in place of an unknown one. */
   suggestions: unknown[];
-  constructor(status: number, code: string, message: string, retryAfter: number | null = null, suggestions: unknown[] = []) {
+  /** The rest of the refusal's `error` object (`ticket`, `attemptsLeft`, `workspaces`…), untrusted. */
+  details: Record<string, unknown>;
+  constructor(status: number, code: string, message: string, retryAfter: number | null = null, suggestions: unknown[] = [], details: Record<string, unknown> = {}) {
     super(message);
     this.name = "BackofficeError";
     this.status = status;
     this.code = code;
     this.retryAfter = retryAfter;
     this.suggestions = suggestions;
+    this.details = details;
   }
 }
 
@@ -261,6 +264,17 @@ function invoicePath(id: string, rest: string): string {
   return `/app/billing/invoices/${id}${rest}`;
 }
 
+export interface BoMfaFactor { id: string; name: string | null; createdAt: string | null }
+export interface BoMfaStatus { factors: BoMfaFactor[]; aal: "aal1" | "aal2" }
+/** `qrCode` is an SVG of `uri`; `secret` is shown once, for typing by hand. */
+export interface BoMfaEnrollment { factorId: string; secret: string; uri: string; qrCode: string }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function mfaFactorId(id: string): string {
+  if (!UUID.test(id)) throw new BackofficeError(404, "not_found", "Cet appareil est introuvable.");
+  return id;
+}
+
 // A guest's invitation link is a credential: never in a log line.
 const logPath = (path: string): string => path.replace(/\/guest\/invites\/[^/]+/, "/guest/invites/…");
 
@@ -316,7 +330,8 @@ async function call<T>(path: string, init: { method?: string; token?: string | n
       err?.code ?? (res.status >= 500 ? "unavailable" : "error"),
       err?.message ?? "Le service est momentanément indisponible. Réessayez dans un instant.",
       Number.isFinite(retry) && retry > 0 ? retry : null,
-      Array.isArray(err?.suggestions) ? err.suggestions : []
+      Array.isArray(err?.suggestions) ? err.suggestions : [],
+      err && typeof err === "object" ? (err as Record<string, unknown>) : {}
     );
   }
   return data as T;
@@ -427,6 +442,16 @@ export const backoffice = {
   // Always answers ok, whether or not the account exists.
   forgot: (email: string) => call<{ ok: true }>("/app/auth/forgot", { method: "POST", body: { email } }),
   logout: (token: string) => call<{ ok: true }>("/app/auth/logout", { method: "POST", token }),
+  // The Google return's outcome, kept 60 s behind a single-use ticket: a session or the refusal decided then.
+  googleTicket: (ticket: string) => call<BoOpenedSession>("/app/auth/google/ticket", { method: "POST", body: { ticket } }),
+  // Second step of a sign-in refused with `mfa_required`: the ticket it carried and the six digits.
+  mfaSignIn: (ticket: string, code: string) => call<BoOpenedSession>("/app/auth/mfa", { method: "POST", body: { ticket, code } }),
+  mfaFactors: (token: string) => call<BoMfaStatus>("/app/me/mfa", { token }),
+  mfaEnroll: (token: string, name?: string) => call<BoMfaEnrollment>("/app/me/mfa/enroll", { method: "POST", token, body: name ? { name } : {} }),
+  // The first right code turns the factor on and opens a new session that replaces the caller's.
+  mfaVerifyEnrollment: (token: string, factorId: string, code: string) =>
+    call<{ session: BoSession; factor: BoMfaFactor }>("/app/me/mfa/verify-enrollment", { method: "POST", token, body: { factorId: mfaFactorId(factorId), code } }),
+  mfaRemove: (token: string, factorId: string) => call<{ ok: boolean }>(`/app/me/mfa/${mfaFactorId(factorId)}`, { method: "DELETE", token }),
 
   // Whether Yelema's team is shipping an update right now (switched on before a push, off after).
   // Public and per workspace; a short timeout: it is asked every minute by every open page.
