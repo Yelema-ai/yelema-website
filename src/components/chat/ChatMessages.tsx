@@ -6,7 +6,7 @@ import { useSafeDashboard } from "@/components/experts/DashboardProvider";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, ClipboardCheck, Clock, Copy, CornerDownLeft, FileText, Image as ImageIcon, Loader2, PhoneCall, Repeat } from "lucide-react";
 import { turnDocs, type DriveFile, type TurnDoc } from "@/lib/drive-links";
-import { kanbanNotice } from "@/lib/kanban-notice";
+import { kanbanNotice, kanbanWork } from "@/lib/kanban-notice";
 import { autoRequest } from "@/lib/auto-request";
 import { isRoutineRun, isSilentRun, routinePlainText, SILENT_RUN_LABEL } from "@/lib/routines";
 import { isCallTranscript } from "@/lib/voice";
@@ -358,6 +358,13 @@ const MessageRow = memo(function MessageRow({
       return (
         <p className="flex items-center justify-center gap-2 text-center text-xs text-ink-3">
           <FileText className="h-3.5 w-3.5 shrink-0" /> {auto.label}
+        </p>
+      );
+    }
+    if (m.role === "user" && kanbanWork(m.content)) {
+      return (
+        <p className="flex items-center justify-center gap-2 text-center text-xs text-ink-3">
+          <ClipboardCheck className="h-3.5 w-3.5 shrink-0" /> Tâche de fond confiée : l’Expert y travaille seul
         </p>
       );
     }

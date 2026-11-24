@@ -29,3 +29,12 @@ export function kanbanNotice(content: string): KanbanNotice | null {
   const who = assignee.trim().replace(/^./, (c) => c.toUpperCase());
   return { taskId, title: title.trim().slice(0, 160), who, verb };
 }
+
+// The turn Hermes's dispatcher opens on the worker's side to run a task (« work kanban task t_f98bdda9 »): stored as
+// the member's message, it showed as a technical bubble at the top of the task's conversation (Leslie, 23/11).
+const WORK_RE = /^\s*work kanban task (t_[0-9a-z]+)\b/i;
+
+/** The task id of the dispatcher's opening turn, or null. */
+export function kanbanWork(content: string): string | null {
+  return WORK_RE.exec(content)?.[1] ?? null;
+}
