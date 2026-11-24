@@ -5,11 +5,20 @@ import { createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
 
 export const LINK_TTL_MS = 15 * 60_000;
 
-/** Derived from FILE_LINK_SECRET, else AGENT37_API_KEY (a deployment behind the gateway has no Agent37 key); null ⇒ no links. */
+const derive = (secret: string | undefined): Buffer | null => (secret && secret.length >= 16 ? Buffer.from(hkdfSync("sha256", secret, "yelema", "deliverable-file-link-v1", 32)) : null);
+
+/**
+ * Derived from FILE_LINK_SECRET; without it, from AGENT37_API_KEY unless FILE_LINK_FALLBACK=off (the key of every
+ * instance should not also sign links); null ⇒ no links.
+ */
 export function fileLinkKey(env: Record<string, string | undefined> = process.env): Buffer | null {
-  const secret = env.FILE_LINK_SECRET?.trim() || env.AGENT37_API_KEY?.trim();
-  if (!secret || secret.length < 16) return null;
-  return Buffer.from(hkdfSync("sha256", secret, "yelema", "deliverable-file-link-v1", 32));
+  return derive(env.FILE_LINK_SECRET?.trim()) ?? (env.FILE_LINK_FALLBACK?.trim() === "off" ? null : derive(env.AGENT37_API_KEY?.trim()));
+}
+
+/** The keys a link may have been signed with: the current one, and the fallback's while it is not switched off (links live 15 minutes). */
+export function fileLinkVerifyKeys(env: Record<string, string | undefined> = process.env): Buffer[] {
+  const legacy = env.FILE_LINK_FALLBACK?.trim() === "off" ? null : derive(env.AGENT37_API_KEY?.trim());
+  return [derive(env.FILE_LINK_SECRET?.trim()), legacy].filter((k): k is Buffer => k !== null);
 }
 
 const subject = (workspace: string, instance: string, path: string, exp: number) => `${workspace}\n${instance}\n${path}\n${String(exp)}`;

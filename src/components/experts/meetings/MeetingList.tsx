@@ -1,5 +1,6 @@
 "use client";
 
+import { safeHref } from "@/lib/markdown-safety";
 import { useState } from "react";
 import { CalendarClock, ExternalLink, FileText, Loader2, RotateCcw, Send, Video } from "lucide-react";
 import { toast } from "sonner";
@@ -68,7 +69,7 @@ export function MeetingRow({ meeting, now, onSend, onRewrite }: { meeting: Meeti
   return (
     <li className="flex items-center gap-2 rounded-2xl border border-line bg-surface pr-3 transition-colors has-[a:hover]:bg-soft">
       {meeting.pageUrl ? (
-        <a href={meeting.pageUrl} target="_blank" rel="noopener noreferrer" aria-label={`Ouvrir le compte rendu ${title}`} className={content}>
+        <a href={safeHref(meeting.pageUrl)} target="_blank" rel="noopener noreferrer" aria-label={`Ouvrir le compte rendu ${title}`} className={content}>
           <RowContent meeting={meeting} now={now} />
         </a>
       ) : (

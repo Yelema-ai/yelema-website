@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { mayWriteChannels } from "@/lib/channel-rules";
 import { ApiError } from "@/lib/http";
 import { authViaBackoffice } from "@/lib/runtime-config";
 import { pinnedWorkspaceId } from "@/lib/tenant";
@@ -162,6 +163,17 @@ export async function requireAgentAccess(agent37Id: string, access: "owner" | "a
     throw new ApiError(403, "forbidden", "Cette action est réservée aux administrateurs.");
   }
   return { row, userId: user.id, role };
+}
+
+/** `requireAgentAccess`, then the rule of an instance several members share: its channels are written by an admin only. */
+export async function requireChannelWrite(agent37Id: string): Promise<{ row: AgentRow; userId: string; role: Role | null }> {
+  const access = await requireAgentAccess(agent37Id);
+  if (!authViaBackoffice()) return access;
+  const seat = (await currentInstance())?.seat;
+  if (!mayWriteChannels(seat, seat ? (await currentPrincipal())?.user.role : null)) {
+    throw new ApiError(403, "forbidden", "Les canaux d’une instance d’équipe sont gérés par un administrateur.");
+  }
+  return access;
 }
 
 /**

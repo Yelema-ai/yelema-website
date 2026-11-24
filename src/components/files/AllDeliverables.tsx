@@ -21,6 +21,8 @@ import { matchesDriveQuery } from "@/lib/drive-order";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+/** Deliverables drawn at first, and added by each « Afficher plus ». */
+const SLICE = 60;
 const ALL = "all";
 const COMPANY = "entreprise";
 const expertId = (e: Expert) => `${e.agentId}:${e.profileId}`;
@@ -62,6 +64,17 @@ export function AllDeliverables({ initial = null }: { initial?: ServerReading<Re
     );
     return sort === "name" ? [...rows].sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base", numeric: true })) : rows;
   }, [all, who, onlyNew, kind, query, sort]);
+
+  // Every deliverable of the company is not drawn at once: a slice, then « Afficher plus ». Back to one slice on any filter.
+  const [limit, setLimit] = useState(SLICE);
+  const filterKey = `${who}|${onlyNew}|${kind}|${query}|${sort}|${mode}`;
+  const [limitFor, setLimitFor] = useState(filterKey);
+  if (limitFor !== filterKey) {
+    setLimitFor(filterKey);
+    setLimit(SLICE);
+  }
+  const total = shown.length;
+  const visible = useMemo(() => shown.slice(0, limit), [shown, limit]);
 
   function open(d: Deliverable) {
     markSeen(d);
@@ -238,7 +251,7 @@ export function AllDeliverables({ initial = null }: { initial?: ServerReading<Re
               <span>Contenu</span>
               <span>Modifié le</span>
             </li>
-            {shown.map((d) => (
+            {visible.map((d) => (
               <li key={`${d.agentId}:${d.path}`} className="border-b border-line last:border-0">
                 <button
                   type="button"
@@ -272,16 +285,16 @@ export function AllDeliverables({ initial = null }: { initial?: ServerReading<Re
           // Projects first, as folders with their cover, then the loose files by month (Leslie, 16/11: « le meilleur des deux »).
           <div className="flex flex-col gap-7">
             {[
-              ["Projets", shown.filter((d) => d.folder)] as const,
+              ["Projets", visible.filter((d) => d.folder)] as const,
               // Sorted A to Z, the files stay in one block: months would break the order.
-              ...(sort === "name" ? [["Fichiers", shown.filter((d) => !d.folder)] as const] : byMonth(shown.filter((d) => !d.folder))),
+              ...(sort === "name" ? [["Fichiers", visible.filter((d) => !d.folder)] as const] : byMonth(visible.filter((d) => !d.folder))),
             ]
               .filter(([, rows]) => rows.length > 0)
               .map(([title, rows]) => (
                 <section key={title}>
                   <h2 className="mb-2.5 flex items-baseline justify-between text-[15px] font-semibold text-ink">
                     {title}
-                    {title === "Projets" && <span className="text-[13px] font-normal text-ink-3">{rows.length}</span>}
+                    {title === "Projets" && <span className="text-[13px] font-normal text-ink-3">{total > limit ? shown.filter((d) => d.folder).length : rows.length}</span>}
                   </h2>
                   <ul className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] sm:gap-3">
                     {rows.map((d) => (
@@ -306,6 +319,11 @@ export function AllDeliverables({ initial = null }: { initial?: ServerReading<Re
                 </section>
               ))}
           </div>
+        )}
+        {all !== null && total > limit && (
+          <button type="button" onClick={() => setLimit((n) => n + SLICE)} className="mx-auto mt-5 flex h-10 items-center rounded-full border border-line bg-surface px-4 text-[13px] font-semibold text-ink-2 hover:bg-soft hover:text-ink">
+            Afficher plus ({total - limit} restants)
+          </button>
         )}
       </div>
       {preview && <FilePreview agentId={preview.agentId} entry={preview.entry} onClose={() => setPreview(null)} />}

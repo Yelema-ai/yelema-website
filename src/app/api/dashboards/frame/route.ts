@@ -9,6 +9,7 @@ import { assertInDrive } from "@/lib/drive";
 import { expertDriveFolders } from "@/lib/expert-folders";
 import { withTimeout } from "@/lib/fetch-timeout";
 import { inlineDashboard } from "@/lib/dashboard-inline";
+import { asService } from "@/lib/service-call";
 
 type Target = { url: string } | { html: string } | { status: number; error: string; retryAfter?: number };
 const MISSING = { status: 404, error: "Tableau de bord introuvable." };
@@ -58,7 +59,7 @@ async function ownerTarget(request: NextRequest): Promise<Target> {
 export async function GET(request: NextRequest) {
   try {
     const token = request.nextUrl.searchParams.get("s");
-    const target = token ? await sharedTarget(request, token) : await ownerTarget(request);
+    const target = token ? await asService("shared-dashboard", () => sharedTarget(request, token)) : await ownerTarget(request);
     if ("status" in target) {
       const headers = target.retryAfter ? { "Retry-After": String(target.retryAfter) } : undefined;
       return new NextResponse(target.error, { status: target.status, headers });

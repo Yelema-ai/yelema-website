@@ -1,7 +1,8 @@
 import { instanceFetch } from "@/lib/agent37";
 import { insideLivrables } from "@/lib/deliverables-shape";
-import { fileLinkKey, verifyFileLink } from "@/lib/file-link";
+import { fileLinkVerifyKeys, verifyFileLink } from "@/lib/file-link";
 import { ApiError, handleError } from "@/lib/http";
+import { asService } from "@/lib/service-call";
 import { pinnedWorkspaceId } from "@/lib/tenant";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -13,12 +14,11 @@ export async function GET(request: Request, { params }: Ctx) {
     const { id } = await params;
     const q = new URL(request.url).searchParams;
     const path = q.get("p") ?? "";
-    const key = fileLinkKey();
     const workspace = (await pinnedWorkspaceId()) ?? "";
-    if (!key || !insideLivrables(path) || !verifyFileLink(key, workspace, id, path, Number(q.get("e")), q.get("s") ?? "")) {
+    if (!insideLivrables(path) || !fileLinkVerifyKeys().some((key) => verifyFileLink(key, workspace, id, path, Number(q.get("e")), q.get("s") ?? ""))) {
       throw new ApiError(404, "not_found", "Lien expiré ou invalide.");
     }
-    const upstream = await instanceFetch(id, `/v1/files/content?path=${encodeURIComponent(`~/${path}`)}`);
+    const upstream = await asService("signed-file-link", () => instanceFetch(id, `/v1/files/content?path=${encodeURIComponent(`~/${path}`)}`));
     if (!upstream.ok || !upstream.body) {
       await upstream.body?.cancel().catch(() => undefined);
       throw new ApiError(404, "not_found", "Fichier introuvable.");

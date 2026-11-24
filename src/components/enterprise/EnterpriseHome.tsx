@@ -15,6 +15,7 @@ import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { useOwnAgentId } from "@/components/conversations/useAllConversations";
 import { RecentDeliverables } from "@/components/home/RecentDeliverables";
 import { agentTabPath } from "@/lib/expert-tabs";
+import { handoffQuery } from "@/lib/chat-handoff";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -116,7 +117,7 @@ export function EnterpriseHome() {
     const m = message.trim();
     if (!m) return;
     const path = to ? agentTabPath(to.agentId, "chat", to.profileId) : ownAgentId ? agentTabPath(ownAgentId, "chat") : null;
-    if (path) router.push(`${path}?q=${encodeURIComponent(m)}`);
+    if (path) router.push(`${path}?${handoffQuery(m)}`);
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {

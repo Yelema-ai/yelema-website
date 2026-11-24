@@ -36,6 +36,8 @@ import { MODIFY_PREFIX } from "@/lib/approval";
 import { wakeInstance } from "@/components/app/wake";
 import { useChatAttachments } from "./useChatAttachments";
 import { rememberedSettings } from "./rememberedSettings";
+import type { Handoff } from "@/lib/chat-handoff";
+import { drivePathFault } from "@/lib/drive-paths";
 
 // The conversation pane, rendered full-height in the chat tab's main column. Empty state = a
 // centered welcome (heading + big composer + subtitle); once there are messages it becomes a
@@ -62,7 +64,7 @@ export function ChatView({
   onDashboardOpened,
   profilePanel = null,
 }: {
-  initialMessage?: string | null;
+  initialMessage?: Handoff | null;
   driveFolder?: string | null;
   /** On an expert's page, its header: « Ordinateur » and « Tableau » sit there, beside its name (Leslie, 28/10). */
   actionsSlot?: HTMLElement | null;
@@ -142,10 +144,12 @@ export function ChatView({
   useEffect(() => {
     if (!refParam) return;
     const url = new URL(window.location.href);
-    pinned.current = { path: refParam, session: url.searchParams.get("session") };
-    if ((activeSessionId ?? null) === pinned.current.session) addReference(refParam);
     url.searchParams.delete("ref");
     window.history.replaceState(window.history.state, "", url);
+    // Only a file of the drive is ever pinned, as the files routes and the turn itself accept.
+    if (drivePathFault(refParam)) return;
+    pinned.current = { path: refParam, session: url.searchParams.get("session") };
+    if ((activeSessionId ?? null) === pinned.current.session) addReference(refParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refParam]);
 
@@ -162,17 +166,21 @@ export function ChatView({
   }, [sayParam]);
 
   // A message handed over by the home page ("Demander à mon équipe") is sent once, into a new
-  // thread, and dropped from the URL so a refresh does not send it again.
+  // thread, and dropped from the URL so a refresh does not send it again. A `?q=` our own screens
+  // did not hand over is only written in the field, for the member to read and send.
   const sentInitial = useRef(false);
   useEffect(() => {
-    if (!initialMessage || sentInitial.current || activeSessionId) return;
+    if (!initialMessage || sentInitial.current) return;
+    if (initialMessage.send && activeSessionId) return;
     sentInitial.current = true;
     const url = new URL(window.location.href);
     url.searchParams.delete("q");
+    url.searchParams.delete("n");
     window.history.replaceState(window.history.state, "", url);
+    if (!initialMessage.send) return setDraft((d) => ({ text: initialMessage.text, token: (d?.token ?? 0) + 1 }));
     // Sent with the model and effort chosen on the home's chat bar.
     const { model, provider, reasoningEffort } = rememberedSettings();
-    void send(initialMessage, { model, provider, reasoningEffort });
+    void send(initialMessage.text, { model, provider, reasoningEffort });
   }, [initialMessage, activeSessionId, send]);
 
   const scrollRef = useRef<HTMLDivElement>(null);

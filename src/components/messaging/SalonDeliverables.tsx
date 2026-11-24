@@ -1,5 +1,6 @@
 "use client";
 
+import { safeHref } from "@/lib/markdown-safety";
 import { useMemo, useState } from "react";
 import { FileText, Folder, RotateCw, Search, X } from "lucide-react";
 import { shortName, type BuzzEntry } from "@/lib/buzz";
@@ -110,7 +111,7 @@ export function SalonDeliverables({ items, error, loading, onRefresh, directory 
               return (
                 <li key={d.id} className="border-b border-line last:border-0">
                   {d.url ? (
-                    <a href={d.url} target="_blank" rel="noopener noreferrer" className={cn(cls, "hover:bg-soft")}>
+                    <a href={safeHref(d.url)} target="_blank" rel="noopener noreferrer" className={cn(cls, "hover:bg-soft")}>
                       {row}
                     </a>
                   ) : (

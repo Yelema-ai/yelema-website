@@ -1,4 +1,5 @@
 import { BackofficeError } from "@/lib/backoffice";
+import { clientIp, rateWindow } from "@/lib/guest-access";
 import { apiError } from "@/lib/http";
 import { authViaBackoffice } from "@/lib/runtime-config";
 
@@ -28,4 +29,25 @@ export function authFailure(e: unknown): Response {
     default:
       return apiError(e.status >= 500 ? "Le service est momentanément indisponible. Réessayez dans un instant." : e.message, e.status, e.code);
   }
+}
+
+// In front of the back office's own lock (per account, kept there): per server instance, by account and by address.
+// Wide enough for an office behind one address; a script trying passwords stops here without a call.
+const WINDOW_MS = 10 * 60_000;
+const limits = {
+  login: { account: rateWindow(20, WINDOW_MS), ip: rateWindow(60, WINDOW_MS) },
+  forgot: { account: rateWindow(5, WINDOW_MS), ip: rateWindow(20, WINDOW_MS) },
+};
+
+/** The 429 to answer when this account or this address tried too often; null otherwise. */
+export function tooManyTries(kind: keyof typeof limits, request: Request, email: string): Response | null {
+  const now = Date.now();
+  const host = (request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "").toLowerCase();
+  const ip = clientIp(request.headers, process.env.VERCEL === "1");
+  const hit = [limits[kind].account(`${host}\n${email.toLowerCase()}`, now), ...(ip ? [limits[kind].ip(ip, now)] : [])].find((r) => !r.ok);
+  if (!hit || hit.ok) return null;
+  const minutes = Math.max(1, Math.ceil(hit.retryAfter / 60));
+  const res = apiError(`Trop d’essais. Réessayez dans ${minutes} minute${minutes > 1 ? "s" : ""}.`, 429, "rate_limited");
+  res.headers.set("Retry-After", String(hit.retryAfter));
+  return res;
 }

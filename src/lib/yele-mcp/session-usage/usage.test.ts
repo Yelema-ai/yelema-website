@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { usageForPeriod } from "../periods.ts";
-import { METRIC_KEYS, parseSessionUsage, tokensOf, usageByDayOf, usageByProfile, withRoutineErrors } from "./usage.ts";
+import { METRIC_KEYS, parseSessionUsage, parseSessionUsageByProfile, tokensOf, usageByDayOf, usageByProfile, withRoutineErrors } from "./usage.ts";
 
 // Une ligne telle que le lecteur l'émet : clés, puis les chiffres dans l'ordre de METRIC_KEYS.
 const figures = (o: Partial<Record<(typeof METRIC_KEYS)[number], number>>) => METRIC_KEYS.map((k) => o[k] ?? 0);
@@ -95,4 +95,25 @@ test("withRoutineErrors : les échecs viennent de l'audit des routines, le reste
   assert.equal(usage.koffi.errors, 2);
   assert.equal(usage.koffi.count, 7);
   assert.equal(usage.absent, undefined);
+});
+
+test("lecture par profil : un state.db inchangé (`same`) reprend les chiffres gardés", () => {
+  const row = (profile: string, n: number) => ["2026-11-10", profile, "cron", "default", "", ...figures({ sessions: n })];
+  const first = parseSessionUsageByProfile(JSON.stringify({ profiles: [
+    { name: "koffi", stamp: "1/a/-", rows: [row("koffi", 2)], totals: [], tools: [["2026-11-10", "koffi", "cron", "default", "", "terminal", 7]], skills: [], composio: [] },
+    { name: "awa", stamp: "1/b/-", rows: [row("awa", 1)], totals: [], tools: [], skills: [], composio: [] },
+  ], unreadable: ["nadia"] }));
+  assert.equal(first.usage.rows.length, 2);
+  assert.deepEqual(first.usage.unreadable, ["nadia"]);
+  const second = parseSessionUsageByProfile(JSON.stringify({ profiles: [
+    { name: "koffi", stamp: "1/a/-", same: true },
+    { name: "awa", stamp: "1/c/-", rows: [row("awa", 5)], totals: [], tools: [], skills: [], composio: [] },
+  ], unreadable: [] }), first.readings);
+  assert.deepEqual(second.usage.rows.map((r) => [r.profile, r.sessions]), [["koffi", 2], ["awa", 5]]);
+  assert.equal(second.usage.tools[0].calls, 7);
+  assert.equal(second.readings.get("awa")?.stamp, "1/c/-");
+  // Un profil disparu n'est plus compté ; un `same` sans lecture gardée de cette empreinte est refusé.
+  assert.equal(parseSessionUsageByProfile(JSON.stringify({ profiles: [{ name: "awa", stamp: "1/c/-", same: true }] }), second.readings).usage.rows.length, 1);
+  assert.throws(() => parseSessionUsageByProfile(JSON.stringify({ profiles: [{ name: "koffi", stamp: "2/a/-", same: true }] }), first.readings));
+  assert.throws(() => parseSessionUsageByProfile(JSON.stringify({ rows: [], totals: [] })));
 });

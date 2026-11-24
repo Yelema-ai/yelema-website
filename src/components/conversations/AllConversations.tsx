@@ -10,6 +10,7 @@ import { Picker } from "@/components/ui/picker";
 import { cn } from "@/lib/utils";
 import { convKey } from "@/lib/activity";
 import { arrange } from "@/lib/chat-marks";
+import { capGroups } from "@/lib/paginate";
 import { fold, useAllConversations, useOwnAgentId, type ConversationRow } from "./useAllConversations";
 import { useChatMarks } from "./useChatMarks";
 import { prefetchThread } from "@/components/chat/useChat";
@@ -19,6 +20,8 @@ import type { ServerReading } from "@/components/useServerReading";
 
 type Filter = "tout" | "non-lues" | "routines" | "archivees";
 const DAY = 86_400_000;
+/** Rows drawn at first, and added by each « Afficher plus ». */
+const SLICE = 100;
 const DATES = [
   { value: "", label: "Toutes les dates" },
   { value: "1", label: "Aujourd’hui" },
@@ -90,6 +93,16 @@ export function AllConversations({ initial = null }: { initial?: ServerReading<R
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown, marks]);
+
+  // A thousand conversations are not drawn at once: a slice, then « Afficher plus ». Back to one slice on any filter.
+  const [limit, setLimit] = useState(SLICE);
+  const filterKey = `${needle}|${filter}|${who}|${since}`;
+  const [limitFor, setLimitFor] = useState(filterKey);
+  if (limitFor !== filterKey) {
+    setLimitFor(filterKey);
+    setLimit(SLICE);
+  }
+  const visible = useMemo(() => capGroups(groups, limit), [groups, limit]);
 
   // No conversation at all yet (the first day): one sentence, no search and no filters to sort nothing (Leslie, 23/11).
   const none = rows !== null && rows.length === 0;
@@ -168,11 +181,12 @@ export function AllConversations({ initial = null }: { initial?: ServerReading<R
       ) : groups.length === 0 ? (
         <p className="mt-8 text-sm text-ink-3">{filter === "archivees" && !needle ? "Aucune conversation archivée." : "Aucune conversation ne correspond."}</p>
       ) : (
-        groups.map((g) => (
+        <>
+        {visible.groups.map((g) => (
           <section key={g.label} className="mt-6">
             <h2 className="flex items-center justify-between px-1 pb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-3">
               {g.label}
-              <span className="font-medium normal-case">{g.rows.length}</span>
+              <span className="font-medium normal-case">{g.total}</span>
             </h2>
             <div className="overflow-hidden rounded-card border border-line bg-surface">
               {g.rows.map((r) => {
@@ -213,7 +227,13 @@ export function AllConversations({ initial = null }: { initial?: ServerReading<R
               })}
             </div>
           </section>
-        ))
+        ))}
+        {visible.hidden > 0 && (
+          <button type="button" onClick={() => setLimit((n) => n + SLICE)} className="mx-auto mt-5 flex h-10 items-center rounded-full border border-line bg-surface px-4 text-[13px] font-semibold text-ink-2 hover:bg-soft hover:text-ink">
+            Afficher plus ({visible.hidden} restantes)
+          </button>
+        )}
+        </>
       )}
     </div>
   );

@@ -227,13 +227,17 @@ export function bareAddress(from: string): string {
 /** Sent by the expert's inbox rather than received in it. */
 export const isSent = (labels: readonly string[]): boolean => labels.includes("sent");
 
-// Policy of the document shown in the message's sandboxed iframe: no script, no request but images,
-// inline styles and inline fonts.
-const MAIL_CSP = "default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; font-src data:";
+// Policy of the document shown in the message's sandboxed iframe: no script and no request at all (inline
+// styles, inline fonts, pictures carried in the message). A remote picture tells its sender the message was
+// opened, when and from where: those load only once the reader asks (`images`).
+export const mailCsp = (images = false): string => `default-src 'none'; img-src data:${images ? " https:" : ""}; style-src 'unsafe-inline'; font-src data:`;
 
-/** The document to give the sandboxed iframe's `srcDoc`. */
-export function sandboxedMail(html: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${MAIL_CSP}"><base target="_blank"><style>body{margin:0;padding:12px;font:14px/1.6 system-ui,sans-serif;color:#1b1b1f;background:#fff;overflow-wrap:anywhere}img{max-width:100%;height:auto}</style></head><body>${html}</body></html>`;
+/** Whether a message would fetch a remote picture (a tag, an inline style, an old `background`). */
+export const hasRemoteImages = (html: string): boolean => /<(?:img|input|source|video)\b[^>]*\bsrc(?:set)?\s*=\s*["']?\s*(?:https?:)?\/\/|\bbackground\s*=\s*["']?\s*(?:https?:)?\/\/|url\(\s*["']?\s*(?:https?:)?\/\//i.test(html);
+
+/** The document to give the sandboxed iframe (`srcDoc`, or the frame route when remote pictures are asked for). */
+export function sandboxedMail(html: string, images = false): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${mailCsp(images)}"><base target="_blank"><style>body{margin:0;padding:12px;font:14px/1.6 system-ui,sans-serif;color:#1b1b1f;background:#fff;overflow-wrap:anywhere}img{max-width:100%;height:auto}</style></head><body>${html}</body></html>`;
 }
 
 // ── No address left to give (Leslie, 18/11) ─────────────────────────────────────────────────────────

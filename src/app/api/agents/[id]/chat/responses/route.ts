@@ -34,7 +34,7 @@ export async function POST(request: Request, { params }: Ctx) {
     const { row } = await requireAgentAccess(id);
 
     const body = await readJson<ResponsesBody>(request);
-    const profile = await resolveProfile(row, body.profile);
+    const profile = await resolveProfile(row, body.profile, "known");
     const input = (body.input ?? "").trim();
     // The attachments of a turn are paths the expert will read: like every files route, only the
     // drive is accepted, so a turn cannot hand ~/.hermes or ~/.yelema to the model.

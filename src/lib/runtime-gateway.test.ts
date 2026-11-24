@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { gatewayFetch, gatewayInstancePath, gatewayPortHeaders, runtimeGateway } from "./runtime-gateway.ts";
+import { gatewayFetch, gatewayInstancePath, gatewayPortHeaders, runtimeGateway, withMemberSession } from "./runtime-gateway.ts";
 
 describe("passerelle d’exécution", () => {
   it("active seulement avec l’adresse ET le jeton ; barre finale retirée", () => {
@@ -29,5 +29,14 @@ describe("passerelle d’exécution", () => {
     });
     await gatewayFetch({ url: "https://gw.test", token: "tok" }, "/v1/control/templates", { headers: { Authorization: "Bearer autre" } });
     assert.deepEqual(seen, [{ url: "https://gw.test/v1/control/templates", auth: "Bearer tok" }]);
+  });
+
+  it("la session du membre part en X-Yelema-Session, sans toucher aux autres en-têtes ; sans session, rien", () => {
+    const sent = withMemberSession({ method: "POST", headers: { "X-Yelema-User": "u1" } }, "jeton.de.session");
+    const h = new Headers(sent.headers);
+    assert.equal(sent.method, "POST");
+    assert.deepEqual([h.get("x-yelema-session"), h.get("x-yelema-user")], ["jeton.de.session", "u1"]);
+    const init = { headers: { A: "b" } };
+    assert.equal(withMemberSession(init, null), init);
   });
 });

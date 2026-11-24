@@ -3,9 +3,12 @@
 import { memo, useMemo, useState, type MouseEvent } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Streamdown } from "streamdown";
+import { defaultRehypePlugins, Streamdown } from "streamdown";
+import type { PluggableList } from "unified";
 import "streamdown/styles.css";
 import { ANGLED, BARE, citedFolder, CODE, FOLDER_BARE, FOLDER_CODE, isHiddenInChat, LINKED, normDrivePath, noteFolder, openTarget, safeDecode } from "@/lib/drive-links";
+import { externalImagesAsLinks, ownLink, strictSchema } from "@/lib/markdown-safety";
+import type { SanitizeSchema } from "@/lib/markdown-safety";
 import { paragraphCache } from "@/lib/paragraph-cache";
 import { replyLines } from "@/lib/reply-lines";
 import { agentTabPath } from "@/lib/expert-tabs";
@@ -107,7 +110,12 @@ function folderLink(path: string, agentId: string, profileId?: string | null): s
 }
 
 // Our own links (drive downloads) open directly; external ones still ask first.
-const LINK_SAFETY = { enabled: true, onLinkCheck: (url: string) => url.startsWith("/") };
+const LINK_SAFETY = { enabled: true, onLinkCheck: ownLink };
+
+// Streamdown's own (raw HTML, sanitizing by allow-list, link hardening), its allow-list narrowed and remote
+// pictures turned into links in between. The order matters: nothing runs after `raw` unsanitized.
+const [sanitize, schema] = defaultRehypePlugins.sanitize as unknown as [unknown, SanitizeSchema];
+const REHYPE = [defaultRehypePlugins.raw, [sanitize, strictSchema(schema)], externalImagesAsLinks, defaultRehypePlugins.harden] as PluggableList;
 
 const FR = {
   close: "Fermer",
@@ -177,7 +185,7 @@ export const Markdown = memo(function Markdown({ content, agentId, profileId }: 
   };
   return (
     <div onClickCapture={onClick}>
-      <Streamdown className="chat-markdown text-[15px] leading-relaxed" linkSafety={LINK_SAFETY} translations={FR}>
+      <Streamdown className="chat-markdown text-[15px] leading-relaxed" linkSafety={LINK_SAFETY} translations={FR} rehypePlugins={REHYPE}>
         {text}
       </Streamdown>
       {preview && agentId && <FilePreview agentId={agentId} entry={preview} onClose={() => setPreview(null)} />}

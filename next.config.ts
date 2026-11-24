@@ -17,8 +17,7 @@ const nextConfig: NextConfig = {
   // On every answer. The app is never shown inside another site's page (its own file previews
   // frame its own routes, hence SAMEORIGIN and not DENY); a browser keeps to HTTPS once it has
   // seen it; a type is never guessed; another site learns only that a visitor came from here.
-  // No Content-Security-Policy yet: one that fits the chat, the screen and the previews needs
-  // trying in a browser first.
+  // The Content-Security-Policy is written per request by the proxy (src/lib/csp.ts, CSP_MODE).
   // Administration became the company part of Paramètres (Leslie, 24/10): its old addresses, and
   // those of the tabs that moved to Intégrations before, still lead somewhere.
   async redirects() {
@@ -42,6 +41,7 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+          { key: "Permissions-Policy", value: "geolocation=(), payment=(), usb=(), serial=(), bluetooth=()" },
         ],
       },
       // Pictures, videos and logos of /public: kept a day, then served stale while re-read for a week. Media folders

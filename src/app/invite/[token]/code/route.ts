@@ -5,7 +5,7 @@ import { apiError, json, readJson } from "@/lib/http";
 
 // `POST /invite/<token>/code` — sends the guest a 6-digit code; the same answer whether the address matches or not.
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
-  const refused = guardPost(request, "code");
+  const refused = await guardPost(request, "code");
   if (refused) return refused;
   try {
     const { token } = await params;

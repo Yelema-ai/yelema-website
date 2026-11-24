@@ -26,6 +26,14 @@ export function gatewayPortHeaders(init: HeadersInit | undefined): Record<string
   return Object.fromEntries(headers);
 }
 
+/** The member's Supabase access token, checked by the gateway, which then trusts it over `X-Yelema-User`. */
+export function withMemberSession(init: RequestInit, token: string | null): RequestInit {
+  if (!token) return init;
+  const headers = new Headers(init.headers);
+  headers.set("X-Yelema-Session", token);
+  return { ...init, headers };
+}
+
 export function gatewayFetch(gw: RuntimeGateway, path: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${gw.token}`);

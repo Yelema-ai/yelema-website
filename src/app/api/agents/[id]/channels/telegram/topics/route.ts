@@ -1,5 +1,5 @@
 import { agent37, instanceFetch } from "@/lib/agent37";
-import { requireAgentAccess } from "@/lib/auth";
+import { requireChannelWrite } from "@/lib/auth";
 import { repointRoutines } from "@/lib/hermes-cron";
 import { handleError, json } from "@/lib/http";
 import { installedProfiles } from "@/lib/installed-experts";
@@ -29,7 +29,7 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function POST(_request: Request, { params }: Ctx) {
   try {
     const { id } = await params;
-    const { row } = await requireAgentAccess(id);
+    const { row } = await requireChannelWrite(id);
 
     // Server-side write outside the drive on purpose: the script goes where the command runs it.
     const query = new URLSearchParams({ path: ROUTE_SCRIPT_FILE, overwrite: "true" });

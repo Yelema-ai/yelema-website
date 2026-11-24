@@ -1,6 +1,7 @@
 // L'état des connecteurs de l'instance.
 
 import type { RawConnectionInfo } from "../types.ts";
+import { inline } from "./inline.ts";
 
 export function formatAuditOutils(connections: RawConnectionInfo[], targetExpert?: string): string {
   const filtered = targetExpert
@@ -15,9 +16,9 @@ export function formatAuditOutils(connections: RawConnectionInfo[], targetExpert
 
   out += `**État des connexions :**\n`;
   for (const c of filtered) {
-    const name = c.toolkitSlug || "Outil";
+    const name = inline(c.toolkitSlug, 60) || "Outil";
     const status = c.status === "ACTIVE" && !c.isDisabled ? "✅ Actif" : "⚠️ À reconnecter / Inactif";
-    const alias = c.alias ? ` (${c.alias})` : "";
+    const alias = c.alias ? ` (${inline(c.alias, 80)})` : "";
     out += `- **${name}**${alias} : ${status}\n`;
   }
   return out;

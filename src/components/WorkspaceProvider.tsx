@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import type { WorkspaceWithRole } from "@/lib/types";
 import { apiFetch } from "@/lib/api";
 import { resetBootstrap } from "@/lib/bootstrap-client";
+import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { confirmDevice } from "@/lib/device-cache-client";
 
 const STORAGE_KEY = "agent37wl_workspace";
@@ -56,6 +57,7 @@ export function WorkspaceProvider({
   // The device's copy of this account and space fills the stores before the screens' first reads
   // (layout effects run before them). Not while the stored space is about to replace the first one.
   const confirmedId = useRef<string | null>(null);
+  const memoryOnly = usePublicConfig().deviceCache === "memory";
   useLayoutEffect(() => {
     if (!currentId) return;
     if (!confirmedId.current) {
@@ -67,7 +69,7 @@ export function WorkspaceProvider({
     }
     if (confirmedId.current && confirmedId.current !== currentId) resetBootstrap();
     confirmedId.current = currentId;
-    confirmDevice(userEmail, currentId);
+    confirmDevice(userEmail, currentId, memoryOnly);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userEmail, currentId]);
 

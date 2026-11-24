@@ -18,3 +18,13 @@ test("the page is clamped into range", () => {
 test("an empty list is one empty page", () => {
   assert.deepEqual(paginate([], 4, 10), { items: [], page: 1, pages: 1, from: 0, to: 0 });
 });
+
+test("capGroups : les premières lignes dans l'ordre, le vrai total de chaque groupe, le reste compté", async () => {
+  const { capGroups } = await import("./paginate.ts");
+  const groups = [{ label: "a", rows: [1, 2, 3] }, { label: "b", rows: [4, 5, 6, 7] }, { label: "c", rows: [8] }];
+  assert.deepEqual(capGroups(groups, 5), { groups: [{ label: "a", rows: [1, 2, 3], total: 3 }, { label: "b", rows: [4, 5], total: 4 }], hidden: 3 });
+  assert.deepEqual(capGroups(groups, 100).hidden, 0);
+  assert.equal(capGroups(groups, 100).groups.length, 3);
+  assert.deepEqual(capGroups(groups, 0), { groups: [], hidden: 8 });
+  assert.equal(groups[1].rows.length, 4, "la liste d'origine n'est pas modifiée");
+});

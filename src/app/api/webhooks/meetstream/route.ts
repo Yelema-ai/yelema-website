@@ -8,11 +8,14 @@ import { memo } from "@/lib/memo";
 import { ACTIVE_PHASES, isMeetingId } from "@/lib/meetings/record";
 import { meetings, type Defer } from "@/lib/meetings/service";
 import { SIGNATURE_HEADER, WEBHOOK_MAX_BYTES, parseWebhookEvent, signatureMatches } from "@/lib/meetstream/webhook";
+import { asService } from "@/lib/service-call";
 import { isProfileId } from "@/lib/profile-id";
 import { meetstreamWebhookSecret } from "@/lib/runtime-config";
+import { sharedCacheOn, sharedLayer, vercelRuntimeCache } from "@/lib/shared-cache";
 
 const PLAIN_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const delivered = memo<true>({ ttlMs: 30 * 60_000, maxEntries: 5000 });
+const seenElsewhere = sharedCacheOn(process.env) ? sharedLayer<true>("meetstream", 30 * 60, () => vercelRuntimeCache("webhooks")) : null;
 
 function targetOf(attributes: Record<string, string>): { scope: MeetingScope; meetingId: string } | null {
   const agentId = attributes[BOT_ATTRIBUTES.agent];
@@ -33,12 +36,14 @@ export async function POST(request: Request): Promise<Response> {
   if (raw === null) return answer(413, { error: "too large" });
   if (!signatureMatches(raw, request.headers.get(SIGNATURE_HEADER), secret)) return answer(401, { error: "invalid signature" });
   const digest = createHash("sha256").update(raw).digest("hex");
-  if (delivered.peek(digest)) return answer(200, { ok: true });
+  // The same delivery again (a retry, a replay): acknowledged, not processed; across functions when the shared cache is on.
+  if (delivered.peek(digest) || (await seenElsewhere?.read(`meetstream:${digest}`))) return answer(200, { ok: true });
   delivered.put(digest, true);
+  if (seenElsewhere) after(() => seenElsewhere.write(`meetstream:${digest}`, true));
   const event = parseWebhookEvent(raw);
   const target = event ? targetOf(event.attributes) : null;
   if (!event || !target) return answer(200, { ok: true });
-  after(async () => {
+  after(() => asService("meetstream-webhook", async () => {
     const tasks: Promise<void>[] = [];
     const defer: Defer = (task) => {
       tasks.push(task().catch((e) => console.error("[meetstream] deferred task:", e instanceof Error ? e.message : e)));
@@ -56,7 +61,7 @@ export async function POST(request: Request): Promise<Response> {
       console.error(`[meetstream] ${event.event} for ${event.botId}:`, e instanceof Error ? e.message : e);
     }
     await Promise.all(tasks);
-  });
+  }));
   return answer(200, { ok: true });
 }
 

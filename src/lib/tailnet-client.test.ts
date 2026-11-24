@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { tailnetClientHeader } from "./tailnet-client.ts";
+import { tailnetClientHeader, tailnetProxied } from "./tailnet-client.ts";
 
 describe("tailnet address relayed to the back office", () => {
   it("passes a Tailscale IPv4 address only", () => {
@@ -10,5 +10,10 @@ describe("tailnet address relayed to the back office", () => {
     assert.deepEqual(tailnetClientHeader("10.0.0.1"), {});
     assert.deepEqual(tailnetClientHeader("100.70.1.2, 1.2.3.4"), {});
     assert.deepEqual(tailnetClientHeader(null), {});
+  });
+
+  it("is relayed only where our own proxy writes it: never on Vercel", () => {
+    assert.equal(tailnetProxied({ VERCEL: "1" }), false);
+    assert.equal(tailnetProxied({}), true);
   });
 });

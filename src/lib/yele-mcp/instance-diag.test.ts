@@ -65,3 +65,12 @@ test("parseMemorySearch : paragraphes rendus masqués de leurs secrets", () => {
   assert.equal(r.matches.length, 1);
   assert.doesNotMatch(r.matches[0], /AAEh/);
 });
+
+test("🔒 le lien d'invitation Telegram n'est ni demandé au lecteur ni gardé", async () => {
+  const { instanceDiagReader, parseInstanceDiag } = await import("./instance-diag.ts");
+  const params = instanceDiagReader().params as { telegramFields: string[]; maxIncidents: number; errorChars: number };
+  assert.ok(!params.telegramFields.includes("inviteLink"));
+  assert.ok(params.maxIncidents <= 200 && params.errorChars <= 500);
+  const d = parseInstanceDiag(JSON.stringify({ telegram: { bot: "b", inviteLink: "https://t.me/+x" }, alerts: {} }));
+  assert.equal(JSON.stringify(d).includes("t.me"), false);
+});

@@ -2,8 +2,9 @@
 // instance's browser relay (no shared desktop). Same surface as the noVNC client ComputerProvider drives:
 // viewOnly, focus, disconnect, and "connect" / "disconnect" events.
 
+import { latestOnly, MAX_FRAME_SIDE, parseFrame, type Frame } from "@/lib/screencast-frames";
+
 type Listener = () => void;
-type Frame = { t: "frame"; data: string; w?: number; h?: number } | { t: "empty" } | { t: "tabs" };
 
 const BUTTONS = ["left", "middle", "right"] as const;
 
@@ -22,7 +23,10 @@ export class ScreencastClient {
     this.ws = new WebSocket(url);
     this.ws.onopen = () => this.emit("connect");
     this.ws.onclose = () => !this.closed && this.emit("disconnect");
-    this.ws.onmessage = (e) => this.draw(JSON.parse(String(e.data)) as Frame);
+    this.ws.onmessage = (e) => {
+      const m = parseFrame(e.data);
+      if (m) this.pace(m);
+    };
     this.bindInput();
   }
 
@@ -43,8 +47,12 @@ export class ScreencastClient {
     for (const fn of this.listeners[type]) fn();
   }
 
-  private draw(m: Frame): void {
+  // A picture is decoded before the next one starts; those that arrive meanwhile are skipped, but the last.
+  private pace = latestOnly<Frame>((m, done) => this.draw(m, done));
+
+  private draw(m: Frame, done: () => void): void {
     const ctx = this.canvas.getContext("2d");
+    if (!ctx || m.t !== "frame") done();
     if (!ctx) return;
     if (m.t === "empty") {
       this.canvas.width = 640;
@@ -59,7 +67,10 @@ export class ScreencastClient {
     }
     if (m.t !== "frame") return;
     const img = new Image();
+    img.onerror = done;
     img.onload = () => {
+      done();
+      if (img.width > MAX_FRAME_SIDE || img.height > MAX_FRAME_SIDE) return;
       this.frame = { w: m.w || img.width, h: m.h || img.height };
       if (this.canvas.width !== img.width || this.canvas.height !== img.height) {
         this.canvas.width = img.width;

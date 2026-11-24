@@ -89,13 +89,20 @@ export function sameOriginPost(h: Headers): boolean {
 
 const IP_RE = /^[0-9a-fA-F:.]{2,45}$/;
 
+/** TRUSTED_PROXY_HOPS: how many of our own proxies append to `X-Forwarded-For` (1 to 5; 1 by default). */
+export const trustedHops = (raw: string | undefined): number => {
+  const n = Number(raw?.trim());
+  return Number.isInteger(n) && n >= 1 && n <= 5 ? n : 1;
+};
+
 /**
  * The visitor's address from the trusted hop, for rate limits; never logged. On Vercel, `x-real-ip` set by its proxy
- * (`IP_HEADER_NAME` of @vercel/functions; a client's own value is overwritten); elsewhere, the entry the nearest
- * proxy appended (rightmost of `X-Forwarded-For`). Never a left-hand entry, which the client writes.
+ * (`IP_HEADER_NAME` of @vercel/functions; a client's own value is overwritten); elsewhere, the entry our outermost
+ * proxy appended to `X-Forwarded-For` (`hops` from the right). Never an entry further left, which the client writes.
  */
-export function clientIp(h: Headers, onVercel: boolean): string {
-  const ip = onVercel ? (h.get("x-real-ip") ?? "").trim() : ((h.get("x-forwarded-for") ?? "").split(",").pop() ?? "").trim();
+export function clientIp(h: Headers, onVercel: boolean, hops = 1): string {
+  const chain = (h.get("x-forwarded-for") ?? "").split(",");
+  const ip = (onVercel ? h.get("x-real-ip") : chain[chain.length - hops])?.trim() ?? "";
   return IP_RE.test(ip) ? ip : "";
 }
 
@@ -114,13 +121,51 @@ export function rateWindow(limit: number, windowMs: number, maxKeys = 5000) {
   };
 }
 
+type Window = { n: number; until: number };
+type Verdict = { ok: true } | { ok: false; retryAfter: number };
+
+/** The same window in a store the server instances share. Best effort (read, then write): the local window still applies. */
+export function sharedWindow(store: { read(key: string): Promise<Window | undefined>; write(key: string, value: Window): Promise<void> }, limit: number, windowMs: number) {
+  return async (key: string, nowMs: number): Promise<Verdict> => {
+    const seen = await store.read(key);
+    const w = seen && Number.isFinite(seen.until) && seen.until > nowMs ? { n: Number(seen.n) || 0, until: seen.until } : { n: 0, until: nowMs + windowMs };
+    w.n++;
+    if (w.n > limit) return { ok: false, retryAfter: Math.ceil((w.until - nowMs) / 1000) };
+    await store.write(key, w);
+    return { ok: true };
+  };
+}
+
+/** At most `max` things open at once per key, in this server instance: `take` returns its release, or null when full. */
+export function slots(max: number) {
+  const open = new Map<string, number>();
+  return (key: string): (() => void) | null => {
+    const n = open.get(key) ?? 0;
+    if (n >= max) return null;
+    open.set(key, n + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const left = (open.get(key) ?? 1) - 1;
+      if (left > 0) open.set(key, left);
+      else open.delete(key);
+    };
+  };
+}
+
+/** What the shared store also counts (the rare, costly ones), with the local window's own numbers. */
+export const SHARED_GUEST_LIMITS = { code: [5, 10 * 60_000], verify: [10, 10 * 60_000], stream: [20, 10 * 60_000] } as const;
+/** Streams one guest session may hold open at once per server instance (a few tabs). */
+export const GUEST_STREAMS_AT_ONCE = 4;
+
 /** Per server instance, in front of the back office's own: per address (code, verify), per session (salon). */
 export const guestLimits = () => ({
-  code: rateWindow(5, 10 * 60_000),
-  verify: rateWindow(10, 10 * 60_000),
+  code: rateWindow(...SHARED_GUEST_LIMITS.code),
+  verify: rateWindow(...SHARED_GUEST_LIMITS.verify),
   post: rateWindow(20, 60_000),
   read: rateWindow(60, 60_000),
-  stream: rateWindow(20, 10 * 60_000),
+  stream: rateWindow(...SHARED_GUEST_LIMITS.stream),
 });
 
 export interface GuestSalon { id: string; nom: string; channel: string }

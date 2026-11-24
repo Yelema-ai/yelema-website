@@ -123,3 +123,27 @@ test("de bout en bout avec python3 : un chemin hors des fichiers tampons est ref
   };
   await assert.rejects(runPythonReader(exec, "", {}, JSON.parse), (e: unknown) => e instanceof ReaderError && e.reason === "exit");
 });
+
+test("zlib bomb: a small result that inflates past the bound is refused, not held in memory", async () => {
+  const { MAX_JSON_BYTES, maxJsonBytes } = await import("./python-reader.ts");
+  assert.equal(MAX_JSON_BYTES, 32 * 1024 * 1024);
+  const bomb = deflateSync(Buffer.alloc(MAX_JSON_BYTES + 1, 0x20)).toString("base64");
+  assert.ok(bomb.length < 100_000);
+  await assert.rejects(runPythonReader(async () => ok(JSON.stringify({ inline: bomb })), "", {}, JSON.parse), (e) => e instanceof ReaderError && e.reason === "too_large");
+  assert.equal(maxJsonBytes("64"), 64 * 1024 * 1024);
+  for (const raw of [undefined, "", "0", "9999", "abc"]) assert.equal(maxJsonBytes(raw), 32 * 1024 * 1024);
+});
+
+test("a batch runs a few at a time, in order", async () => {
+  const { inBatches } = await import("./python-reader.ts");
+  let running = 0;
+  let most = 0;
+  const task = (n: number) => async () => {
+    most = Math.max(most, ++running);
+    await new Promise((r) => setTimeout(r, 2));
+    running--;
+    return n;
+  };
+  assert.deepEqual(await inBatches([1, 2, 3, 4, 5, 6, 7].map(task), 3), [1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(most, 3);
+});

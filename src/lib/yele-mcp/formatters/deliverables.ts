@@ -2,6 +2,7 @@
 
 import { formatDateFr } from "../periods.ts";
 import type { RawFileInfo } from "../types.ts";
+import { inline } from "./inline.ts";
 
 export function formatLivrablesRecents(files: RawFileInfo[], limite = 10): string {
   const validFiles = files
@@ -17,7 +18,7 @@ export function formatLivrablesRecents(files: RawFileInfo[], limite = 10): strin
   for (const f of validFiles) {
     const dateStr = f.modified ? formatDateFr(f.modified < 1e11 ? f.modified * 1000 : f.modified) : "Date inconnue";
     const sizeKb = f.size ? `(${Math.round(f.size / 1024)} Ko)` : "";
-    out += `- 📄 **${f.name}** ${sizeKb} — modifié le ${dateStr}\n`;
+    out += `- 📄 **${inline(f.name)}** ${sizeKb} — modifié le ${dateStr}\n`;
   }
   return out;
 }

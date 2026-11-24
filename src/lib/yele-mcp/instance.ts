@@ -4,8 +4,10 @@ import { agent37, instanceFetch } from "@/lib/agent37";
 import { loadCatalogue, matchCatalogue } from "@/lib/catalogue";
 import { listConnections } from "@/lib/composio";
 import { expertDisplayName } from "@/lib/experts";
+import { cappedText } from "@/lib/bounded-body";
 import { withTimeout } from "@/lib/fetch-timeout";
 import { listPlatforms } from "@/lib/hermes-messaging";
+import { memo } from "@/lib/memo";
 import { isProfileId, profileQuery } from "@/lib/profile-id";
 import { routinesOf } from "@/lib/routine-store";
 import { isRunOf, runOutcome } from "@/lib/routines";
@@ -17,7 +19,8 @@ import { instanceSetupReader, parseInstanceSetup } from "./instance-setup.ts";
 import { memorySearchReader, parseMemorySearch } from "./memory-search.ts";
 import { ReaderError, runPythonReader } from "./python-reader.ts";
 import { sessionUsageReader } from "./session-usage/command.ts";
-import { parseSessionUsage, usageByDayOf, usageByProfile, withRoutineErrors } from "./session-usage/usage.ts";
+import { ToolNotice } from "./tool-error.ts";
+import { parseSessionUsageByProfile, type ProfileReading, usageByDayOf, usageByProfile, withRoutineErrors } from "./session-usage/usage.ts";
 import type {
   ChannelState,
   DiscoveredExpert,
@@ -36,6 +39,8 @@ import type {
 // routines, consommation, connecteurs, canaux, livrables et mémoire.
 
 const TIMEOUT_MS = 15_000;
+// Un fichier lu pour un outil (rapport du jour, configuration) : ses 200 premiers Ko, jamais plus.
+const FILE_MAX_BYTES = 200_000;
 // Historique détaillé des routines d'un expert : nombre d'exécutions par routine et de résultats lus.
 const RUNS_PER_ROUTINE = 5;
 const MAX_OUTCOME_READS = 25;
@@ -54,13 +59,37 @@ async function readOnInstance<T>(agentId: string, what: string, reader: Instance
   } catch (e) {
     const why = e instanceof ReaderError ? `${e.reason} ${e.detail}` : `sortie inattendue : ${e instanceof Error ? e.message : String(e)}`;
     console.warn(`[yele-mcp] ${what} illisible sur ${agentId} : ${why.slice(0, 400)}`);
-    throw new Error(unreadable);
+    throw new ToolNotice(unreadable);
   }
 }
 
-export const readInstanceDiag = (agentId: string): Promise<InstanceDiag> => readOnInstance(agentId, "diagnostic", instanceDiagReader(), parseInstanceDiag);
+// Une question à Yélé appelle plusieurs outils de suite : la même lecture leur sert pendant 30 s (une panne n'est
+// jamais gardée). Au-delà, le state.db d'un profil n'est relu que s'il a changé (son empreinte, lue sur l'instance).
+const BURST = { ttlMs: 30_000, maxEntries: 200 };
+const diagReadings = memo<InstanceDiag>(BURST);
+const usageReadings = memo<SessionUsage>(BURST);
+const profileReadings = new Map<string, Map<string, ProfileReading>>();
+const MAX_KEPT_INSTANCES = 100;
 
-export const readSessionUsage = (agentId: string): Promise<SessionUsage> => readOnInstance(agentId, "sessions", sessionUsageReader(), parseSessionUsage);
+export const readInstanceDiag = (agentId: string): Promise<InstanceDiag> =>
+  diagReadings.get(agentId, () => readOnInstance(agentId, "diagnostic", instanceDiagReader(), parseInstanceDiag));
+
+export const readSessionUsage = (agentId: string): Promise<SessionUsage> =>
+  usageReadings.get(agentId, () => {
+    const known = profileReadings.get(agentId) ?? new Map<string, ProfileReading>();
+    const stamps = Object.fromEntries([...known].map(([profile, r]) => [profile, r.stamp]));
+    return readOnInstance(agentId, "sessions", sessionUsageReader(stamps), (json) => {
+      const { usage, readings } = parseSessionUsageByProfile(json, known);
+      profileReadings.delete(agentId);
+      profileReadings.set(agentId, readings);
+      if (profileReadings.size > MAX_KEPT_INSTANCES) profileReadings.delete(profileReadings.keys().next().value as string);
+      return usage;
+    }).catch((e: unknown) => {
+      // Une lecture ratée ne s'appuie plus sur ce qui était gardé : la suivante relit tout.
+      profileReadings.delete(agentId);
+      throw e;
+    });
+  });
 
 export const readInstanceSetup = (agentId: string): Promise<InstanceSetup> =>
   readOnInstance(agentId, "configuration des profils", instanceSetupReader(), parseInstanceSetup);
@@ -226,8 +255,8 @@ export function yeleSupervisionDeps(
     listChannels: once(() => readChannels(agentId)),
     fetchFileContent: async (path: string): Promise<string | null> => {
       try {
-        const res = await instanceFetch(agentId, `/v1/files/content?path=${encodeURIComponent(path)}`, withTimeout(undefined, TIMEOUT_MS));
-        return res.ok ? await res.text() : null;
+        const res = await instanceFetch(agentId, `/v1/files/content?path=${encodeURIComponent(path)}`, withTimeout({ headers: { Range: `bytes=0-${FILE_MAX_BYTES - 1}` } }, TIMEOUT_MS));
+        return res.ok ? (await cappedText(res, FILE_MAX_BYTES)).text : null;
       } catch {
         return null;
       }

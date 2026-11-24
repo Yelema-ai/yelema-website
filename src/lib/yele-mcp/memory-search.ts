@@ -7,6 +7,8 @@ import type { MemorySearchResult } from "./types.ts";
 
 /** Nombre maximal de paragraphes par expert. */
 export const MATCHES_PER_EXPERT = 3;
+/** Taille maximale d'un paragraphe rendu, en caractères. */
+export const MATCH_MAX_CHARS = 1_200;
 
 const SCRIPT = String.raw`
 import re, unicodedata
@@ -22,14 +24,14 @@ for expert, home in (expert_homes() if query else []):
         continue
     with open(path, encoding="utf-8", errors="replace") as f:
         paragraphs = re.split(r"\n\s*\n", f.read())
-    matches = [p.strip() for p in paragraphs if query in fold(p)][: P["perExpert"]]
+    matches = [p.strip()[: P["maxChars"]] for p in paragraphs if query in fold(p)][: P["perExpert"]]
     if matches:
         results.append({"expId": expert, "matches": matches})
 emit(results)
 `;
 
 export const memorySearchReader = (query: string, expert?: string): InstanceReader =>
-  hermesReader(SCRIPT, { query, expert: expert ?? null, perExpert: MATCHES_PER_EXPERT });
+  hermesReader(SCRIPT, { query, expert: expert ?? null, perExpert: MATCHES_PER_EXPERT, maxChars: MATCH_MAX_CHARS });
 
 /** Valide le résultat du lecteur et masque les secrets des paragraphes. */
 export function parseMemorySearch(json: string): MemorySearchResult[] {
@@ -39,6 +41,6 @@ export function parseMemorySearch(json: string): MemorySearchResult[] {
     .filter((r): r is { expId: string; matches: unknown } => typeof r === "object" && r !== null && typeof (r as { expId?: unknown }).expId === "string")
     .map((r) => ({
       expId: r.expId,
-      matches: (Array.isArray(r.matches) ? r.matches : []).filter((m): m is string => typeof m === "string").map(masquerSecrets),
+      matches: (Array.isArray(r.matches) ? r.matches : []).filter((m): m is string => typeof m === "string").slice(0, MATCHES_PER_EXPERT).map((m) => masquerSecrets(m.slice(0, MATCH_MAX_CHARS))),
     }));
 }

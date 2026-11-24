@@ -7,6 +7,7 @@ import { mailToken as sessionToken, noStore } from "../../../../mail/_session";
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    if (!/^[0-9a-f-]{36}$/.test(id)) return json({ error: { code: "not_found", message: "Ce salon est introuvable." } }, 404);
     const { cles } = await readJson<{ cles?: unknown }>(request);
     const keys = Array.isArray(cles) ? cles.filter((k): k is string => typeof k === "string" && PUBKEY_RE.test(k)).slice(0, 50) : [];
     return noStore(json(await backoffice.buzzAddSalonMembers(await sessionToken(), id, keys)));

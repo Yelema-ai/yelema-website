@@ -22,8 +22,12 @@ export const EXEC_OUTPUT_LIMIT = 512 * 1024;
 export const INLINE_LIMIT = 384 * 1024;
 /** Taille maximale d'un résultat accepté. */
 export const MAX_RESULT_BYTES = 64 * 1024 * 1024;
-/** Taille maximale du résultat une fois décompressé, en octets. */
-export const MAX_JSON_BYTES = 256 * 1024 * 1024;
+/** Taille maximale du résultat une fois décompressé, en octets (32 Mo ; `YELE_MCP_MAX_JSON_MB` pour une instance hors norme). */
+export const maxJsonBytes = (raw: string | undefined): number => {
+  const mb = Number(raw?.trim());
+  return (Number.isFinite(mb) && mb >= 1 && mb <= 256 ? mb : 32) * 1024 * 1024;
+};
+export const MAX_JSON_BYTES = maxJsonBytes(process.env.YELE_MCP_MAX_JSON_MB);
 /** Âge au-delà duquel un fichier temporaire est supprimé. */
 export const SPOOL_TTL_S = 600;
 const SPOOL_PREFIX = "yelema-reader-";
@@ -128,7 +132,7 @@ function envelopeOf(stdout: string): Envelope {
   throw new ReaderError("output", stdout.slice(0, 200));
 }
 
-async function inBatches<T>(tasks: (() => Promise<T>)[], size: number): Promise<T[]> {
+export async function inBatches<T>(tasks: (() => Promise<T>)[], size: number): Promise<T[]> {
   const out: T[] = [];
   for (let i = 0; i < tasks.length; i += size) out.push(...(await Promise.all(tasks.slice(i, i + size).map((t) => t()))));
   return out;

@@ -168,3 +168,14 @@ test("flux : fermé à la durée maximale ou quand le relais tombe ; reprise dep
   assert.equal(sinceOf("9999", 2000), 2000);
   assert.equal(sinceOf("1", 2_000_000), 2_000_000 - 7 * 86_400);
 });
+
+test("flux : sa place est rendue une fois, qu'il finisse seul ou que le navigateur parte", async () => {
+  let closed = 0;
+  await readAll(guestStream({ relay: new FakeStream(), channel: SALON, names, since: 0, recheck: async () => "ok", signal: new AbortController().signal, maxMs: 5, onClose: () => closed++ }));
+  assert.equal(closed, 1);
+  const ac = new AbortController();
+  const reading = readAll(guestStream({ relay: new FakeStream(), channel: SALON, names, since: 0, recheck: async () => "ok", signal: ac.signal, onClose: () => closed++ }));
+  ac.abort();
+  await reading;
+  assert.equal(closed, 2);
+});

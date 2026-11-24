@@ -5,6 +5,7 @@ import { Check, History, Loader2, Paperclip, Repeat, X } from "lucide-react";
 import { toast } from "sonner";
 import { TOO_LARGE, tooLarge } from "@/lib/upload-limit";
 import { apiFetch, readApiError, errorText } from "@/lib/api";
+import { routinePath } from "@/lib/api-paths";
 import { DRIVE_ROOT } from "@/lib/drive-paths";
 import {
   RECURRENCES,
@@ -132,7 +133,7 @@ export function RoutineDialog({
     try {
       const body = JSON.stringify({ expert: expert.profileId, name: draft.name, task: draft.task, skills: draft.skills, attachment: draft.attachment, schedule });
       const res = routine
-        ? await apiFetch<{ routine: Routine }>(`/api/agents/${agentId}/routines/${routine.id}`, { method: "PATCH", body })
+        ? await apiFetch<{ routine: Routine }>(routinePath(agentId, routine.id), { method: "PATCH", body })
         : await apiFetch<{ routine: Routine }>(`/api/agents/${agentId}/routines`, { method: "POST", body });
       onSaved(res.routine);
       onOpenChange(false);
