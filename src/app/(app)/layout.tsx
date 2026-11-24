@@ -3,6 +3,8 @@ import { appContext } from "@/lib/app-context";
 import { WorkspaceProvider } from "@/components/WorkspaceProvider";
 import { UnlinkedAccount } from "@/components/UnlinkedAccount";
 import { AppShell } from "@/components/app/AppShell";
+import { tabBootstrap } from "@/lib/bootstrap-server";
+import type { Bootstrap } from "@/lib/bootstrap-client";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, me, workspaces, initial } = await appContext();
@@ -16,7 +18,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // en enveloppant ou non son contenu dans <Page>.
   return (
     <WorkspaceProvider initialWorkspaces={workspaces} userEmail={user.email ?? ""} userName={user.name} userFirstName={user.firstName} userAvatarUrl={me?.user.avatarUrl ?? null}>
-      <AppShell initialExperts={initial.experts} initialAgents={initial.agents} initialCatalogue={initial.catalogue}>
+      {/* The tab's first read starts here, not after the JS loaded: not awaited, it streams in behind the page. */}
+      <AppShell initialExperts={initial.experts} initialAgents={initial.agents} initialCatalogue={initial.catalogue} bootstrap={tabBootstrap().catch(() => null) as Promise<Bootstrap | null>}>
         {children}
       </AppShell>
     </WorkspaceProvider>

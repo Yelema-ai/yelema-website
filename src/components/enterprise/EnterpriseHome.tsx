@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type KeyboardEvent } from "react";
-import { useRouter } from "next/navigation";
 import { CalendarDays, ChevronDown, FileText, ListChecks, Loader2, Lock, Mail, Mic, ReceiptText, Send, Sheet, Sun } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -15,7 +14,7 @@ import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { useOwnAgentId } from "@/components/conversations/useAllConversations";
 import { RecentDeliverables } from "@/components/home/RecentDeliverables";
 import { agentTabPath } from "@/lib/expert-tabs";
-import { handoffQuery } from "@/lib/chat-handoff";
+import { useChatHandoff } from "@/components/home/useChatHandoff";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -93,7 +92,6 @@ function Installing() {
 // opens that chat with the message on its way), four shortcuts, then the latest deliverables. The
 // team itself is in the menu; here only where its installation stands.
 export function EnterpriseHome() {
-  const router = useRouter();
   const { current, userEmail, userFirstName } = useWorkspace();
   const { experts, loading, unreadable, installing, stalled, failed, failedExperts } = useExpertsContext();
   // The chat d'entreprise is the member's own instance with no Expert chosen; who has Djénéba may
@@ -113,12 +111,8 @@ export function EnterpriseHome() {
     onError: (message) => toast.error(message),
   });
 
-  function send(message: string) {
-    const m = message.trim();
-    if (!m) return;
-    const path = to ? agentTabPath(to.agentId, "chat", to.profileId) : ownAgentId ? agentTabPath(ownAgentId, "chat") : null;
-    if (path) router.push(`${path}?${handoffQuery(m)}`);
-  }
+  const chat = useChatHandoff(to ? agentTabPath(to.agentId, "chat", to.profileId) : ownAgentId ? agentTabPath(ownAgentId, "chat") : null);
+  const send = chat.send;
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -147,6 +141,7 @@ export function EnterpriseHome() {
           <section className="mt-7 rounded-[22px] border border-line bg-surface p-4 shadow-[0_8px_30px_rgb(48_22_103_/_0.06)]">
             <textarea
               value={text}
+              onFocus={chat.warm}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={onKeyDown}
               rows={2}

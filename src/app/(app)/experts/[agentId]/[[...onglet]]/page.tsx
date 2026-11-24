@@ -4,6 +4,10 @@ import { authViaBackoffice } from "@/lib/runtime-config";
 import { openConversation } from "@/lib/conversation-token";
 import { movedTabPath, parseAgentRoute, resolveProfile } from "@/lib/expert-tabs";
 import { AgentWorkspace } from "@/components/AgentWorkspace";
+import { initialThread } from "@/lib/first-screen-server";
+
+// A thread id as it rides `?session=` (Agent37 or Hermes): anything else is never sent to the instance.
+const SESSION_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 // L'espace d'un expert. L'instance et l'expert (son profil Hermes) sont portés par l'URL, puis
 // l'onglet : /experts/{agentId}/{profileId}/{onglet}, « chat » par défaut. Sans profil, c'est le
@@ -15,7 +19,7 @@ export default async function AgentWorkspacePage({
   searchParams,
 }: {
   params: Promise<{ agentId: string; onglet?: string[] }>;
-  searchParams: Promise<{ c?: string }>;
+  searchParams: Promise<{ c?: string; session?: string }>;
 }) {
   const { agentId, onglet } = await params;
 
@@ -32,7 +36,11 @@ export default async function AgentWorkspacePage({
     const row = await backofficeAgentRow();
     if (!row || row.agent37_id !== agentId) notFound();
     const profileId = route.profileId && (resolveProfile(route.profileId, row.profiles ?? []) ?? route.profileId);
-    return <AgentWorkspace key={`${agentId}:${profileId ?? ""}`} agentId={agentId} profileId={profileId} workspaceId={row.workspace_id} initialTab={route.tab} />;
+    // The opened thread is read here and streams in with the page (not awaited): one round trip less to its messages.
+    const { session } = await searchParams;
+    const sessionId = session && SESSION_ID.test(session) ? session : null;
+    const thread = sessionId ? initialThread(agentId, profileId ?? null, sessionId) : null;
+    return <AgentWorkspace key={`${agentId}:${profileId ?? ""}`} agentId={agentId} profileId={profileId} workspaceId={row.workspace_id} initialTab={route.tab} initialThread={thread && sessionId ? { sessionId, reading: thread } : null} />;
   }
 
   const { db, user } = await requireUser();

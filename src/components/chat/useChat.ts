@@ -229,6 +229,13 @@ function readThread(agentId: string, q: string, sessionId: string): Promise<Read
   return cachedFetch(k, () => fetchThread(agentId, q, sessionId), AHEAD_MS).finally(() => forget(k));
 }
 
+/** The thread the page read on the server: the opening joins that reading instead of asking again (null = it asks). */
+export function seedThread(agentId: string, profile: string | null, sessionId: string, reading: Promise<SessionDetail | null>): void {
+  const q = profileQuery(profile);
+  const startedAt = Date.now();
+  void cachedFetch(aheadKey(historyKey(agentId, q, sessionId)), () => reading.then((res) => (res ? { ...res, startedAt } : fetchThread(agentId, q, sessionId))), AHEAD_MS).catch(() => undefined);
+}
+
 /** Reads a thread ahead of its click: its messages then paint at once, and the opening asks nothing more. */
 export function prefetchThread(agentId: string, profile: string | null, sessionId: string): void {
   const q = profileQuery(profile);
