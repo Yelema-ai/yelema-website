@@ -159,4 +159,7 @@ export interface ChatSession {
   last_active: number;
   // The routine this conversation is a run of, or null/absent for one a person started.
   routine?: string | null;
+  // A background task's own conversation (the worker side of a kanban task): filed under Routines with the
+  // layers icon, never in « Tout » (Leslie, 23/11: « ça crée une nouvelle convo à chaque update »).
+  background?: boolean;
 }

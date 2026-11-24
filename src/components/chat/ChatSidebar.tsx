@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useConversationStatus } from "@/components/activity/hooks";
-import { Archive, ChevronRight, Link2, Loader2, MoreHorizontal, Pencil, Pin, PinOff, Plus, Repeat, RotateCw, Search, Trash2, X } from "lucide-react";
+import { Archive, ChevronRight, Layers, Link2, Loader2, MoreHorizontal, Pencil, Pin, PinOff, Plus, Repeat, RotateCw, Search, Trash2, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNotifications } from "@/components/activity/ActivityProvider";
 import { convKey } from "@/lib/activity";
@@ -263,7 +263,7 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
         >
           {/* A pinned thread carries its pin and a light tint (Leslie, 31/10): it stands out from the dates. */}
           {pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-brand-ink" aria-label="Épinglée" />}
-          {s.routine && <Repeat className="h-3.5 w-3.5 shrink-0 text-ink-3" aria-label="Routine" />}
+          {s.background ? <Layers className="h-3.5 w-3.5 shrink-0 text-ink-3" aria-label="Tâche de fond" /> : s.routine && <Repeat className="h-3.5 w-3.5 shrink-0 text-ink-3" aria-label="Routine" />}
           <span className="min-w-0 flex-1">
             <span className={cn("block truncate", status === "unread" && "font-semibold text-ink")}>{label}</span>
             {status && <ConversationBadge status={status} />}
