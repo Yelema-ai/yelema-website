@@ -3,6 +3,7 @@
 import { DeliverableWatcher } from "@/components/activity/DeliverableWatcher";
 import { InstanceEventStream } from "@/components/activity/InstanceEventStream";
 import { syncPrefs } from "@/lib/prefs-sync";
+import { streamBootstrap, type Bootstrap } from "@/lib/bootstrap-client";
 import { SearchDialog } from "@/components/conversations/SearchDialog";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { CompanyColors } from "@/components/app/CompanyColors";
@@ -45,12 +46,17 @@ export function AppShell({
   initialExperts,
   initialAgents = null,
   initialCatalogue = null,
+  bootstrap = null,
 }: {
   children: React.ReactNode;
   initialExperts: InitialExperts | null;
   initialAgents?: MergedAgent[] | null;
   initialCatalogue?: CatalogueResponse | null;
+  /** The layout's server read of `/api/bootstrap`, streaming in: the tab's first read joins it. */
+  bootstrap?: Promise<Bootstrap | null> | null;
 }) {
+  // During the first render, before any child asks for the bootstrap in its effects.
+  useState(() => bootstrap && streamBootstrap(bootstrap));
   // The member's notification and conversation choices, from the back office, before the first notice.
   useEffect(() => void syncPrefs(), []);
   const { current, userEmail } = useWorkspace();

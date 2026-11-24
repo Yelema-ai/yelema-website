@@ -25,10 +25,12 @@ export function createBootstrap(load: () => Promise<Response>, now: () => number
   let absentUntil = 0;
   let round = 0;
 
-  function start(): Promise<Bootstrap | null> {
+  const fetchIt = (): Promise<Bootstrap | null> =>
+    load().then((res) => (res.ok ? (res.json() as Promise<Bootstrap>) : (res.status === 404 && (absentUntil = now() + ABSENT_MS), null)));
+
+  function start(reading: Promise<Bootstrap | null> = fetchIt()): Promise<Bootstrap | null> {
     const mine = ++round;
-    return load()
-      .then((res) => (res.ok ? (res.json() as Promise<Bootstrap>) : (res.status === 404 && (absentUntil = now() + ABSENT_MS), null)))
+    return reading
       .catch(() => null)
       .then((b) => {
         if (mine !== round) return null;
@@ -58,6 +60,10 @@ export function createBootstrap(load: () => Promise<Response>, now: () => number
       if (answered || (agentId && own !== undefined && agentId !== own)) return Promise.resolve();
       return this.bootstrap().then(() => undefined);
     },
+    /** The page's server read of the bootstrap, still streaming in: the first read joins it (null = the tab asks). */
+    streamed(reading: Promise<Bootstrap | null>): void {
+      started ??= start(reading.then((b) => b ?? fetchIt()));
+    },
     /** The shell knows the own instance before the bootstrap answers: readers of another one do not wait. */
     ownedBy(agentId: string | null): void {
       if (agentId) own ??= agentId;
@@ -79,3 +85,4 @@ export const bootstrap = () => (server ? Promise.resolve(null) : tab.bootstrap()
 export const bootstrapped = (agentId?: string) => (server ? Promise.resolve() : tab.bootstrapped(agentId));
 export const resetBootstrap = () => tab.reset();
 export const bootstrapOwner = (agentId: string | null) => tab.ownedBy(agentId);
+export const streamBootstrap = (reading: Promise<Bootstrap | null>) => void (server || tab.streamed(reading));
