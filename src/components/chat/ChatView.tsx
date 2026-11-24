@@ -25,7 +25,6 @@ import { ChatComposer } from "./ChatComposer";
 import { ExpertReadiness } from "@/components/experts/ExpertReadiness";
 import { useVoiceExpert } from "@/components/voice/useVoiceExpert";
 import type { Stage } from "@/lib/jour-zero";
-import { isDjeneba } from "@/lib/expert-cycle";
 import { ChatMessages } from "./ChatMessages";
 import { ChatSessionsPanel } from "./ChatSessionsPanel";
 import { setChatFull, setChatListHidden, setProfilePanel, useChatFull, useChatListHidden, useChatSidePanel } from "./chat-layout";
@@ -258,9 +257,9 @@ export function ChatView({
       cancelled = true;
     };
   }, [wantsIntro, agentId, driveFolder]);
-  // Only at Djénéba, who runs the company's common welcome once and then briefs each Expert, which starts
-  // its own installation in its thread (Leslie, 23/11; hermes-experts #109).
-  const showIntro = wantsIntro && made < INTRO_MAX && Boolean(profile) && isDjeneba({ catalogueKey: expert?.catalogueKey ?? null, profileId: profile ?? "" });
+  // At every Expert again (Leslie, 23/11 evening: « remettre le bien démarrer chez chaque expert »): it runs
+  // /onboarding, which plays its installation in full until it is done, after Djénéba's common welcome.
+  const showIntro = wantsIntro && made < INTRO_MAX && Boolean(profile);
   const instance = useMemo(() => agents.find((x) => x.agent37_id === agentId) ?? null, [agents, agentId]);
   // The expert's name when the chat targets one; the company chat otherwise (never the instance's
   // name, which the back office writes as the list of its Experts).
