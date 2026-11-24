@@ -44,10 +44,10 @@ describe("crossSiteWrite", () => {
 });
 
 describe("csrfMode, jsonTyped", () => {
-  it("applique par défaut", () => {
-    assert.equal(csrfMode(undefined), "enforce");
-    assert.equal(csrfMode("n'importe"), "enforce");
-    assert.equal(csrfMode("report"), "report");
+  it("observe par défaut, applique sur demande", () => {
+    assert.equal(csrfMode(undefined), "report");
+    assert.equal(csrfMode("n'importe"), "report");
+    assert.equal(csrfMode("enforce"), "enforce");
     assert.equal(csrfMode("off"), "off");
   });
 

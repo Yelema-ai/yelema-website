@@ -15,10 +15,10 @@ test("without an account, only a named service leaves; anything else is refused"
   assert.deepEqual(gatewayUser("", "", null, "enforce"), { refuse: true });
 });
 
-test("report mode lets the unnamed call through; any other value enforces", () => {
+test("report mode (default) lets the unnamed call through; only `enforce` refuses", () => {
   assert.deepEqual(gatewayUser(null, null, null, gatewayUserMode("report")), { send: null });
-  assert.equal(gatewayUserMode(" REPORT "), "report");
-  for (const raw of [undefined, "", "off", "enforce", "0"]) assert.equal(gatewayUserMode(raw), "enforce");
+  assert.equal(gatewayUserMode(" ENFORCE "), "enforce");
+  for (const raw of [undefined, "", "off", "report", "0"]) assert.equal(gatewayUserMode(raw), "report");
 });
 
 test("the service name follows the work it wraps, awaits included, and nothing outside it", async () => {

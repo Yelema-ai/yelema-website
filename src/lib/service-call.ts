@@ -11,8 +11,8 @@ const scope = new AsyncLocalStorage<ServiceCaller>();
 export const asService = <T>(who: ServiceCaller, fn: () => T): T => scope.run(who, fn);
 export const serviceCaller = (): ServiceCaller | null => scope.getStore() ?? null;
 
-/** GATEWAY_USER_MODE: `enforce` (default) refuses an unnamed call, `report` logs it and lets it through. */
-export const gatewayUserMode = (raw: string | undefined): "enforce" | "report" => (raw?.trim().toLowerCase() === "report" ? "report" : "enforce");
+/** GATEWAY_USER_MODE: `report` (default for the first rollout) logs an unnamed call and lets it through, `enforce` refuses it. */
+export const gatewayUserMode = (raw: string | undefined): "enforce" | "report" => (raw?.trim().toLowerCase() === "enforce" ? "enforce" : "report");
 
 export type UserDecision = { send: string | null } | { refuse: true };
 

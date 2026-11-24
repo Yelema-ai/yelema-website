@@ -5,7 +5,7 @@ import { normalizeOrigin } from "./site-url.ts";
 type Headers = { get(name: string): string | null };
 
 export type CsrfMode = "enforce" | "report" | "off";
-export const csrfMode = (raw: string | undefined): CsrfMode => (raw === "off" || raw === "report" ? raw : "enforce");
+export const csrfMode = (raw: string | undefined): CsrfMode => (raw === "off" || raw === "enforce" ? raw : "report");
 
 /** `CSRF_ALLOWED_ORIGINS`: other origins whose pages may write here, comma-separated. */
 export function allowedOrigins(raw: string | undefined): ReadonlySet<string> {
