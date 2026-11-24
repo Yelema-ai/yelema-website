@@ -136,8 +136,11 @@ export function folderPeeks(entries: readonly TreeEntry[], folders: readonly str
     const peek = out.get(f)!;
     peek.count = list.length;
     peek.first = [...list].sort((a, b) => (b.modified || 0) - (a.modified || 0) || a.name.localeCompare(b.name, "fr")).slice(0, shown).map((e) => ({ name: e.name, folder: false }));
-    peek.tiles = [...list]
-      .sort((a, b) => Number(coverRank(b.name) > 0) - Number(coverRank(a.name) > 0) || (b.modified || 0) - (a.modified || 0) || a.name.localeCompare(b.name, "fr"))
+    // What draws well small first (a picture, a PDF, a slide); with two of those, nothing else (a page of text reads as a grey smear).
+    const tier = (name: string) => (coverRank(name) >= 3 ? 2 : coverRank(name) > 0 ? 1 : 0);
+    const ranked = [...list].sort((a, b) => tier(b.name) - tier(a.name) || (b.modified || 0) - (a.modified || 0) || a.name.localeCompare(b.name, "fr"));
+    const visual = ranked.filter((e) => tier(e.name) === 2);
+    peek.tiles = (visual.length >= 2 ? visual : ranked)
       .slice(0, 4)
       .map((e) => ({ path: e.path, name: e.name, modified: e.modified || 0 }));
   }

@@ -86,11 +86,11 @@ test("a folder's glimpse: its best cover anywhere inside, else its newest three 
   assert.ok(r.first.every((x) => !x.folder));
   assert.equal(r.count, 3);
   assert.equal(peeks.get("~/Livrables/Djeneba/CFAO")!.cover, "~/Livrables/Djeneba/CFAO/Offre/visuel.png");
-  // The card's mosaic: what can be seen first (PDF, Word), then the rest, newest first; never a working file.
-  assert.deepEqual(r.tiles.map((x) => x.name), ["Ordre du jour.docx", "Plan.pdf", "compte-rendu.html"]);
+  // The card's mosaic: what draws well small first (PDF), then the other documents, then the rest; never a working file.
+  assert.deepEqual(r.tiles.map((x) => x.name), ["Plan.pdf", "Ordre du jour.docx", "compte-rendu.html"]);
 });
 
-test("a folder's mosaic holds four outputs at most, at any depth, pictures and documents before the rest", async () => {
+test("a folder's mosaic holds four outputs at most, at any depth, pictures, PDFs and slides alone when there are two", async () => {
   const { folderPeeks } = await import("./deliverable-folders.ts");
   const e = (path: string, modified: number, type = "file") => ({ name: path.split("/").pop()!, path, type, modified, depth: path.split("/").length - 3 });
   const peeks = folderPeeks(
@@ -107,7 +107,8 @@ test("a folder's mosaic holds four outputs at most, at any depth, pictures and d
     ["/home/node/Livrables/Kouassi"]
   );
   const k = peeks.get("/home/node/Livrables/Kouassi")!;
-  assert.deepEqual(k.tiles.map((x) => x.name), ["offre.pdf", "chiffres.xlsx", "deck.pptx", "affiche.png"]);
+  // Two pictures, PDFs or slides or more: only those (a sheet or a page of text reads as a grey smear at that size).
+  assert.deepEqual(k.tiles.map((x) => x.name), ["offre.pdf", "deck.pptx", "affiche.png"]);
   assert.equal(k.count, 5);
 });
 

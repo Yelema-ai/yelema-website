@@ -305,7 +305,7 @@ const renderPdf: Render = async (data, _doc, width) => {
     <span className="relative block size-full bg-white">
       {/* eslint-disable-next-line @next/next/no-img-element -- a page drawn here, as a data URL */}
       <img src={src} alt="" className="block w-full" />
-      <span className="absolute right-3 top-3 rounded-full bg-black/65 px-2.5 py-1 text-[12px] font-semibold text-white">
+      <span data-page-count className="absolute right-3 top-3 rounded-full bg-black/65 px-2.5 py-1 text-[12px] font-semibold text-white">
         1/{pages} {pages > 1 ? "pages" : "page"}
       </span>
     </span>
@@ -485,7 +485,7 @@ function Slide({ lines, n, of, badge = true }: { lines: string[]; n: number; of:
         </span>
       ))}
       {badge && (
-        <span className="absolute bottom-2 right-3 text-[11px] font-semibold text-[#8a8a98]">
+        <span data-page-count className="absolute bottom-2 right-3 text-[11px] font-semibold text-[#8a8a98]">
           {n}/{of}
         </span>
       )}
