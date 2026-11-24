@@ -10,7 +10,7 @@ import { apiError, json, readJson } from "@/lib/http";
 // admits its public half in the salon only; the private half stays sealed in the guest cookie, never readable.
 // A browser that still holds this invitation's cookie keeps its key: the same device, not a new one.
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
-  const refused = guardPost(request, "verify");
+  const refused = await guardPost(request, "verify");
   if (refused) return refused;
   try {
     const { token } = await params;

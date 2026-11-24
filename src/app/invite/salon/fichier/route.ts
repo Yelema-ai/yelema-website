@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { backoffice } from "@/lib/backoffice";
 import { guestFailure, guestSession, ipOf, noStore } from "@/lib/guest-session";
 import { apiError } from "@/lib/http";
+import { safeHref } from "@/lib/markdown-safety";
 
 // `GET /invite/salon/fichier?p=<chemin>` — each open re-checks the guest's session at the back office, which
 // signs a fresh short address for a file its salon's list still holds; the browser is sent there.
@@ -12,7 +13,9 @@ export async function GET(request: Request) {
   if (!p || p.length > 1024) return noStore(apiError("Ce fichier est introuvable.", 404, "not_found"));
   try {
     const { data } = await backoffice.guestFile(session, ipOf(request), p);
-    return noStore(NextResponse.redirect(data.url, 302));
+    const to = safeHref(data.url);
+    if (!to) return noStore(apiError("Ce fichier est introuvable.", 404, "not_found"));
+    return noStore(NextResponse.redirect(new URL(to, request.url), 302));
   } catch (e) {
     return noStore(guestFailure(e));
   }

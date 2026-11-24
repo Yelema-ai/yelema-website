@@ -136,6 +136,12 @@ export function forgetPrincipal(workspace: string, token: string): void {
 }
 const instanceOf = sessionMemo("instance", (token) => backoffice.instance(token));
 
+/** At sign-out: what was kept of this session goes at once, here and in the shared layer, not at the next renewal. */
+export function forgetSession(workspace: string, token: string): void {
+  meOf.drop(workspace, token);
+  instanceOf.drop(workspace, token);
+}
+
 // A refused session (expired, suspended, no longer a member) reads as "nobody signed in"; an
 // outage is NOT that, and is thrown so the caller answers "try again" rather than signing out.
 function nobodyOn(e: unknown): null {
@@ -172,6 +178,7 @@ const currentReading = cache(async (): Promise<BoInstanceReading | null> => {
 const JWKS_TTL_MS = 10 * 60_000;
 const jwks = memo<Jwk[]>({ ttlMs: JWKS_TTL_MS, staleOnErrorMs: 6 * 60 * 60_000, maxEntries: 4, maxFlightMs: 6_000 });
 let jwksForcedAt = 0;
+const sharedJwks = sharedCacheOn(process.env) ? sharedLayer<Jwk[]>("jwks", JWKS_TTL_MS / 1000, () => vercelRuntimeCache(deployVersion())) : null;
 
 async function readJwks(base: string): Promise<Jwk[]> {
   const anon = supabaseAnonKey();
@@ -190,13 +197,15 @@ export async function verifiedAccessToken(token: string): Promise<VerifiedClaims
   if (!base) return null;
   const expect = { issuer: `${base}/auth/v1`, audience: "authenticated" };
   try {
-    let keys = await jwks.get(base, () => readJwks(base));
+    // A cold function reads the keys (public) from the region's shared cache when it is on, not from Supabase.
+    let keys = await jwks.get(base, sharedJwks ? () => throughShared(sharedJwks, `jwks:${base}`, () => readJwks(base), () => false, keepAlive) : () => readJwks(base));
     // A key rotated since the last read: read the set once more, at most once a minute.
     const kid = tokenKid(token);
     if (kid && !keys.some((k) => k.kid === kid) && Date.now() - jwksForcedAt > 60_000) {
       jwksForcedAt = Date.now();
       jwks.drop(base);
       keys = await jwks.get(base, () => readJwks(base));
+      if (sharedJwks) keepAlive(sharedJwks.write(`jwks:${base}`, keys));
     }
     const check = verifyEs256(token, keys, expect);
     return check.ok ? check.claims : null;

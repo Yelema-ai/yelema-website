@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { apiFetch, ApiFetchError } from "@/lib/api";
+import { salonPath } from "@/lib/api-paths";
 import { remember, whenKept } from "@/lib/client-cache";
 import { optimistic } from "@/lib/optimistic";
 import { conversationName, facesOf, isSalonName, labelsOf, myExpertsIn, myMember, participants, working, type BuzzOverview } from "@/lib/buzz";
@@ -101,7 +102,7 @@ export function Messaging() {
   const setOpen = useCallback((id: string | null) => {
     setOpenState(id);
     setPane("fil");
-    router.replace(id ? `/echanges?c=${id}` : "/echanges", { scroll: false });
+    router.replace(id ? `/echanges?c=${encodeURIComponent(id)}` : "/echanges", { scroll: false });
   }, [router]);
 
   const refresh = useCallback(async () => {
@@ -350,7 +351,7 @@ export function Messaging() {
       // Affichés tout de suite ; retirés, avec le refus, si le back-office ne les admet pas.
       const ok = await optimistic({
         apply: () => members(before && [...new Set([...before, ...keys])]),
-        run: () => apiFetch(`/api/buzz/salons/${salon}/membres`, { method: "POST", body: JSON.stringify({ cles: keys }) }, "Les participants n’ont pas pu être ajoutés"),
+        run: () => apiFetch(salonPath(salon, "membres"), { method: "POST", body: JSON.stringify({ cles: keys }) }, "Les participants n’ont pas pu être ajoutés"),
         rollback: () => members(before),
         refused: (m) => toast.error(m),
       });
@@ -387,7 +388,7 @@ export function Messaging() {
     };
     const ok = await optimistic({
       apply: () => named(nom),
-      run: () => apiFetch(`/api/buzz/salons/${c.id}`, { method: "PATCH", body: JSON.stringify({ nom }) }, "Le salon n’a pas pu être renommé"),
+      run: () => apiFetch(salonPath(c.id), { method: "PATCH", body: JSON.stringify({ nom }) }, "Le salon n’a pas pu être renommé"),
       rollback: () => named(was),
       refused: (m) => toast.error(m),
     });
@@ -396,7 +397,7 @@ export function Messaging() {
 
   // Lève l'erreur : la fenêtre de confirmation l'affiche et reste ouverte.
   async function remove(c: Conversation) {
-    await apiFetch(`/api/buzz/salons/${c.id}`, { method: "DELETE" }, "Le salon n’a pas pu être supprimé");
+    await apiFetch(salonPath(c.id), { method: "DELETE" }, "Le salon n’a pas pu être supprimé");
     if (open === c.id) setOpen(null);
     toast.success("Salon supprimé.");
     await refresh();
@@ -404,7 +405,7 @@ export function Messaging() {
 
   async function copyLink(c: Conversation) {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/echanges?c=${c.id}`);
+      await navigator.clipboard.writeText(`${window.location.origin}/echanges?c=${encodeURIComponent(c.id)}`);
       toast.success("Lien copié : il ouvre cette conversation pour ses participants.");
     } catch {
       toast.error("Le lien n’a pas pu être copié.");

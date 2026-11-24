@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { instanceFetch } from "@/lib/agent37";
 import { logSharedOpen, resolveDashboardAccess, sharedRateLimit, TOO_MANY } from "@/lib/dashboard-access";
 import { fetchCachedSharedPage } from "@/lib/dashboard-cache";
+import { asService } from "@/lib/service-call";
 import { withTimeout } from "@/lib/fetch-timeout";
 
 const MISSING = () => new NextResponse("Fichier introuvable.", { status: 404 });
@@ -17,7 +18,9 @@ async function firstFound(agentId: string, paths: readonly string[]): Promise<Re
   return null;
 }
 
-export async function GET(request: NextRequest) {
+export const GET = (request: NextRequest) => asService("shared-dashboard", () => read(request));
+
+async function read(request: NextRequest) {
   try {
     const kind = request.nextUrl.searchParams.get("kind");
     const token = request.nextUrl.searchParams.get("s");

@@ -104,7 +104,7 @@ export function sinceOf(raw: string | null, nowS: number): number {
  * a ping every `heartbeatMs`, the session checked every `recheckMs` (`end` then close when it is over),
  * closed after `maxMs` or when the relay drops (the browser reconnects).
  */
-export function guestStream(o: { relay: StreamRelay; channel: string; names: ReadonlyMap<string, string>; since: number; recheck: Recheck; signal: AbortSignal; heartbeatMs?: number; recheckMs?: number; maxMs?: number }): ReadableStream<Uint8Array> {
+export function guestStream(o: { relay: StreamRelay; channel: string; names: ReadonlyMap<string, string>; since: number; recheck: Recheck; signal: AbortSignal; heartbeatMs?: number; recheckMs?: number; maxMs?: number; onClose?: () => void }): ReadableStream<Uint8Array> {
   const enc = new TextEncoder();
   let finish: (last?: string) => void = () => undefined;
   return new ReadableStream<Uint8Array>({
@@ -128,6 +128,7 @@ export function guestStream(o: { relay: StreamRelay; channel: string; names: Rea
         sub?.close();
         o.relay.onclose = null;
         o.relay.close();
+        o.onClose?.();
         try {
           ctrl.close();
         } catch {

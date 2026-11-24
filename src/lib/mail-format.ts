@@ -82,11 +82,28 @@ const BARE_URL = /<?(https?:\/\/[^\s<>)\]]+[^\s<>)\].,;:!?»"'])>?/g;
 const anchor = (href: string, label: string) => `<a href="${escapeHtml(href)}" style="color:${LINK};font-weight:600;text-decoration:underline">${escapeHtml(label)}</a>`;
 const strong = (s: string) => `<strong style="font-weight:700">${s}</strong>`;
 
+/** Le domaine réel d'un lien, montré après un libellé libre qui ne le nomme pas : le libellé ne peut pas mentir sur la destination. */
+export function shownHost(href: string, label: string): string | null {
+  let host: string;
+  try {
+    host = new URL(href).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return null;
+  }
+  // Un libellé qui est lui-même une adresse ou un domaine doit être celui du lien, à la lettre.
+  const named = label.toLowerCase().match(/(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)/g)?.map((m) => m.replace(/^https?:\/\//, '').replace(/^www\./, '')) ?? [];
+  return named.length > 0 && named.every((n) => n === host) ? null : host;
+}
+const labelled = (href: string, label: string) => {
+  const host = shownHost(href, label);
+  return anchor(href, label) + (host ? ` <span style="color:#6b6880;font-size:13px">(${escapeHtml(host)})</span>` : '');
+};
+
 /** Une ligne en HTML : liens (Markdown ou nus, posés sur un libellé), gras, et « Nom : » de tête en gras. */
 function inline(text: string, lead: boolean): string {
   const links: string[] = [];
   const hold = (html: string) => `\u0000${String(links.push(html) - 1)}\u0000`;
-  let s = text.replace(MD_LINK, (_, label: string, href: string) => hold(anchor(href, label))).replace(BARE_URL, (_, href: string) => hold(anchor(href, linkLabel(href))));
+  let s = text.replace(MD_LINK, (_, label: string, href: string) => hold(labelled(href, label))).replace(BARE_URL, (_, href: string) => hold(anchor(href, linkLabel(href))));
   s = escapeHtml(s)
     .replace(/\*\*(?=\S)(.+?)(?<=\S)\*\*/g, (_, b: string) => strong(b))
     .replace(/__(?=\S)(.+?)(?<=\S)__/g, (_, b: string) => strong(b));

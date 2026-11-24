@@ -4,6 +4,7 @@ import { scheduleLabel, type RunOutcome } from "../../routines.ts";
 import { isExpert } from "../experts.ts";
 import { DAY_MS, formatDateFr } from "../periods.ts";
 import type { ExpertRoutineRuns, ExpertRoutines } from "../types.ts";
+import { inline } from "./inline.ts";
 
 export function formatRoutinesPlanning(list: ExpertRoutines[], targetExpert?: string): string {
   const chosen = targetExpert ? list.filter((r) => isExpert({ id: r.expId, name: r.expertName }, targetExpert)) : list;
@@ -18,7 +19,7 @@ export function formatRoutinesPlanning(list: ExpertRoutines[], targetExpert?: st
     out += `**${exp.expertName}** : ${exp.routines.length} routine(s), ${exp.routines.filter((r) => r.enabled).length} active(s)\n`;
     for (const r of exp.routines) {
       const state = r.enabled ? "✅ active" : r.suggested ? "💡 proposée, jamais activée" : "⏸️ en pause";
-      out += `- **${r.name}** (${state}) : ${scheduleLabel(r.schedule)}`;
+      out += `- **${inline(r.name)}** (${state}) : ${scheduleLabel(r.schedule)}`;
       if (r.enabled) out += ` ; prochaine : ${when(r.nextRunAt)}`;
       out += ` ; dernière : ${when(r.lastRunAt)}\n`;
     }
@@ -43,12 +44,12 @@ export function formatHistoriqueRoutines(list: ExpertRoutineRuns[], targetExpert
     for (const r of exp.routines) {
       const last = r.runs[0];
       if (!last) {
-        out += `- **${r.name}** : n'a encore jamais tourné${r.enabled ? "" : " (en pause)"}\n`;
+        out += `- **${inline(r.name)}** : n'a encore jamais tourné${r.enabled ? "" : " (en pause)"}\n`;
       } else if (!targetExpert) {
         const week = r.runs.filter((x) => x.at >= weekAgo).length;
-        out += `- **${r.name}** : dernière exécution le ${formatDateFr(last.at)}, ${week} exécution(s) sur 7 jours\n`;
+        out += `- **${inline(r.name)}** : dernière exécution le ${formatDateFr(last.at)}, ${week} exécution(s) sur 7 jours\n`;
       } else {
-        out += `- **${r.name}** :\n`;
+        out += `- **${inline(r.name)}** :\n`;
         for (const run of r.runs) out += `  - ${formatDateFr(run.at)} : ${run.outcome ? OUTCOME[run.outcome] : "résultat illisible"}\n`;
       }
     }

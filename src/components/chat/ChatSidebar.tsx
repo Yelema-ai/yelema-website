@@ -17,6 +17,7 @@ import { copyLater } from "@/lib/clipboard";
 import { profileQuery } from "@/lib/profile-id";
 import { useChatContext } from "./ChatProvider";
 import { prefetchThread } from "./useChat";
+import { sessionPath } from "@/lib/api-paths";
 import { intentOf, whenIdle } from "@/components/usePrefetch";
 import type { ChatSession } from "./types";
 import { toMs } from "@/lib/activity";
@@ -182,7 +183,7 @@ export function ChatSidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   async function copyLink(s: ChatSession) {
     const link = new URL(`${agentTabPath(agentId, "chat", profile)}?session=${encodeURIComponent(s.session_id)}`, window.location.origin);
     const mint = apiFetch<{ path: string; days: number }>(
-      `/api/agents/${agentId}/chat/sessions/${s.session_id}/share${profileQuery(profile)}`,
+      sessionPath(agentId, s.session_id, profileQuery(profile), "share"),
       { method: "POST", body: JSON.stringify({ title: s.routine ?? s.title ?? "" }) }
     ).then(
       (res) => ({ token: new URL(res.path, window.location.origin).searchParams.get("c"), days: res.days }),

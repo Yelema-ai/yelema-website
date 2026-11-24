@@ -15,3 +15,10 @@ test("never a write, never another error", () => {
   assert.equal(coldStartWait("GET", 500, 0), null);
   assert.equal(coldStartWait("GET", 404, 0), null);
 });
+
+test("the whole wait is capped: a usual cold start keeps its three tries, slow answers stop early", () => {
+  assert.equal(coldStartWait("GET", 502, 0, 9_000), 2_000);
+  assert.equal(coldStartWait("GET", 502, 1, 20_000), 4_000);
+  assert.equal(coldStartWait("GET", 502, 1, 21_001), null);
+  assert.equal(coldStartWait("GET", 503, 0, 30_000), null);
+});

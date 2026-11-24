@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { normalizeAllowlist, prepareChannelWrite } from "./channel-rules.ts";
+import { mayWriteChannels, normalizeAllowlist, prepareChannelWrite, relayUnlinkIsShared } from "./channel-rules.ts";
 import type { ChannelField, MessagingPlatform } from "./channels.ts";
 
 const field = (key: string, over: Partial<ChannelField> = {}): ChannelField => ({
@@ -56,4 +56,24 @@ test("a missing required credential is named in French; a secret already set is 
 
 test("switching a channel off asks for nothing", () => {
   assert.equal(prepareChannelWrite(slack(), {}, false).problem, null);
+});
+
+test("🔒 instance partagée : seul un administrateur écrit ses canaux ; un identifiant d'appariement reste un segment", async () => {
+  const { isPairingId, mayWriteChannels } = await import("./channel-rules.ts");
+  assert.equal(mayWriteChannels(undefined, "member"), true);
+  assert.equal(mayWriteChannels(null, null), true);
+  assert.equal(mayWriteChannels("u-abc", "member"), false);
+  assert.equal(mayWriteChannels("u-abc", null), false);
+  assert.equal(mayWriteChannels("u-abc", "admin"), true);
+  for (const ok of ["a1b2c3", "3f2b8c1e-9d4a-4c11-8e7b-1a2b3c4d5e6f", "pair_01:AbC.def"]) assert.equal(isPairingId(ok), true, ok);
+  for (const bad of ["", "..", "../x", "a/b", "a..b", "a%2Fb", "a b", "a?b", "-x", "x".repeat(129), 12, null, undefined]) assert.equal(isPairingId(bad), false, String(bad));
+});
+
+test("shared instance: the bot and the unlinking of everyone's Slack or Teams are an admin's; one's own Telegram link is not", () => {
+  assert.equal(relayUnlinkIsShared("slack"), true);
+  assert.equal(relayUnlinkIsShared("teams"), true);
+  assert.equal(relayUnlinkIsShared("telegram"), false);
+  assert.equal(mayWriteChannels("u-1a2b3c", "member"), false);
+  assert.equal(mayWriteChannels("u-1a2b3c", "admin"), true);
+  assert.equal(mayWriteChannels(null, "member"), true);
 });

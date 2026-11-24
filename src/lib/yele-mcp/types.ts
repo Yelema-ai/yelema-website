@@ -38,7 +38,6 @@ export interface TelegramConfig {
   chatTitle?: string;
   chatId?: number;
   phase?: string;
-  inviteLink?: string;
   topics?: Record<string, string>;
 }
 

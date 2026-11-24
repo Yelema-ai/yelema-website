@@ -172,6 +172,9 @@ export interface LlmWritten {
 /** What a key is set for: the whole company, one member (by an admin), or the user themself. */
 export type SettingScope = { kind: "client" } | { kind: "member"; id: string } | { kind: "own" };
 
+/** The company's settings and another member's are an administrator's; one's own are everyone's. */
+export const isAdminScope = (scope: SettingScope): boolean => scope.kind !== "own";
+
 const MEMBER_ID = /^\d{1,12}$/;
 export const isMemberId = (id: unknown): id is string => typeof id === "string" && MEMBER_ID.test(id);
 

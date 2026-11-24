@@ -109,5 +109,7 @@ test("yele-mcp: unknown tool and error propagation", async () => {
   });
   const err = textOf(await answerRpc(rpc("tools/call", { name: "analyser_activite_experts", arguments: {} }), fail));
   assert.equal(err.isError, true);
-  assert.match(err.content[0].text, /Instance inaccessible/);
+  // Le texte d'une erreur interne reste au journal ; le modèle reçoit une référence.
+  assert.doesNotMatch(err.content[0].text, /Instance inaccessible/);
+  assert.match(err.content[0].text, /^Erreur lors de l'exécution de l'outil \(réf\. [0-9a-f]{8}\)\.$/);
 });

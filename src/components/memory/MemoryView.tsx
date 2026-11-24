@@ -14,7 +14,7 @@ import { MemoryGroups } from "./MemoryGroups";
 import { EssentialTile } from "@/components/company/EssentialTile";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { usePoll } from "@/components/usePoll";
 import { runPool } from "@/lib/bulk";
@@ -38,6 +38,7 @@ async function sendLarge(file: File, to: UploadDestination, what: string): Promi
 }
 import { driveTree } from "@/lib/drive-store";
 import { expertPath } from "@/lib/expert-tabs";
+import { handoffQuery } from "@/lib/chat-handoff";
 
 // The company memory: what the experts know of the company. Everyone sees the deposits of their own
 // compartments; whoever may deposit adds a note or a document. The back office sends each deposit
@@ -101,6 +102,7 @@ export function MemoryView({
   // No brand book yet: Djénéba makes it, she is in every account (Leslie, 05/11: « tous les comptes n'ont pas
   // Koffi »). She hands it to Koffi when the team has him. The file may land in either one's Livrables.
   const { experts } = useExpertsContext();
+  const router = useRouter();
   const plainKey = (k?: string | null) => (k ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const isExpert = (e: (typeof experts)[number], name: string) => [e.catalogueKey, e.driveFolder, e.profileId].some((k) => plainKey(k).includes(name));
   const koffi = experts.find((e) => isExpert(e, "koffi"));
@@ -291,8 +293,8 @@ export function MemoryView({
                   </Button>
                 )}
                 {!charte && !offer && designer && (
-                  <Button asChild size="sm">
-                    <Link href={`${expertPath(designer.agentId, designer.profileId)}/chat?q=${encodeURIComponent(charteRequest)}`}>La créer avec {designer.displayName}</Link>
+                  <Button size="sm" onClick={() => router.push(`${expertPath(designer.agentId, designer.profileId)}/chat?${handoffQuery(charteRequest)}`)}>
+                    La créer avec {designer.displayName}
                   </Button>
                 )}
                 <Button variant="outline" size="sm" onClick={() => chartePicker.current?.click()}>

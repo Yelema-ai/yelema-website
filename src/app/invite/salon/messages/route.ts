@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const refused = guardPost(request, "message");
+  const refused = await guardPost(request, "message");
   if (refused) return refused;
   const g = await guestContext(request);
   if (g instanceof NextResponse) return g;

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { routinePath } from "@/lib/api-paths";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { absoluteFr, relativeFr } from "@/lib/fr-dates";
 import { runOpens, type Routine, type RoutineRun, type RunOutcome } from "@/lib/routines";
@@ -32,7 +33,7 @@ export function RoutineHistoryDialog({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiFetch<{ runs: RoutineRun[] }>(`/api/agents/${agentId}/routines/${routine.id}/runs?expert=${encodeURIComponent(profileId)}`)
+    apiFetch<{ runs: RoutineRun[] }>(`${routinePath(agentId, routine.id, "runs")}?expert=${encodeURIComponent(profileId)}`)
       .then((res) => setRuns(res.runs))
       .catch((e: Error) => setError(e.message));
   }, [agentId, profileId, routine.id]);

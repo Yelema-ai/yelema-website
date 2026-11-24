@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Copy, FolderOpen, Mail, MessageSquare, Pencil, Phone, Repeat, X } from "lucide-react";
@@ -8,10 +9,7 @@ import { agentTabPath, parseAgentRoute, type AgentTab } from "@/lib/expert-tabs"
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { useMyAgents } from "@/components/useMyAgents";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
-import { ExpertEditModal } from "@/components/experts/ExpertEditModal";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
-import { ExpertEmails } from "@/components/experts/ExpertEmails";
-import { ExpertRoutines } from "@/components/experts/ExpertRoutines";
 import { ExpertReadiness } from "@/components/experts/ExpertReadiness";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { useCatalogueExpert } from "@/components/experts/useCatalogue";
@@ -19,6 +17,7 @@ import { readExpertScreen } from "@/components/experts/expert-preload";
 import { useMailInboxes } from "@/components/experts/useMailInboxes";
 import { expertDisplayName } from "@/lib/experts";
 import { DRIVE_ROOT } from "@/lib/drive-paths";
+import { readHandoff, type Handoff } from "@/lib/chat-handoff";
 import { inboxOf } from "@/lib/mail";
 import { ChatProvider } from "@/components/chat/ChatProvider";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
@@ -27,15 +26,39 @@ import { ComputerMenuItem } from "@/components/experts/ExpertComputer";
 import { ExpertMoreMenu } from "@/components/experts/ExpertMoreMenu";
 import { DashboardMenuFace } from "@/components/experts/ExpertDashboard";
 import { setChatFull, setProfilePanel, useChatFull, useChatListHidden, useChatSidePanel, useProfilePanel } from "@/components/chat/chat-layout";
-import { FilesTab } from "@/components/files/FilesTab";
 import { cn } from "@/lib/utils";
 import { useInstallPending } from "@/components/experts/useInstallPending";
 import { CallButton } from "@/components/voice/CallButton";
 import { VoiceButton } from "@/components/voice/VoiceButton";
-import { CallsAndMeetings } from "@/components/experts/meetings/CallsAndMeetings";
 import { isNotetaker } from "@/lib/meetings/notetaker";
 import { useVoices } from "@/components/voice/useVoices";
 import { NotificationBell } from "@/components/app/NotificationBell";
+
+// Discussion is what opens: the other tabs' code is fetched when the page is idle (or at the click, if sooner),
+// not before the chat can answer a keystroke.
+const TAB_CODE = {
+  files: () => import("@/components/files/FilesTab").then((m) => m.FilesTab),
+  routines: () => import("@/components/experts/ExpertRoutines").then((m) => m.ExpertRoutines),
+  calls: () => import("@/components/experts/meetings/CallsAndMeetings").then((m) => m.CallsAndMeetings),
+  emails: () => import("@/components/experts/ExpertEmails").then((m) => m.ExpertEmails),
+  edit: () => import("@/components/experts/ExpertEditModal").then((m) => m.ExpertEditModal),
+};
+const FilesTab = dynamic(TAB_CODE.files);
+const ExpertRoutines = dynamic(TAB_CODE.routines);
+const CallsAndMeetings = dynamic(TAB_CODE.calls);
+const ExpertEmails = dynamic(TAB_CODE.emails);
+const ExpertEditModal = dynamic(TAB_CODE.edit);
+
+function preloadTabs(): () => void {
+  const all = () => void Promise.all(Object.values(TAB_CODE).map((load) => load().catch(() => undefined)));
+  const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+  if (ric) {
+    const id = ric(all, { timeout: 4_000 });
+    return () => window.cancelIdleCallback?.(id);
+  }
+  const id = setTimeout(all, 2_000);
+  return () => clearTimeout(id);
+}
 
 const TABS: { id: AgentTab; label: string; icon: typeof MessageSquare }[] = [
   // Livrables right after Discussion (Leslie, 25/10), then Appels and E-mails.
@@ -72,6 +95,7 @@ export function AgentWorkspace({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  useEffect(preloadTabs, []);
   const { setCurrentId, current } = useWorkspace();
   // Only an admin gives or takes an expert's address; the back office checks it again.
   const mailAdmin = current?.role === "admin";
@@ -125,11 +149,16 @@ export function AgentWorkspace({
   // Only an expert of the catalogue can be called: the back office opens the call by its key.
   const callee = expert?.catalogueKey ? { key: expert.catalogueKey, name: expertName, photoUrl: portrait } : null;
 
-  // A message typed on the home page rides the URL as ?q= and is sent once the chat is up. Read once
-  // mounted, like ?session= below: on a client navigation from the home page the first render still
-  // sees the home page's URL, so reading it during render lost the message.
-  const [initialMessage, setInitialMessage] = useState<string | null>(null);
-  useEffect(() => setInitialMessage(new URLSearchParams(window.location.search).get("q")), []);
+  // A message typed on the home page rides the URL as ?q= and is sent once the chat is up; a ?q= this tab did
+  // not write itself only fills the field (lib/chat-handoff.ts). Read once mounted, like ?session= below: on a
+  // client navigation from the home page the first render still sees the home page's URL.
+  const [initialMessage, setInitialMessage] = useState<Handoff | null>(null);
+  const handoffRead = useRef(false);
+  useEffect(() => {
+    if (handoffRead.current) return;
+    handoffRead.current = true;
+    setInitialMessage(readHandoff(window.location.search));
+  }, []);
 
   // The open tab follows the URL (history.pushState updates usePathname in the App Router). Fall
   // back to the server-resolved initialTab on the first paint before the path is parsed.

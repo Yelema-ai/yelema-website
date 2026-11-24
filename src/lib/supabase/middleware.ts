@@ -7,6 +7,7 @@ import { authViaBackoffice, deploymentWorkspaceId, multiTenant, resolverToken, s
 import { bearerDecision } from "@/lib/bearer-access";
 import { guestCookieApplies, guestCookieName } from "@/lib/guest-access";
 import { decodeSession, encodeSession, LEGACY_SESSION_COOKIE, secondsLeft, SESSION_COOKIE, sessionCookieOptions, sessionCookieValue, verifiedAccessToken } from "@/lib/session";
+import { renewBefore, tokenLifetime } from "@/lib/session-renewal";
 import { requestSiteOrigin } from "@/lib/site-url";
 import { sealTenant, writeTenantHeader } from "@/lib/tenant-header";
 import { hostOf, resolveHost, TenantError, type ResolvedTenant } from "@/lib/tenant-resolver";
@@ -112,9 +113,6 @@ async function tenantGate(request: NextRequest): Promise<NextResponse | { tenant
 
 const GUEST_COOKIE = guestCookieName(process.env.NODE_ENV === "production");
 
-// Renew the access token this long before it expires, so a request never leaves with a dead one.
-const RENEW_BEFORE_S = 120;
-
 // The requests of one page renew together: one call per refresh token, its answer shared, so they
 // all leave with the same new session instead of racing the back office's token rotation.
 const renewals = memo<BoOpenedSession>({ ttlMs: 30_000, maxEntries: 2000, maxFlightMs: 20_000 });
@@ -161,7 +159,8 @@ async function updateBackofficeSession(request: NextRequest, workspace: string |
     return NextResponse.next({ request });
   }
 
-  if (session && secondsLeft(session) < RENEW_BEFORE_S) {
+  // Ahead of expiry, so a request never leaves with a dead token (how far ahead: lib/session-renewal).
+  if (session && secondsLeft(session) < renewBefore(request.method, pathname, tokenLifetime(session.accessToken))) {
     try {
       const opened = await renew(session.refreshToken, workspace);
       session = opened.session;

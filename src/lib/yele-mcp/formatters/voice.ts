@@ -4,6 +4,9 @@ import { expertRole, formatExpertDisplayName } from "../experts.ts";
 import { masquerSecrets } from "../secrets.ts";
 import type { DiscoveredExpert, VoiceBriefInfo } from "../types.ts";
 
+// Un brief cite des tiers (objets d'e-mails, agenda) : une clôture de bloc de code ne l'en fait pas sortir.
+const unfenced = (s: string) => s.replace(/`{3,}|~{3,}/g, "'''");
+
 export function formatAppelsEtVoix(
   briefs: VoiceBriefInfo[] | null,
   experts?: DiscoveredExpert[],
@@ -23,7 +26,7 @@ export function formatAppelsEtVoix(
       const d = new Date(item.at);
       const dateStr = d.toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
       out += `- **Dernier brief généré** : le ${dateStr}\n\n`;
-      out += `#### 📋 Contenu du Brief d'Avant-Appel :\n\`\`\`text\n${(item.text || "").trim()}\n\`\`\`\n`;
+      out += `#### 📋 Contenu du Brief d'Avant-Appel :\n\`\`\`text\n${unfenced((item.text || "").trim())}\n\`\`\`\n`;
     } else {
       out += `- **Brief d'appel** : Aucun brief récent préparé pour cet expert.\n`;
     }
@@ -49,7 +52,7 @@ export function formatAppelsEtVoix(
       const d = new Date(item.at);
       dateStr = d.toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
       const firstLine = (item.text || "").split("\n").filter((l) => l.trim())[0] || "";
-      preview = firstLine.length > 50 ? firstLine.slice(0, 50) + "..." : firstLine;
+      preview = unfenced(firstLine.length > 50 ? firstLine.slice(0, 50) + "..." : firstLine).replace(/\|/g, "/");
     }
     out += `| **${exp.name}** | ${role} | ${dateStr} | ${preview} |\n`;
   }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { salonPath } from "@/lib/api-paths";
 import { cached, cachedFetch, hydrate, servesKept, subscribe } from "@/lib/client-cache";
 import { deviceKeep, onDeviceOpen } from "@/lib/device-cache-client";
 import { instanceEvents } from "@/lib/instance-events";
@@ -19,7 +20,7 @@ const SETTLE_MS = 4_000;
 const readAt = new Map<string, number>();
 
 function load(salon: string): Promise<SalonDeliverable[]> {
-  return apiFetch<{ items: SalonDeliverable[] }>(`/api/buzz/salons/${salon}/livrables`, undefined, "Les livrables du salon sont indisponibles").then((r) => {
+  return apiFetch<{ items: SalonDeliverable[] }>(salonPath(salon, "livrables"), undefined, "Les livrables du salon sont indisponibles").then((r) => {
     readAt.set(salon, Date.now());
     deviceKeep(`${DEVICE}${salon}`, withoutUrls(r.items));
     return r.items;

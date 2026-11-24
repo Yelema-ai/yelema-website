@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from "react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
-import { isTrustedDashboardUrl as isTrustedFrameUrl } from "@/lib/dashboards";
+import { isModelPage, isTrustedDashboardUrl as isTrustedFrameUrl } from "@/lib/dashboards";
 import { usePoll } from "@/components/usePoll";
 import { instanceEvents, matches } from "@/lib/instance-events";
 import type { ChatMessage } from "@/components/chat/types";
@@ -92,8 +92,7 @@ export function useDashboard() {
 /** A frame of the dashboard host (36-hex id, lib/dashboards), or one of this app's own models. */
 export function isTrustedDashboardUrl(url: string | null | undefined): url is string {
   if (!url) return false;
-  if (url.startsWith("/modeles/")) return !url.includes("..") && !url.includes("//");
-  return isTrustedFrameUrl(url);
+  return isModelPage(url) || isTrustedFrameUrl(url);
 }
 
 /**

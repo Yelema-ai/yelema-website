@@ -68,3 +68,12 @@ export function prepareChannelWrite(platform: MessagingPlatform, sent: Record<st
 export function fieldLabel(field: ChannelField): string {
   return field.prompt || field.key;
 }
+
+/** A channel's credentials and its gateway belong to the whole instance: on one shared by several members (a seat), only an admin writes them. */
+export const mayWriteChannels = (seat: string | null | undefined, role: string | null | undefined): boolean => !seat || role === "admin";
+
+/** Unlinking Slack or Teams unlinks every member's account; the relayed Telegram is the caller's own account only. */
+export const relayUnlinkIsShared = (channel: "slack" | "teams" | "telegram"): boolean => channel !== "telegram";
+
+/** A pairing id as it enters the instance's own API path: one plain segment, never a way up (`..`). */
+export const isPairingId = (id: unknown): id is string => typeof id === "string" && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(id) && !id.includes("..");

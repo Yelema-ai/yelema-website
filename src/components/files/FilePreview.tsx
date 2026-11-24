@@ -1,6 +1,7 @@
 "use client";
 
 import { errorText } from "@/lib/api";
+import { cappedText } from "@/lib/bounded-body";
 import { useEffect, useRef, useState, type TouchEvent } from "react";
 import { Download, ExternalLink, Loader2, Pencil, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -375,9 +376,9 @@ function TextPreview({ url, markdown = false }: { url: string; markdown?: boolea
     fetch(url)
       .then(async (res) => {
         if (!res.ok) throw new Error("Ce fichier n’a pas pu être chargé.");
-        // Cap the rendered slice so a huge log can't lock the tab.
-        const body = await res.text();
-        return body.length > 500_000 ? `${body.slice(0, 500_000)}\n\n… (aperçu tronqué)` : body;
+        // Only the start is read: a huge log is neither downloaded whole nor drawn whole.
+        const { text, cut } = await cappedText(res, 500_000);
+        return cut ? `${text}\n\n… (aperçu tronqué)` : text;
       })
       .then((body) => !cancelled && setText(body))
       .catch((e) => !cancelled && setError(errorText(e)));

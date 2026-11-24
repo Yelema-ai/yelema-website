@@ -235,6 +235,9 @@ export function SendMinutesDialog({
                     E-mail
                   </button>
                 </div>
+                {audience.participants && contacts.length > 0 && (
+                  <p className="break-words text-xs text-ink-3">Adresses relevées par l’Expert, à vérifier avant l’envoi : {contacts.map((c) => c.email).join(", ")}</p>
+                )}
                 {audience.others && <EmailsField emails={emails} onChange={setEmails} />}
               </div>
             </div>

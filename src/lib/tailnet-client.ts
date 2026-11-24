@@ -11,8 +11,12 @@ export function tailnetClientHeader(value: string | null | undefined): Record<st
   return TAILNET_V4.test(v) ? { "X-Tailnet-Client": v } : {};
 }
 
+/** Only behind our own Apache is the header its word: on Vercel, where any visitor can write it, it is dropped. */
+export const tailnetProxied = (env: Record<string, string | undefined>): boolean => env.VERCEL !== "1";
+
 /** Outside a request (a scheduled job), there is no member to vouch for: nothing is relayed. */
 export async function requestTailnetClient(): Promise<Record<string, string>> {
+  if (!tailnetProxied(process.env)) return {};
   try {
     const { headers } = await import("next/headers");
     return tailnetClientHeader((await headers()).get("x-tailnet-client"));

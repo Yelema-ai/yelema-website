@@ -1,5 +1,5 @@
 import { backoffice } from "@/lib/backoffice";
-import { mcpError, noStore, serverDraft, settingsToken } from "../../_shared";
+import { mcpError, noStore, scopeToken, serverDraft } from "../../_shared";
 
 type Ctx = { params: Promise<{ memberId: string }> };
 
@@ -8,7 +8,8 @@ type Ctx = { params: Promise<{ memberId: string }> };
 export async function POST(request: Request, { params }: Ctx) {
   try {
     const { memberId } = await params;
-    return noStore(await backoffice.addMcpServer(await settingsToken(), { kind: "member", id: memberId }, await serverDraft(request)));
+    const scope = { kind: "member", id: memberId } as const;
+    return noStore(await backoffice.addMcpServer(await scopeToken(scope), scope, await serverDraft(request)));
   } catch (e) {
     return mcpError(e);
   }

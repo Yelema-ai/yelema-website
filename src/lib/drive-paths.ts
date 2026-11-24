@@ -7,6 +7,14 @@ export const DRIVE_ABS = "/home/node/Livrables";
 // Where chat attachments land, so they show up in the Files tab too.
 export const ATTACHMENTS_DIR = `${DRIVE_ROOT}/Pièces jointes`;
 
+/** Why `path` is not a path of the drive: a `.` or `..` segment, or somewhere else on the instance. Null when it is one. */
+export function drivePathFault(path: string): "invalid" | "outside" | null {
+  const parts = path.split("/");
+  if (parts.includes("..") || parts.includes(".")) return "invalid";
+  const inside = (root: string) => path === root || path.startsWith(`${root}/`);
+  return inside(DRIVE_ROOT) || inside(DRIVE_ABS) ? null : "outside";
+}
+
 export function isDriveRoot(path: string): boolean {
   const trimmed = path.replace(/\/+$/, "");
   return trimmed === DRIVE_ROOT || trimmed === DRIVE_ABS;

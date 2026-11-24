@@ -7,7 +7,11 @@ import { KEEP_DAYS } from "./session-usage/command.ts";
 import type { ExpertConnector, ExpertSkillInfo, IncidentAlertData, InstanceDiag, MailConfig, TelegramConfig, VoiceBriefInfo } from "./types.ts";
 
 /** Champs lus dans telegram.json et mail.json. */
-const TELEGRAM_FIELDS = ["bot", "botId", "chatTitle", "chatId", "phase", "inviteLink", "topics"] as const satisfies readonly (keyof TelegramConfig)[];
+// Le lien d'invitation du groupe permet d'y entrer : il n'est pas lu.
+const TELEGRAM_FIELDS = ["bot", "botId", "chatTitle", "chatId", "phase", "topics"] as const satisfies readonly (keyof TelegramConfig)[];
+/** Derniers échecs de routine gardés par expert (les compteurs, eux, comptent tout), et longueur gardée de chaque erreur. */
+const MAX_INCIDENTS = 200;
+const ERROR_CHARS = 500;
 const MAIL_FIELDS = ["addresses"] as const satisfies readonly (keyof MailConfig)[];
 
 const SCRIPT = String.raw`
@@ -27,7 +31,8 @@ def picked(data, fields):
     return {k: data[k] for k in fields if k in data} if isinstance(data, dict) else None
 
 def audit(expert, home):
-    out = {"runs": 0, "errors": 0, "byDay": {}, "incidents": []}
+    from collections import deque
+    out = {"runs": 0, "errors": 0, "byDay": {}, "incidents": deque(maxlen=P["maxIncidents"])}
     path = _os.path.join(home, L["hermes"]["cronAudit"])
     if not _os.path.exists(path):
         return out
@@ -47,7 +52,8 @@ def audit(expert, home):
             ts = row.get("ts") if isinstance(row.get("ts"), str) else ""
             if ts[:10] >= KEEP_FROM:
                 out["byDay"][ts[:10]] = out["byDay"].get(ts[:10], 0) + 1
-                out["incidents"].append({"type": "CRON_ERROR", "expert": expert, "ts": ts, "model": str(row.get("model") or ""), "error": str(row["error"])})
+                out["incidents"].append({"type": "CRON_ERROR", "expert": expert, "ts": ts, "model": str(row.get("model") or "")[:200], "error": str(row["error"])[: P["errorChars"]]})
+    out["incidents"] = list(out["incidents"])
     return out
 
 def connectors(expert):
@@ -123,7 +129,7 @@ emit({
 `;
 
 export const instanceDiagReader = (): InstanceReader =>
-  hermesReader(SCRIPT, { keepDays: KEEP_DAYS, telegramFields: TELEGRAM_FIELDS, mailFields: MAIL_FIELDS });
+  hermesReader(SCRIPT, { keepDays: KEEP_DAYS, telegramFields: TELEGRAM_FIELDS, mailFields: MAIL_FIELDS, maxIncidents: MAX_INCIDENTS, errorChars: ERROR_CHARS });
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -143,7 +149,6 @@ function telegramOf(v: unknown): TelegramConfig | null {
     chatTitle: str(v.chatTitle),
     chatId: typeof v.chatId === "number" ? v.chatId : undefined,
     phase: str(v.phase),
-    inviteLink: str(v.inviteLink),
     topics,
   };
 }

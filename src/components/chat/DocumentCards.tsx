@@ -15,6 +15,8 @@ import { fileLabel } from "@/lib/drive-paths";
 import { cachedFetch, forget } from "@/lib/client-cache";
 import type { MemoryList } from "@/lib/memory";
 import { toast } from "sonner";
+import { inflatedBytes, openZip, zipTotalBytes } from "@/lib/zip-sizes";
+import { atMost } from "@/lib/thumbs";
 
 const KINDS: Record<DocKind, { label: string; icon: LucideIcon; tone: string }> = {
   pdf: { label: "PDF", icon: FileText, tone: "bg-[#FCE8E4] text-[#B4321F] dark:bg-[#3b2520] dark:text-[#f4a28c]" },
@@ -32,6 +34,8 @@ const KINDS: Record<DocKind, { label: string; icon: LucideIcon; tone: string }> 
 const MAX_PREVIEW_BYTES = 30 * 1024 * 1024;
 // A workbook part is not inflated past this: a small file may unzip to hundreds of megabytes.
 const MAX_XML_PART_BYTES = 20 * 1024 * 1024;
+const MAX_DOCX_BYTES = 20 * 1024 * 1024;
+const MAX_DOCX_INFLATED_BYTES = 60 * 1024 * 1024;
 
 const ext = (name: string) => (name.includes(".") ? name.split(".").pop()!.toLowerCase() : "");
 const kindLabel = (doc: TurnDoc) => KINDS[doc.kind].label || ext(doc.name).toUpperCase() || "Fichier";
@@ -225,6 +229,8 @@ async function readCapped(res: Response, abort: AbortController): Promise<ArrayB
   return out.buffer;
 }
 
+const cardTurn = atMost(3);
+
 // Fetches the document once it is on screen, then hands it to its renderer; the thumbnail stays
 // while it loads and comes back if anything fails.
 function Lazy({ doc, url, render, full = false }: { doc: TurnDoc; url: string; render: Render; full?: boolean }) {
@@ -242,10 +248,15 @@ function Lazy({ doc, url, render, full = false }: { doc: TurnDoc; url: string; r
     const abort = new AbortController();
     const go = async () => {
       try {
-        const res = await fetch(url, { signal: abort.signal });
-        if (!res.ok) throw new Error(String(res.status));
-        const out = await render(await readCapped(res, abort), docRef.current, el.clientWidth || 600, full, abort.signal);
-        if (alive) setNode(out);
+        const draw = async () => {
+          if (!alive) return null;
+          const res = await fetch(url, { signal: abort.signal });
+          if (!res.ok) throw new Error(String(res.status));
+          return render(await readCapped(res, abort), docRef.current, el.clientWidth || 600, full, abort.signal);
+        };
+        // A grid of cards downloads and draws three files at a time; the one opened full size does not wait.
+        const out = full ? await draw() : await cardTurn(draw);
+        if (alive && out) setNode(out);
       } catch {
         if (alive) setFailed(true);
       }
@@ -378,11 +389,10 @@ const colIndex = (ref: string) => [...(ref.match(/^[A-Z]+/)?.[0] ?? "A")].reduce
 
 async function readXlsx(data: ArrayBuffer, maxRows = ROWS, maxCols = COLS): Promise<{ sheet: string | null; rows: string[][] }> {
   const JSZip = (await import("jszip")).default;
-  const zip = await JSZip.loadAsync(data);
+  const zip = await openZip((d) => JSZip.loadAsync(d), data);
   const xml = async (path: string) => {
     const part = zip.file(path);
-    // jszip's private `_data` holds the part's inflated size, read from the zip before inflating it.
-    if (((part as unknown as { _data?: { uncompressedSize?: number } } | null)?._data?.uncompressedSize ?? 0) > MAX_XML_PART_BYTES) throw new Error("too large");
+    if (part && inflatedBytes(zip, path) > MAX_XML_PART_BYTES) throw new Error("too large");
     const text = await part?.async("string");
     return text ? new DOMParser().parseFromString(text, "application/xml") : null;
   };
@@ -455,6 +465,8 @@ function cleanHtml(html: string): string {
 }
 
 const renderDocx: Render = async (data, _doc, _width, full) => {
+  // mammoth inflates the whole file: refused on its packed size, then on what its own directory says it holds.
+  if (data.byteLength > MAX_DOCX_BYTES || zipTotalBytes(data) > MAX_DOCX_INFLATED_BYTES) throw new Error("too large");
   const mammoth = await import("mammoth");
   // Pictures are dropped by cleanHtml anyway: not inlined as base64 in the first place.
   const { value } = await mammoth.convertToHtml({ arrayBuffer: data }, { convertImage: mammoth.images.imgElement(async () => ({ src: "" })) });

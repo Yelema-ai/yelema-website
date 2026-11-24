@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, MonitorX, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
+import { salonPath } from "@/lib/api-paths";
 import { DEFAULT_GUEST_DAYS, devicesLabel, GUEST_DAYS, GUEST_STATUS_LABEL, guestFormError, parseGuestEmails, presentGuests, refusalLines, type GuestDays, type GuestRefusal, type SalonGuest } from "@/lib/salon-guests";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,7 @@ export function SalonGuests({ salon, nom, open, onClose, onPresent }: { salon: s
   const [busy, setBusy] = useState<string | null>(null);
   const [refused, setRefused] = useState<string[]>([]);
   const [confirming, setConfirming] = useState<string | null>(null);
-  const base = `/api/buzz/salons/${salon}/guests`;
+  const base = salonPath(salon, "guests");
 
   const tell = useRef(onPresent);
   tell.current = onPresent;

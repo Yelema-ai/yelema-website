@@ -168,6 +168,17 @@ export function deliverableKind(path: unknown): "pdf" | "html" | null {
   return ext === "pdf" ? "pdf" : ext ? "html" : null;
 }
 
+/** One of this app's own dashboard models (`/modeles/…`): no dot segment, backslash or encoded slash to walk out of it. */
+export function isModelPage(url: unknown): url is string {
+  if (typeof url !== "string" || !url.startsWith("/modeles/") || /[\\\x00-\x20]|%2[ef]|%5c|\/\/|\.\./i.test(url)) return false;
+  try {
+    const u = new URL(url, "https://own.invalid");
+    return u.origin === "https://own.invalid" && u.pathname.startsWith("/modeles/") && `${u.pathname}${u.search}${u.hash}` === url;
+  } catch {
+    return false;
+  }
+}
+
 export function isTrustedDashboardUrl(url: unknown): url is string {
   return typeof url === "string" && TRUSTED_FRAME_REGEX.test(url.trim());
 }

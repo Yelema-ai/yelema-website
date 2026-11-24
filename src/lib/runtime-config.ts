@@ -131,6 +131,8 @@ export type PublicConfig = {
   logoUrl: string | null;
   /** The instance's event stream is open (EVENT_STREAM=on and the gateway): polls wait for it. */
   eventStream: boolean;
+  /** `memory` (DEVICE_CACHE=memory, sensitive deployments): conversations and drive are never written to the device. */
+  deviceCache: "disk" | "memory";
   /** Échanges (messagerie entre membres) shown: `ECHANGES=on` on the Vercel project (pilot only for now). */
   echanges: boolean;
 };
@@ -145,6 +147,7 @@ export function publicConfig(): PublicConfig {
     siteUrl: siteUrl() ?? null,
     logoUrl: brandLogoUrl() ?? null,
     eventStream: eventStreamOn(process.env),
+    deviceCache: read("DEVICE_CACHE")?.toLowerCase() === "memory" ? "memory" : "disk",
     echanges: echangesVisible(),
   };
 }

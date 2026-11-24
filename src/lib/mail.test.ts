@@ -17,6 +17,8 @@ import {
   parseMailReply,
   parseRecipients,
   sanitizeInboxDisplayName,
+  hasRemoteImages,
+  mailCsp,
   sandboxedMail,
   userInitials,
   type MailInbox,
@@ -56,9 +58,9 @@ test("a message is sent or received by its label", () => {
   assert.equal(isSent(["received"]), false);
 });
 
-test("a received e-mail is wrapped in a document that fetches nothing but images and opens links elsewhere", () => {
+test("a received e-mail is wrapped in a document that fetches nothing and opens links elsewhere", () => {
   const doc = sandboxedMail("<script>alert(1)</script><img src=x onerror=alert(2)>");
-  assert.match(doc, /Content-Security-Policy" content="default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; font-src data:"/);
+  assert.match(doc, /Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:"/);
   assert.match(doc, /<base target="_blank">/);
   // The markup is passed through untouched: it is the iframe's empty sandbox that keeps it inert.
   assert.match(doc, /<script>alert\(1\)<\/script>/);
@@ -139,4 +141,16 @@ test("an address refused because none is left says so; an outage says it is one"
   const href = moreInboxesHref("Unifood", "Djénéba");
   assert.ok(href.startsWith("mailto:contact@yelema.ai?subject="));
   assert.ok(decodeURIComponent(href).includes("pour Djénéba"));
+});
+
+test("remote pictures of an e-mail load only once the reader asks; a tracker is seen whatever way it is written", () => {
+  assert.doesNotMatch(sandboxedMail('<img src="https://t.example/px.gif">'), /img-src[^;]*https:/);
+  assert.match(sandboxedMail('<img src="https://t.example/px.gif">', true), /img-src data: https:;/);
+  assert.doesNotMatch(mailCsp(true), /script-src|connect-src|frame-src|http:/);
+  for (const html of ['<img src="https://t.example/px.gif" width=1>', "<IMG SRC=https://t.example/p>", '<img alt="" src = \'//t.example/p\'>', '<td background="https://t.example/bg.png">', '<div style="background:url(https://t.example/b)">', "<style>.a{background-image:url( 'http://t.example/c' )}</style>", '<img srcset="https://t.example/2x 2x" src="data:image/png;base64,AA">', '<input type="image" src="https://t.example/i">']) {
+    assert.equal(hasRemoteImages(html), true, html);
+  }
+  for (const html of ["<p>Bonjour</p>", '<img src="data:image/png;base64,AAAA">', '<img src="cid:logo@x">', '<a href="https://exemple.com">lien</a>', "<p>voir https://exemple.com/image.png</p>"]) {
+    assert.equal(hasRemoteImages(html), false, html);
+  }
 });

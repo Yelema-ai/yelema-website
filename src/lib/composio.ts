@@ -2,6 +2,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { Composio } from "@composio/core";
 import { ApiError } from "@/lib/http";
+import { httpsUrl } from "@/lib/markdown-safety";
 import { composioApiKey } from "@/lib/runtime-config";
 import type {
   AgentRow,
@@ -103,6 +104,8 @@ export async function connectToolkit(userId: string, toolkit: string, alias?: st
   try {
     const session = await client().toolRouter.create(userId, { manageConnections: true, multiAccount: { enable: true } });
     const request = await session.authorize(toolkit, { alias: chosen || `${toolkit.toLowerCase()}-${randomBytes(3).toString("hex")}` });
+    // The browser opens this address: only ever a web page.
+    if (!httpsUrl(request.redirectUrl)) throw new Error("no https redirect address");
     return { toolkit, connectedAccountId: request.id, redirectUrl: request.redirectUrl ?? "" };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
