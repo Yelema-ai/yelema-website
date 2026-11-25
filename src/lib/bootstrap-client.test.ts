@@ -51,4 +51,13 @@ describe("bootstrap de l'onglet", () => {
     assert.deepEqual(seeded, ["own"]);
     assert.equal(calls, 2);
   });
+
+  it("la lecture du serveur arrive comme thenable de React (then() ne rend rien) : rejointe, pas relue", async () => {
+    let calls = 0;
+    const b = createBootstrap(() => (calls++, answer(200)));
+    const thenable = { then(ok: (v: Bootstrap) => void) { ok(body); } } as unknown as PromiseLike<Bootstrap | null>;
+    b.streamed(thenable);
+    assert.equal((await b.bootstrap())?.agentId, "own");
+    assert.equal(calls, 0);
+  });
 });

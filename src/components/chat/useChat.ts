@@ -229,11 +229,12 @@ function readThread(agentId: string, q: string, sessionId: string): Promise<Read
   return cachedFetch(k, () => fetchThread(agentId, q, sessionId), AHEAD_MS).finally(() => forget(k));
 }
 
-/** The thread the page read on the server: the opening joins that reading instead of asking again (null = it asks). */
-export function seedThread(agentId: string, profile: string | null, sessionId: string, reading: Promise<SessionDetail | null>): void {
+/** The thread the page read on the server: the opening joins that reading instead of asking again (null = it asks).
+ *  Promise.resolve: it reaches the browser as React's thenable, whose then() returns nothing (crashed every ?session= load). */
+export function seedThread(agentId: string, profile: string | null, sessionId: string, reading: PromiseLike<SessionDetail | null>): void {
   const q = profileQuery(profile);
   const startedAt = Date.now();
-  void cachedFetch(aheadKey(historyKey(agentId, q, sessionId)), () => reading.then((res) => (res ? { ...res, startedAt } : fetchThread(agentId, q, sessionId))), AHEAD_MS).catch(() => undefined);
+  void cachedFetch(aheadKey(historyKey(agentId, q, sessionId)), () => Promise.resolve(reading).then((res) => (res ? { ...res, startedAt } : fetchThread(agentId, q, sessionId))), AHEAD_MS).catch(() => undefined);
 }
 
 /** Reads a thread ahead of its click: its messages then paint at once, and the opening asks nothing more. */
