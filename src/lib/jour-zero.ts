@@ -9,6 +9,9 @@ export interface JourZeroCheck {
   label: string;
   ok: boolean;
   detail: string;
+  /** Version 2, on a point left: the sentence telling the client what to type, and that command. */
+  pourRegler?: string;
+  commande?: string;
 }
 
 export interface JourZero {
@@ -35,10 +38,12 @@ function parseCheck(raw: unknown): JourZeroCheck | null {
   const label = text(c.label, 80);
   const detail = c.detail === undefined ? "" : text(c.detail, 400);
   if (!JOUR_ZERO_CHECK_IDS.includes(c.id as JourZeroCheckId) || !label || detail === null || typeof c.ok !== "boolean") return null;
-  return { id: c.id as JourZeroCheckId, label, ok: c.ok, detail };
+  const pourRegler = text(c.pour_regler, 400);
+  const commande = typeof c.commande === "string" && /^\/[a-z][a-z-]{0,39}$/.test(c.commande) ? c.commande : null;
+  return { id: c.id as JourZeroCheckId, label, ok: c.ok, detail, ...(pourRegler ? { pourRegler } : {}), ...(commande ? { commande } : {}) };
 }
 
-/** The file's text as a version-1 preparation; null when it is not one (a bad check alone is dropped). */
+/** The file's text as a version-1 or 2 preparation; null when it is not one (a bad check alone is dropped). */
 export function parseJourZero(body: string): JourZero | null {
   if (body.length > JOUR_ZERO_MAX_BYTES) return null;
   let data: unknown;
@@ -49,7 +54,7 @@ export function parseJourZero(body: string): JourZero | null {
   }
   if (!data || typeof data !== "object" || Array.isArray(data)) return null;
   const d = data as Record<string, unknown>;
-  if (d.version !== 1 || typeof d.pret !== "boolean" || !Array.isArray(d.checks)) return null;
+  if ((d.version !== 1 && d.version !== 2) || typeof d.pret !== "boolean" || !Array.isArray(d.checks)) return null;
   const when = (v: unknown) => (typeof v === "string" && !Number.isNaN(Date.parse(v)) ? v : null);
   const date = when(d.date);
   const seen = new Set<string>();

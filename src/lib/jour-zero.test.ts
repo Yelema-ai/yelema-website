@@ -13,13 +13,24 @@ test("a version-1 file gives its checks", () => {
   assert.equal(jz?.date, "2026-10-17T08:00:00Z");
 });
 
-test("anything that is not a version-1 preparation is refused", () => {
+test("anything that is not a version-1 or 2 preparation is refused", () => {
   assert.equal(parseJourZero("pas du json"), null);
   assert.equal(parseJourZero("[]"), null);
-  assert.equal(parseJourZero(file({ version: 2 })), null);
+  assert.equal(parseJourZero(file({ version: 3 })), null);
+  assert.equal(parseJourZero(file({ version: "2" })), null);
   assert.equal(parseJourZero(file({ pret: "oui" })), null);
   assert.equal(parseJourZero(file({ checks: {} })), null);
   assert.equal(parseJourZero(" ".repeat(JOUR_ZERO_MAX_BYTES + 1)), null);
+});
+
+test("a version-2 file, as the jour-zero skill writes it, keeps each point's sentence and command", () => {
+  const fix = { pour_regler: "Tapez /configuration : je relève vos outils et je teste ceux qui manquent.", commande: "/configuration" };
+  const jz = parseJourZero(file({ version: 2, pret: false, checks: [check("outils", false, fix), check("competences"), check("charte", false, { ...fix, commande: "rm -rf /", source: "https://www.mstudio.vc/" })] }));
+  assert.deepEqual(jz?.checks[0], { id: "outils", label: "Vérif outils", ok: false, detail: "ok", pourRegler: fix.pour_regler, commande: "/configuration" });
+  assert.deepEqual(jz?.checks[1], { id: "competences", label: "Vérif competences", ok: true, detail: "ok" });
+  assert.equal(jz?.checks[2]?.commande, undefined);
+  assert.equal(jz?.onboarding, null);
+  assert.deepEqual(readiness(jz!), { state: "partial", label: "Préparation 1/3" });
 });
 
 test("a bad check alone is dropped, and an id counts once", () => {
