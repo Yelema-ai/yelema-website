@@ -61,8 +61,9 @@ export function createBootstrap(load: () => Promise<Response>, now: () => number
       return this.bootstrap().then(() => undefined);
     },
     /** The page's server read of the bootstrap, still streaming in: the first read joins it (null = the tab asks). */
-    streamed(reading: Promise<Bootstrap | null>): void {
-      started ??= start(reading.then((b) => b ?? fetchIt()));
+    streamed(reading: PromiseLike<Bootstrap | null>): void {
+      // Promise.resolve: a server promise reaches the browser as React's thenable, whose then() returns nothing.
+      started ??= start(Promise.resolve(reading).then((b) => b ?? fetchIt()));
     },
     /** The shell knows the own instance before the bootstrap answers: readers of another one do not wait. */
     ownedBy(agentId: string | null): void {
@@ -85,4 +86,4 @@ export const bootstrap = () => (server ? Promise.resolve(null) : tab.bootstrap()
 export const bootstrapped = (agentId?: string) => (server ? Promise.resolve() : tab.bootstrapped(agentId));
 export const resetBootstrap = () => tab.reset();
 export const bootstrapOwner = (agentId: string | null) => tab.ownedBy(agentId);
-export const streamBootstrap = (reading: Promise<Bootstrap | null>) => void (server || tab.streamed(reading));
+export const streamBootstrap = (reading: PromiseLike<Bootstrap | null>) => void (server || tab.streamed(reading));
