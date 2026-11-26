@@ -1,5 +1,8 @@
 // Shared client-side types for the web Chat tab.
 
+import type { ApprovalRequest } from "@/lib/approval";
+import type { TurnStatus } from "@/lib/turn-status";
+
 export type ToolStatus = "running" | "completed" | "error";
 
 export interface ToolEvent {
@@ -35,6 +38,15 @@ export interface ChatMessage {
   steered?: boolean;
   /** The deliverables this reply's own turn wrote (home-relative), as the runtime's history reports them. */
   files?: string[];
+  /** The runtime is summarising the conversation, grown too long, before it answers (live only). */
+  compacting?: boolean;
+  /** What the turn waits on, said by the runtime (`response.status`: quota, retry, nothing yet); live only. */
+  status?: TurnStatus;
+  /** Approvals the expert asked for during this reply's turn (live only: the transcript does not keep them). */
+  approvals?: ApprovalRequest[];
+  /** What the expert wrote before each tool of the turn, kept on screen while it works (live only): the reply
+   * never vanishes mid-turn (Leslie, 23/11 : « c'est comme si elle disparaissait »). The final reply replaces it. */
+  said?: string[];
 }
 
 export interface ModelOption {
@@ -147,4 +159,7 @@ export interface ChatSession {
   last_active: number;
   // The routine this conversation is a run of, or null/absent for one a person started.
   routine?: string | null;
+  // A background task's own conversation (the worker side of a kanban task): filed under Routines with the
+  // layers icon, never in « Tout » (Leslie, 23/11: « ça crée une nouvelle convo à chaque update »).
+  background?: boolean;
 }

@@ -54,8 +54,13 @@ export function neutralizeHarnessName<T extends string | null | undefined>(text:
 }
 
 // A channel is live when the harness says the gateway has it connected.
-export function isChannelConnected(channel: MessagingPlatform): boolean {
+export function isChannelConnected(channel: Pick<MessagingPlatform, "enabled" | "state">): boolean {
   return channel.enabled && channel.state === "connected";
+}
+
+// An account is linked, whatever its state (connected, in error, starting, switched off): it stays manageable.
+export function hasChannelAccount(channel: MessagingPlatform): boolean {
+  return channel.configured || channel.enabled;
 }
 
 // The harness keeps the last failure on a channel even after it is switched off, so an error only
@@ -78,9 +83,16 @@ export function isConnectableChannel(channel: MessagingPlatform): boolean {
   return channel.env_vars.length > 0 || isGuidedChannel(channel.id);
 }
 
-// The channels the Messaging tab leads with, in this order. Everything else the harness supports is
-// still offered, folded under "More channels".
-export const FEATURED_CHANNELS = ["telegram", "slack", "teams", "whatsapp", "discord", "google_chat"] as const;
+// The channels the Messaging tab leads with, in this order. The others (WhatsApp, Discord…) show only once
+// an account is linked.
+export const FEATURED_CHANNELS = ["telegram", "slack", "teams"] as const;
+
+// Not tested yet with clients: « Bientôt », no way to connect, until an account is linked.
+export const SOON_CHANNELS = ["slack", "teams"] as const;
+
+export function isSoonChannel(id: string): boolean {
+  return (SOON_CHANNELS as readonly string[]).includes(id);
+}
 
 // These connect through their own panel; the rest take the credentials form.
 export const GUIDED_CHANNELS = ["telegram", "whatsapp", "teams", "slack"] as const;

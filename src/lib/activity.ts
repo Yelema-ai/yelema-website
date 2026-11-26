@@ -104,7 +104,7 @@ function notice(s: ActivityState, key: string, kind: Unread["kind"], visible: bo
   const ref = parseConvKey(key)!;
   const viewed = s.viewing === key;
   if (viewed && visible) return { state: s, notice: null };
-  const state = viewed ? s : { ...s, unread: { ...s.unread, [key]: { at, kind } } };
+  const state = viewed ? s : { ...s, unread: capUnread({ ...s.unread, [key]: { at, kind } }) };
   return { state, notice: { key, ...ref, kind, toast: !viewed, system: !visible } };
 }
 
@@ -130,6 +130,13 @@ export function finishTurn(
 export function routineFinished(s: ActivityState, key: string, visible: boolean, now: number, silent = false): { state: ActivityState; notice: Notice | null } {
   const r = notice(s, key, "routine", visible, now);
   return silent && r.state.unread[key] && !s.unread[key] ? { ...r, state: { ...r.state, unread: without(r.state.unread, (_, k) => k === key) } } : r;
+}
+
+// A tab open for days keeps the newest marks only, as the saved copy does.
+function capUnread(unread: Record<string, Unread>): Record<string, Unread> {
+  const keys = Object.keys(unread);
+  if (keys.length <= MAX_UNREAD) return unread;
+  return Object.fromEntries(Object.entries(unread).sort((a, b) => b[1].at - a[1].at).slice(0, MAX_UNREAD));
 }
 
 // The conversation on screen changes; opening one reads it.
@@ -175,8 +182,8 @@ export interface NotificationItem extends Note {
   unread: boolean;
 }
 
-/** What the bell lists, newest first: every note, and every unread mark (one kept from before a reload has no words). */
-export function notifications(s: ActivityState): NotificationItem[] {
+/** Every note and every unread mark (one kept from before a reload has no words), newest first. */
+function allNotifications(s: ActivityState): NotificationItem[] {
   const keys = new Set([...Object.keys(s.notes), ...Object.keys(s.unread)]);
   const out: NotificationItem[] = [];
   for (const key of keys) {
@@ -186,7 +193,12 @@ export function notifications(s: ActivityState): NotificationItem[] {
     const mark = s.unread[key];
     out.push({ ...note, ...(mark && mark.at > note.at ? { at: mark.at, kind: mark.kind } : {}), key, ...ref, unread: Boolean(mark) });
   }
-  return out.sort((a, b) => b.at - a.at).slice(0, MAX_NOTES);
+  return out.sort((a, b) => b.at - a.at);
+}
+
+/** What the bell lists: the newest ones only. */
+export function notifications(s: ActivityState): NotificationItem[] {
+  return allNotifications(s).slice(0, MAX_NOTES);
 }
 
 export type ConversationStatus = "running" | "unread" | "failed" | null;
@@ -199,12 +211,19 @@ export function conversationStatus(s: ActivityState, key: string): ConversationS
   return u ? (u.kind === "failed" ? "failed" : "unread") : null;
 }
 
-export function expertActivity(s: ActivityState, agentId: string, profile: string | null): { running: boolean; unread: number } {
+export function expertActivity(
+  s: ActivityState,
+  agentId: string,
+  profile: string | null
+): { running: boolean; unread: number; waiting: NotificationItem | null } {
   const prefix = `${expertKey(agentId, profile)}|`;
   const running = Object.values(s.turns).some((t) => expertKey(t.agentId, t.profile) === expertKey(agentId, profile));
   // A run with nothing to report is in the bell only: no conversation to point the Expert's badge at.
   const unread = Object.keys(s.unread).filter((k) => k.startsWith(prefix) && !s.notes[k]?.silent).length;
-  return { running, unread };
+  // The newest conversation behind the badge, looked for in everything unread and not only in the bell's
+  // newest ones: an older answer still opens from its badge (Leslie, 04/11: « et non encore nouvelle discussion »).
+  const waiting = unread ? (allNotifications(s).find((i) => i.unread && !i.silent && i.key.startsWith(prefix)) ?? null) : null;
+  return { running, unread, waiting };
 }
 
 // ---- Routines ----
@@ -246,7 +265,7 @@ export interface Persisted {
   watching: Turn[];
 }
 
-const MAX_UNREAD = 200;
+export const MAX_UNREAD = 200;
 // A turn still unresolved after this long is no longer followed.
 export const WATCH_TTL_MS = 2 * 60 * 60_000;
 

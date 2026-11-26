@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArchiveRestore, CheckCheck, Lock, Pin, Repeat, Search } from "lucide-react";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
@@ -10,12 +10,18 @@ import { Picker } from "@/components/ui/picker";
 import { cn } from "@/lib/utils";
 import { convKey } from "@/lib/activity";
 import { arrange } from "@/lib/chat-marks";
+import { capGroups } from "@/lib/paginate";
 import { fold, useAllConversations, useOwnAgentId, type ConversationRow } from "./useAllConversations";
 import { useChatMarks } from "./useChatMarks";
+import { prefetchThread } from "@/components/chat/useChat";
+import { intentOf } from "@/components/usePrefetch";
 import type { ChatSession } from "@/components/chat/types";
+import type { ServerReading } from "@/components/useServerReading";
 
 type Filter = "tout" | "non-lues" | "routines" | "archivees";
 const DAY = 86_400_000;
+/** Rows drawn at first, and added by each « Afficher plus ». */
+const SLICE = 100;
 const DATES = [
   { value: "", label: "Toutes les dates" },
   { value: "1", label: "Aujourd’hui" },
@@ -42,7 +48,7 @@ const time = (at: number) =>
 // with a search, Tout / Non lues / Routines / Archivées, the Expert and the dates. Pinned ones head
 // the list; archived ones only show under « Archivées », where they can be brought back. A row opens
 // the conversation in its space; « Tout marquer comme lu » clears the bell's marks.
-export function AllConversations({ initial = null }: { initial?: Record<string, ChatSession[]> | null }) {
+export function AllConversations({ initial = null }: { initial?: ServerReading<Record<string, ChatSession[]>> }) {
   const ownAgentId = useOwnAgentId();
   const { experts } = useExpertsContext();
   const rows = useAllConversations(ownAgentId, experts, true, initial);
@@ -54,6 +60,9 @@ export function AllConversations({ initial = null }: { initial?: Record<string, 
   const { marks, mark } = useChatMarks();
   const keyOf = (r: ConversationRow) => convKey(r.expert?.agentId ?? ownAgentId ?? "", r.expert?.profileId ?? null, r.session.session_id);
   const archivedKeys = new Set(marks.archived);
+  // A row about to be clicked: its thread is read ahead, so it opens filled.
+  const rowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ahead = (r: ConversationRow) => intentOf(rowTimer, () => prefetchThread(r.expert?.agentId ?? ownAgentId ?? "", r.expert?.profileId ?? null, r.session.session_id));
 
   const unreadIds = useMemo(() => new Set(bell.items.filter((i) => i.unread).map((i) => i.sessionId)), [bell.items]);
   const needle = fold(q.trim());
@@ -85,6 +94,19 @@ export function AllConversations({ initial = null }: { initial?: Record<string, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown, marks]);
 
+  // A thousand conversations are not drawn at once: a slice, then « Afficher plus ». Back to one slice on any filter.
+  const [limit, setLimit] = useState(SLICE);
+  const filterKey = `${needle}|${filter}|${who}|${since}`;
+  const [limitFor, setLimitFor] = useState(filterKey);
+  if (limitFor !== filterKey) {
+    setLimitFor(filterKey);
+    setLimit(SLICE);
+  }
+  const visible = useMemo(() => capGroups(groups, limit), [groups, limit]);
+
+  // No conversation at all yet (the first day): one sentence, no search and no filters to sort nothing (Leslie, 23/11).
+  const none = rows !== null && rows.length === 0;
+
   const chips: { id: Filter; label: string }[] = [
     { id: "tout", label: "Tout" },
     { id: "non-lues", label: unreadIds.size ? `Non lues ${unreadIds.size}` : "Non lues" },
@@ -103,6 +125,8 @@ export function AllConversations({ initial = null }: { initial?: Record<string, 
         )}
       </div>
 
+      {!none && (
+      <>
       <label className="mt-5 flex h-11 items-center gap-2.5 rounded-xl border border-line bg-surface px-3">
         <Search className="size-4 shrink-0 text-ink-3" />
         <input
@@ -147,17 +171,22 @@ export function AllConversations({ initial = null }: { initial?: Record<string, 
           <Picker label="Dates" placeholder="Toutes les dates" value={since} onChange={setSince} groups={[{ options: DATES }]} />
         </span>
       </div>
+      </>
+      )}
 
       {rows === null ? (
         <p className="mt-8 text-sm text-ink-3">Chargement des conversations…</p>
+      ) : none ? (
+        <p className="mt-8 text-sm text-ink-3">Pas encore de conversation.</p>
       ) : groups.length === 0 ? (
         <p className="mt-8 text-sm text-ink-3">{filter === "archivees" && !needle ? "Aucune conversation archivée." : "Aucune conversation ne correspond."}</p>
       ) : (
-        groups.map((g) => (
+        <>
+        {visible.groups.map((g) => (
           <section key={g.label} className="mt-6">
             <h2 className="flex items-center justify-between px-1 pb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-3">
               {g.label}
-              <span className="font-medium normal-case">{g.rows.length}</span>
+              <span className="font-medium normal-case">{g.total}</span>
             </h2>
             <div className="overflow-hidden rounded-card border border-line bg-surface">
               {g.rows.map((r) => {
@@ -165,7 +194,7 @@ export function AllConversations({ initial = null }: { initial?: Record<string, 
                 const key = keyOf(r);
                 return (
                   <div key={r.href} className="flex items-center border-b border-line last:border-b-0 hover:bg-soft">
-                  <Link href={r.href} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2.5">
+                  <Link href={r.href} {...(ownAgentId || r.expert ? ahead(r) : {})} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-4 py-2.5">
                     {r.expert ? (
                       <ExpertAvatar expert={{ ...r.expert, gateway: null }} size="sm" />
                     ) : (
@@ -198,7 +227,13 @@ export function AllConversations({ initial = null }: { initial?: Record<string, 
               })}
             </div>
           </section>
-        ))
+        ))}
+        {visible.hidden > 0 && (
+          <button type="button" onClick={() => setLimit((n) => n + SLICE)} className="mx-auto mt-5 flex h-10 items-center rounded-full border border-line bg-surface px-4 text-[13px] font-semibold text-ink-2 hover:bg-soft hover:text-ink">
+            Afficher plus ({visible.hidden} restantes)
+          </button>
+        )}
+        </>
       )}
     </div>
   );

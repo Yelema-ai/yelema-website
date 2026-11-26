@@ -3,13 +3,15 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from "react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
-import { isTrustedDashboardUrl as isTrustedFrameUrl } from "@/lib/dashboards";
+import { isModelPage, isTrustedDashboardUrl as isTrustedFrameUrl } from "@/lib/dashboards";
 import { usePoll } from "@/components/usePoll";
-import { instanceEvents, pollDue } from "@/lib/instance-events";
+import { instanceEvents, matches } from "@/lib/instance-events";
 import type { ChatMessage } from "@/components/chat/types";
 import type { DashboardShareMode } from "@/lib/backoffice";
+import { DEFAULT_SHARE_EXPIRY, type ShareExpiry } from "@/lib/dashboard-expiry";
 
 const WIDE = "(min-width: 85rem)";
+const AUTO_AGAIN_MS = 30 * 60_000;
 
 export interface DashboardData {
   available: boolean;
@@ -19,7 +21,6 @@ export interface DashboardData {
   reader?: string;
   kpis?: string[];
   lien?: string | null;
-  hebergeur?: string;
   maj?: string | null;
   pdfPath?: string | null;
   htmlPath?: string | null;
@@ -28,15 +29,20 @@ export interface DashboardData {
   previewUrl?: string;
   isDjeneba?: boolean;
   teamViewLien?: string | null;
+  /** Djénéba's page of the team's dashboards, in the drive. */
+  teamViewPath?: string | null;
   /** False where the back office does not keep shares (sharing is then unavailable). */
   sharing?: boolean;
   share?: { mode: ShareMode; people: string[]; updatedAt: string | null } | null;
   candidates?: { email: string; name: string | null }[];
   shareUrl?: string | null;
+  /** End of the link in `shareUrl` (ISO); null: no end. */
+  shareExpiresAt?: string | null;
+  shareExpiry?: ShareExpiry;
 }
 
 export type ShareMode = DashboardShareMode;
-type ShareAnswer = Pick<DashboardData, "share" | "candidates" | "shareUrl">;
+type ShareAnswer = Pick<DashboardData, "share" | "candidates" | "shareUrl" | "shareExpiresAt" | "shareExpiry">;
 
 interface DashboardContextValue {
   agentId: string;
@@ -54,6 +60,8 @@ interface DashboardContextValue {
   loading: boolean;
   isGenerating: boolean;
   triggerGeneration: () => Promise<void>;
+  /** The dashboard was already asked for on its own lately: the panel offers to try again, nothing more. */
+  autoAsked: boolean;
   activeUrl: string | null;
   embedUrl: string | null;
   copyShareLink: () => void;
@@ -62,6 +70,8 @@ interface DashboardContextValue {
   setShareModalOpen: (open: boolean) => void;
   updateSharing: (mode: ShareMode, people?: string[], regenerate?: boolean) => Promise<boolean>;
   stopSharing: () => Promise<boolean>;
+  /** A new link with this end; links already sent keep theirs. */
+  setShareExpiry: (expiry: ShareExpiry) => Promise<boolean>;
   downloadPdf: () => void;
   downloadHtml: () => void;
   downloadPptx: () => void;
@@ -82,8 +92,7 @@ export function useDashboard() {
 /** A frame of the dashboard host (36-hex id, lib/dashboards), or one of this app's own models. */
 export function isTrustedDashboardUrl(url: string | null | undefined): url is string {
   if (!url) return false;
-  if (url.startsWith("/modeles/")) return !url.includes("..") && !url.includes("//");
-  return isTrustedFrameUrl(url);
+  return isModelPage(url) || isTrustedFrameUrl(url);
 }
 
 /**
@@ -132,8 +141,8 @@ export function DashboardProvider({
   const [customUrl, setCustomUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-
-  const lastRead = useRef(0);
+  // The owner's choice for the next link, kept across reloads of the dashboard.
+  const expiryRef = useRef<ShareExpiry>(DEFAULT_SHARE_EXPIRY);
 
   // `fresh`: after an instance event, the server's few-seconds reading is not reused.
   const fetchDashboard = useCallback(async (fresh = false) => {
@@ -142,9 +151,10 @@ export function DashboardProvider({
       return;
     }
     setLoading(true);
-    lastRead.current = Date.now();
     try {
-      const res = await apiFetch<DashboardData>(`/api/agents/${agentId}/experts/${encodeURIComponent(profile)}/dashboard${fresh ? "?fresh=1" : ""}`);
+      const qs = new URLSearchParams({ expires: expiryRef.current });
+      if (fresh) qs.set("fresh", "1");
+      const res = await apiFetch<DashboardData>(`/api/agents/${agentId}/experts/${encodeURIComponent(profile)}/dashboard?${qs.toString()}`);
       setData(res);
     } catch (err) {
       console.warn("Erreur chargement dashboard:", err);
@@ -173,24 +183,33 @@ export function DashboardProvider({
     }
   }, [isGenerating, isStreaming, openDashboard, onTriggerTableau]);
 
-  // Pendant la génération, relu à chaque tour fini ou fichier écrit sur l'instance ; sans ce flux (ou en filet,
-  // toutes les 30 s), toutes les 5 s (onglet visible), 10 min au plus, pour voir arriver le lien.
-  usePoll(() => (pollDue(instanceEvents.connected(agentId), Date.now() - lastRead.current) ? fetchDashboard() : undefined), {
-    everyMs: 5_000,
-    deadlineMs: 10 * 60_000,
-    immediate: false,
-    enabled: isGenerating,
-  });
+  // No « Préparer » button (Leslie, 23/11 : « une étape en plus qui n'est pas nécessaire »): opening the
+  // dashboard of an Expert who has none asks for it once. Never twice in 30 min for the same Expert, even
+  // after a reload: the chat's /tableau turn ends long before the page is written (03/11 : « beaucoup
+  // de commandes tableaux lancés »).
+  const autoKey = agentId && profile ? `yelema:tableau-auto:${agentId}:${profile}` : null;
+  const [autoAsked, setAutoAsked] = useState(false);
+  useEffect(() => {
+    let at = 0;
+    try {
+      at = autoKey ? Number(localStorage.getItem(autoKey)) || 0 : 0;
+    } catch {}
+    setAutoAsked(Date.now() - at < AUTO_AGAIN_MS);
+  }, [autoKey]);
+
+  // Pendant la génération : relu à chaque tour fini ou fichier écrit sur l'instance (flux branché) ; sans
+  // flux, toutes les 15 s (onglet visible), 10 min au plus, pour voir arriver le lien.
+  usePoll(() => fetchDashboard(), { everyMs: 15_000, deadlineMs: 10 * 60_000, immediate: false, enabled: isGenerating, live: true, agentId });
   useEffect(() => {
     if (!isGenerating || !agentId) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const off = instanceEvents.on(agentId, (type) => {
-      if (type !== "turn.ended" && type !== "files.changed") return;
+    const off = instanceEvents.on(agentId, (e) => {
+      if (!matches(e, { types: ["turn.ended", "files.changed", "instance.changed"], profile }) && !(e.type === "job.done" && e.kind === "deliverables")) return;
       clearTimeout(timer);
       timer = setTimeout(() => void fetchDashboard(true), 800);
     });
     return () => (clearTimeout(timer), off());
-  }, [isGenerating, agentId, fetchDashboard]);
+  }, [isGenerating, agentId, profile, fetchDashboard]);
 
   // Detection automatique du lien depuis les messages du chat
   const messageUrl = useMemo(() => {
@@ -210,25 +229,36 @@ export function DashboardProvider({
 
   // URL pour l'integration dans l'iframe (securisee par sandbox strict sans allow-same-origin)
   const embedUrl = useMemo(() => {
-    // No published link: the page the expert left in its drive, as the pack sends it without a host.
-    if (!activeUrl) {
-      return data?.htmlPath && agentId && profile && activeTab === "metier"
-        ? `/api/dashboards/frame?agentId=${encodeURIComponent(agentId)}&profile=${encodeURIComponent(profile)}&path=${encodeURIComponent(data.htmlPath)}`
-        : null;
+    // The page the expert left in its drive, unless its state still names a legacy Render page.
+    const team = activeTab === "equipe" && data?.isDjeneba;
+    const drivePage = team ? data?.teamViewPath : activeTab === "metier" ? data?.htmlPath : null;
+    if (drivePage && !(team ? data?.teamViewLien : data?.lien) && agentId && profile) {
+      return `/api/dashboards/frame?agentId=${encodeURIComponent(agentId)}&profile=${encodeURIComponent(profile)}&path=${encodeURIComponent(drivePage)}`;
     }
+    if (!activeUrl) return null;
     if (isTrustedFrameUrl(activeUrl) && agentId && profile) {
       return `/api/dashboards/frame?agentId=${encodeURIComponent(agentId)}&profile=${encodeURIComponent(profile)}`;
     }
     return activeUrl;
-  }, [activeUrl, agentId, profile, data?.htmlPath, activeTab]);
+  }, [activeUrl, agentId, profile, data, activeTab]);
+
+  const open = panelOpen || dialogOpen;
+  useEffect(() => {
+    if (!open || !autoKey || autoAsked || !data || loading || embedUrl || isGenerating || isStreaming || activeTab !== "metier") return;
+    setAutoAsked(true);
+    try {
+      localStorage.setItem(autoKey, String(Date.now()));
+    } catch {}
+    void triggerGeneration();
+  }, [open, autoKey, autoAsked, data, loading, embedUrl, isGenerating, isStreaming, activeTab, triggerGeneration]);
 
   // Quand le lien (ou la page dans le drive) arrive alors qu'on generait
   useEffect(() => {
     if (isGenerating && embedUrl) {
       setIsGenerating(false);
-      toast.success(activeUrl ? "Le tableau de bord est mis en ligne." : "Le tableau de bord est prêt.");
+      toast.success("Le tableau de bord est prêt.");
     }
-  }, [isGenerating, embedUrl, activeUrl]);
+  }, [isGenerating, embedUrl]);
 
   // Si le streaming du chat se termine alors qu'on etait en attente
   useEffect(() => {
@@ -276,7 +306,7 @@ export function DashboardProvider({
     if (!sharePath) return false;
     try {
       const res = await apiFetch<ShareAnswer>(sharePath, init);
-      setData((prev) => (prev ? { ...prev, share: res.share, candidates: res.candidates, shareUrl: res.shareUrl } : null));
+      setData((prev) => (prev ? { ...prev, share: res.share, candidates: res.candidates, shareUrl: res.shareUrl, shareExpiresAt: res.shareExpiresAt, shareExpiry: res.shareExpiry } : null));
       return true;
     } catch (err) {
       toast.error(err instanceof Error && err.message ? err.message : "Le partage n’a pas pu être enregistré.");
@@ -286,11 +316,19 @@ export function DashboardProvider({
 
   const updateSharing = useCallback(
     (mode: ShareMode, people: string[] = [], regenerate = false) =>
-      applyShare({ method: "PATCH", body: JSON.stringify({ mode, people, regenerate }) }),
+      applyShare({ method: "PATCH", body: JSON.stringify({ mode, people, regenerate, expires: expiryRef.current }) }),
     [applyShare]
   );
 
   const stopSharing = useCallback(() => applyShare({ method: "DELETE" }), [applyShare]);
+
+  const setShareExpiry = useCallback(
+    (expiry: ShareExpiry) => {
+      expiryRef.current = expiry;
+      return data?.share ? applyShare({ method: "POST", body: JSON.stringify({ expires: expiry }) }) : Promise.resolve(true);
+    },
+    [applyShare, data?.share]
+  );
 
   const downloadPdf = useCallback(() => {
     if (data?.pdfPath) {
@@ -375,6 +413,7 @@ export function DashboardProvider({
         loading,
         isGenerating,
         triggerGeneration,
+        autoAsked,
         activeUrl,
         embedUrl,
         copyShareLink,
@@ -383,6 +422,7 @@ export function DashboardProvider({
         setShareModalOpen,
         updateSharing,
         stopSharing,
+        setShareExpiry,
         downloadPdf,
         downloadHtml,
         downloadPptx,

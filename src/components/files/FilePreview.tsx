@@ -1,13 +1,16 @@
 "use client";
 
+import { errorText } from "@/lib/api";
+import { cappedText } from "@/lib/bounded-body";
 import { useEffect, useRef, useState, type TouchEvent } from "react";
-import { Download, ExternalLink, Loader2, Pencil } from "lucide-react";
+import { Download, ExternalLink, Loader2, Pencil, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { fileLabel, seatFolderOf } from "@/lib/drive-paths";
 import type { Expert } from "@/lib/types";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SendDialog } from "@/components/experts/SendDialog";
 import { Button } from "@/components/ui/button";
 import { CharteAdopt, isCharteDoc, Preview as DocPreview } from "@/components/chat/DocumentCards";
 import { docKind, normDrivePath } from "@/lib/drive-links";
@@ -91,6 +94,7 @@ export function FilePreview({
   const editor = entry ? editorOf(experts, agentId, entry.path) : null;
   const where = entry ? folderLabel(entry.path) : "";
   const [opening, setOpening] = useState(false);
+  const [sending, setSending] = useState(false);
   const google = entry ? shortcutKind(entry.name) : null;
   const ext = google ? GOOGLE_LABEL[google] : entry?.name.includes(".") ? entry.name.split(".").pop()!.toUpperCase() : "";
   return (
@@ -171,6 +175,29 @@ export function FilePreview({
                   <span className="max-sm:hidden">{editor.name ? `Modifier avec ${editor.name}` : "Modifier dans le chat d’entreprise"}</span>
                 </Button>
               )}
+              {/* « Envoyer » (Leslie, 16/11): the expert sends it with its own tools; the instruction is
+                  written in its chat with the file pinned, for the member to send. */}
+              {editor?.name && (
+                <Button variant="outline" onClick={() => setSending(true)}>
+                  <Send className="h-4 w-4" />
+                  Envoyer
+                </Button>
+              )}
+              {sending && editor?.name && (
+                <SendDialog
+                  mode="file"
+                  agentId={agentId}
+                  profileId={editor.profileId}
+                  expertName={editor.name}
+                  files={[{ name: fileLabel(entry), path: normDrivePath(entry.path) }]}
+                  onClose={() => setSending(false)}
+                  onSend={(text) => {
+                    setSending(false);
+                    onClose();
+                    router.push(`${agentTabPath(agentId, "chat", editor.profileId)}?ref=${encodeURIComponent(entry.path)}&dire=${encodeURIComponent(text)}`);
+                  }}
+                />
+              )}
               {isCharteDoc(entry) && (
                 <div className="basis-full">
                   <CharteAdopt agentId={agentId} doc={entry} />
@@ -226,6 +253,32 @@ function PreviewBody({ agentId, entry }: { agentId: string; entry: FileEntry }) 
       <a href={inline} target="_blank" rel="noopener" title="Ouvrir en taille réelle" className="flex max-h-[70vh] justify-center overflow-auto rounded-md border bg-secondary/30 p-4">
         <ReducedImage thumb={thumbUrl(agentId, entry.path, 1600, entry.modified)} original={inline} alt={entry.name} className="max-h-[66vh] max-w-full object-contain" />
       </a>
+    );
+  }
+
+  if (kind === "video") {
+    return (
+      <div className="flex max-h-[70vh] min-h-[40vh] items-center justify-center overflow-hidden rounded-md border bg-black/95 p-2">
+        <video
+          src={inline}
+          controls
+          playsInline
+          className="max-h-[66vh] max-w-full rounded object-contain shadow-sm"
+        >
+          Votre navigateur ne prend pas en charge la lecture directe de vidéos.
+        </video>
+      </div>
+    );
+  }
+
+  if (kind === "audio") {
+    return (
+      <div className="flex min-h-[12rem] flex-col items-center justify-center gap-4 rounded-md border bg-secondary/30 p-6">
+        <p className="text-sm font-medium text-foreground">{entry.name}</p>
+        <audio src={inline} controls className="w-full max-w-md">
+          Votre navigateur ne prend pas en charge la lecture directe de fichiers audio.
+        </audio>
+      </div>
     );
   }
 
@@ -323,12 +376,12 @@ function TextPreview({ url, markdown = false }: { url: string; markdown?: boolea
     fetch(url)
       .then(async (res) => {
         if (!res.ok) throw new Error("Ce fichier n’a pas pu être chargé.");
-        // Cap the rendered slice so a huge log can't lock the tab.
-        const body = await res.text();
-        return body.length > 500_000 ? `${body.slice(0, 500_000)}\n\n… (aperçu tronqué)` : body;
+        // Only the start is read: a huge log is neither downloaded whole nor drawn whole.
+        const { text, cut } = await cappedText(res, 500_000);
+        return cut ? `${text}\n\n… (aperçu tronqué)` : text;
       })
       .then((body) => !cancelled && setText(body))
-      .catch((e) => !cancelled && setError((e as Error).message));
+      .catch((e) => !cancelled && setError(errorText(e)));
     return () => {
       cancelled = true;
     };

@@ -4,8 +4,9 @@ import { cookies } from "next/headers";
 import { after } from "next/server";
 import { cache } from "react";
 import { backoffice, BackofficeError, type BoInstance, type BoInstanceReading, type BoMe, type BoSession } from "@/lib/backoffice";
-import { tokenKid, verifyEs256, type Jwk } from "@/lib/jwt";
+import { tokenKid, verifyEs256, type Jwk, type VerifiedClaims } from "@/lib/jwt";
 import { memo } from "@/lib/memo";
+import { salonsOfMe } from "@/lib/salons-closed";
 import { deployVersion, supabaseAnonKey, supabaseUrl } from "@/lib/runtime-config";
 import { sharedCacheOn, sharedLayer, throughShared, vercelRuntimeCache } from "@/lib/shared-cache";
 import { pinnedWorkspaceId } from "@/lib/tenant";
@@ -135,6 +136,12 @@ export function forgetPrincipal(workspace: string, token: string): void {
 }
 const instanceOf = sessionMemo("instance", (token) => backoffice.instance(token));
 
+/** At sign-out: what was kept of this session goes at once, here and in the shared layer, not at the next renewal. */
+export function forgetSession(workspace: string, token: string): void {
+  meOf.drop(workspace, token);
+  instanceOf.drop(workspace, token);
+}
+
 // A refused session (expired, suspended, no longer a member) reads as "nobody signed in"; an
 // outage is NOT that, and is thrown so the caller answers "try again" rather than signing out.
 function nobodyOn(e: unknown): null {
@@ -171,6 +178,7 @@ const currentReading = cache(async (): Promise<BoInstanceReading | null> => {
 const JWKS_TTL_MS = 10 * 60_000;
 const jwks = memo<Jwk[]>({ ttlMs: JWKS_TTL_MS, staleOnErrorMs: 6 * 60 * 60_000, maxEntries: 4, maxFlightMs: 6_000 });
 let jwksForcedAt = 0;
+const sharedJwks = sharedCacheOn(process.env) ? sharedLayer<Jwk[]>("jwks", JWKS_TTL_MS / 1000, () => vercelRuntimeCache(deployVersion())) : null;
 
 async function readJwks(base: string): Promise<Jwk[]> {
   const anon = supabaseAnonKey();
@@ -184,21 +192,23 @@ async function readJwks(base: string): Promise<Jwk[]> {
 }
 
 /** The account a session's token names, checked against the project's keys; null when it cannot be told here. */
-async function localClaims(token: string): Promise<{ sub: string; email: string | null } | null> {
+export async function verifiedAccessToken(token: string): Promise<VerifiedClaims | null> {
   const base = supabaseUrl()?.replace(/\/+$/, "");
   if (!base) return null;
   const expect = { issuer: `${base}/auth/v1`, audience: "authenticated" };
   try {
-    let keys = await jwks.get(base, () => readJwks(base));
+    // A cold function reads the keys (public) from the region's shared cache when it is on, not from Supabase.
+    let keys = await jwks.get(base, sharedJwks ? () => throughShared(sharedJwks, `jwks:${base}`, () => readJwks(base), () => false, keepAlive) : () => readJwks(base));
     // A key rotated since the last read: read the set once more, at most once a minute.
     const kid = tokenKid(token);
     if (kid && !keys.some((k) => k.kid === kid) && Date.now() - jwksForcedAt > 60_000) {
       jwksForcedAt = Date.now();
       jwks.drop(base);
       keys = await jwks.get(base, () => readJwks(base));
+      if (sharedJwks) keepAlive(sharedJwks.write(`jwks:${base}`, keys));
     }
     const check = verifyEs256(token, keys, expect);
-    return check.ok ? { sub: check.claims.sub, email: check.claims.email } : null;
+    return check.ok ? check.claims : null;
   } catch {
     return null;
   }
@@ -212,7 +222,7 @@ async function localClaims(token: string): Promise<{ sub: string; email: string 
 export const currentUserId = cache(async (): Promise<string | null> => {
   const session = await readSession();
   if (!session) return null;
-  const local = await localClaims(session.accessToken);
+  const local = await verifiedAccessToken(session.accessToken);
   if (local) return local.sub;
   return (await currentPrincipal())?.user.id ?? null;
 });
@@ -226,7 +236,13 @@ export const currentInstallation = cache(async (): Promise<Pick<BoInstanceReadin
   return reading ? { installation: reading.installation, failedExperts: reading.failedExperts } : null;
 });
 
+// Only when the back office says it: an older one leaves the field out, and the browser keeps what it knew.
+function salonsField(me: BoMe): { salons?: boolean } {
+  const salons = salonsOfMe(me);
+  return salons === null ? {} : { salons };
+}
+
 /** The one workspace of a user signed in through the back office, in this app's shape. */
 export function workspaceOfMe(me: BoMe): WorkspaceWithRole {
-  return { id: me.workspace.id, name: me.workspace.name, owner_id: "", created_at: "", role: me.user.role, logo_url: me.workspace.logoUrl, brand_color: me.workspace.brandColor ?? null, access: me.access ?? "instance" };
+  return { id: me.workspace.id, name: me.workspace.name, owner_id: "", created_at: "", role: me.user.role, logo_url: me.workspace.logoUrl, brand_color: me.workspace.brandColor ?? null, access: typeof me.access === "string" ? me.access : "instance", ...salonsField(me) };
 }

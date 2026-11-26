@@ -2,12 +2,16 @@
 
 import { BackButton } from "@/components/ui/back-button";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, Check, Copy, Inbox, Loader2, Mail, Paperclip, Plus, RefreshCw, Send, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Check, Copy, Inbox, Loader2, Mail, Paperclip, Plus, RefreshCw, Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
-import { bareAddress, isSent, parseRecipients, sandboxedMail, type MailDetail, type MailInbox, type MailOutgoingAttachment, type MailSummary } from "@/lib/mail";
+import { bareAddress, hasRemoteImages, isSent, parseRecipients, sandboxedMail, type CreateMailInboxInput, type MailDetail, type MailInbox, type MailOutgoingAttachment, type MailSummary } from "@/lib/mail";
 import { MAX_UPLOAD_BYTES } from "@/lib/upload-limit";
+import { mailMessagePath } from "@/lib/api-paths";
 import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { AssignInboxDialog } from "@/components/experts/AssignInboxDialog";
+import { useAssignInbox } from "@/components/experts/useAssignInbox";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -43,9 +47,23 @@ function encode(file: File): Promise<MailOutgoingAttachment> {
   });
 }
 
-// `expertKey`: the catalogue key, the inbox's own key, so the messages are asked without waiting for the inboxes.
-export function ExpertEmails({ inbox, expertKey = null, expertName, loaded }: { inbox: MailInbox | null; expertKey?: string | null; expertName: string; loaded: boolean }) {
-  const expert = inbox?.expert ?? expertKey;
+export function ExpertEmails({
+  inbox,
+  expertKey = null,
+  expertName,
+  loaded,
+  onCreateInbox,
+  onDeleteInbox,
+}: {
+  inbox: MailInbox | null;
+  expertKey?: string | null;
+  expertName: string;
+  loaded: boolean;
+  onCreateInbox?: (input: Omit<CreateMailInboxInput, "agentId">) => Promise<MailInbox>;
+  onDeleteInbox?: (expert: string) => Promise<void>;
+}) {
+  const assign = useAssignInbox();
+  const expert = inbox?.expert ?? null;
   const [page, setPage] = useState<Page | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -54,6 +72,8 @@ export function ExpertEmails({ inbox, expertKey = null, expertName, loaded }: { 
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState<{ id: string; message: MailDetail | null } | null>(null);
   const [compose, setCompose] = useState<Compose | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   // An answer for an expert the screen has left is dropped.
   const asked = useRef<string | null>(null);
 
@@ -95,7 +115,7 @@ export function ExpertEmails({ inbox, expertKey = null, expertName, loaded }: { 
     if (!expert) return;
     setOpen({ id, message: null });
     try {
-      const message = await apiFetch<MailDetail>(`/api/mail/${expert}/messages/${id}`);
+      const message = await apiFetch<MailDetail>(mailMessagePath(expert, id));
       setOpen((current) => (current?.id === id ? { id, message } : current));
     } catch (e) {
       toast.error((e as Error).message);
@@ -112,13 +132,68 @@ export function ExpertEmails({ inbox, expertKey = null, expertName, loaded }: { 
   }
 
   if (!inbox) {
+    if (!loaded) {
+      return (
+        <div className="rounded-[22px] border border-line bg-surface p-10 text-center">
+          <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-soft text-ink-3">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </span>
+          <h2 className="mt-3 text-base font-semibold text-ink">Chargement…</h2>
+        </div>
+      );
+    }
+
+    if (expertKey && onCreateInbox) {
+      return (
+        <div className="space-y-5">
+          <header className="flex flex-col items-start justify-between gap-4 rounded-[22px] border border-line bg-surface p-5 sm:flex-row sm:items-center sm:p-6">
+            <div className="flex min-w-0 items-start gap-4">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-tint text-brand">
+                <Mail className="h-6 w-6" />
+              </span>
+              <div className="min-w-0">
+                <h1 className="font-display text-2xl font-bold tracking-tight text-ink">E-mails de {expertName}</h1>
+                <p className="mt-1 text-sm text-ink-2">
+                  {expertName} n’a pas encore d’adresse e-mail.
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button type="button" onClick={() => setCreateOpen(true)} data-tour="expert-mail-create">
+                <Mail />
+                Attribuer une adresse e-mail
+              </Button>
+            </div>
+          </header>
+
+          <div className="rounded-[22px] border border-line bg-surface p-10 text-center">
+            <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-soft text-ink-3">
+              <Inbox className="h-6 w-6" />
+            </span>
+            <h2 className="mt-3 text-base font-semibold text-ink">Aucune boîte e-mail attribuée</h2>
+            <p className="mx-auto mt-1 max-w-md text-sm text-ink-3">
+              Attribuez une adresse dédiée à {expertName} uniquement si vous souhaitez qu’il envoie et reçoive des e-mails.
+            </p>
+          </div>
+
+          <AssignInboxDialog
+            open={createOpen}
+            onOpenChange={setCreateOpen}
+            expertName={expertName}
+            owner={null}
+            onAssign={(name) => assign({ expert: expertKey, currentName: expertName, name, renames: true, create: onCreateInbox })}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="rounded-[22px] border border-line bg-surface p-10 text-center">
         <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-soft text-ink-3">
-          {loaded ? <Inbox className="h-6 w-6" /> : <Loader2 className="h-6 w-6 animate-spin" />}
+          <Inbox className="h-6 w-6" />
         </span>
-        <h2 className="mt-3 text-base font-semibold text-ink">{loaded ? "Pas de boîte e-mail" : "Chargement…"}</h2>
-        {loaded && <p className="mx-auto mt-1 max-w-md text-sm text-ink-3">{expertName} n’a pas de boîte e-mail que vous puissiez consulter. Votre administrateur peut le régler dans Intégrations › E-mails.</p>}
+        <h2 className="mt-3 text-base font-semibold text-ink">Pas de boîte e-mail</h2>
+        <p className="mx-auto mt-1 max-w-md text-sm text-ink-3">Votre administrateur peut attribuer une adresse à {expertName}.</p>
       </div>
     );
   }
@@ -156,7 +231,19 @@ export function ExpertEmails({ inbox, expertKey = null, expertName, loaded }: { 
           <Button variant="outline" size="icon" onClick={() => void load()} disabled={loading} aria-label="Actualiser">
             <RefreshCw className={cn(loading && "animate-spin")} />
           </Button>
-          <Button onClick={() => setCompose({ replyTo: null })} disabled={!inbox.canSend}>
+          {onDeleteInbox && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setDeleteOpen(true)}
+              title="Supprimer l’adresse e-mail"
+              aria-label="Supprimer l’adresse e-mail"
+              className="text-ko hover:bg-ko-pale hover:text-ko"
+            >
+              <Trash2 />
+            </Button>
+          )}
+          <Button onClick={() => setCompose({ replyTo: null })} disabled={!inbox.canSend} data-tour="expert-mail-new">
             <Plus />
             Nouveau message
           </Button>
@@ -232,6 +319,7 @@ export function ExpertEmails({ inbox, expertKey = null, expertName, loaded }: { 
         <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
           {open?.message ? (
             <MessageView
+              key={open.message.id}
               expert={inbox.expert}
               message={open.message}
               canReply={inbox.canSend && !isSent(open.message.labels)}
@@ -262,11 +350,29 @@ export function ExpertEmails({ inbox, expertKey = null, expertName, loaded }: { 
           }}
         />
       )}
+
+      {onDeleteInbox && (
+        <ConfirmDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          title={`Retirer l’adresse e-mail de ${expertName} ?`}
+          description={`L’adresse ${inbox.address} ne recevra et n’enverra plus rien. Sa boîte est supprimée définitivement dans 30 jours ; d’ici là, l’attribuer de nouveau la rouvre telle quelle.`}
+          confirmText="Retirer l’adresse"
+          destructive
+          onConfirm={async () => {
+            await onDeleteInbox(inbox.expert);
+            toast.success("Adresse e-mail retirée.");
+          }}
+        />
+      )}
     </div>
   );
 }
 
 function MessageView({ expert, message, canReply, onReply, onBack }: { expert: string; message: MailDetail; canReply: boolean; onReply: () => void; onBack: () => void }) {
+  // Remote pictures tell the sender the message was read: shown only when asked, for this message.
+  const [images, setImages] = useState(false);
+  const remote = Boolean(message.html) && hasRemoteImages(message.html);
   return (
     <div className="space-y-4">
       <DialogHeader className="items-start gap-3 text-left">
@@ -282,10 +388,21 @@ function MessageView({ expert, message, canReply, onReply, onBack }: { expert: s
         </DialogDescription>
       </DialogHeader>
 
+      {remote && !images && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-soft/40 px-3 py-2 text-xs text-ink-2">
+          <span>Les images distantes de ce message sont masquées : les afficher signale à l’expéditeur que vous l’avez ouvert.</span>
+          <Button variant="outline" size="sm" onClick={() => setImages(true)}>
+            Afficher les images
+          </Button>
+        </div>
+      )}
       {message.html ? (
-        // Written by anyone: an empty `sandbox` runs no script, submits no form and has no access to
-        // this page; the document's own policy (sandboxedMail) fetches nothing but images.
-        <iframe title="Contenu du message" sandbox="" referrerPolicy="no-referrer" srcDoc={sandboxedMail(message.html)} className="h-[46vh] w-full rounded-xl border border-line bg-white" />
+        // Empty `sandbox`: no script, no form, no access to this page; `sandboxedMail` sets the document's policy.
+        images ? (
+          <iframe title="Contenu du message" sandbox="" referrerPolicy="no-referrer" src={mailMessagePath(expert, message.id, "frame")} className="h-[46vh] w-full rounded-xl border border-line bg-white" />
+        ) : (
+          <iframe title="Contenu du message" sandbox="" referrerPolicy="no-referrer" srcDoc={sandboxedMail(message.html)} className="h-[46vh] w-full rounded-xl border border-line bg-white" />
+        )
       ) : (
         <div className="whitespace-pre-wrap rounded-xl border border-line bg-soft/30 p-4 text-sm leading-relaxed text-ink">{message.text}</div>
       )}
@@ -294,7 +411,7 @@ function MessageView({ expert, message, canReply, onReply, onBack }: { expert: s
         <ul className="flex flex-wrap gap-2">
           {message.attachments.map((a) => (
             <li key={a.id}>
-              <a href={`/api/mail/${expert}/messages/${message.id}/attachments/${a.id}`} download={a.filename} className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-[13px] font-semibold text-ink hover:bg-soft">
+              <a href={mailMessagePath(expert, message.id, "attachments", a.id)} download={a.filename} className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-[13px] font-semibold text-ink hover:bg-soft">
                 <Paperclip className="h-3.5 w-3.5" />
                 <span className="max-w-[220px] truncate">{a.filename}</span>
                 <span className="font-normal text-ink-3">{weight(a.size)}</span>
@@ -334,7 +451,7 @@ function ComposeDialog({ inbox, expertName, replyTo, onClose, onSent }: { inbox:
     setRefusal(null);
     try {
       const attachments = await Promise.all(files.map(encode));
-      const url = replyTo ? `/api/mail/${inbox.expert}/messages/${replyTo.id}/reply` : `/api/mail/${inbox.expert}/messages`;
+      const url = replyTo ? mailMessagePath(inbox.expert, replyTo.id, "reply") : `/api/mail/${inbox.expert}/messages`;
       await apiFetch(url, { method: "POST", body: JSON.stringify(replyTo ? { text, attachments } : { to: recipients, subject, text, attachments }) });
       toast.success("E-mail envoyé.");
       onSent();

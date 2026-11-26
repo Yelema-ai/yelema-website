@@ -3,6 +3,7 @@
 import { DeliverableWatcher } from "@/components/activity/DeliverableWatcher";
 import { InstanceEventStream } from "@/components/activity/InstanceEventStream";
 import { syncPrefs } from "@/lib/prefs-sync";
+import { streamBootstrap, type Bootstrap } from "@/lib/bootstrap-client";
 import { SearchDialog } from "@/components/conversations/SearchDialog";
 import { useWorkspace } from "@/components/WorkspaceProvider";
 import { CompanyColors } from "@/components/app/CompanyColors";
@@ -12,8 +13,10 @@ import { ActivityProvider } from "@/components/activity/ActivityProvider";
 import { Sidebar } from "@/components/app/Sidebar";
 import { NavProgress } from "@/components/app/NavProgress";
 import { ReadAhead } from "@/components/app/ReadAhead";
+import { AnalyticsReadAhead } from "@/components/settings/analytics/AnalyticsReadAhead";
 import { TopBar } from "@/components/app/TopBar";
 import { DeployStatusProvider, UpdateStrip } from "@/components/app/DeployStatus";
+import { NightStrip } from "@/components/app/NightReview";
 import { ComputerProvider } from "@/components/experts/ComputerProvider";
 import { ExpertsProvider } from "@/components/experts/ExpertsProvider";
 import type { InitialExperts } from "@/components/experts/useExperts";
@@ -24,8 +27,7 @@ import { remember } from "@/lib/client-cache";
 import type { CatalogueResponse, MergedAgent } from "@/lib/types";
 import { AgentsProvider } from "@/components/useMyAgents";
 import { catalogueKey } from "@/components/experts/useCatalogue";
-
-const COLLAPSE_KEY = "sbmini";
+import { GuidedTour, type TourMenu } from "@/components/tour/GuidedTour";
 
 /**
  * Le cadre unique de l'application : menu à gauche, barre en haut, contenu à droite.
@@ -45,12 +47,17 @@ export function AppShell({
   initialExperts,
   initialAgents = null,
   initialCatalogue = null,
+  bootstrap = null,
 }: {
   children: React.ReactNode;
   initialExperts: InitialExperts | null;
   initialAgents?: MergedAgent[] | null;
   initialCatalogue?: CatalogueResponse | null;
+  /** The layout's server read of `/api/bootstrap`, streaming in: the tab's first read joins it. */
+  bootstrap?: Promise<Bootstrap | null> | null;
 }) {
+  // During the first render, before any child asks for the bootstrap in its effects.
+  useState(() => bootstrap && streamBootstrap(bootstrap));
   // The member's notification and conversation choices, from the back office, before the first notice.
   useEffect(() => void syncPrefs(), []);
   const { current, userEmail } = useWorkspace();
@@ -58,22 +65,19 @@ export function AppShell({
   // The catalogue the server read with the page: every screen that lists it starts from it.
   useState(() => current && initialCatalogue && remember(catalogueKey(userEmail, current.id), initialCatalogue));
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
+  // Le menu s'ouvre toujours replié (icônes et photos) ; le membre le déplie à la main, pour la visite en cours seulement.
+  const [collapsed, setCollapsed] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // During the guided tour the menu is unfolded, and on a phone the drawer is out for the menu's own steps.
+  const [tourMenu, setTourMenu] = useState<TourMenu>("off");
+  const railed = collapsed && tourMenu === "off";
+  const menuOut = drawerOpen || tourMenu === "menu";
 
   // "Son ordinateur" keeps ONE live connection, to the instance last opened, so moving between its
   // experts (or to another page and back) does not reconnect. Another instance starts afresh.
   const routeAgentId = pathname.startsWith("/experts/") ? (pathname.split("/")[2] ?? null) : null;
   const [computerAgentId, setComputerAgentId] = useState<string | null>(routeAgentId);
   if (routeAgentId && routeAgentId !== computerAgentId) setComputerAgentId(routeAgentId);
-
-  useEffect(() => {
-    try {
-      setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
-    } catch {
-      // Stockage indisponible : le menu s'ouvre déplié, ce qui est le bon défaut.
-    }
-  }, []);
 
   // Une navigation depuis le tiroir le referme.
   useEffect(() => {
@@ -94,15 +98,7 @@ export function AppShell({
       setDrawerOpen(false);
       return;
     }
-    setCollapsed((c) => {
-      const next = !c;
-      try {
-        localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
-      } catch {
-        // Le choix ne survivra pas au rechargement.
-      }
-      return next;
-    });
+    setCollapsed((c) => !c);
   }
 
   return (
@@ -117,13 +113,15 @@ export function AppShell({
           <NavProgress />
         </Suspense>
         <ReadAhead />
+        <AnalyticsReadAhead />
         <DeliverableWatcher />
         <InstanceEventStream />
         <SearchDialog />
+        {!chatOnly && <GuidedTour onMenu={setTourMenu} />}
         <div
           className="min-h-screen md:grid"
           // --shell-nav: where the working area starts, for what covers it (an enlarged dashboard).
-          style={{ gridTemplateColumns: `${collapsed ? 72 : 272}px minmax(0,1fr)`, ["--shell-nav" as string]: `${collapsed ? 72 : 272}px` }}
+          style={{ gridTemplateColumns: `${railed ? 72 : 272}px minmax(0,1fr)`, ["--shell-nav" as string]: `${railed ? 72 : 272}px` }}
         >
           {drawerOpen && (
             <button
@@ -136,16 +134,17 @@ export function AppShell({
           <div
             className={cn(
               "fixed inset-y-0 left-0 z-40 w-[284px] shadow-xl transition-transform md:shadow-none md:static md:z-auto md:w-auto md:translate-x-0",
-              drawerOpen ? "translate-x-0" : "-translate-x-full"
+              menuOut ? "translate-x-0" : "-translate-x-full"
             )}
           >
-            <Sidebar collapsed={collapsed && !drawerOpen} onToggle={toggle} onNavigate={() => setDrawerOpen(false)} />
+            <Sidebar collapsed={railed && !menuOut} onToggle={toggle} onNavigate={() => setDrawerOpen(false)} />
           </div>
           {/* Le <main> est la zone qui défile : la hauteur est bornée à l'écran pour que le chat et les
               fichiers gardent leur barre de saisie en bas, les pages longues défilant à l'intérieur. */}
           <main className="flex h-screen min-w-0 flex-col overflow-y-auto">
             <TopBar onMenu={() => setDrawerOpen(true)} />
             <UpdateStrip />
+            {!chatOnly && <NightStrip />}
             <CallStrip />
             <ComputerProvider key={computerAgentId ?? "none"} agentId={computerAgentId}>
               {children}

@@ -1,6 +1,7 @@
 // Pinned/archived conversations and notification kinds: the browser keeps a copy for instant reads,
 // the back office keeps the truth so they follow the member to another computer or the mobile app.
 import { apiFetch } from "@/lib/api";
+import { bootstrap } from "@/lib/bootstrap-client";
 import { parseMarks, type ChatMarks } from "@/lib/chat-marks";
 import { DEFAULT_NOTIFY_PREFS, readNotifyPrefs, storeNotifyPrefs, type NotifyPrefs } from "@/lib/notify-prefs";
 
@@ -34,7 +35,8 @@ const sameNotify = (a: NotifyPrefs, b: NotifyPrefs) => (Object.keys(a) as (keyof
 /** Once per page: the back office's choices replace the local copy; marks made before it kept them are sent up. */
 export function syncPrefs(): Promise<void> {
   synced ??= (async () => {
-    const server = await apiFetch<Prefs>(URL).catch(() => null);
+    // The tab's bootstrap carries them; without it, their own route.
+    const server = ((await bootstrap())?.preferences as Prefs | null | undefined) ?? (await apiFetch<Prefs>(URL).catch(() => null));
     if (!server) return;
     const local = readLocalMarks();
     if (isEmpty(server.chatMarks) && !isEmpty(local)) pushPrefs({ chatMarks: local });

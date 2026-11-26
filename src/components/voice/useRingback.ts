@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { beepTimes } from "@/lib/connection-tone";
+import { END_BEEP_S, END_GAP_S, END_HZ } from "@/lib/end-tone";
 import { newAudioContext } from "@/lib/mic-tap";
 
 // The ringback heard while the call is being put through, like a phone: 440 Hz, 1.5 s on, 3.5 s
@@ -39,12 +41,6 @@ export function useRingback(active: boolean): void {
   }, [active]);
 }
 
-// The end tone when a call the expert had answered ends: three short beeps at 425 Hz, like a line
-// that hangs up. Synthesised, nothing to load; played once and released.
-const BEEPS = 3;
-const BEEP_S = 0.16;
-const GAP_S = 0.12;
-
 // Opened during the click that starts the call: a browser lets a page play sound only from a
 // context a gesture started, and the expert may hang up long after, with no click (Leslie, 25/10:
 // no tone when the expert hangs up). The connection tone plays on it during the call, the end tone
@@ -72,7 +68,9 @@ export function primeHangupTone(): void {
   }
 }
 
-export function playHangupTone(): void {
+/** The end tone (src/lib/end-tone.ts): `beeps` short beeps at 425 Hz, then the context is released. */
+export function playHangupTone(beeps: number): void {
+  if (beeps < 1) return;
   let ctx: AudioContext;
   if (primed && primed.state !== "closed") {
     ctx = primed;
@@ -89,18 +87,17 @@ export function playHangupTone(): void {
   gain.gain.value = 0;
   gain.connect(ctx.destination);
   const tone = ctx.createOscillator();
-  tone.frequency.value = 425;
+  tone.frequency.value = END_HZ;
   tone.connect(gain);
-  const t0 = ctx.currentTime + 0.02;
-  for (let i = 0; i < BEEPS; i++) {
-    const t = t0 + i * (BEEP_S + GAP_S);
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(VOLUME, t + 0.015);
-    gain.gain.setValueAtTime(VOLUME, t + BEEP_S - 0.015);
-    gain.gain.linearRampToValueAtTime(0, t + BEEP_S);
+  const times = beepTimes(ctx.currentTime + 0.02, beeps, END_BEEP_S, END_GAP_S);
+  for (const [on, off] of times) {
+    gain.gain.setValueAtTime(0, on);
+    gain.gain.linearRampToValueAtTime(VOLUME, on + 0.015);
+    gain.gain.setValueAtTime(VOLUME, off - 0.015);
+    gain.gain.linearRampToValueAtTime(0, off);
   }
-  const end = t0 + BEEPS * (BEEP_S + GAP_S);
-  tone.start(t0);
+  const end = times[times.length - 1][1];
+  tone.start(times[0][0]);
   tone.stop(end);
   // Released when the beeps end, or after their time if they never played (a context Safari kept
   // suspended never fires `ended`): Safari allows only a few contexts at once.
@@ -111,5 +108,5 @@ export function playHangupTone(): void {
     void ctx.close().catch(() => {});
   };
   tone.onended = close;
-  setTimeout(close, (end + 0.5) * 1000);
+  setTimeout(close, (end - ctx.currentTime + 0.5) * 1000);
 }

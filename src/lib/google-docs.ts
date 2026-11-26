@@ -11,9 +11,84 @@ export interface GoogleDoc {
   kind: GoogleKind;
   url: string;
   title: string;
+  /** A name taken from the reply that gives the document, when nothing names it (Leslie, 19/11). */
+  guess?: string;
 }
 
 export const GOOGLE_LABEL: Record<GoogleKind, string> = { sheets: "Google Sheets", docs: "Google Docs", slides: "Google Slides" };
+/** The format in a word, under a document's name (« Slides, 11 h 42 »). */
+export const SHORT_LABEL: Record<GoogleKind, string> = { sheets: "Sheets", docs: "Docs", slides: "Slides" };
+/** What a document no text names is called (Leslie, 18/11: « tout s'appelle Google Slides »). */
+export const UNNAMED: Record<GoogleKind, string> = { sheets: "Tableur sans nom", docs: "Document sans nom", slides: "Présentation sans nom" };
+
+/** True when nothing gave the document a name (its title is still the format's). */
+export const isUnnamed = (d: Pick<GoogleDoc, "kind" | "title">): boolean => d.title === GOOGLE_LABEL[d.kind];
+
+/** The name shown: the member's own, else the one the text gave, else « Présentation sans nom ». */
+export function docName(d: Pick<GoogleDoc, "id" | "kind" | "title" | "guess">, names: Readonly<Record<string, string>>): string {
+  const own = names[d.id]?.trim();
+  return own || (isUnnamed(d) ? d.guess || UNNAMED[d.kind] : d.title);
+}
+
+/**
+ * A default name from the reply itself (Leslie, 19/11: « pas fan de Nommer, mets un nom par défaut par
+ * rapport au contenu »): its first heading, else its first bold words, else its first sentence, cut at
+ * 48 signs on a word. Links, emojis and « Voici » go; null when nothing is left worth a name.
+ */
+export function titleFromReply(text: string): string | null {
+  const clean = (t: string) =>
+    t
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/https?:\/\/\S+/g, "")
+      .replace(/\p{Extended_Pictographic}️?/gu, "")
+      .replace(/[*_`#>]+/g, "")
+      .replace(/^\s*(?:voici|voilà|c['’]est prêt|c['’]est fait|bonjour|parfait|super|ok)\b[\s,:!.]*/iu, "")
+      .replace(/\s+/g, " ")
+      .replace(/[\s:,;.!?-]+$/u, "")
+      .trim();
+  const heading = /^\s{0,3}#{1,4}\s+(.+)$/m.exec(text)?.[1];
+  const bold = /\*\*([^*\n]{4,80})\*\*/.exec(text)?.[1];
+  const sentence = text.split(/(?<=[.!?:])\s|\n/).map(clean).find((x) => x.split(" ").length >= 2);
+  for (const c of [heading, bold, sentence]) {
+    if (!c) continue;
+    let t = clean(c);
+    // « La présentation de 3 pages » parle du document sans le nommer.
+    if (t.split(" ").length < 2 || /^(?:le|la|les|l['’]|un|une|des|ce|cette)\s*(?:document|doc|fichier|lien|présentation|tableur|tableau|classeur|slides?)\b/iu.test(t)) continue;
+    if (t.length > 48) {
+      const cut = t.slice(0, 48);
+      t = cut.includes(",") ? cut.slice(0, cut.lastIndexOf(",")) : cut.replace(/\s+\S*$/u, "").replace(/\s+(?:à|de|du|des|la|le|les|et|en|pour|avec|sur)$/iu, "");
+    }
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  return null;
+}
+
+/** A rename kept: trimmed, at most 120 signs; empty gives the document its own name back. */
+export function cleanName(name: string): string {
+  return name.replace(/\s+/g, " ").trim().slice(0, 120);
+}
+
+/** Today's, yesterday's or the date's heading of a document last used at `ms` (null: « Plus ancien »). */
+export function dayHeading(ms: number | null, now: Date = new Date()): string {
+  if (!ms) return "Plus ancien";
+  const d = new Date(ms);
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86_400_000);
+  const date = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+  if (diff === 0) return "Aujourd’hui";
+  if (diff === 1) return `Hier, ${date}`;
+  return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" }).replace(/^./, (c) => c.toUpperCase());
+}
+
+/** « 11 h 42 »: the day is the heading above. */
+export function usedTime(ms: number | null): string | null {
+  if (!ms) return null;
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, "0")} h ${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** The fold used to search a name: no accents, no case. */
+export const foldName = (s: string): string => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
 const PATH_KIND: Record<string, GoogleKind> = { spreadsheets: "sheets", document: "docs", presentation: "slides" };
 const URL_RE = /https:\/\/docs\.google\.com\/(spreadsheets|document|presentation)\/d\/([A-Za-z0-9_-]{20,})[^\s)\]>"'«»]*/g;
@@ -58,8 +133,8 @@ export function titleBefore(text: string, at: number): string | null {
   if (!last) return null;
   const t = last.replace(/\s+(?:est|sont|se|qui|que|avec|dans|sur|pour|en|à|a)\b.*$/iu, "").replace(/\s+(?:pages?|p\.)\s*\d.*$/iu, "").trim();
   const words = t.split(/\s+/);
-  // « le document » alone names nothing; « la présentation WhatsApp » does.
-  if (words.length < 2) return null;
+  // « le document » alone names nothing; « la présentation WhatsApp » does, « la présentation de 3 pages » does not.
+  if (words.length < 2 || /^\p{L}+\s+(?:de|d['’]|en)\s*\d/u.test(t)) return null;
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
@@ -82,6 +157,8 @@ export function googleDocs(text: string): GoogleDoc[] {
     if (!had) found.set(doc.id, { ...doc, title: guess ?? GOOGLE_LABEL[doc.kind] });
     else if (guess && had.title === GOOGLE_LABEL[doc.kind]) had.title = guess;
   }
+  const guess = titleFromReply(text);
+  for (const d of found.values()) if (isUnnamed(d) && guess) d.guess = guess;
   return [...found.values()];
 }
 
@@ -144,8 +221,10 @@ export function usedGoogleDocs(replies: { text: string; at: number | null }[]): 
     for (const d of [...named, ...linked]) {
       const had = seen.get(d.id);
       const title = had && d.title.startsWith("Google ") ? had.title : d.title;
+      // The first reply that gave the document keeps naming it by default.
+      const guess = had?.guess ?? d.guess;
       seen.delete(d.id);
-      seen.set(d.id, { id: d.id, kind: d.kind, url: d.url, title, usedAt: at });
+      seen.set(d.id, { id: d.id, kind: d.kind, url: d.url, title, usedAt: at, ...(guess ? { guess } : {}) });
     }
   }
   return [...seen.values()].reverse();

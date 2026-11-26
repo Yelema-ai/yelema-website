@@ -10,6 +10,7 @@ import { UNIPILE_DASHBOARD, accountBroken, accountDomain, accountName, accountTy
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { ExpertAvatar } from "@/components/experts/ExpertAvatar";
 import { ToolLogo } from "./ToolLogo";
+import { StatePill } from "./StatePill";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -139,8 +140,9 @@ export function UnipileCard() {
       <div className="flex min-h-[78px] items-center gap-3 py-3 pl-4 pr-3">
         <button
           type="button"
-          onClick={() => connected && showDetails()}
-          disabled={!connected}
+          onClick={() => (status?.accountsError ? open() : connected ? showDetails() : status && !status.connected && !editing ? open() : undefined)}
+          disabled={!status || editing}
+          aria-label={broken.length ? `Vos messageries, ${brokenLabel}` : undefined}
           className="flex min-w-0 flex-1 items-center gap-3 self-stretch text-left disabled:cursor-default"
         >
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-soft text-ink-2">
@@ -159,41 +161,25 @@ export function UnipileCard() {
             </span>
           )}
           {status === null && !error ? (
-            <span className="h-7 w-24 shrink-0 animate-pulse rounded-full bg-soft" />
+            <span className="h-8 w-[108px] shrink-0 animate-pulse rounded-full bg-soft" />
           ) : connected ? (
             <>
-              {broken.length || status?.accountsError ? null : (
-                <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-ok-pale px-2.5 text-xs font-semibold leading-none text-ok">
-                  <Check className="h-3.5 w-3.5" />
-                  Connecté
-                </span>
+              {/* A small red dot when an account is to sign in again; the accounts and their « Reconnecter » are
+                  behind the click (Leslie, 05/11: no red banner under the card). */}
+              {broken.length || status?.accountsError ? (
+                <span title={status?.accountsError ? "Unipile ne reconnaît plus votre clé" : brokenLabel} className="size-2 shrink-0 rounded-full bg-[#dc2626]" />
+              ) : (
+                <StatePill state="connected" />
               )}
               <ChevronRight className="size-4 shrink-0 text-ink-3" />
             </>
+          ) : status && !status.connected && !editing ? (
+            <StatePill state="connect" />
           ) : null}
         </button>
-        {status && !status.connected && !editing && (
-          <Button size="sm" onClick={open} className="shrink-0">
-            Connecter
-          </Button>
-        )}
       </div>
 
       {error && <p className="border-t px-4 py-2 text-[13px] text-ink-3">{error}</p>}
-
-      {connected && status && (broken.length > 0 || status.accountsError) && (
-        <div className="mx-3 mb-3 flex items-center gap-3 rounded-[14px] bg-ko-pale px-3 py-2 text-[13px] text-ko">
-          <span className="flex-1 font-semibold">{status.accountsError ? "Unipile ne reconnaît plus votre clé" : brokenLabel}</span>
-          {status.accountsError ? (
-            <Button size="sm" onClick={open}>Reconnecter</Button>
-          ) : (
-            <Button size="sm" disabled={linking !== null} onClick={() => (broken.length === 1 ? void reconnect(broken[0]) : showDetails())}>
-              {linking ? <Loader2 className="animate-spin" /> : null}
-              Reconnecter
-            </Button>
-          )}
-        </div>
-      )}
 
       <Dialog open={details} onOpenChange={(v) => (setDetails(v), setConfirming(false))}>
         <DialogContent className="sm:max-w-[520px]">
@@ -284,14 +270,14 @@ export function UnipileCard() {
       {editing && status && (
         <div className="space-y-3 border-t px-4 pb-3 pt-3 text-[13px]">
           <p className="text-ink-3">
-            Dans votre tableau de bord Unipile, reliez votre WhatsApp, puis copiez le DSN et créez une clé d’API.
+            Dans votre tableau de bord Unipile, reliez votre WhatsApp, puis copiez l’adresse de votre compte (DSN) et créez une clé d’accès.
           </p>
           <label className="block space-y-1">
-            <span className="font-semibold text-ink-2">DSN</span>
+            <span className="font-semibold text-ink-2">Adresse du compte Unipile (DSN)</span>
             <Input value={dsn} onChange={(e) => setDsn(e.target.value)} placeholder="api8.unipile.com:13851" autoComplete="off" />
           </label>
           <label className="block space-y-1">
-            <span className="font-semibold text-ink-2">Clé d’API</span>
+            <span className="font-semibold text-ink-2">Clé</span>
             <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={status.connected ? "Saisissez-la de nouveau" : ""} autoComplete="new-password" />
           </label>
           <div className="space-y-1">
@@ -307,7 +293,7 @@ export function UnipileCard() {
           </div>
           {tested && (
             <p className="text-ink-2">
-              {tested.length ? `Comptes trouvés : ${tested.map((a) => `${a.type} · ${a.name}`).join(", ")}` : "La clé marche, mais aucun compte n’est relié chez Unipile."}
+              {tested.length ? `Comptes trouvés : ${tested.map((a) => `${a.name} (${a.type})`).join(", ")}` : "La clé fonctionne, mais aucun compte n’est relié dans Unipile."}
             </p>
           )}
           <div className="flex flex-wrap gap-2">

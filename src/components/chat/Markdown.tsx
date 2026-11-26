@@ -3,9 +3,12 @@
 import { memo, useMemo, useState, type MouseEvent } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Streamdown } from "streamdown";
+import { defaultRehypePlugins, Streamdown } from "streamdown";
+import type { PluggableList } from "unified";
 import "streamdown/styles.css";
 import { ANGLED, BARE, citedFolder, CODE, FOLDER_BARE, FOLDER_CODE, isHiddenInChat, LINKED, normDrivePath, noteFolder, openTarget, safeDecode } from "@/lib/drive-links";
+import { externalImagesAsLinks, ownLink, strictSchema } from "@/lib/markdown-safety";
+import type { SanitizeSchema } from "@/lib/markdown-safety";
 import { paragraphCache } from "@/lib/paragraph-cache";
 import { replyLines } from "@/lib/reply-lines";
 import { agentTabPath } from "@/lib/expert-tabs";
@@ -48,10 +51,12 @@ function linkDriveFiles(content: string, agentId: string, profileId?: string | n
     if (!t) return null;
     if (!t.file) return folderLink(t.path, agentId, profileId);
     const text = label?.trim() || name(t.path);
+    // A working file (« compte-rendu.json ») is never a link, even written as a full address (Leslie, 20/11).
+    if (isHiddenInChat(t.path)) return text;
     files?.set(text.replace(/\\([_*\[\]])/g, "$1").replace(/[*_]/g, "").trim(), t.path);
     return `[${text}](${url(t.path)})`;
   };
-  return content
+  return withoutFileOnlyLines(content)
     .replace(OPEN_LINK, (m, label: string, href: string) => opened(label, href) ?? m)
     .replace(OPEN_BARE, (m, lead: string, href: string) => {
       const l = opened(null, href);
@@ -73,6 +78,30 @@ function linkDriveFiles(content: string, agentId: string, profileId?: string | n
     });
 }
 
+// A line that only points at a working file (« Fichier : compte-rendu.json », a link or not) says nothing to the
+// member: it goes (Leslie, 20/11 : « trop de texte technique »).
+const FILE_ONLY_LINE = /^[ \t>*_-]*(?:[\p{L} ]{1,24}\s*:\s*)?[*_]*\s*\[?([^\s\]()]+)\]?(?:\(([^)\s]+)\))?[*_]*\s*(?:↗)?\s*$/u;
+// A long bare address (« https://mstudio-frames.onrender.com/share/frame/95b3…eba5 ») reads as its site's name, still
+// a link: the full string was technical text across two lines (Leslie, 20/11). A short one stays as written.
+const LONG_BARE_URL = /(^|[ \t])(https?:\/\/([^\s/)<>\]]+)[^\s)<>\]]{30,}?)(?=[.,;!?]?(?:\s|$))/gm;
+function shortBareUrls(content: string): string {
+  // A deliverable's own address keeps its handling below (its file name, its preview).
+  return content.replace(LONG_BARE_URL, (m, lead: string, url: string, host: string) => (openTarget(url) ? m : `${lead}[${host.replace(/^www\./, "")}](${url})`));
+}
+
+function withoutFileOnlyLines(content: string): string {
+  return shortBareUrls(content)
+    .split("\n")
+    .filter((line) => {
+      const m = FILE_ONLY_LINE.exec(line);
+      if (!m) return true;
+      const target = safeDecode(m[2] ?? m[1]);
+      const path = openTarget(target)?.path ?? target;
+      return !(/\.[a-z0-9]{1,6}$/i.test(path.split("?")[0]) && isHiddenInChat(path.split("?")[0]));
+    })
+    .join("\n");
+}
+
 function folderLink(path: string, agentId: string, profileId?: string | null): string | null {
   const folder = citedFolder(path);
   if (!folder) return null;
@@ -81,7 +110,12 @@ function folderLink(path: string, agentId: string, profileId?: string | null): s
 }
 
 // Our own links (drive downloads) open directly; external ones still ask first.
-const LINK_SAFETY = { enabled: true, onLinkCheck: (url: string) => url.startsWith("/") };
+const LINK_SAFETY = { enabled: true, onLinkCheck: ownLink };
+
+// Streamdown's own (raw HTML, sanitizing by allow-list, link hardening), its allow-list narrowed and remote
+// pictures turned into links in between. The order matters: nothing runs after `raw` unsanitized.
+const [sanitize, schema] = defaultRehypePlugins.sanitize as unknown as [unknown, SanitizeSchema];
+const REHYPE = [defaultRehypePlugins.raw, [sanitize, strictSchema(schema)], externalImagesAsLinks, defaultRehypePlugins.harden] as PluggableList;
 
 const FR = {
   close: "Fermer",
@@ -151,7 +185,7 @@ export const Markdown = memo(function Markdown({ content, agentId, profileId }: 
   };
   return (
     <div onClickCapture={onClick}>
-      <Streamdown className="chat-markdown text-[15px] leading-relaxed" linkSafety={LINK_SAFETY} translations={FR}>
+      <Streamdown className="chat-markdown text-[15px] leading-relaxed" linkSafety={LINK_SAFETY} translations={FR} rehypePlugins={REHYPE}>
         {text}
       </Streamdown>
       {preview && agentId && <FilePreview agentId={agentId} entry={preview} onClose={() => setPreview(null)} />}

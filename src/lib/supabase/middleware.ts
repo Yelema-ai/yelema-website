@@ -3,15 +3,25 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createHash } from "node:crypto";
 import { backoffice, BackofficeError, type BoOpenedSession } from "@/lib/backoffice";
 import { memo } from "@/lib/memo";
+import { mfaCookie } from "@/lib/mfa-cookie";
+import { mfaChallenge } from "@/lib/signin-steps";
 import { authViaBackoffice, deploymentWorkspaceId, multiTenant, resolverToken, siteUrl, supabaseAnonKey, supabaseUrl } from "@/lib/runtime-config";
-import { decodeSession, encodeSession, LEGACY_SESSION_COOKIE, secondsLeft, SESSION_COOKIE, sessionCookieOptions, sessionCookieValue } from "@/lib/session";
-import { publicSiteOrigin } from "@/lib/site-url";
+import { bearerDecision } from "@/lib/bearer-access";
+import { guestCookieApplies, guestCookieName } from "@/lib/guest-access";
+import { decodeSession, encodeSession, LEGACY_SESSION_COOKIE, secondsLeft, SESSION_COOKIE, sessionCookieOptions, sessionCookieValue, verifiedAccessToken } from "@/lib/session";
+import { renewBefore, tokenLifetime } from "@/lib/session-renewal";
+import { requestSiteOrigin } from "@/lib/site-url";
 import { sealTenant, writeTenantHeader } from "@/lib/tenant-header";
 import { hostOf, resolveHost, TenantError, type ResolvedTenant } from "@/lib/tenant-resolver";
+
+// Where /login lives. Not nextUrl alone: behind a reverse proxy it carries the listen address (localhost:3000).
+const loginOrigin = (request: NextRequest): string => requestSiteOrigin(multiTenant(), siteUrl(), hostOf(request.headers), request.nextUrl.origin);
 
 export async function updateSession(request: NextRequest) {
   // Only this proxy writes the resolved client: whatever the browser sent is dropped.
   writeTenantHeader(request.headers, null);
+  // An external guest's cookie is for /invite only: no other route ever sees it, even a stray one.
+  if (request.cookies.has(GUEST_COOKIE) && !guestCookieApplies(request.nextUrl.pathname)) request.cookies.delete(GUEST_COOKIE);
   // Health checks come from the back-office, carry no session, and must answer even when the
   // Supabase variables are missing — so they skip the auth client entirely.
   if (request.nextUrl.pathname === "/api/health") return NextResponse.next({ request });
@@ -64,14 +74,14 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/dashboards") ||
     pathname.startsWith("/api/dashboards/shared") ||
     pathname.startsWith("/api/dashboards/frame") ||
-    pathname.startsWith("/api/dashboards/file");
+    pathname.startsWith("/api/dashboards/file") ||
+    SIGNED_FILE.test(pathname);
 
   if (!user && !isPublic) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: { code: "unauthorized", message: "Sign in required" } }, { status: 401 });
     }
-    // SITE_URL, not nextUrl: behind the reverse proxy nextUrl can carry the listen address.
-    const url = new URL("/login", publicSiteOrigin(siteUrl(), request.nextUrl.origin));
+    const url = new URL("/login", loginOrigin(request));
     url.searchParams.set("next", pathname + request.nextUrl.search); // a shared link keeps its ?c= / ?s=
     return NextResponse.redirect(url);
   }
@@ -103,14 +113,16 @@ async function tenantGate(request: NextRequest): Promise<NextResponse | { tenant
   return { tenant, host: host! };
 }
 
-// Renew the access token this long before it expires, so a request never leaves with a dead one.
-const RENEW_BEFORE_S = 120;
+const GUEST_COOKIE = guestCookieName(process.env.NODE_ENV === "production");
 
 // The requests of one page renew together: one call per refresh token, its answer shared, so they
 // all leave with the same new session instead of racing the back office's token rotation.
 const renewals = memo<BoOpenedSession>({ ttlMs: 30_000, maxEntries: 2000, maxFlightMs: 20_000 });
 const renew = (refreshToken: string, workspace: string | undefined) =>
   renewals.get(`${workspace ?? ""}:${createHash("sha256").update(refreshToken).digest("hex")}`, () => backoffice.refresh(refreshToken, workspace));
+
+// A deliverable's signed link carries its own proof (lib/file-link.ts): no session.
+const SIGNED_FILE = /^\/api\/agents\/[A-Za-z0-9_-]{1,64}\/files\/signed$/;
 
 function isPublicPath(pathname: string): boolean {
   return (
@@ -123,7 +135,8 @@ function isPublicPath(pathname: string): boolean {
     pathname.startsWith("/dashboards") ||
     pathname.startsWith("/api/dashboards/shared") ||
     pathname.startsWith("/api/dashboards/frame") ||
-    pathname.startsWith("/api/dashboards/file")
+    pathname.startsWith("/api/dashboards/file") ||
+    SIGNED_FILE.test(pathname)
   );
 }
 
@@ -136,8 +149,21 @@ async function updateBackofficeSession(request: NextRequest, workspace: string |
   let session = decodeSession(sessionCookieValue(request.cookies));
   let renewed: string | null = null;
   let dropped = false;
+  let challenge: ReturnType<typeof mfaChallenge> = null;
 
-  if (session && secondsLeft(session) < RENEW_BEFORE_S) {
+  // The mobile app: the token rides this request only (never renewed or set as a cookie here).
+  const bearer = await bearerDecision(
+    { method: request.method, pathname, hasCookieSession: Boolean(session), authorization: request.headers.get("authorization"), workspaceHeader: request.headers.get("x-workspace-id"), workspace },
+    verifiedAccessToken
+  );
+  if (bearer && "refuse" in bearer) return NextResponse.json({ error: { code: bearer.refuse.code, message: bearer.refuse.message } }, { status: bearer.refuse.status });
+  if (bearer) {
+    request.cookies.set(SESSION_COOKIE, encodeSession(bearer.session));
+    return NextResponse.next({ request });
+  }
+
+  // Ahead of expiry, so a request never leaves with a dead token (how far ahead: lib/session-renewal).
+  if (session && secondsLeft(session) < renewBefore(request.method, pathname, tokenLifetime(session.accessToken))) {
     try {
       const opened = await renew(session.refreshToken, workspace);
       session = opened.session;
@@ -148,6 +174,8 @@ async function updateBackofficeSession(request: NextRequest, workspace: string |
     } catch (e) {
       const refused = e instanceof BackofficeError && (e.status === 401 || e.status === 403);
       // Refused: signed out. An outage keeps the cookie, even past expiry: it is renewed once the back office answers.
+      // A renewal that asks for a code leaves its ticket for /login, which then shows the code step.
+      challenge = mfaChallenge(e);
       if (refused) {
         session = null;
         dropped = true;
@@ -162,7 +190,7 @@ async function updateBackofficeSession(request: NextRequest, workspace: string |
     if (pathname.startsWith("/api/")) {
       response = NextResponse.json({ error: { code: "unauthorized", message: "Sign in required" } }, { status: 401 });
     } else {
-      const url = new URL("/login", publicSiteOrigin(siteUrl(), request.nextUrl.origin));
+      const url = new URL("/login", loginOrigin(request));
       url.searchParams.set("next", pathname + request.nextUrl.search); // a shared link keeps its ?c= / ?s=
       response = NextResponse.redirect(url);
     }
@@ -174,5 +202,9 @@ async function updateBackofficeSession(request: NextRequest, workspace: string |
   // The cookie's earlier name goes once its value lives under the new one, or is dropped.
   if ((renewed || dropped) && SESSION_COOKIE !== LEGACY_SESSION_COOKIE) response.cookies.delete(LEGACY_SESSION_COOKIE);
   if (dropped) response.cookies.delete(SESSION_COOKIE);
+  if (challenge) {
+    const c = mfaCookie(challenge.ticket, challenge.expiresIn, hostOf(request.headers) ?? "");
+    response.cookies.set(c.name, c.value, c.options);
+  }
   return response;
 }

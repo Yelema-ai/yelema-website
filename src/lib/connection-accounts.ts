@@ -11,7 +11,7 @@ export const ACCOUNT_STATE_LABELS: Record<AccountState, string> = {
   disabled: "Désactivé",
 };
 
-export function accountState(c: IntegrationConnection): AccountState {
+export function accountState(c: Pick<IntegrationConnection, "status" | "isDisabled">): AccountState {
   const s = (c.status || "").toUpperCase();
   if (c.isDisabled || s === "INACTIVE" || s === "DISABLED") return "disabled";
   if (s === "ACTIVE") return "active";
@@ -96,5 +96,5 @@ export function accountSummary(list: readonly IntegrationConnection[]): string {
   if (accounts.length === 0) return unfinished.length ? ACCOUNT_STATE_LABELS.pending : "";
   const broken = accounts.filter(needsReconnect).length;
   const head = plural(accounts.length, "compte", "comptes");
-  return broken ? `${head} · ${broken} à reconnecter` : head;
+  return broken ? `${head}, ${broken} à reconnecter` : head;
 }

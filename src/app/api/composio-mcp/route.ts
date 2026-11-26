@@ -1,11 +1,16 @@
+import { boundedBytes, tokenLimit } from "@/lib/instance-limits";
 import { randomUUID } from "node:crypto";
 import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { instanceFetch } from "@/lib/agent37";
+import { callerProfile, instanceBearer } from "@/lib/profile-token";
+import { profileTokenAccounts } from "@/lib/profile-token-server";
+import { asService } from "@/lib/service-call";
 import { backoffice, BackofficeError, type ComposioCallsDeclaration } from "@/lib/backoffice";
 import { composioUserId, hashAppsToken, mintMcpSession, stageFile, type McpSession } from "@/lib/composio";
 import { pinnedAccounts } from "@/lib/connection-accounts";
 import { extractComposioCalls } from "@/lib/composio-usage";
+import { formatEmailCalls } from "@/lib/composio-email";
 import { fetchUntilHeaders } from "@/lib/fetch-timeout";
 import {
   addBridgeTool,
@@ -68,8 +73,8 @@ type TokenRow = { agent37_id: string; workspace_id: string; owner_user_id: strin
 const tokenRows = memo<TokenRow | null>({ ttlMs: 60_000, ttlOf: (row) => (row ? 60_000 : 10_000), maxEntries: 2000, maxFlightMs: 15_000 });
 class LookupDown extends Error {}
 
-function rowOfToken(token: string): Promise<TokenRow | null> {
-  const hash = hashAppsToken(token);
+// By the hash alone: for a profile token this finds the instance and proves nothing (see `handle`).
+function rowOfHash(hash: string): Promise<TokenRow | null> {
   return tokenRows.get(hash, async () => {
     const { data, error } = await createAdminClient()
       .from("agents")
@@ -161,7 +166,7 @@ async function runBridge(agentId: string, args: Record<string, unknown>, id: unk
   const tooBig = bridgeAnswer(id, { ok: false, message: "Ce fichier dépasse 25 Mo : trop lourd pour être joint. Dépose un lien vers un document Google à la place." });
   try {
     const qs = new URLSearchParams({ path, disposition: "attachment" });
-    const res = await instanceFetch(agentId, `/v1/files/content?${qs}`, { signal: AbortSignal.timeout(BRIDGE_READ_TIMEOUT_MS) });
+    const res = await asService("composio-mcp", () => instanceFetch(agentId, `/v1/files/content?${qs}`, { signal: AbortSignal.timeout(BRIDGE_READ_TIMEOUT_MS) }));
     if (res.status === 404) return bridgeAnswer(id, { ok: false, message: `Fichier introuvable : ${path}. Liste le dossier pour avoir le nom exact, puis réessaie.` });
     if (!res.ok) {
       console.warn(`[composio-mcp] ${agentId}: bridge read ${res.status}`);
@@ -185,8 +190,8 @@ async function runBridge(agentId: string, args: Record<string, unknown>, id: unk
 const SEAT_PROFILE = /^u-[a-z0-9]{6}$/;
 const seats = memo<TokenRow | null>({ ttlMs: 60_000, ttlOf: (row) => (row ? 60_000 : 10_000), maxEntries: 2000, maxFlightMs: 20_000 });
 
-async function seatRow(token: string, workspace: string | undefined, header: string | null): Promise<TokenRow | Response | null> {
-  const profile = header?.trim() ?? "";
+async function seatRow(token: string, workspace: string | undefined, named: string | null): Promise<TokenRow | Response | null> {
+  const profile = named ?? "";
   if (!workspace || !SEAT_PROFILE.test(profile)) return null;
   try {
     return await seats.get(`${hashAppsToken(token)}|${workspace}|${profile}`, async () => {
@@ -203,9 +208,17 @@ async function seatRow(token: string, workspace: string | undefined, header: str
   }
 }
 
+// A tool call's arguments (an e-mail with its text, a document's content): far under this.
+const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
+const limit = tokenLimit(600);
+
 async function handle(request: Request): Promise<Response> {
   const token = /^Bearer\s+(.+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]?.trim();
   if (!token) return errorJson(401, "missing bearer token");
+  const wait = limit(token);
+  if (wait !== null) return new Response(JSON.stringify({ error: "too many requests" }), { status: 429, headers: { "content-type": "application/json", "retry-after": String(wait) } });
+  const bearer = instanceBearer(token);
+  if (!bearer) return errorJson(401, "invalid token");
 
   // The client this address belongs to: the deployment's, or the one of the host that was called.
   let pinned: string | undefined;
@@ -216,29 +229,41 @@ async function handle(request: Request): Promise<Response> {
     return e instanceof TenantError && e.status < 500 ? errorJson(401, "invalid token") : errorJson(503, "token lookup unavailable");
   }
 
-  // An enterprise seat names itself: no agents row to look up.
-  const seatHeader = request.headers.get("x-yelema-profile");
-  const isSeat = SEAT_PROFILE.test(seatHeader?.trim() ?? "");
+  // An enterprise seat names itself (or its profile token names it): no agents row to look up.
+  const profile = callerProfile(bearer, request.headers.get("x-yelema-profile"));
+  const isSeat = SEAT_PROFILE.test(profile ?? "");
   let found: TokenRow | null = null;
   if (!isSeat) {
     try {
-      found = await rowOfToken(token);
+      found = await rowOfHash(bearer.hash);
     } catch {
       // A database outage must not look like a revoked token to the expert.
       return errorJson(503, "token lookup unavailable");
     }
   }
-  const row = found ?? (await seatRow(token, pinned, seatHeader));
+  const row = found ?? (await seatRow(token, pinned, profile));
   if (row instanceof Response) return row;
   if (!row) return errorJson(401, "invalid token");
   // An instance of another client than this address's is not ours to proxy.
   if (pinned && row.workspace_id !== pinned) return errorJson(401, "invalid token");
   const userId = composioUserId(row);
-  const seat = found ? null : (request.headers.get("x-yelema-profile")?.trim() ?? null);
-  const pins = await defaultPins(token, row.workspace_id, seat);
+  const seat = found ? null : profile;
+  // A profile token is believed once the back office accepted it: a seat's by the seat answer above, any other here.
+  let pins: Record<string, string[]>;
+  if (bearer.profile && found) {
+    const own = await profileTokenAccounts(token, row.workspace_id).catch(() => undefined);
+    if (own === undefined) return errorJson(503, "token lookup unavailable");
+    if (!own) return errorJson(401, "invalid token");
+    pins = pinnedAccounts(own);
+  } else pins = await defaultPins(token, row.workspace_id, seat);
 
-  const body = request.method === "POST" ? await request.arrayBuffer() : undefined;
-  const text = body ? new TextDecoder().decode(body) : "";
+  const read = request.method === "POST" ? await boundedBytes(request, MAX_REQUEST_BYTES) : undefined;
+  if (read === null) return errorJson(413, "request too large");
+  const raw = read?.buffer;
+  const text = raw ? new TextDecoder().decode(raw) : "";
+  // An e-mail sent through the client's Gmail or Outlook leaves formatted, never as raw text.
+  const formatted = text ? formatEmailCalls(text) : null;
+  const body = formatted ? (new TextEncoder().encode(formatted).buffer as ArrayBuffer) : raw;
   // The bridge reads the expert's own instance: an enterprise seat has no instance of its own here.
   const bridge = text ? bridgeCall(text) : null;
   if (bridge) {
@@ -262,6 +287,8 @@ async function handle(request: Request): Promise<Response> {
       const value = upstream.headers.get(name);
       if (value) headers.set(name, value);
     }
+    // A streamed answer goes out as it comes: never held back to be compressed.
+    if (headers.get("content-type")?.includes("text/event-stream")) headers.set("cache-control", "no-cache, no-transform");
     // The tool list gets the bridge (an expert's instance only): read whole, it is a short answer.
     if (found && upstream.ok && isToolsList(text)) {
       return new Response(addBridgeTool(await upstream.text(), upstream.headers.get("content-type")), { status: upstream.status, headers });

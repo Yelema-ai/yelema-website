@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { MessagesSquare, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { echangesVisible } from "@/lib/runtime-config";
 
 export interface TeamMemberView {
   name: string | null;
@@ -12,6 +13,7 @@ export interface TeamMemberView {
 const initials = (s: string): string => s.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
 
 export function TeamView({ name, members }: { name: string; members: TeamMemberView[] }) {
+  const echanges = echangesVisible();
   return (
     <div className="space-y-5">
       <header className="flex flex-col items-start justify-between gap-4 rounded-[22px] border border-line bg-surface p-5 sm:flex-row sm:items-center sm:p-6">
@@ -26,12 +28,14 @@ export function TeamView({ name, members }: { name: string; members: TeamMemberV
             </p>
           </div>
         </div>
-        <Button asChild>
-          <Link href="/echanges">
-            <MessagesSquare />
-            Écrire à l’équipe
-          </Link>
-        </Button>
+        {echanges && (
+          <Button asChild>
+            <Link href="/echanges">
+              <MessagesSquare />
+              Écrire à l’équipe
+            </Link>
+          </Button>
+        )}
       </header>
 
       <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">

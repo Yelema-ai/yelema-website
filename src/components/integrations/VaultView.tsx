@@ -86,7 +86,7 @@ export function VaultView() {
           <h2 className="sr-only">Accès aux sites</h2>
           <p className="mt-1 max-w-xl text-sm text-ink-3">Confiez à un Expert l’accès à un site : il s’y connecte pour vous, sans jamais voir le mot de passe.</p>
         </div>
-        <Button onClick={() => setAdding(true)} disabled={!data || all.length === 0} className="self-start sm:self-auto">
+        <Button onClick={() => setAdding(true)} disabled={!data || all.length === 0} className="self-start sm:self-auto" data-tour="vault-add">
           <Plus /> Ajouter un accès
         </Button>
       </div>
@@ -104,12 +104,13 @@ export function VaultView() {
         className="w-full max-w-xs"
       />
 
-      <div className="flex items-start gap-3.5 rounded-[22px] border border-line bg-surface p-4 text-sm text-ink-2">
+      {/* Icon and sentence on one line, centred (Leslie, 06/11). */}
+      <div className="flex items-center gap-3.5 rounded-[22px] border border-line bg-surface p-4 text-sm text-ink-2">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-tint text-brand">
           <Lock className="h-5 w-5" />
         </div>
         <p className="text-xs leading-relaxed text-ink-3">
-          Les mots de passe restent chiffrés dans votre instance : ni Yelema ni l’Expert ne les voient. Choisissez un compte sans double authentification.
+          Les mots de passe restent chiffrés : ni Yelema ni l’Expert ne les voient. Choisissez un compte sans double authentification.
         </p>
       </div>
 
@@ -118,13 +119,13 @@ export function VaultView() {
       ) : !data ? (
         <div className="flex min-h-[10rem] flex-col items-center justify-center gap-2 rounded-lg border border-line bg-surface p-8 text-xs text-ink-3">
           <Loader2 className="h-6 w-6 animate-spin" />
-          Lecture du coffre de l’instance…
+          Chargement des accès…
         </div>
       ) : rows.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-line px-6 py-12 text-center">
           <p className="text-sm font-semibold text-ink">{only ? `Aucun accès confié à ${nameOf(only)}` : "Aucun accès confié à vos Experts"}</p>
           <p className="mt-1 max-w-sm text-xs text-ink-3">Ajoutez l’accès à un site (portail administratif, banque, outil métier) et dites à quoi il sert.</p>
-          <Button onClick={() => setAdding(true)} variant="outline" size="sm" className="mt-4">
+          <Button onClick={() => setAdding(true)} variant="outline" size="sm" className="mt-4" data-tour="vault-add">
             <Plus /> Ajouter un accès
           </Button>
         </div>
@@ -137,14 +138,14 @@ export function VaultView() {
                   <th className="px-4 py-2.5 font-medium">Libellé</th>
                   <th className="px-4 py-2.5 font-medium">Experts</th>
                   <th className="px-4 py-2.5 font-medium">Site</th>
-                  <th className="px-4 py-2.5 font-medium">À quoi elle sert</th>
-                  <th className="px-4 py-2.5 font-medium">Ajoutée le</th>
-                  <th className="px-4 py-2.5" />
+                  <th className="px-4 py-2.5 font-medium">À quoi il sert</th>
+                  <th className="px-4 py-2.5 font-medium">Ajouté le</th>
+                  <th className="px-4 py-2.5" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
                 {shown.items.map((it) => (
-                  <tr key={it.key} className="border-t border-line align-top">
+                  <tr key={it.key} className="border-t border-line align-middle">
                     <td className="px-4 py-3 text-ink">
                       {it.label}
                       {/* Ni l'identifiant ni l'adresse : seulement leur nature, rien qui se lise par-dessus l'épaule. */}
@@ -175,7 +176,7 @@ export function VaultView() {
       <ConfirmDialog
         open={Boolean(removing)}
         onOpenChange={(open) => !open && setRemoving(null)}
-        title="Retirer la connexion"
+        title="Retirer l’accès"
         description={`Retirer « ${removing?.label ?? ""} » ? ${removing ? holders(removing) : "Les Experts"} ne pourront plus se connecter à ce site.`}
         confirmText="Retirer"
         destructive

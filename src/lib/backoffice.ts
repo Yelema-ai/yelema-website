@@ -6,15 +6,20 @@ import type { ComposioCall } from "@/lib/composio-usage";
 import { voiceKeyPath, type VoiceKeysOverview } from "@/lib/voice-keys";
 import { isServerId, mcpScopePath, mcpServerPath, type McpOauthQuery, type McpOauthServer, type McpOverview, type McpToolsOverview, type McpToolsReport, type McpServerDraft, type McpWritten } from "@/lib/mcp-servers";
 import type { UnipileAccount, UnipileDraft, UnipileStatus } from "@/lib/unipile";
+import type { TriggersOverview, TriggerWithKey } from "@/lib/triggers";
 import { vaultPath, type VaultDraft, type VaultEntry, type VaultItem, type VaultList, type VaultOverview, type VaultRef, type VaultScope } from "@/lib/vault";
 import { scopePath, type LlmModelChoice, type LlmOverview, type LlmWritten, type SettingScope } from "@/lib/llm";
-import { mailPath, type MailDetail, type MailDraft, type MailInbox, type MailRights, type MailRightsPatch, type MailSummary } from "@/lib/mail";
+import { isExpertKey, mailPath, mailTargetQuery, type CreateMailInboxInput, type MailTarget, type MailDetail, type MailDraft, type MailInbox, type MailRights, type MailRightsPatch, type MailSummary } from "@/lib/mail";
 import { isPublicId, type MemoryList, type MemoryNote, type MemoryPatch, type OrgAssignmentDraft, type OrgChart, type OrgGrantDraft, type OrgMember, type OrgRole } from "@/lib/memory";
 import { backofficeUrl, resolverToken } from "@/lib/runtime-config";
 import { SIGNALING_METHOD, type CallRecord, type SignalingStep, type VoiceOption } from "@/lib/voice";
 import { pinnedWorkspaceId } from "@/lib/tenant";
+import { requestTailnetClient } from "@/lib/tailnet-client";
 import type { BuzzOverview } from "@/lib/buzz";
+import type { GuestFile, GuestParticipant, GuestSessionView } from "@/lib/guest-access";
+import type { GuestRefusal, SalonGuest } from "@/lib/salon-guests";
 import type { ClaudeAuth, ClaudeAuthStatus, ClaudeLogin, ClaudeUsage } from "@/lib/claude-code-auth";
+import type { TourPrefs, TourUpdate } from "@/lib/tour-state";
 
 // The Yelema back office's API for this app (`/api/v1/app/*`, guide: yelema-platform
 // docs/specs/client-api-v1/app.md). It signs users in and says what they may see: their account,
@@ -52,13 +57,16 @@ export class BackofficeError extends Error {
   retryAfter: number | null;
   /** What a refusal carries besides its code: the models to propose in place of an unknown one. */
   suggestions: unknown[];
-  constructor(status: number, code: string, message: string, retryAfter: number | null = null, suggestions: unknown[] = []) {
+  /** The rest of the refusal's `error` object (`ticket`, `attemptsLeft`, `workspaces`…), untrusted. */
+  details: Record<string, unknown>;
+  constructor(status: number, code: string, message: string, retryAfter: number | null = null, suggestions: unknown[] = [], details: Record<string, unknown> = {}) {
     super(message);
     this.name = "BackofficeError";
     this.status = status;
     this.code = code;
     this.retryAfter = retryAfter;
     this.suggestions = suggestions;
+    this.details = details;
   }
 }
 
@@ -80,7 +88,12 @@ export interface BoMe {
   workspace: { id: string; name: string; logoUrl: string | null; brandColor?: string | null };
   instance: { id: string } | null;
   /** `entreprise`: company chat only — no Experts, no instance of one's own. `equipe`: Experts on a team instance. */
-  access?: "instance" | "entreprise" | "equipe";
+  access?: "instance" | "entreprise" | "equipe" | { salons?: boolean };
+  /**
+   * Salons open for the company (feature `salons` checked AND an active relay). The back office says it in
+   * `access.salons` or here at the top level; read through `salonsOfMe`. Absent from an older back office.
+   */
+  salons?: boolean;
 }
 
 export interface BoInstanceView {
@@ -104,6 +117,8 @@ export interface BoInstanceView {
     profile: string;
     key: string;
     version: string | null;
+    /** Its arrival on the instance (« Embauché le »), ISO 8601. */
+    since?: string | null;
     displayName?: string | null;
     avatarUrl?: string | null;
     cycle?: { key: string; label: string } | null;
@@ -115,7 +130,8 @@ export interface BoInstanceView {
 }
 
 /** A file an expert of a salon put in its `Salons/<id>/` folder; `url` is signed and short-lived. */
-export interface SalonDeliverable { id: string; expertId: string; title: string; kind: string; updatedAt: string; url: string | null; folder: string; auteur: string }
+import type { SalonDeliverable } from "@/lib/salon-deliverables";
+export type { SalonDeliverable };
 
 export interface TeamRoster { name: string; members: { name: string | null; email: string; you: boolean; experts: string[] }[] }
 
@@ -196,6 +212,8 @@ export interface BoMemberRoom {
   quota: { used: number; allowed: number | null };
   seats: { used: number; cap: number } | null;
   enterpriseOpen: boolean;
+  /** The company's own e-mail domains, when the back office serves them (asked of Sélim on 07/11). */
+  allowedDomains?: string[];
 }
 
 export type BoOpenedSession = { session: BoSession } & BoMe;
@@ -247,6 +265,20 @@ function invoicePath(id: string, rest: string): string {
   return `/app/billing/invoices/${id}${rest}`;
 }
 
+export interface BoMfaFactor { id: string; name: string | null; createdAt: string | null }
+export interface BoMfaStatus { factors: BoMfaFactor[]; aal: "aal1" | "aal2" }
+/** `qrCode` is an SVG of `uri`; `secret` is shown once, for typing by hand. */
+export interface BoMfaEnrollment { factorId: string; secret: string; uri: string; qrCode: string }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function mfaFactorId(id: string): string {
+  if (!UUID.test(id)) throw new BackofficeError(404, "not_found", "Cet appareil est introuvable.");
+  return id;
+}
+
+// A guest's invitation link is a credential: never in a log line.
+const logPath = (path: string): string => path.replace(/\/guest\/invites\/[^/]+/, "/guest/invites/…");
+
 // The one way out to the back office: its address, the request's workspace, a deadline, and an
 // outage read as one (503, a sentence for the member).
 async function send(path: string, init: { method?: string; workspace?: string; timeoutMs?: number; headers: Record<string, string>; body?: BodyInit }): Promise<Response> {
@@ -256,20 +288,20 @@ async function send(path: string, init: { method?: string; workspace?: string; t
   try {
     return await fetch(`${base}/api/v1${path}`, {
       method: init.method ?? "GET",
-      headers: { "X-Workspace-Id": workspace, ...init.headers },
+      headers: { "X-Workspace-Id": workspace, ...(await requestTailnetClient()), ...init.headers },
       body: init.body,
       cache: "no-store",
       signal: AbortSignal.timeout(init.timeoutMs ?? TIMEOUT_MS),
     });
   } catch (e) {
-    console.error(`[backoffice] ${path} unreachable:`, e instanceof Error ? e.message : e);
+    console.error(`[backoffice] ${logPath(path)} unreachable:`, e instanceof Error ? e.message : e);
     throw new BackofficeError(503, "unavailable", "Le service est momentanément indisponible. Réessayez dans un instant.");
   }
 }
 
 // `workspace` is given by the proxy, which runs before a request has a scope to read it from.
 // `form` sends a multipart body instead of JSON (a document for the company memory).
-async function call<T>(path: string, init: { method?: string; token?: string | null; body?: unknown; form?: FormData; workspace?: string; timeoutMs?: number; headers?: Record<string, string> } = {}): Promise<T> {
+async function call<T>(path: string, init: { method?: string; token?: string | null; body?: unknown; form?: FormData; raw?: ArrayBuffer; workspace?: string; timeoutMs?: number; headers?: Record<string, string> } = {}): Promise<T> {
   const res = await send(path, {
     method: init.method ?? "GET",
     workspace: init.workspace,
@@ -280,7 +312,7 @@ async function call<T>(path: string, init: { method?: string; token?: string | n
       ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
       ...init.headers,
     },
-    body: init.form ?? (init.body === undefined ? undefined : JSON.stringify(init.body)),
+    body: init.raw ?? init.form ?? (init.body === undefined ? undefined : JSON.stringify(init.body)),
   });
 
   const text = await res.text();
@@ -293,16 +325,29 @@ async function call<T>(path: string, init: { method?: string; token?: string | n
   if (!res.ok) {
     const err = (data as { error?: { code?: string; message?: string; suggestions?: unknown } } | null)?.error;
     const retry = Number(res.headers.get("retry-after"));
-    if (!err) console.error(`[backoffice] ${path}: ${res.status}`, text.slice(0, 300));
+    if (!err) console.error(`[backoffice] ${logPath(path)}: ${res.status}`, text.slice(0, 300));
     throw new BackofficeError(
       res.status,
       err?.code ?? (res.status >= 500 ? "unavailable" : "error"),
       err?.message ?? "Le service est momentanément indisponible. Réessayez dans un instant.",
       Number.isFinite(retry) && retry > 0 ? retry : null,
-      Array.isArray(err?.suggestions) ? err.suggestions : []
+      Array.isArray(err?.suggestions) ? err.suggestions : [],
+      err && typeof err === "object" ? (err as Record<string, unknown>) : {}
     );
   }
   return data as T;
+}
+
+// The guest routes take this server's resolver token as their secret; without it, an outage, never a call.
+function guestCall<T>(path: string, init: { ip: string; session?: string; method?: string; body?: unknown; timeoutMs?: number }): Promise<T> {
+  const secret = resolverToken();
+  if (!secret) return Promise.reject(new BackofficeError(503, "unavailable", "Le service est momentanément indisponible. Réessayez dans un instant."));
+  return call<T>(path, {
+    method: init.method,
+    body: init.body,
+    timeoutMs: init.timeoutMs,
+    headers: { "X-Yelema-Site-Secret": secret, ...(init.ip ? { "X-Yelema-Client-Ip": init.ip } : {}), ...(init.session ? { Authorization: `Guest ${init.session}` } : {}) },
+  });
 }
 
 /** The tool executions of one request through the Composio proxy, as the back office records them. */
@@ -381,8 +426,11 @@ function usageQuery(filter: BoUsageFilter, page?: number): string {
   return query ? `?${query}` : "";
 }
 
-/** `/app/me/preferences` : épinglé, archivé et notifications du membre, gardés par le back-office. */
-export type MemberPrefs = { chatMarks: { pinned: string[]; archived: string[] }; notify: Record<string, boolean> };
+/** `/app/me/preferences` : épinglé, archivé et notifications du membre, gardés par le back-office. `tour` is
+ * absent until the back office keeps the guided tour (docs/plans/visite-guidee.md). */
+export type MemberPrefs = { chatMarks: { pinned: string[]; archived: string[] }; notify: Record<string, boolean>; tour?: TourPrefs };
+/** A `PUT` replaces the sections it carries; `tour` takes `{ done }`, the back office sets the date. */
+export type MemberPrefsPatch = Partial<Pick<MemberPrefs, "chatMarks" | "notify">> & { tour?: TourUpdate };
 
 export const backoffice = {
   login: (email: string, password: string) =>
@@ -398,10 +446,23 @@ export const backoffice = {
   // Always answers ok, whether or not the account exists.
   forgot: (email: string) => call<{ ok: true }>("/app/auth/forgot", { method: "POST", body: { email } }),
   logout: (token: string) => call<{ ok: true }>("/app/auth/logout", { method: "POST", token }),
+  // The Google return's outcome, kept 60 s behind a single-use ticket: a session or the refusal decided then.
+  googleTicket: (ticket: string) => call<BoOpenedSession>("/app/auth/google/ticket", { method: "POST", body: { ticket } }),
+  // Second step of a sign-in refused with `mfa_required`: the ticket it carried and the six digits.
+  mfaSignIn: (ticket: string, code: string) => call<BoOpenedSession>("/app/auth/mfa", { method: "POST", body: { ticket, code } }),
+  mfaFactors: (token: string) => call<BoMfaStatus>("/app/me/mfa", { token }),
+  mfaEnroll: (token: string, name?: string) => call<BoMfaEnrollment>("/app/me/mfa/enroll", { method: "POST", token, body: name ? { name } : {} }),
+  // The first right code turns the factor on and opens a new session that replaces the caller's.
+  mfaVerifyEnrollment: (token: string, factorId: string, code: string) =>
+    call<{ session: BoSession; factor: BoMfaFactor }>("/app/me/mfa/verify-enrollment", { method: "POST", token, body: { factorId: mfaFactorId(factorId), code } }),
+  mfaRemove: (token: string, factorId: string) => call<{ ok: boolean }>(`/app/me/mfa/${mfaFactorId(factorId)}`, { method: "DELETE", token }),
 
   // Whether Yelema's team is shipping an update right now (switched on before a push, off after).
   // Public and per workspace; a short timeout: it is asked every minute by every open page.
   platformStatus: () => call<{ maintenance?: boolean }>("/app/platform-status", { timeoutMs: 4_000 }),
+  // The tab's first read in one call (contract §3): each block has the shape of its own route. A back
+  // office without it answers 404, and the app asks the routes one by one.
+  bootstrap: (token: string) => call<{ me?: unknown; preferences?: MemberPrefs; platform?: { maintenance?: boolean }; instance?: unknown }>("/app/bootstrap", { token, timeoutMs: 4_000 }),
   me: (token: string) => call<BoMe>("/app/me", { token }),
   updateMe: (token: string, patch: MePatch) => call<BoMe>("/app/me", { method: "PATCH", token, body: patch }),
   // The member's own photo (multipart, field `file`): the back office checks the type and the size,
@@ -409,7 +470,7 @@ export const backoffice = {
   setMyAvatar: (token: string, form: FormData) => call<BoMe>("/app/me/avatar", { method: "PUT", token, form, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
   removeMyAvatar: (token: string) => call<BoMe>("/app/me/avatar", { method: "DELETE", token }),
   preferences: (token: string) => call<MemberPrefs>("/app/me/preferences", { token }),
-  setPreferences: (token: string, body: Partial<MemberPrefs>) => call<MemberPrefs>("/app/me/preferences", { method: "PUT", token, body }),
+  setPreferences: (token: string, body: MemberPrefsPatch) => call<MemberPrefs>("/app/me/preferences", { method: "PUT", token, body }),
   instance: async (token: string): Promise<BoInstanceReading> => {
     const d = await call<{ instance: BoInstance | null; installation?: string; failedExperts?: unknown }>("/app/instance", { token });
     const known = d.installation === "running" || d.installation === "ready" || d.installation === "failed";
@@ -488,9 +549,6 @@ export const backoffice = {
   // The invoice's PDF, as a stream for the route to pipe.
   invoicePdf: (token: string, invoiceId: string) => stream(invoicePath(invoiceId, "/pdf"), token),
 
-  // The experts' e-mail. One inbox per expert for the whole workspace; the back office holds the
-  // provider's key and decides on every call who may read and who may send. A refusal to send is a
-  // 403 whose sentence is shown as it is; 404 everywhere when the feature is off.
   // Voice calls: the back office answers with Aethex's own bodies, which the browser's SDK reads.
   voiceCalls: async (token: string, expert: string | null) =>
     (await call<{ items: CallRecord[] }>(`/app/voice/calls${expert ? `?expert=${encodeURIComponent(expert)}` : ""}`, { token })).items,
@@ -506,7 +564,18 @@ export const backoffice = {
     call<Record<string, unknown>>(`/app/voice/calls/${conversationId}/${step}`, { method: SIGNALING_METHOD[step], token, body }),
   voiceThinkLonger: (token: string, conversationId: string, on: boolean) =>
     call<{ thinkLonger: boolean }>(`/app/voice/calls/${conversationId}/think-longer`, { method: "POST", token, body: { on } }),
-  mailInboxes: async (token: string) => (await call<{ items: MailInbox[] }>("/app/mail/inboxes", { token })).items,
+  // The experts' e-mail: one inbox per member and per expert, opened and closed by the client's admins;
+  // `expert` designates the caller's own inbox for it. 404 when the feature is off. Ids are checked before they reach a path.
+  mailInboxes: async (token: string, target: MailTarget) =>
+    (await call<{ items: MailInbox[] }>(`/app/mail/inboxes?${mailTargetQuery(target)}`, { token })).items,
+  createMailInbox: (token: string, input: CreateMailInboxInput) => {
+    if (!isExpertKey(input.expert)) throw new BackofficeError(400, "invalid_input", "Cet expert est introuvable.");
+    return call<MailInbox>("/app/mail/inboxes", { method: "POST", token, body: input, timeoutMs: SETTING_WRITE_TIMEOUT_MS });
+  },
+  deleteMailInbox: (token: string, expert: string, target: MailTarget) => {
+    if (!isExpertKey(expert)) throw new BackofficeError(400, "invalid_input", "Cet expert est introuvable.");
+    return call<{ deleted: boolean }>(`/app/mail/inboxes/${expert}?${mailTargetQuery(target)}`, { method: "DELETE", token, timeoutMs: SETTING_WRITE_TIMEOUT_MS });
+  },
   // Newest first, 25 a page; `page` is the previous answer's `nextPageToken`.
   mailMessages: (token: string, expert: string, page?: string) =>
     call<{ items: MailSummary[]; nextPageToken: string | null }>(`${mailRoute(expert)}${page ? `?page=${encodeURIComponent(page)}` : ""}`, { token }),
@@ -533,6 +602,11 @@ export const backoffice = {
     call<LlmWritten>("/app/llm/own/model", { method: "PUT", token, body: choice, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
   setLlmSettings: (token: string, settings: { membersMayBringKey: boolean }) =>
     call<{ membersMayBringKey: boolean }>("/app/llm/settings", { method: "PUT", token, body: settings }),
+  // Answer check of the caller's own instance: provider and model only, the mode is set at Yelema.
+  answerCheck: (token: string) => call<unknown>("/app/judge", { token }),
+  setAnswerCheck: (token: string, choice: { provider: string; model: string }) =>
+    call<LlmWritten>("/app/judge", { method: "PUT", token, body: choice, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
+  resetAnswerCheck: (token: string) => call<LlmWritten>("/app/judge", { method: "DELETE", token, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
   // Several accounts per provider and their order (backup accounts and models). `scope` is checked
   // into `own`, `client` or a member id before it reaches a path.
   addLlmAccount: (token: string, scope: string, draft: AccountDraft) =>
@@ -589,6 +663,11 @@ export const backoffice = {
   clearUnipile: (token: string) => call<{ ok: true }>("/app/unipile", { method: "DELETE", token, timeoutMs: 60_000 }),
   // A one-click Unipile link, made by the instance (it alone holds the key), to link a broken account again.
   reconnectUnipile: (token: string, accountId: string) => call<{ url: string }>("/app/unipile/reconnect", { method: "POST", token, body: { accountId }, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
+  // The member's « quand… alors… » triggers; a webhook key comes back once, never kept here.
+  triggers: (token: string) => call<TriggersOverview>("/app/triggers", { token }),
+  createTrigger: (token: string, body: Record<string, unknown>) => call<TriggerWithKey>("/app/triggers", { method: "POST", token, body, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
+  updateTrigger: (token: string, id: string, body: Record<string, unknown>) => call<TriggerWithKey>(`/app/triggers/${encodeURIComponent(id)}`, { method: "PATCH", token, body, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
+  deleteTrigger: (token: string, id: string) => call<{ ok: true }>(`/app/triggers/${encodeURIComponent(id)}`, { method: "DELETE", token, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
   mcp: (token: string) => call<McpOverview>("/app/mcp", { token }),
   addMcpServer: (token: string, scope: SettingScope, draft: McpServerDraft) => {
     const path = mcpScopePath(scope);
@@ -666,7 +745,27 @@ export const backoffice = {
   buzzDeleteSalon: (token: string, id: string) => call<{ ok: true }>(`/app/buzz/salons/${encodeURIComponent(id)}`, { method: "DELETE", token, timeoutMs: 60_000 }),
   buzzAddSalonMembers: (token: string, id: string, cles: string[]) => call<{ ok: true; ajoutes: number }>(`/app/buzz/salons/${encodeURIComponent(id)}/membres`, { method: "POST", token, body: { cles }, timeoutMs: 90_000 }),
   buzzSalonDeliverables: (token: string, id: string) => call<{ items: SalonDeliverable[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/livrables`, { token, timeoutMs: 30_000 }),
-  buzzSent: (token: string, sent: { kind: string; recipients: string[] }) => call<{ ok: true }>("/app/buzz/outbox", { method: "POST", token, body: sent }),
+  buzzSalonGuests: (token: string, id: string) => call<{ data: SalonGuest[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/guests`, { token }),
+  buzzInviteGuests: (token: string, id: string, body: { emails: string[]; days: number }) =>
+    call<{ data: SalonGuest[]; refused: GuestRefusal[] }>(`/app/buzz/salons/${encodeURIComponent(id)}/guests`, { method: "POST", token, body, timeoutMs: 60_000 }),
+  buzzExtendGuest: (token: string, id: string, guest: string, days: number) =>
+    call<{ data: SalonGuest }>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}`, { method: "PATCH", token, body: { days } }),
+  buzzRemoveGuest: (token: string, id: string, guest: string) =>
+    call<unknown>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}`, { method: "DELETE", token, timeoutMs: 60_000 }),
+  buzzResetGuestDevices: (token: string, id: string, guest: string) =>
+    call<unknown>(`/app/buzz/salons/${encodeURIComponent(id)}/guests/${encodeURIComponent(guest)}/devices`, { method: "DELETE", token, timeoutMs: 60_000 }),
+  // An external guest's routes: called by this server only, with its secret and the visitor's address.
+  guestCode: (invite: string, email: string, ip: string) => guestCall<unknown>(`/guest/invites/${encodeURIComponent(invite)}/code`, { ip, method: "POST", body: { email } }),
+  guestVerify: (invite: string, body: { email: string; code: string; pubkey: string }, ip: string) =>
+    guestCall<GuestSessionView & { session: string }>(`/guest/invites/${encodeURIComponent(invite)}/verify`, { ip, method: "POST", body }),
+  guestSession: (session: string, ip: string) => guestCall<GuestSessionView>("/guest/session", { ip, session }),
+  guestDeliverables: (session: string, ip: string) => guestCall<{ data: GuestFile[] }>("/guest/salon/deliverables", { ip, session, timeoutMs: 30_000 }),
+  guestFile: (session: string, ip: string, drivePath: string) =>
+    guestCall<{ data: { url: string } }>(`/guest/salon/file?${new URLSearchParams({ p: drivePath }).toString()}`, { ip, session, timeoutMs: 30_000 }),
+  guestParticipants: (session: string, ip: string) => guestCall<{ data: GuestParticipant[] }>("/guest/salon/participants", { ip, session }),
+  guestLogout: (session: string, ip: string) => guestCall<unknown>("/guest/logout", { ip, session, method: "POST" }),
+  // `ajout`: the recipients were just added to the salon `salon` (named `nom`), to be told so.
+  buzzSent: (token: string, sent: { kind: string; recipients: string[]; salon?: string; nom?: string }) => call<{ ok: true }>("/app/buzz/outbox", { method: "POST", token, body: sent }),
   memoryItems: (token: string) => call<MemoryList>("/app/memory/items", { token }),
   createMemoryNote: (token: string, note: MemoryNote) => call<{ id: string }>("/app/memory/items", { method: "POST", token, body: note }),
   uploadMemoryDocument: (token: string, form: FormData) => call<{ id: string }>("/app/memory/items", { method: "POST", token, form, timeoutMs: MAIL_SEND_TIMEOUT_MS }),
@@ -677,6 +776,24 @@ export const backoffice = {
     call<{ id: string; version: number }>(`${ownPath("/app/memory/items", id)}/versions`, { method: "POST", token, form, timeoutMs: MAIL_SEND_TIMEOUT_MS }),
   // The document of a deposit, as a stream for the route to pipe. 404 when the member does not read its compartment.
   memoryDocument: (token: string, id: string) => stream(`${ownPath("/app/memory/items", id)}/file`, token),
+
+  // A document over the host's 4.5 MB limit, sent in parts (lib/upload-parts.ts, docs/plans/envois-en-morceaux.md):
+  // the back office keeps the parts, puts them back together, and gives the file or files it in the memory.
+  startUpload: (token: string, meta: { name: string; type: string; size: number; parts: number }) =>
+    call<{ id: string }>("/app/uploads", { method: "POST", token, body: meta }),
+  uploadPart: (token: string, id: string, n: number, bytes: ArrayBuffer) =>
+    call<{ ok: true }>(`${ownPath("/app/uploads", id)}/parts/${n}`, {
+      method: "PUT",
+      token,
+      raw: bytes,
+      headers: { "Content-Type": "application/octet-stream" },
+      timeoutMs: MAIL_SEND_TIMEOUT_MS,
+    }),
+  /** The file put back together, as a stream; 409 while a part is missing. */
+  uploadedFile: (token: string, id: string) => stream(`${ownPath("/app/uploads", id)}/file`, token),
+  uploadToMemory: (token: string, id: string, as: { title: string; unit?: string | null } | { item: string }) =>
+    call<{ id: string; version?: number }>(`${ownPath("/app/uploads", id)}/memory`, { method: "POST", token, body: as, timeoutMs: MAIL_SEND_TIMEOUT_MS }),
+  cancelUpload: (token: string, id: string) => call<{ ok: true }>(ownPath("/app/uploads", id), { method: "DELETE", token }),
 
   // The org chart that walls the memory, for the workspace's admins. The back office keeps it; the
   // app holds no copy.

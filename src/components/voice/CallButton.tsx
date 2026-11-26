@@ -14,6 +14,7 @@ export function CallButton({
   label = "Appeler",
   iconOnly = false,
   primary = false,
+  tour,
 }: {
   expert: { key: string; name: string; photoUrl: string | null };
   className?: string;
@@ -22,6 +23,8 @@ export function CallButton({
   iconOnly?: boolean;
   /** The page's main action (an empty « Appels »): the brand button, larger. */
   primary?: boolean;
+  /** The guided tour's anchor (`data-tour`). */
+  tour?: string;
 }) {
   const voices = useVoices();
   const { call } = useCall();
@@ -37,6 +40,7 @@ export function CallButton({
         variant={primary ? "default" : "secondary"}
         size={iconOnly ? "icon" : primary ? "lg" : "sm"}
         className={className}
+        data-tour={tour}
         onClick={() => call(expert, voices)}
         onPointerEnter={() => preloadFace(expert.photoUrl)}
         onFocus={() => preloadFace(expert.photoUrl)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ExternalLink, Loader2, ShieldCheck, Sparkles } from "lucide-react";
+import { Check, ExternalLink, Loader2, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { McpToolsReport } from "@/lib/mcp-servers";
@@ -11,6 +11,10 @@ export interface McpOauthFlow {
   name: string;
   step: "installing" | "authorizing" | "success";
   url: string | null;
+  /** The site the authorization page is on, shown before the member goes there. */
+  host: string | null;
+  /** False: that site is not the server's own; the page opens only at the member's click. */
+  expected: boolean;
 }
 
 type Tool = McpToolsReport["servers"][number]["tools"][number];
@@ -63,6 +67,7 @@ export function McpOauthSteps({ flow, tools, onOpenAccess, onCancel, onClose }: 
     );
 
   const installing = flow.step === "installing";
+  const unexpected = Boolean(flow.url) && !flow.expected;
   return (
     <div className="space-y-5 py-2">
       <DialogHeader>
@@ -71,7 +76,7 @@ export function McpOauthSteps({ flow, tools, onOpenAccess, onCancel, onClose }: 
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <DialogTitle>Autorisation OAuth : {flow.name}</DialogTitle>
+            <DialogTitle>Connexion au compte : {flow.name}</DialogTitle>
             <DialogDescription>Finalisez la connexion en autorisant l’accès sur le site officiel.</DialogDescription>
           </div>
         </div>
@@ -82,15 +87,28 @@ export function McpOauthSteps({ flow, tools, onOpenAccess, onCancel, onClose }: 
           <div className="space-y-0.5">
             <p className="text-sm font-semibold text-ink">Page d’autorisation</p>
             <p className="text-xs text-ink-3">
-              {installing ? "Elle s’ouvrira dès que le serveur sera installé sur votre instance." : "Si la fenêtre ne s’est pas ouverte automatiquement, cliquez sur le bouton."}
+              {installing ? "Elle s’ouvrira dès que l’outil sera installé." : unexpected ? "Elle s’ouvrira quand vous aurez vérifié son adresse." : "Si la fenêtre ne s’est pas ouverte automatiquement, cliquez sur le bouton."}
             </p>
+            {flow.host && (
+              <p className="break-all text-xs text-ink-2">
+                Vous vous identifierez sur <strong className="font-mono">{flow.host}</strong>
+              </p>
+            )}
           </div>
           <Button size="sm" onClick={onOpenAccess} disabled={!flow.url} className="shrink-0">
             <ExternalLink className="h-4 w-4" />
-            Ouvrir l’accès
+            {unexpected ? "Continuer" : "Ouvrir l’accès"}
           </Button>
         </div>
-        <Waiting>{installing ? "Installation du serveur sur votre instance…" : flow.url ? "En attente de votre validation dans la fenêtre du fournisseur…" : "Préparation de l’autorisation…"}</Waiting>
+        {unexpected && (
+          <p role="alert" className="flex items-start gap-2 rounded-xl bg-ko-pale p-3 text-xs text-ink">
+            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-ko" />
+            <span>
+              Cette adresse n’est pas celle du serveur <strong>{flow.name}</strong>. Ne continuez que si <strong className="break-all font-mono">{flow.host}</strong> est bien le site de connexion de votre fournisseur.
+            </span>
+          </p>
+        )}
+        <Waiting>{installing ? "Installation de l’outil…" : !flow.url ? "Préparation de l’autorisation…" : unexpected ? "En attente de votre accord pour ouvrir cette adresse…" : "En attente de votre validation dans la fenêtre du fournisseur…"}</Waiting>
       </div>
 
       <DialogFooter>

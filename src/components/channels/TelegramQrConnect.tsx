@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
+import { useRef, useState } from "react";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
@@ -9,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const POLL_MS = 2500;
 const BOT_NAME_MAX = 64;
 
 // Telegram without BotFather: the agent asks Telegram for a new bot, the user scans the QR (or opens
@@ -50,49 +50,35 @@ export function TelegramQrConnect({
   };
 
   // Watch the pairing until the user confirms the bot in Telegram; that poll also saves it.
-  useEffect(() => {
-    if (!session || session.status !== "waiting") return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      if (cancelled) return;
-      if (document.hidden) return void (timer = setTimeout(() => void poll(), POLL_MS));
+  const pairingId = session?.status === "waiting" ? session.pairing_id : null;
+  const poller = usePoll(
+    async () => {
+      if (!pairingId || done.current) return;
       try {
-        const next = await pair({ pairing_id: session.pairing_id });
-        if (cancelled) return;
+        const next = await pair({ pairing_id: pairingId });
         if (next.status === "connected" && !done.current) {
           done.current = true;
+          poller.current?.stop();
           toast.success("Telegram connecté");
           onConnected(next.bot_username ?? null);
-          return;
-        }
-        if (next.status === "expired") {
+        } else if (next.status === "expired") {
           setSession(null);
           setError("Ce code a expiré. Générez-en un nouveau.");
-          return;
         }
       } catch (e) {
-        if (cancelled) return;
         setSession(null);
         setError(e instanceof Error ? e.message : "La connexion à Telegram a échoué. Réessayez.");
-        return;
       }
-      if (!cancelled) timer = setTimeout(() => void poll(), POLL_MS);
-    };
-    timer = setTimeout(() => void poll(), POLL_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.pairing_id, session?.status]);
+    },
+    { enabled: Boolean(pairingId), everyMs: WAIT_POLL_MS, immediate: false, runOnShow: true, wake: { types: ["job.done"], kind: "telegram" } }
+  );
 
   if (!session) {
     return (
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
           Nous créons un bot Telegram pour vos Experts : scannez un code avec votre téléphone et confirmez dans
-          Telegram. Pas de BotFather, aucun jeton à copier.
+          Telegram. Rien d’autre à faire.
         </p>
         <div className="space-y-1.5">
           <Label htmlFor="telegram-bot-name" className="text-xs">

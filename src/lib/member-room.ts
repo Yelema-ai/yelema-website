@@ -16,3 +16,19 @@ export function inviteBlocked(room: MemberRoom): string | null {
   if (room.seats && room.seats.used >= room.seats.cap) return "Le chat d’entreprise est complet : contactez Yelema pour l’agrandir.";
   return null;
 }
+
+/** The domain of an address, lower case, or null when it has none. */
+export const domainOf = (email: string): string | null => /@([^@\s]+)$/.exec(email.trim().toLowerCase())?.[1] ?? null;
+
+/**
+ * Why this address may not be invited (Leslie, 07/11: only the company's own domains, for every client), or
+ * null. No list to check against: the back office decides alone.
+ */
+export function domainRefusal(email: string, domains: readonly string[]): string | null {
+  const allowed = domains.map((d) => d.trim().toLowerCase().replace(/^@/, "")).filter(Boolean);
+  const domain = domainOf(email);
+  if (!allowed.length || !domain) return null;
+  if (allowed.includes(domain)) return null;
+  const list = allowed.map((d) => `@${d}`);
+  return `Seules les adresses ${list.length > 1 ? `${list.slice(0, -1).join(", ")} ou ${list.at(-1)}` : list[0]} peuvent être invitées.`;
+}

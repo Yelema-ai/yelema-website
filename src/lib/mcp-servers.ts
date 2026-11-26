@@ -111,18 +111,18 @@ const REFUSALS: Record<string, string> = {
   reserved_name: "Ce nom est réservé. Choisissez-en un autre.",
   duplicate_name: "Un serveur porte déjà ce nom. Choisissez-en un autre, ou supprimez d’abord l’ancien.",
   bad_url: "Cette adresse n’est pas acceptée : elle doit commencer par https:// et être joignable depuis Internet.",
-  bad_token: "Ce jeton n’est pas valide. Vérifiez qu’il est copié en entier, sans espace ni retour à la ligne.",
+  bad_token: "Cette clé n’est pas valide. Vérifiez qu’elle est copiée en entier, sans espace ni retour à la ligne.",
   too_many_servers: "Vous avez atteint le nombre maximal de serveurs (10). Supprimez-en un pour en ajouter un autre.",
   bad_request: "Cette demande n’a pas pu être traitée.",
   forbidden: "Ce réglage est réservé aux administrateurs de votre espace.",
   not_found: "Ce serveur est introuvable.",
   too_many_attempts: "Trop d’essais en peu de temps. Réessayez dans une heure.",
-  stale_flow: "Cette fenêtre appartient à une autorisation remplacée depuis : terminez-la dans la dernière fenêtre ouverte.",
+  stale_flow: "Cette fenêtre a expiré. Terminez la connexion dans la dernière fenêtre ouverte.",
   unavailable: "L’enregistrement est momentanément indisponible. Réessayez plus tard.",
-  conflict: "Votre instance n’est pas prête pour cette autorisation. Réessayez dans un instant.",
+  conflict: "Vos Experts ne sont pas encore prêts. Réessayez dans un instant.",
   bad_callback: "Le retour du fournisseur est incomplet. Relancez l’autorisation.",
   oauth_unavailable: "Ce serveur n’a pas proposé d’autorisation. Vérifiez son adresse, ou choisissez une autre méthode.",
-  instance_error: "Votre instance n’a pas pu traiter la demande. Réessayez dans un instant.",
+  instance_error: "La demande n’a pas abouti. Réessayez dans un instant.",
   bad_stdio: "Ce serveur ne fait pas partie du catalogue de Yelema.",
   bad_header: "Cet en-tête n’est pas accepté : des lettres, des chiffres et des tirets (X-API-KEY…), ni Authorization ni un en-tête du navigateur.",
 };
@@ -183,4 +183,29 @@ export interface McpToolsReport {
 export interface McpToolsOverview {
   own: McpToolsReport | null;
   members?: { id: string; name: string | null; email: string; report: McpToolsReport | null }[];
+}
+
+const SUBDOMAINS = /^(mcp|api|www|developer|developers|app|server)\./i;
+
+/** A server's address as people read it: « higgsfield.ai » for https://mcp.higgsfield.ai/mcp; null without one. */
+export function serverHost(url: string | null | undefined): string | null {
+  try {
+    let host = new URL(String(url ?? "")).hostname.toLowerCase();
+    while (SUBDOMAINS.test(host) && host.split(".").length > 2) host = host.replace(SUBDOMAINS, "");
+    return host || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The name a server card shows (Leslie, 07/11: « on ne lit plus le nom de l'outil »): the name typed when it says
+ * something, else the tool's name read from its address (« Higgsfield » for mcp.higgsfield.ai), first letter capital.
+ */
+export function serverTitle(server: Pick<McpServer, "name" | "url">): string {
+  const typed = server.name.trim().replace(/\.$/, "");
+  const host = serverHost(server.url);
+  const fromHost = host ? host.split(".").slice(-2)[0] : "";
+  const name = typed.length >= 3 || !fromHost ? typed : fromHost;
+  return name ? name.charAt(0).toUpperCase() + name.slice(1) : "Serveur";
 }

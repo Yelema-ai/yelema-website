@@ -142,7 +142,7 @@ export function parseModelChoice(body: unknown): LlmModelChoice | null {
 /** The sentence for a refused pick: the list is Yelema's, not an account's, and its names are not shown back. */
 export function modelChoiceRefusal(code: string): string | null {
   if (code === "unknown_model") return "Ce modèle n’est plus proposé. Rechargez la page pour voir la liste à jour.";
-  if (code === "unknown_profile") return "Cet Expert n’est pas installé sur votre instance.";
+  if (code === "unknown_profile") return "Cet Expert ne fait pas partie de vos Experts.";
   if (code === "unavailable") return "Les modèles de Yelema sont momentanément indisponibles. Réessayez plus tard.";
   return llmRefusalMessage(code);
 }
@@ -172,6 +172,9 @@ export interface LlmWritten {
 /** What a key is set for: the whole company, one member (by an admin), or the user themself. */
 export type SettingScope = { kind: "client" } | { kind: "member"; id: string } | { kind: "own" };
 
+/** The company's settings and another member's are an administrator's; one's own are everyone's. */
+export const isAdminScope = (scope: SettingScope): boolean => scope.kind !== "own";
+
 const MEMBER_ID = /^\d{1,12}$/;
 export const isMemberId = (id: unknown): id is string => typeof id === "string" && MEMBER_ID.test(id);
 
@@ -190,7 +193,7 @@ const REFUSALS: Record<string, string> = {
   bad_name: "Ce nom n’est pas valide : une lettre, puis des lettres, des chiffres ou des tirets, 40 caractères au plus, sans espace.",
   reserved_name: "Ce nom est réservé. Choisissez-en un autre.",
   bad_url: "Cette adresse n’est pas acceptée : elle doit commencer par https:// et être joignable depuis Internet.",
-  no_instance: "L’instance de ce membre n’est pas encore en service. Réessayez une fois ses Experts installés.",
+  no_instance: "Les Experts de ce membre ne sont pas encore prêts. Réessayez plus tard.",
   login_unavailable: "La connexion à ce fournisseur n’a pas pu démarrer. Réessayez dans un instant.",
   bad_request: "Cette demande n’a pas pu être traitée.",
   forbidden: "Ce réglage est réservé aux administrateurs de votre espace.",
@@ -212,7 +215,7 @@ export function llmRefusalMessage(code: string, suggestions: readonly unknown[] 
 }
 
 export const LLM_SOURCE_LABELS: Record<LlmSource, string> = {
-  member: "Comptes de l’instance",
+  member: "Comptes du membre",
   yelema: "Yelema (moteur inclus)",
   agent37: "Yelema (moteur de secours)",
 };

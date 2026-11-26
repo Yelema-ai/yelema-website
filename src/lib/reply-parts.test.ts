@@ -35,7 +35,7 @@ test("what is not clearly a question stays text", () => {
     "Tu préfères quoi ?\nA) Oui\nC) Non",
     "Tu préfères quoi ?\nB) Oui\nC) Non",
     "Le code :\n```\nA) x\nB) y",
-    `Tu préfères quoi ?\nA) ${"long ".repeat(30)}\nB) Non`,
+    `Tu préfères quoi ?\nA) ${"long ".repeat(40)}\nB) Non`,
     `Tu préfères quoi ?\nA) Oui\nB) Non\n${"suite ".repeat(40)}`,
     "Une réponse ordinaire.",
   ]) {
@@ -64,4 +64,13 @@ test("numbered choices work like lettered ones", () => {
   for (const t of ["Voici les étapes :\n1. Préparer\n2. Livrer", "On fait comment ?\n1. Oui\n3. Non", "On fait comment ?\nA) Oui\n2) Non", "On fait comment ?\n2. Oui\n3. Non", "1. Oui\n2. Non"]) {
     assert.deepEqual(replyParts(t).choices, [], t);
   }
+});
+
+test("« ⭐ » marks the recommended choice, like « (recommandé) »", () => {
+  const p = replyParts("Par quel Expert commencer ?\nA) Kouassi : commercial ⭐\nB) Fatima : marketing\nC) Mamadou : finance");
+  assert.equal(p.choices.length, 3);
+  assert.equal(p.choices[0].label, "Kouassi : commercial");
+  assert.equal(p.choices[0].isDefault, true);
+  assert.equal(p.choices[0].mark, "recommandé");
+  assert.equal(p.choices[1].isDefault, false);
 });

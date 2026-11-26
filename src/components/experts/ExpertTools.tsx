@@ -5,12 +5,15 @@ import Link from "next/link";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
+import { expertTools } from "@/lib/expert-tools-client";
+import { instanceEvents, matches } from "@/lib/instance-events";
 import { toolsOverview, type ExpertTool, type ToolState } from "@/lib/expert-tools";
 import type { McpOverview } from "@/lib/mcp-servers";
 import type { IntegrationConnection, IntegrationConnectionsResult, IntegrationConnectResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { usePublicConfig } from "@/components/PublicConfigProvider";
 import { Button } from "@/components/ui/button";
+import { httpsUrl } from "@/lib/markdown-safety";
 
 interface Loaded {
   tools: ExpertTool[];
@@ -18,8 +21,12 @@ interface Loaded {
   mcpNames: string[];
 }
 
+// A focus re-reads the connections at most this often.
+const REFOCUS_MS = 60_000;
+
 // Outils: what this expert needs to work fully (its pack's outils-recommandes.json) against what this
 // member has connected, so they know what is left to connect.
+
 export function ExpertTools({ agentId, profileId, expertName }: { agentId: string; profileId: string; expertName: string }) {
   const viaBackoffice = usePublicConfig().authVia === "backoffice";
   const [data, setData] = useState<Loaded | null>(null);
@@ -30,8 +37,8 @@ export function ExpertTools({ agentId, profileId, expertName }: { agentId: strin
   const load = useCallback(async () => {
     setLoadError(false);
     try {
-      const [{ outils }, connections, mcp] = await Promise.all([
-        apiFetch<{ outils: ExpertTool[] }>(`/api/agents/${agentId}/experts/${profileId}/outils`),
+      const [outils, connections, mcp] = await Promise.all([
+        expertTools(agentId, profileId),
         apiFetch<IntegrationConnectionsResult>(connectionsUrl).then((r) => r.connections, () => []),
         viaBackoffice ? apiFetch<McpOverview>("/api/mcp").catch(() => null) : null,
       ]);
@@ -46,14 +53,25 @@ export function ExpertTools({ agentId, profileId, expertName }: { agentId: strin
     void load();
   }, [load]);
 
-  // The sign-in happens in another tab: the list is read again when the member comes back.
+  // The sign-in happens in another tab: the list is read again when the member comes back (at most once a
+  // minute: a click back from a frame is a focus too), or when the back office says a connection changed.
   useEffect(() => {
-    const refresh = () => void apiFetch<IntegrationConnectionsResult>(connectionsUrl).then(
-      (r) => setData((d) => d && { ...d, connections: r.connections }),
-      () => undefined
-    );
-    window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
+    let last = Date.now();
+    const refresh = (force = false) => {
+      if (!force && Date.now() - last < REFOCUS_MS) return;
+      last = Date.now();
+      void apiFetch<IntegrationConnectionsResult>(connectionsUrl).then(
+        (r) => setData((d) => d && { ...d, connections: r.connections }),
+        () => undefined
+      );
+    };
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    const off = instanceEvents.on(null, (e) => matches(e, { types: ["job.done"], kind: "connectors" }) && refresh(true));
+    return () => {
+      off();
+      window.removeEventListener("focus", onFocus);
+    };
   }, [connectionsUrl]);
 
   async function connect(t: ToolState) {
@@ -63,7 +81,9 @@ export function ExpertTools({ agentId, profileId, expertName }: { agentId: strin
         method: "POST",
         body: JSON.stringify({ toolkit: t.composio }),
       });
-      window.open(redirectUrl, "_blank", "noopener,noreferrer");
+      const page = httpsUrl(redirectUrl);
+      if (!page) throw new Error("La connexion n’a pas pu démarrer. Réessayez dans un instant.");
+      window.open(page, "_blank", "noopener,noreferrer");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {

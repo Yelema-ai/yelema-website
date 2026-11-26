@@ -39,7 +39,7 @@ test("un compte se distingue par la fin de son identifiant", () => {
 
 test("la carte d'un outil résume ses comptes, les connexions inachevées à part", () => {
   const list = [conn("a", "ACTIVE"), conn("b", "ACTIVE"), conn("c", "EXPIRED"), conn("d", "INITIATED"), conn("e", "INITIATED")];
-  assert.equal(accountSummary(list), "3 comptes · 1 à reconnecter");
+  assert.equal(accountSummary(list), "3 comptes, 1 à reconnecter");
   assert.deepEqual(splitAccounts(list).unfinished.map((c) => c.id), ["d", "e"]);
   assert.equal(accountSummary([conn("a", "ACTIVE")]), "1 compte");
   assert.equal(accountSummary([conn("d", "INITIATED")]), "Connexion non terminée");

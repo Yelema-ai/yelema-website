@@ -63,6 +63,8 @@ export default function ResetPasswordPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...link, password }),
         });
+        // Password saved, the account has a second factor: the sign-in page asks for its code.
+        if (res.status === 403 && (await res.clone().json().catch(() => null))?.error?.code === "mfa_required") return window.location.replace("/login");
         if (!res.ok) {
           if (invite && res.status === 401) {
             setLoading(false);

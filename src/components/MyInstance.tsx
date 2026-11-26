@@ -22,7 +22,7 @@ export function MyInstance({ children }: { children: (agent: MergedAgent) => Rea
   }
   return (
     <p className="max-w-xl text-sm text-ink-2">
-      Votre instance n’est pas encore prête. Vos connecteurs et vos canaux apparaîtront ici dès qu’elle le sera.
+      Vos Experts ne sont pas encore prêts. Vos connecteurs et vos canaux apparaîtront ici dès qu’ils le seront.
     </p>
   );
 }

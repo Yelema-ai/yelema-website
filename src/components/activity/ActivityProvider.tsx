@@ -32,6 +32,7 @@ import {
 } from "@/lib/activity";
 import { cleanReply, isAccountToTopUp } from "@/lib/chat-errors";
 import { driveChanged } from "@/lib/drive-store";
+import { instanceEvents } from "@/lib/instance-events";
 import { agentTabPath } from "@/lib/expert-tabs";
 import { expertDisplayName } from "@/lib/experts";
 import type { ChatSession } from "@/components/chat/types";
@@ -80,6 +81,7 @@ export const useActivityState = () => useContext(StateContext);
 export const useNotifications = () => useContext(NotificationsContext);
 
 const visible = () => typeof document === "undefined" || document.visibilityState === "visible";
+const SAVE_AFTER_MS = 1_000;
 
 function readStorage(agentId: string): string | null {
   try {
@@ -102,15 +104,43 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
   const expertsRef = useRef(experts);
   expertsRef.current = experts;
 
-  const persist = useCallback((s: ActivityState) => {
+  // Written once a burst of changes is over (and when the tab hides), only what changed: not on every
+  // streamed turn's commit.
+  const written = useRef(new Map<string, string>());
+  const pendingSave = useRef<{ timer: number; state: ActivityState } | null>(null);
+  const save = useCallback(() => {
+    const p = pendingSave.current;
+    if (!p) return;
+    window.clearTimeout(p.timer);
+    pendingSave.current = null;
     for (const agentId of loadedRef.current) {
+      const text = JSON.stringify(persistedFor(p.state, routinesRef.current, agentId));
+      if (written.current.get(agentId) === text) continue;
       try {
-        localStorage.setItem(STORAGE_PREFIX + agentId, JSON.stringify(persistedFor(s, routinesRef.current, agentId)));
+        localStorage.setItem(STORAGE_PREFIX + agentId, text);
+        written.current.set(agentId, text);
       } catch {
         // No storage: the badges last as long as the page.
       }
     }
   }, []);
+  const persist = useCallback(
+    (s: ActivityState) => {
+      if (pendingSave.current) window.clearTimeout(pendingSave.current.timer);
+      pendingSave.current = { state: s, timer: window.setTimeout(save, SAVE_AFTER_MS) };
+    },
+    [save]
+  );
+  useEffect(() => {
+    const flush = () => document.visibilityState === "hidden" && save();
+    document.addEventListener("visibilitychange", flush);
+    window.addEventListener("pagehide", save);
+    return () => {
+      save();
+      document.removeEventListener("visibilitychange", flush);
+      window.removeEventListener("pagehide", save);
+    };
+  }, [save]);
 
   const commit = useCallback(
     (next: ActivityState) => {
@@ -201,9 +231,9 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
       },
       bind: (id, sessionId, responseId) => commit(bindTurn(stateRef.current, id, sessionId, responseId)),
       finish: (id, outcome, raw, source = "local") => {
-        // A turn that ended may have written deliverables.
+        // A turn that ended may have written deliverables (unless the stream says so itself).
         const agentId = stateRef.current.turns[id]?.agentId;
-        if (agentId) driveChanged(agentId);
+        if (agentId && !instanceEvents.heard(agentId, "files.changed")) driveChanged(agentId);
         const text = cleanReply(raw);
         const now = Date.now();
         const r = finishTurn(stateRef.current, id, outcome, source, visible(), now);
@@ -228,7 +258,7 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
       routineDone: (key, routine, sessionId, at, loud, silent = false) => {
         const ref = parseConvKey(key);
         // Nothing to report: a line in the bell, no conversation and no pop-up (Leslie, 28/10: « juste une notif »).
-        if (ref && !silent) driveChanged(ref.agentId);
+        if (ref && !silent && !instanceEvents.heard(ref.agentId, "files.changed")) driveChanged(ref.agentId);
         if (ref && !silent) presenceRef.current.get(expertKey(ref.agentId, ref.profile))?.addSession({ session_id: sessionId, title: routine, last_active: at, routine });
         const now = Date.now();
         const r = routineFinished(stateRef.current, key, visible(), now, silent);

@@ -3,6 +3,7 @@
 import { Building2, User } from "lucide-react";
 import type { SettingScope } from "@/lib/llm";
 import { cn } from "@/lib/utils";
+import { Picker } from "@/components/ui/picker";
 
 export interface ScopeMember {
   id: string;
@@ -39,18 +40,14 @@ export function ScopePicker({ members, value, onChange }: { members: ScopeMember
         </button>
       </div>
       {forMember && (
-        <select
-          aria-label="Membre"
+        <Picker
+          label="Membre"
+          placeholder="Choisir un membre"
           value={value.id}
-          onChange={(e) => onChange({ kind: "member", id: e.target.value })}
-          className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 text-sm text-ink focus-visible:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15 sm:max-w-sm"
-        >
-          {members.map((m) => (
-            <option key={m.id} value={m.id}>
-              {memberLabel(m)}
-            </option>
-          ))}
-        </select>
+          onChange={(id) => onChange({ kind: "member", id })}
+          groups={[{ options: members.map((m) => ({ value: m.id, label: memberLabel(m) })) }]}
+          className="h-10 flex-1 sm:h-10 sm:max-w-sm sm:text-sm"
+        />
       )}
     </div>
   );

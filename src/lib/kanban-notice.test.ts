@@ -17,3 +17,10 @@ test("anything else stays the user's message", () => {
   assert.equal(kanbanNotice("Où en est le contrat confié à Ibrahim ?"), null);
   assert.equal(kanbanNotice("[kanban] parle-moi du tableau"), null);
 });
+
+test("the dispatcher's opening turn of a task is recognised, a member's sentence is not", async () => {
+  const { kanbanWork } = await import("./kanban-notice.ts");
+  assert.equal(kanbanWork("work kanban task t_f98bdda9"), "t_f98bdda9");
+  assert.equal(kanbanWork("Work kanban task t_ab12\nTitle: x"), "t_ab12");
+  assert.equal(kanbanWork("peux-tu travailler la tâche kanban ?"), null);
+});

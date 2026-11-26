@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, readApiError } from "@/lib/api";
-import { cached, remember } from "@/lib/client-cache";
+import { addApproval, answerOutcome, autoApproves, expireOpen, isApprovalChoice, parseApproval, settleApproval, type ApprovalChoice, type ApprovalState } from "@/lib/approval";
+import { cached, cachedFetch, forget, remember, whenKept } from "@/lib/client-cache";
 import { finishTiming, keepLast, mark, startTiming, type TurnTiming } from "@/lib/chat-timing";
 import { chatFailureMessage, OFFLINE } from "@/lib/chat-errors";
+import { failureFallback, parseTurnStatus, type TurnStatus } from "@/lib/turn-status";
 import { batchQueued, insertBefore, isSteer, steerText, unreadSteerCount } from "@/lib/chat-queue";
 import { profileQuery } from "@/lib/profile-id";
 import { toolPhrase } from "@/lib/tool-steps";
@@ -13,10 +15,14 @@ import { finalReply } from "@/lib/turn-reply";
 import { visibleHistory } from "@/lib/compaction";
 import { attachedFiles, cleanUserMessage } from "@/lib/chat-errors";
 import { useTurnReporter } from "@/components/activity/hooks";
+import { systemNotify } from "@/components/activity/system-notify";
+import { alertInTab } from "@/components/activity/DeliverableWatcher";
+import { isDialogSend } from "@/lib/send-accounts";
 import { FILES_ONLY_PROMPT, type SessionDetail } from "@/lib/types";
 import { uid, type ChatMessage, type ChatSettings, type MessageAttachment, type ToolEvent, type ToolStatus } from "./types";
 import { toMs } from "@/lib/activity";
 import { frameBatch } from "@/lib/frame-batch";
+import { responsePath, sessionPath } from "@/lib/api-paths";
 
 export interface SendSettings extends Partial<ChatSettings> {
   files?: string[];
@@ -199,12 +205,59 @@ function takeUnread(run: LiveRun, pending: string): Queued[] {
 // One thread's history as last read in this tab. The instance belongs to one member, so its id
 // carries the user.
 const historyKey = (agentId: string, q: string, sessionId: string) => `chat:${agentId}${q}:${sessionId}`;
+// A thread read ahead (a row hovered or shown) serves its opening once, if this recent: one read, not two.
+// A send in the thread since makes that read stale: the key counts the thread's sends.
+const AHEAD_MS = 8_000;
+const REFRESH_HINT_MS = 300;
+const sends = new Map<string, number>();
+const aheadKey = (key: string) => `ahead:${key}:${sends.get(key) ?? 0}`;
+// When each thread's kept copy was read (the read's start): an older read landing late never replaces it.
+const readAt = new Map<string, number>();
+function keepThread(key: string, startedAt: number, history: ChatMessage[]): ChatMessage[] {
+  const kept = cached<ChatMessage[]>(key);
+  if (kept && (readAt.get(key) ?? 0) > startedAt) return kept;
+  readAt.set(key, startedAt);
+  return remember(key, history);
+}
+type Read = SessionDetail & { startedAt: number };
+const fetchThread = (agentId: string, q: string, sessionId: string): Promise<Read> => {
+  const startedAt = Date.now();
+  return apiFetch<SessionDetail>(sessionPath(agentId, sessionId, q)).then((res) => ({ ...res, startedAt }));
+};
+function readThread(agentId: string, q: string, sessionId: string): Promise<Read> {
+  const k = aheadKey(historyKey(agentId, q, sessionId));
+  return cachedFetch(k, () => fetchThread(agentId, q, sessionId), AHEAD_MS).finally(() => forget(k));
+}
+
+/** The thread the page read on the server: the opening joins that reading instead of asking again (null = it asks).
+ *  Promise.resolve: it reaches the browser as React's thenable, whose then() returns nothing (crashed every ?session= load). */
+export function seedThread(agentId: string, profile: string | null, sessionId: string, reading: PromiseLike<SessionDetail | null>): void {
+  const q = profileQuery(profile);
+  const startedAt = Date.now();
+  void cachedFetch(aheadKey(historyKey(agentId, q, sessionId)), () => Promise.resolve(reading).then((res) => (res ? { ...res, startedAt } : fetchThread(agentId, q, sessionId))), AHEAD_MS).catch(() => undefined);
+}
+
+/** Reads a thread ahead of its click: its messages then paint at once, and the opening asks nothing more. */
+export function prefetchThread(agentId: string, profile: string | null, sessionId: string): void {
+  const q = profileQuery(profile);
+  const key = historyKey(agentId, q, sessionId);
+  const k = aheadKey(key);
+  cachedFetch(k, () => fetchThread(agentId, q, sessionId), AHEAD_MS).then((res) => {
+    // A send in the thread since this read started: its copy predates the turn.
+    if (aheadKey(key) === k) keepThread(key, res.startedAt, mapHistory(res.history));
+    // Past AHEAD_MS it serves nothing: the whole thread is not kept in the tab for it.
+    setTimeout(() => cached(k) === res && forget(k), AHEAD_MS);
+  }, () => undefined);
+}
 
 export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessionCreated, onActivity }: UseChatArgs) {
   const q = profileQuery(profile);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(false);
+  // A thread opening is loading until a copy or its read is there (the server's HTML included).
+  const [loadingHistory, setLoadingHistory] = useState(sessionId !== null);
+  // A kept copy of the thread is on screen while its fresh read is out.
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The connection back: the « no Internet » line goes, the member writes again.
   useEffect(() => {
@@ -281,7 +334,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
   // does NOT stop server-side generation (only the cancel endpoint does).
   const cancelUpstream = useCallback(
     (rid: string | null) => {
-      if (rid) apiFetch(`/api/agents/${agentId}/chat/responses/${rid}/cancel`, { method: "POST" }).catch(() => {});
+      if (rid) apiFetch(responsePath(agentId, rid, "cancel"), { method: "POST" }).catch(() => {});
     },
     [agentId]
   );
@@ -291,8 +344,8 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
   const refreshHistory = useCallback(
     async (sid: string) => {
       try {
-        const res = await apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sid}${q}`);
-        const history = remember(historyKey(agentId, q, sid), mapHistory(res.history));
+        const res = await fetchThread(agentId, q, sid);
+        const history = keepThread(historyKey(agentId, q, sid), res.startedAt, mapHistory(res.history));
         if (activeSessionRef.current !== sid || runsRef.current.get(sid)) return;
         setMessages(history);
         setIsStreaming(false);
@@ -316,6 +369,8 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
       let streamError: string | null = null;
       let sawTerminal = false;
       let pendingSteer = "";
+      // The state standing when the turn fails: a spent quota says why, rather than the generic sentence.
+      let lastStatus: TurnStatus | null = null;
       try {
         await readSSE(
           body,
@@ -350,7 +405,10 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
               case "response.output_text.delta": {
                 if (run.timing) mark(run.timing, "first", performance.now());
                 const t = str(data.text);
-                if (t) patchRun(run, (m) => ({ ...m, content: m.content + t }));
+                if (t) {
+                  lastStatus = null;
+                  patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, content: m.content + t }));
+                }
                 break;
               }
               case "response.tool_call.generating":
@@ -364,7 +422,8 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
                 }
                 const said = run.assistant.content.trim();
                 if (said) run.narration.push(said);
-                patchRun(run, (m) => ({ ...m, content: "", tools: openTool(m.tools, { tool, status: "running", phrase: toolPhrase(tool, args), generating }) }));
+                lastStatus = null;
+                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, content: "", said: said ? [...(m.said ?? []), said] : m.said, tools: openTool(m.tools, { tool, status: "running", phrase: toolPhrase(tool, args), generating }) }));
                 break;
               }
               case "response.tool_call.completed":
@@ -376,10 +435,55 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
               case "response.tool_call.failed":
                 patchRun(run, (m) => ({ ...m, tools: closeTool(m.tools, str(data.tool) ?? "tool", "error") }));
                 break;
+              // The conversation grew too long: the runtime summarises its start before answering, which can take a
+              // minute or two. Said while it happens (Leslie, 09/11: « on aurait pu être prévenu »), not afterwards.
+              case "response.compaction.started":
+                patchRun(run, (m) => ({ ...m, compacting: true, status: undefined }));
+                break;
+              case "response.compaction.completed":
+                patchRun(run, (m) => ({ ...m, compacting: false }));
+                break;
+              // The turn waits: quota spent, servers overloaded, or nothing for a minute. The runtime's sentence, as
+              // is, under the bubble; the next state replaces it (contract of 09/11).
+              case "response.status": {
+                const status = parseTurnStatus(data);
+                if (!status) break;
+                lastStatus = status;
+                patchRun(run, (m) => ({ ...m, status }));
+                break;
+              }
+              case "response.approval_requested": {
+                const a = parseApproval(data);
+                if (!a) break;
+                const texts = [run.sent?.content ?? "", ...run.users.map((u) => u.content)];
+                if (run.responseId && autoApproves(texts, a.message, isDialogSend)) {
+                  // Sent from « Envoyer »: that click was the member's yes (Leslie, 17/11). Given at once, said on the card.
+                  patchRun(run, (m) => ({ ...m, approvals: addApproval(m.approvals, { ...a, auto: true, state: "sending", choice: "once" }) }));
+                  const settle = (state: ApprovalState) => patchRun(run, (m) => ({ ...m, approvals: settleApproval(m.approvals, a.requestId, state, "once") }));
+                  void fetch(responsePath(agentId, run.responseId, "approval"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ request_id: a.requestId, choice: "once" }),
+                  }).then((res) => answerOutcome(res.status), () => "error" as const).then((o) => settle(o === "error" ? "pending" : o));
+                  break;
+                }
+                patchRun(run, (m) => ({ ...m, approvals: addApproval(m.approvals, a) }));
+                // The expert waits a few minutes only: said outside the page too (Leslie, 17/11: the e-mail never left).
+                if (document.visibilityState === "hidden") {
+                  alertInTab(1);
+                  systemNotify("Votre accord est attendu", a.message.slice(0, 180), `accord-${a.requestId}`, () => {});
+                }
+                break;
+              }
+              case "response.approval_resolved": {
+                const rid = str(data.request_id);
+                if (rid) patchRun(run, (m) => ({ ...m, approvals: settleApproval(m.approvals, rid, "answered", isApprovalChoice(data.choice) ? data.choice : undefined) }));
+                break;
+              }
               case "response.completed": {
                 sawTerminal = true;
                 const final = str(data.output_text);
-                if (final) patchRun(run, (m) => ({ ...m, content: finalReply(final, run.narration) }));
+                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined, said: undefined, ...(final ? { content: finalReply(final, run.narration) } : {}) }));
                 pendingSteer = str(data.pending_steer) ?? "";
                 break;
               }
@@ -388,7 +492,8 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
                 const err = data.error as { message?: string } | undefined;
                 // The instance's own reason is technical and in English: it stays in the browser console.
                 if (err?.message) console.error("[chat] response.failed:", err.message);
-                streamError = chatFailureMessage(err?.message, "Votre expert n’a pas pu répondre. Réessayez dans un instant.", isOnline());
+                patchRun(run, (m) => ({ ...m, compacting: false, status: undefined }));
+                streamError = chatFailureMessage(err?.message, failureFallback(lastStatus, "Votre expert n’a pas pu répondre. Réessayez dans un instant."), isOnline());
                 break;
               }
             }
@@ -410,7 +515,10 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
         patchRun(run, (m) => ({
           ...m,
           content: m.content || (streamError ? `_${streamError}_` : ""),
+          compacting: false,
+          status: undefined,
           tools: (m.tools ?? []).map((t) => (t.status === "running" ? { ...t, status: "completed" as const } : t)),
+          approvals: expireOpen(m.approvals),
         }));
         // The end shows at once, before the streaming flag drops.
         frames.flush();
@@ -439,7 +547,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
         if (next.length) startTurnRef.current(run.sessionId, next);
       }
     },
-    [patchRun, isViewed, forgetRun, refreshHistory, turns, profile, frames]
+    [patchRun, isViewed, forgetRun, refreshHistory, turns, profile, frames, agentId]
   );
 
   // Reattach to a turn that outlived this component (page reload / workspace re-entry): register
@@ -464,7 +572,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
       void (async () => {
         let attached = false;
         try {
-          const res = await fetch(`/api/agents/${agentId}/chat/responses/${encodeURIComponent(responseId)}/stream`, {
+          const res = await fetch(responsePath(agentId, responseId, "stream"), {
             signal: run.abort.signal,
           });
           if (!res.ok || !res.body) {
@@ -507,7 +615,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
         runsRef.current.delete(sid);
         turns.cancel(run);
       } else if (!run) {
-        apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sid}${q}`)
+        apiFetch<SessionDetail>(sessionPath(agentId, sid, q))
           .then((res) => cancelUpstream(res.active_response_id ?? null))
           .catch(() => {});
       }
@@ -533,6 +641,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
     // will file it under its minted session without promoting it).
     newChatRunRef.current = null;
     setError(null);
+    setRefreshing(false);
 
     if (!sessionId) {
       setMessages([]);
@@ -548,10 +657,26 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
     const kept = liveNow ? undefined : cached<ChatMessage[]>(historyKey(agentId, q, sessionId));
     if (kept) setMessages(kept);
     setLoadingHistory(!kept);
-    apiFetch<SessionDetail>(`/api/agents/${agentId}/chat/sessions/${sessionId}${q}`)
+    // « Mise à jour… » only for a read that does not answer at once (one read ahead just now does).
+    let answered = false;
+    let over = false;
+    let hint: ReturnType<typeof setTimeout> | undefined;
+    const showRefresh = () => {
+      if (!over) hint ??= setTimeout(() => !cancelled && !over && setRefreshing(true), REFRESH_HINT_MS);
+    };
+    if (kept) showRefresh();
+    // The device's copy of the thread (a reload) may land a moment later: it paints until the read answers.
+    const offKept = kept || liveNow ? () => undefined : whenKept<ChatMessage[]>(historyKey(agentId, q, sessionId), (h) => {
+      if (cancelled || answered) return;
+      setMessages(h);
+      setLoadingHistory(false);
+      showRefresh();
+    });
+    readThread(agentId, q, sessionId)
       .then((res) => {
+        answered = true;
         if (cancelled) return;
-        const history = remember(historyKey(agentId, q, sessionId), mapHistory(res.history));
+        const history = keepThread(historyKey(agentId, q, sessionId), res.startedAt, mapHistory(res.history));
 
         let run = runsRef.current.get(sessionId) ?? null;
         if (!run && res.active_response_id) {
@@ -588,11 +713,18 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
         if (!cancelled) setError(chatFailureMessage((e as Error).message, (e as Error).message, isOnline()));
       })
       .finally(() => {
-        if (!cancelled) setLoadingHistory(false);
+        // After a failure the device's copy may still land and paint, without the hint.
+        over = true;
+        clearTimeout(hint);
+        if (cancelled) return;
+        setLoadingHistory(false);
+        setRefreshing(false);
       });
 
     return () => {
       cancelled = true;
+      clearTimeout(hint);
+      offKept();
     };
   }, [agentId, q, sessionId, startReattach, forgetRun, refreshHistory]);
 
@@ -609,6 +741,8 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
       turns.start(run);
       if (sessionId) {
         runsRef.current.set(sessionId, run);
+        const key = historyKey(agentId, q, sessionId);
+        sends.set(key, (sends.get(key) ?? 0) + 1);
         // Bubble an existing thread to the top of the rail as soon as it gets a new turn.
         onActivityRef.current?.(sessionId);
       } else {
@@ -693,7 +827,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
         if (isViewed(run)) setMessages((prev) => [...prev.filter((m) => m.id !== queued.id), queued]);
       };
       const body = JSON.stringify({ text: item.user.content, client_message_id: newMessageKey() });
-      const post = () => apiFetch<{ accepted?: boolean }>(`/api/agents/${agentId}/chat/responses/${run.responseId}/steer`, { method: "POST", body });
+      const post = () => apiFetch<{ accepted?: boolean }>(responsePath(agentId, run.responseId ?? "", "steer"), { method: "POST", body });
       // Sent again once if the answer was lost: the gateway answers a resent steer without adding it twice.
       const p = post()
         .catch((e: unknown) => (isNetworkError(e) ? new Promise((r) => setTimeout(r, RESEND_WAITS_MS[0])).then(post) : Promise.reject(e)))
@@ -734,6 +868,28 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
       void startTurn(activeSessionRef.current, [{ user, settings }]);
     },
     [startTurn, steer]
+  );
+
+  // The member's answer to an approval card. 409: it no longer waits (past its deadline, or answered elsewhere).
+  const answerApproval = useCallback(
+    async (messageId: string, requestId: string, choice: ApprovalChoice): Promise<void> => {
+      const run = [newChatRunRef.current, ...runsRef.current.values()].find((r) => r && !r.done && r.assistant.id === messageId);
+      const settle = (state: ApprovalState, c?: ApprovalChoice) => {
+        if (run) return patchRun(run, (m) => ({ ...m, approvals: settleApproval(m.approvals, requestId, state, c) }));
+        setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, approvals: settleApproval(m.approvals, requestId, state, c) } : m)));
+      };
+      if (!run?.responseId) return settle("expired");
+      settle("sending", choice);
+      const outcome = await fetch(responsePath(agentId, run.responseId, "approval"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: requestId, choice }),
+      }).then((res) => answerOutcome(res.status), () => "error" as const);
+      if (outcome !== "error") return settle(outcome, choice);
+      settle("pending");
+      setError("Votre réponse n’a pas pu être transmise. Réessayez.");
+    },
+    [agentId, patchRun]
   );
 
   // Stop the current turn: abort the local stream and cancel it upstream so the agent stops work.
@@ -779,7 +935,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
     };
   }, []);
 
-  return { messages, isStreaming, loadingHistory, error, send, stop, killRun, unqueue };
+  return { messages, isStreaming, loadingHistory, refreshing, error, send, stop, killRun, unqueue, answerApproval };
 }
 
 // The turn's times go to the host's logs (one line, see /api/metrics/chat) and stay in this

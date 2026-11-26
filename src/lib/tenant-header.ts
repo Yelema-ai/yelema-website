@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, hkdfSync, timingSafeEqual } from "node:crypto";
 
 // The client the proxy resolved, handed to the route in a request header. The proxy deletes any
 // value the browser sent and writes its own; routes outside the proxy (instance traffic) could
@@ -14,7 +14,13 @@ export interface ResolvedTenant {
   status: "active" | "suspended";
 }
 
-const sign = (body: string, secret: string) => createHmac("sha256", `tenant-header:${secret}`).update(body).digest("base64url");
+// Its own key, derived from the resolver's token: that token is never itself a signing key.
+let derived: { secret: string; key: Buffer } | null = null;
+function keyOf(secret: string): Buffer {
+  if (derived?.secret !== secret) derived = { secret, key: Buffer.from(hkdfSync("sha256", secret, "yelema", "tenant-header-v2", 32)) };
+  return derived.key;
+}
+const sign = (body: string, secret: string) => createHmac("sha256", keyOf(secret)).update(body).digest("base64url");
 
 /** What the proxy does to every request: drops the header whatever it came with, then writes its own (or none). */
 export function writeTenantHeader(headers: Headers, sealed: string | null): void {

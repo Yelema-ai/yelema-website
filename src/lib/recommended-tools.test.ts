@@ -25,8 +25,8 @@ test("conseillés : six au plus, ni MCP ni socle", () => {
 });
 
 test("pour qui", () => {
-  assert.equal(forWhom(["Djénéba"]), "Pour Djénéba");
-  assert.equal(forWhom(["Djénéba", "Kouassi"]), "Pour Djénéba et Kouassi");
+  assert.equal(forWhom(["Marketing"]), "Pour le marketing");
+  assert.equal(forWhom(["Direction", "Finance"]), "Pour la direction et la finance");
   assert.equal(forWhom(["A", "B", "C"]), "Pour A, B et C");
   assert.equal(forWhom(["A", "B", "C", "D"]), "Pour A, B et 2 autres");
 });

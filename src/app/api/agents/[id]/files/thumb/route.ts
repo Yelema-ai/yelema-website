@@ -3,7 +3,7 @@ import { instanceFetch } from "@/lib/agent37";
 import { requireAgentAccess } from "@/lib/auth";
 import { assertInDrive } from "@/lib/drive";
 import { ApiError, handleError } from "@/lib/http";
-import { boundedCache, isThumbable, thumbWidth } from "@/lib/thumbs";
+import { atMost, boundedCache, isThumbable, looksLikeImage, thumbWidth } from "@/lib/thumbs";
 import { assertUpstreamOk, requireTrimmed } from "../../_helpers";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -12,6 +12,8 @@ const MAX_SOURCE = 40 * 1024 * 1024;
 const FAILED = "L’aperçu n’a pas pu être préparé.";
 // Per server instance: a few hundred previews, an hour at most.
 const cache = boundedCache<Buffer>(48 * 1024 * 1024, 60 * 60_000);
+// A decoded picture holds its pixels in memory: three at a time per server instance.
+const decoding = atMost(3);
 
 async function readCapped(res: Response): Promise<Buffer> {
   if (Number(res.headers.get("content-length") ?? 0) > MAX_SOURCE) throw new ApiError(413, "too_large", FAILED);
@@ -46,11 +48,15 @@ export async function GET(request: Request, { params }: Ctx) {
     const make = async () => {
       const upstream = await instanceFetch(id, `/v1/files/content?path=${encodeURIComponent(path)}`);
       await assertUpstreamOk(upstream, "files/thumb", FAILED, "thumb_error");
-      return sharp(await readCapped(upstream), { limitInputPixels: 120_000_000, failOn: "none" })
-        .rotate()
-        .resize({ width, height: width, fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 78 })
-        .toBuffer();
+      const source = await readCapped(upstream);
+      if (!looksLikeImage(source)) throw new ApiError(415, "not_an_image", "Pas d’aperçu pour ce type de fichier.");
+      return decoding(() =>
+        sharp(source, { limitInputPixels: 120_000_000, failOn: "none" })
+          .rotate()
+          .resize({ width, height: width, fit: "inside", withoutEnlargement: true })
+          .webp({ quality: 78 })
+          .toBuffer()
+      );
     };
     // Unversioned: rebuilt each time, the file may have changed under the same name.
     const body = version ? await cache.get(`${id}\n${path}\n${version}\n${width}`, make) : await make();

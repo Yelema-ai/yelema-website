@@ -33,8 +33,15 @@ function isLocalOrigin(origin: string): boolean {
 // Open-redirect guard for `?next=` params: only internal absolute paths (`/foo`) are
 // allowed — never protocol-relative (`//evil.com`) or absolute URLs. Falls back to
 // /dashboard. Shared by the login page and the /auth/callback route so the two can't drift.
+// A browser reads `/\x` and `/<tab>/x` as `//x` (another site), and a later decoding turns `/%2Fx` into it.
+const NEXT_BASE = "https://next.invalid";
 export function safeNextPath(raw?: string | null): string {
-  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/";
+  if (!raw || !raw.startsWith("/") || /[\\\u0000-\u001f\u007f]/.test(raw) || /^\/(?:\/|%2f|%5c)/i.test(raw)) return "/";
+  try {
+    return new URL(raw, NEXT_BASE).origin === NEXT_BASE ? raw : "/";
+  } catch {
+    return "/";
+  }
 }
 
 // `siteUrl` is the deployment's SITE_URL (runtime config): server code passes `siteUrl()` from
@@ -53,6 +60,13 @@ export function publicSiteOrigin(siteUrl: string | null | undefined, fallbackOri
   }
 
   return fallback || configured || "http://localhost:3000";
+}
+
+// The origin of links this request hands out. One deployment for every client: the request's own host,
+// since the client (and what a signed link is bound to) is read from it; SITE_URL would point elsewhere.
+export function requestSiteOrigin(multiTenant: boolean, siteUrl: string | null | undefined, host: string | null, requestOrigin: string): string {
+  if (multiTenant) return host ? `https://${host}` : requestOrigin;
+  return publicSiteOrigin(siteUrl, host ?? requestOrigin);
 }
 
 // An address typed as https://user:pw@host makes Firefox refuse every relative fetch ("url with

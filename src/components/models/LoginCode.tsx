@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { usePoll, WAIT_POLL_MS } from "@/components/usePoll";
+import { useState } from "react";
 import { Check, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { safeVerificationUrl } from "@/lib/llm";
 import type { LlmAccount } from "@/lib/llm-accounts";
-
-const POLL_MS = 5_000;
 
 // Une connexion en attente : l'adresse à ouvrir et le code à y saisir, avec le compte à ajouter. Le
 // back-office est relu jusqu'à l'approbation ; `onDone` est appelé quand elle aboutit ou échoue.
@@ -15,28 +14,19 @@ export function LoginCode({ account, onDone, compact }: { account: LlmAccount; o
   const [copied, setCopied] = useState(false);
   const url = safeVerificationUrl(account.login?.verificationUrl);
 
-  useEffect(() => {
-    let stopped = false;
-    const tick = async () => {
-      if (stopped) return;
-      // Hidden: nothing is asked until the tab shows again.
-      if (document.hidden) return void (timer = setTimeout(tick, POLL_MS));
-      try {
-        const next = await apiFetch<LlmAccount>(`/api/llm/accounts/${account.id}`);
-        if (next.state === "active") toast.success("Compte connecté", { description: "L’installation sur l’instance est en cours." });
-        if (next.state === "failed") toast.error("La connexion n’a pas abouti (refusée ou code expiré). Relancez-la.");
-        if (next.state !== "pending") return void (await onDone());
-      } catch {
-        // Un échec de lecture ne fait pas perdre la connexion : on relit au tour suivant.
-      }
-      if (!stopped) timer = setTimeout(tick, POLL_MS);
-    };
-    let timer = setTimeout(tick, POLL_MS);
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-    };
-  }, [account.id, onDone]);
+  // Hidden: nothing is asked until the tab shows again (back from the sign-in tab: at once). A failed
+  // read keeps the wait: the next turn reads again.
+  const poller = usePoll(
+    async () => {
+      const next = await apiFetch<LlmAccount>(`/api/llm/accounts/${account.id}`);
+      if (next.state === "active") toast.success("Compte connecté", { description: "Mise en place en cours, quelques instants." });
+      if (next.state === "failed") toast.error("La connexion n’a pas abouti (refusée ou code expiré). Relancez-la.");
+      if (next.state === "pending") return;
+      poller.current?.stop();
+      await onDone();
+    },
+    { everyMs: WAIT_POLL_MS, immediate: false, runOnShow: true, wake: { types: ["job.done"], kind: "llm" } }
+  );
 
   if (!account.login || !url) return null;
   const copy = async () => {

@@ -1,11 +1,13 @@
 "use client";
 
+import { forTheMember } from "@/lib/narration";
 import { useSafeDashboard } from "@/components/experts/DashboardProvider";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronRight, ClipboardCheck, Copy, CornerDownLeft, FileText, Image as ImageIcon, Loader2, PhoneCall, Repeat } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ClipboardCheck, Clock, Copy, CornerDownLeft, FileText, Image as ImageIcon, Loader2, PhoneCall, Repeat } from "lucide-react";
 import { turnDocs, type DriveFile, type TurnDoc } from "@/lib/drive-links";
-import { kanbanNotice } from "@/lib/kanban-notice";
+import { kanbanNotice, kanbanWork } from "@/lib/kanban-notice";
+import { autoRequest } from "@/lib/auto-request";
 import { isRoutineRun, isSilentRun, routinePlainText, SILENT_RUN_LABEL } from "@/lib/routines";
 import { isCallTranscript } from "@/lib/voice";
 import { isResumeSeed } from "@/lib/conversation-resume";
@@ -17,6 +19,7 @@ import { UpdateSpinner, useDeployPhase } from "@/components/app/DeployStatus";
 import type { Expert } from "@/lib/types";
 import { useChatContext } from "./ChatProvider";
 import { DocumentCards, useDriveListing } from "./DocumentCards";
+import { CallCard } from "./CallCard";
 import { GoogleDocCards } from "./GoogleDocs";
 import { googleDocs, usedGoogleDocs, withoutGoogleActions, type GoogleDoc } from "@/lib/google-docs";
 import { Markdown } from "./Markdown";
@@ -24,11 +27,16 @@ import { FilePreview, ReducedImage } from "@/components/files/FilePreview";
 import { contentUrl, thumbUrl, type FileEntry } from "@/components/files/types";
 import { cleanReply } from "@/lib/chat-errors";
 import { mediaTags } from "@/lib/media-tags";
-import { LiveWait, StepsList } from "./ChatSteps";
+import { LiveWait, StepsList, TurnStatusLine } from "./ChatSteps";
 import { ReplyChoices } from "./ReplyActions";
+import { NextAction } from "./NextAction";
+import { citedPerson, isSendRequest } from "@/lib/next-action";
+import { ApprovalCard } from "./ApprovalCard";
+import type { ApprovalChoice } from "@/lib/approval";
 import { replyParts } from "@/lib/reply-parts";
 import type { ChatMessage, MessageAttachment } from "./types";
 import { commandText } from "@/lib/session-title";
+import { isDialogSend, sentFileLine } from "@/lib/send-accounts";
 
 const PAGE = 80;
 
@@ -150,6 +158,8 @@ export function ChatMessages({
   routine = null,
   pronoun = null,
   onReply,
+  onApproval,
+  onModifyApproval,
 }: {
   messages: ChatMessage[];
   isStreaming: boolean;
@@ -170,6 +180,10 @@ export function ChatMessages({
   pronoun?: "elle" | "il" | null;
   /** Sends a message for the member: a choice clicked. */
   onReply?: (text: string) => void;
+  /** Answers an approval card of a live reply. */
+  onApproval?: (messageId: string, requestId: string, choice: ApprovalChoice) => void;
+  /** « Modifier » on an approval card: refused, and the composer opened to say what to change. */
+  onModifyApproval?: (messageId: string, requestId: string) => void;
 }) {
   // The instance whose drive the paths in a reply point into (they become download links).
   const { agentId, profile } = useChatContext();
@@ -206,8 +220,10 @@ export function ChatMessages({
   useEffect(() => onGoogle?.(allGoogle), [allGoogle, onGoogle]);
   // Stable across the parent's renders, so the memoized rows stay put while a reply streams.
   const stableFace = useMemo(() => face, [face?.displayName, face?.photoUrl, face?.gateway]); // eslint-disable-line react-hooks/exhaustive-deps
-  const handlers = useRef({ onReply, onUnqueue });
-  handlers.current = { onReply, onUnqueue };
+  const handlers = useRef({ onReply, onUnqueue, onApproval, onModifyApproval });
+  handlers.current = { onReply, onUnqueue, onApproval, onModifyApproval };
+  const approve = useCallback((id: string, rid: string, c: ApprovalChoice) => handlers.current.onApproval?.(id, rid, c), []);
+  const modify = useCallback((id: string, rid: string) => handlers.current.onModifyApproval?.(id, rid), []);
   const reply = useCallback((text: string) => handlers.current.onReply?.(text), []);
   const unqueue = useCallback((id: string) => handlers.current.onUnqueue?.(id), []);
       const dashboard = useSafeDashboard();
@@ -257,6 +273,8 @@ export function ChatMessages({
             last={i === messages.length - 1}
             // When the member asked: read for the live reply only (its wait line).
             since={live ? messages.slice(0, i).findLast((x) => x.role === "user")?.at : undefined}
+            // The member's request this reply answers: the last reply's offer to send reads it.
+            request={i === messages.length - 1 ? messages.slice(0, i).findLast((x) => x.role === "user")?.content ?? null : null}
             isStreaming={isStreaming}
             routineThread={routineThread}
             updating={updating}
@@ -264,10 +282,15 @@ export function ChatMessages({
             agentId={agentId}
             profile={profile}
             listing={listing}
+            // The first transcript of a call opens its conversation as the call's card.
+            first={isCallTranscript(m.content) && !messages.slice(0, i).some((x) => x.role === "user" && isCallTranscript(x.content))}
+            driveFolder={driveFolder}
             routine={routine}
             pronoun={pronoun}
             onReply={onReply ? reply : undefined}
             onUnqueue={onUnqueue ? unqueue : undefined}
+            onApproval={onApproval ? approve : undefined}
+            onModifyApproval={onModifyApproval ? modify : undefined}
           />
         );
       })}
@@ -281,6 +304,7 @@ const MessageRow = memo(function MessageRow({
   live,
   last,
   since,
+  request = null,
   isStreaming,
   routineThread,
   updating,
@@ -288,15 +312,20 @@ const MessageRow = memo(function MessageRow({
   agentId,
   profile,
   listing,
+  first = false,
+  driveFolder = null,
   routine,
   pronoun,
   onReply,
   onUnqueue,
+  onApproval,
+  onModifyApproval,
 }: {
   m: ChatMessage;
   live: boolean;
   last: boolean;
   since: number | undefined;
+  request?: string | null;
   isStreaming: boolean;
   routineThread: boolean;
   updating: boolean;
@@ -304,15 +333,38 @@ const MessageRow = memo(function MessageRow({
   agentId: string;
   profile: string | null;
   listing: DriveFile[];
+  first?: boolean;
+  driveFolder?: string | null;
   routine: string | null;
   pronoun: "elle" | "il" | null;
   onReply?: (text: string) => void;
   onUnqueue?: (id: string) => void;
+  onApproval?: (messageId: string, requestId: string, choice: ApprovalChoice) => void;
+  onModifyApproval?: (messageId: string, requestId: string) => void;
 }) {
+    // The call's conversation opens on its transcript: the call, its summary and its files instead
+    // (Leslie, 20/11). A later part of the same transcript stays one quiet line.
     if (m.role === "user" && isCallTranscript(m.content)) {
-      return (
+      return first ? (
+        <CallCard content={m.content} at={m.at ?? null} driveFolder={driveFolder} />
+      ) : (
         <p className="flex items-center justify-center gap-2 text-xs text-ink-3">
-          <PhoneCall className="h-3.5 w-3.5" /> Transcription de l’appel transmise à l’Expert
+          <PhoneCall className="h-3.5 w-3.5" /> Suite de la transcription de l’appel transmise à l’Expert
+        </p>
+      );
+    }
+    const auto = m.role === "user" ? autoRequest(m.content) : null;
+    if (auto) {
+      return (
+        <p className="flex items-center justify-center gap-2 text-center text-xs text-ink-3">
+          <FileText className="h-3.5 w-3.5 shrink-0" /> {auto.label}
+        </p>
+      );
+    }
+    if (m.role === "user" && kanbanWork(m.content)) {
+      return (
+        <p className="flex items-center justify-center gap-2 text-center text-xs text-ink-3">
+          <ClipboardCheck className="h-3.5 w-3.5 shrink-0" /> Tâche de fond confiée : l’Expert y travaille seul
         </p>
       );
     }
@@ -345,19 +397,22 @@ const MessageRow = memo(function MessageRow({
       const attachments = m.attachments ?? [];
       return (
         <div className="flex justify-end">
-          <div className="flex min-w-0 max-w-[85%] flex-col items-end gap-1.5">
+          <div className="flex min-w-0 max-w-[min(85%,70ch)] flex-col items-end gap-1.5">
             {attachments.length > 0 && <MessageAttachments attachments={attachments} agentId={agentId} />}
             {m.content && (
               <div className={cn("max-w-full whitespace-pre-wrap rounded-[18px] rounded-br-md bg-brand [overflow-wrap:anywhere] px-4 py-2.5 text-[15px] text-on-brand", m.queued && "opacity-60", m.steered && !m.queued && "bg-brand/80")}>
-                {commandText(m.content, pronoun)}
+                {isDialogSend(m.content) ? <SentFiles text={m.content} agentId={agentId} /> : commandText(m.content, pronoun)}
               </div>
             )}
             {m.queued && (
+              // « En attente » alone read like a stuck message (Leslie, 16/11: « je comprends pas cette queue »):
+              // it says when it will be read, and the button says it cancels it.
               <span className="flex items-center gap-2 text-xs text-ink-3">
-                En attente
+                <Clock className="h-3 w-3" />
+                {pronoun === "elle" ? "Elle le lira" : pronoun === "il" ? "Il le lira" : "Lu"} après sa réponse en cours
                 {onUnqueue && (
                   <button type="button" onClick={() => onUnqueue(m.id)} className="-my-2 inline-flex min-h-8 items-center rounded-lg px-1.5 font-semibold text-ink-2 hover:bg-soft hover:text-ink">
-                    Retirer
+                    Annuler
                   </button>
                 )}
               </span>
@@ -373,19 +428,36 @@ const MessageRow = memo(function MessageRow({
     }
 
     const tools = m.tools ?? [];
-    // Once the expert works with tools, the turn shows one live step line; its reply appears when the turn ends.
-    const working = live && tools.length > 0;
+    // While a tool runs, one live step line; what the expert has written so far stays above it, and the reply
+    // it writes once its tools are done shows as it comes (Leslie, 23/11: the reply seemed to vanish mid-turn).
+    const toolRunning = tools.some((t) => t.status === "running");
+    const working = live && tools.length > 0 && (toolRunning || !m.content);
+    const said = live ? forTheMember(m.said ?? []) : [];
     const showDots = live && !working && !m.content && !m.thinking;
+    const waitShown = working || (showDots && !updating);
     // Only the conversation's last reply can still be answered in a click; an older question reads as written.
     const finished = !live && m.content ? replyParts(withoutGoogleActions(cleanReply(m.content))) : null;
     const answerable = finished && onReply && !isStreaming && !routineThread && last && finished.choices.length > 0;
+    const docs = !live && m.content ? turnDocs(cleanReply(m.content), listing, [...(m.files ?? []), ...mediaTags(m.content).paths]) : [];
+    // The last reply that delivered a document, not already ending on a question, nor answering a sending.
+    const offerSend = !!onReply && last && !isStreaming && !routineThread && !answerable && docs.length > 0 && !isSendRequest(request ?? "");
 
     return (
       <div className="flex items-start gap-3">
         {face && <ExpertAvatar expert={face} size="xs" className="mt-0.5" />}
         <div className="min-w-0 max-w-full flex-1 text-[15px] text-ink">
           {m.thinking && <ThinkingBlock content={m.thinking} live={live && !m.content} />}
-          {(working || (showDots && !updating)) && <LiveWait tools={tools} name={face?.displayName ?? null} since={since} />}
+          {said.length > 0 && <Markdown content={cleanReply(said.join("\n\n"))} agentId={agentId} profileId={profile} />}
+          {waitShown && <LiveWait tools={tools} name={face?.displayName ?? null} since={since} compacting={m.compacting} status={m.status?.message} />}
+          {onApproval && onModifyApproval && m.approvals?.map((a) => (
+            <ApprovalCard
+              key={a.requestId}
+              approval={a}
+              onAnswer={(c) => onApproval(m.id, a.requestId, c)}
+              onModify={() => onModifyApproval(m.id, a.requestId)}
+              onRetry={request && onReply ? () => onReply(request) : undefined}
+            />
+          ))}
           {!live && tools.length > 0 && <StepsList tools={tools} />}
           {routineThread && !live && isSilentRun(m.content) ? (
             <p className="text-sm italic text-ink-3">{SILENT_RUN_LABEL}</p>
@@ -398,9 +470,23 @@ const MessageRow = memo(function MessageRow({
               {face ? `${face.displayName} reprend` : "Votre Expert reprend"} dans un instant, votre message est bien reçu.
             </p>
           ) : null}
+          {/* A state that comes once the reply has begun (a thought, a sentence): under it, not above. */}
+          {live && !waitShown && m.status && <TurnStatusLine text={m.status.message} />}
           {answerable && <ReplyChoices choices={finished.choices} note={finished.choicesNote} onSend={onReply} />}
           {!live && m.content && <GoogleDocCards docs={googleDocs(cleanReply(m.content))} />}
-          {!live && m.content && <DocumentCards agentId={agentId} docs={turnDocs(cleanReply(m.content), listing, [...(m.files ?? []), ...mediaTags(m.content).paths])} />}
+          {docs.length > 0 && <DocumentCards agentId={agentId} docs={docs} />}
+          {!!onReply && !live && !routineThread && docs.length > 0 && (
+            <NextAction
+              offer={offerSend}
+              id={m.id}
+              agentId={agentId}
+              profile={profile}
+              docs={docs}
+              expertName={face?.displayName ?? null}
+              person={citedPerson(request ?? "", face?.displayName)}
+              onSend={onReply!}
+            />
+          )}
           {!live && m.content && !(routineThread && isSilentRun(m.content)) && <CopyReply text={cleanReply(m.content)} />}
         </div>
       </div>
@@ -429,5 +515,31 @@ function CopyReply({ text }: { text: string }) {
     >
       {done ? <Check className="h-4 w-4 text-ok" /> : <Copy className="h-4 w-4" />}
     </button>
+  );
+}
+
+// The « Envoyer » instruction as the member reads it (Leslie, 20/11): each file by its name, opening the
+// document, never the drive's path. The expert still receives the path.
+function SentFiles({ text, agentId }: { text: string; agentId: string }) {
+  return (
+    <>
+      {text.split("\n").map((line, i) => {
+        const f = sentFileLine(line);
+        return (
+          <span key={i} className="block min-h-[1lh]">
+            {f ? (
+              <>
+                {"• "}
+                <a href={contentUrl(agentId, f.path, "inline")} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2 hover:opacity-80" title={f.name}>
+                  {f.name}
+                </a>
+              </>
+            ) : (
+              line
+            )}
+          </span>
+        );
+      })}
+    </>
   );
 }

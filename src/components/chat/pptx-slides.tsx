@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { inflatedBytes, openZip } from "@/lib/zip-sizes";
+import { argbHex } from "@/lib/xlsx-format";
 
 // A PowerPoint slide drawn as it looks (Leslie, 27/10: « on doit voir la main slide »): its background,
 // its pictures and its text boxes at their place and size, in an SVG whose units are the slide's points.
@@ -10,6 +12,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 const EMU_PER_PT = 12700;
 // Pictures inlined in one preview, past which the rest are skipped: a deck of photos stays light.
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+const MAX_PART_BYTES = 20 * 1024 * 1024;
 const MAX_SLIDES = 60;
 
 type Zip = import("jszip");
@@ -65,7 +68,10 @@ function resolve(base: string, target: string) {
 }
 
 async function xmlOf(zip: Zip, path: string): Promise<Document | null> {
-  const text = await zip.file(path)?.async("string");
+  const part = zip.file(path);
+  // A theme, a layout or a relations part too large to parse is read as absent.
+  if (!part || inflatedBytes(zip, path) > MAX_PART_BYTES) return null;
+  const text = await part.async("string");
   return text ? new DOMParser().parseFromString(text, "application/xml") : null;
 }
 
@@ -90,7 +96,8 @@ class Images {
     const mime = MIME[path.split(".").pop()?.toLowerCase() ?? ""];
     const file = this.zip.file(path);
     let src: string | null = null;
-    if (mime && file) {
+    // Refused on its declared size, before it is inflated.
+    if (mime && file && this.used + inflatedBytes(this.zip, path) <= MAX_IMAGE_BYTES) {
       const b64 = await file.async("base64");
       const bytes = (b64.length * 3) / 4;
       if (this.used + bytes <= MAX_IMAGE_BYTES) {
@@ -110,7 +117,9 @@ async function themeColors(zip: Zip): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   for (const c of scheme ? [...scheme.children] : []) {
     const v = kid(c, "srgbClr")?.getAttribute("val") ?? kid(c, "sysClr")?.getAttribute("lastClr");
-    if (v) out[c.localName] = `#${v}`;
+    // Six hex digits only: the value lands in CSS, where « fff url(…) » would load a remote picture.
+    const hex = argbHex(v);
+    if (hex) out[c.localName] = hex;
   }
   out.tx1 = out.dk1 ?? "#000000";
   out.bg1 = out.lt1 ?? "#FFFFFF";
@@ -122,7 +131,7 @@ async function themeColors(zip: Zip): Promise<Record<string, string>> {
 function colorOf(fill: Element | undefined, theme: Record<string, string>): string | undefined {
   if (!fill) return undefined;
   const srgb = kid(fill, "srgbClr")?.getAttribute("val");
-  if (srgb) return `#${srgb}`;
+  if (srgb) return argbHex(srgb) ?? undefined;
   const scheme = kid(fill, "schemeClr")?.getAttribute("val");
   return scheme ? theme[scheme] : undefined;
 }
@@ -256,7 +265,7 @@ async function backgroundOf(zip: Zip, path: string, images: Images, theme: Recor
 
 export async function readSlides(data: ArrayBuffer, maxXmlBytes: number, only?: number): Promise<SlideView[]> {
   const JSZip = (await import("jszip")).default;
-  const zip = await JSZip.loadAsync(data);
+  const zip = await openZip((d) => JSZip.loadAsync(d), data);
   const pres = await xmlOf(zip, "ppt/presentation.xml");
   const size = pres?.getElementsByTagName("p:sldSz")[0];
   const w = num(size?.getAttribute("cx")) / EMU_PER_PT || 960;
@@ -270,7 +279,7 @@ export async function readSlides(data: ArrayBuffer, maxXmlBytes: number, only?: 
   const slides: SlideView[] = [];
   for (const [i, p] of parts.entries()) {
     const part = zip.file(p);
-    if (((part as unknown as { _data?: { uncompressedSize?: number } } | null)?._data?.uncompressedSize ?? 0) > maxXmlBytes) continue;
+    if (inflatedBytes(zip, p) > maxXmlBytes) continue;
     const xml = new DOMParser().parseFromString((await part?.async("string")) ?? "", "application/xml");
     const lines = [...xml.getElementsByTagNameNS(NS_A, "p")]
       .map((para) => [...para.getElementsByTagNameNS(NS_A, "t")].map((t) => t.textContent ?? "").join("").trim())
@@ -326,7 +335,7 @@ export function SlideDrawing({ slide, n, of, badge = true }: { slide: SlideView;
         )}
       </svg>
       {badge && (
-        <span className="absolute bottom-1.5 right-2.5 rounded bg-white/80 px-1 text-[11px] font-semibold text-[#8a8a98]">
+        <span data-page-count className="absolute bottom-1.5 right-2.5 rounded bg-white/80 px-1 text-[11px] font-semibold text-[#8a8a98]">
           {n}/{of}
         </span>
       )}

@@ -1,4 +1,5 @@
 import "server-only";
+import { asMember } from "@/lib/agent37";
 import { gatewayFetch, runtimeGateway } from "@/lib/runtime-gateway";
 import { ApiError } from "@/lib/http";
 import type { RoutineFields } from "@/lib/hermes-cron";
@@ -13,7 +14,7 @@ const UNAVAILABLE = "Les routines ne répondent pas pour l’instant. Réessayez
 async function call(agentId: string, path: string, init?: RequestInit): Promise<Response> {
   const gw = runtimeGateway();
   if (!gw) throw new ApiError(502, "routines_unavailable", UNAVAILABLE);
-  return gatewayFetch(gw, `/v1/instances/${encodeURIComponent(agentId)}/${path}`, { ...init, signal: AbortSignal.timeout(30_000) });
+  return gatewayFetch(gw, `/v1/instances/${encodeURIComponent(agentId)}/${path}`, await asMember({ ...init, signal: AbortSignal.timeout(30_000) }));
 }
 
 async function readJobs(agentId: string, profile: string): Promise<ClaudeJob[]> {

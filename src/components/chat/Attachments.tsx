@@ -3,11 +3,11 @@
 import { useRef } from "react";
 import { FileText, Loader2, Paperclip, RotateCw, X } from "lucide-react";
 import { HiddenFileInput } from "@/components/HiddenFileInput";
-import { tooLarge } from "@/lib/upload-limit";
+import { TOO_LARGE, tooLargeDocument } from "@/lib/upload-limit";
 import { cn } from "@/lib/utils";
 import type { PendingFile } from "./useChatAttachments";
 
-export function AttachButton({ onFiles, disabled }: { onFiles: (files: FileList) => void; disabled?: boolean }) {
+export function AttachButton({ onFiles, disabled, tour }: { onFiles: (files: FileList) => void; disabled?: boolean; tour?: string }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
     <>
@@ -15,6 +15,7 @@ export function AttachButton({ onFiles, disabled }: { onFiles: (files: FileList)
         type="button"
         disabled={disabled}
         onClick={() => ref.current?.click()}
+        data-tour={tour}
         aria-label="Joindre des fichiers"
         title="Joindre des fichiers"
         className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50 max-sm:h-10 max-sm:w-10"
@@ -55,8 +56,10 @@ export function AttachmentTray({
           )}
           <span className="max-w-[10rem] truncate">{f.file.name}</span>
           {f.status === "uploading" && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          {f.status === "error" && tooLarge(f.file) && <span className="font-semibold">plus de 4 Mo</span>}
-          {f.status === "error" && !tooLarge(f.file) && (
+          {f.status === "uploading" && f.progress !== undefined && <span className="tabular-nums text-ink-3">{Math.round(f.progress * 100)} %</span>}
+          {f.status === "error" && tooLargeDocument(f.file) && <span className="font-semibold">plus de 25 Mo</span>}
+          {f.status === "error" && !tooLargeDocument(f.file) && f.error === TOO_LARGE && <span className="font-semibold">plus de 4 Mo</span>}
+          {f.status === "error" && !tooLargeDocument(f.file) && f.error !== TOO_LARGE && (
             <button
               type="button"
               onClick={() => onRetry(f.id)}

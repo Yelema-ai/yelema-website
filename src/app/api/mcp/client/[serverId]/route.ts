@@ -1,5 +1,5 @@
 import { backoffice } from "@/lib/backoffice";
-import { mcpError, noStore, settingsToken } from "../../_shared";
+import { mcpError, noStore, scopeToken } from "../../_shared";
 
 type Ctx = { params: Promise<{ serverId: string }> };
 
@@ -7,7 +7,7 @@ type Ctx = { params: Promise<{ serverId: string }> };
 export async function DELETE(_request: Request, { params }: Ctx) {
   try {
     const { serverId } = await params;
-    return noStore(await backoffice.removeMcpServer(await settingsToken(), { kind: "client" }, serverId));
+    return noStore(await backoffice.removeMcpServer(await scopeToken({ kind: "client" }), { kind: "client" }, serverId));
   } catch (e) {
     return mcpError(e);
   }

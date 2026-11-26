@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { citedFolder, docKind, drivePathsIn, FOLDER_BARE, FOLDER_CODE, isHiddenInChat, normDrivePath, noteFolder, openTarget, turnDocs } from "./drive-links.ts";
+import { citedFolder, deliverableCount, docKind, drivePathsIn, FOLDER_BARE, FOLDER_CODE, isHiddenInChat, normDrivePath, noteFolder, openTarget, turnDocs } from "./drive-links.ts";
 
 test("the paths a reply names, in order, once each, in one spelling", () => {
   const text = [
@@ -26,7 +26,7 @@ test("a path written from the drive itself, without ~/, is a file too (Leslie, 2
 });
 
 test("formats", () => {
-  assert.deepEqual(["a.PDF", "b.xlsx", "c.docx", "d.pptx", "e.png", "f.zip"].map(docKind), ["pdf", "excel", "word", "powerpoint", "image", "other"]);
+  assert.deepEqual(["a.PDF", "b.xlsx", "c.docx", "d.pptx", "e.png", "v.mp4", "s.mp3", "f.zip"].map(docKind), ["pdf", "excel", "word", "powerpoint", "image", "video", "audio", "other"]);
 });
 
 test("cards: the named files, then the deliverables this turn wrote, never another turn's nor the memory", () => {
@@ -99,4 +99,27 @@ test("openTarget: an address of /livrables/ouvrir names a drive file or folder, 
 test("drivePathsIn: a deliverable given as an app address is a cited file", () => {
   const text = "Voici le devis : https://unifood.app.yelema.ai/livrables/ouvrir?p=Livrables%2FKouassi%2Fdevis_v2.xlsx et le dossier https://unifood.app.yelema.ai/livrables/ouvrir?p=Livrables%2FKouassi";
   assert.deepEqual(drivePathsIn(text), ["~/Livrables/Kouassi/devis_v2.xlsx"]);
+});
+
+test("an Expert's deliverables: its own finished files only", () => {
+  const f = (path: string, type = "file") => ({ path, type });
+  const entries = [
+    f("/home/node/Livrables/Fatou/Contrat.docx"),
+    f("/home/node/Livrables/Fatou/Paie/Octobre.xlsx"),
+    f("/home/node/Livrables/Fatou/Paie", "directory"),
+    f("/home/node/Livrables/Fatou/notes.md"),
+    f("/home/node/Livrables/Fatou/_memoire/jour-zero.json"),
+    f("/home/node/Livrables/Fatou/Reçus/cv.pdf"),
+    f("/home/node/Livrables/Fatima/Post.pdf"),
+  ];
+  assert.equal(deliverableCount(entries, "/home/node/Livrables/Fatou"), 2);
+  assert.equal(deliverableCount(entries, "~/Livrables/Fatou"), 2);
+});
+
+test("cards: no pattern, no font, and no picture beside a delivered document (Leslie, 18/11)", () => {
+  const written = ["Livrables/Koffi/Charte Revvo.pdf", "Livrables/Koffi/4.2_logo_revvo.png", "Livrables/Koffi/sources/4.2_logo_revvo.png", "Livrables/Koffi/Onest.ttf"];
+  const docs = turnDocs("Les polices : `~/Livrables/Koffi/*.ttf`", [], written);
+  assert.deepEqual(docs.map((d) => d.name), ["Charte Revvo.pdf"]);
+  // Pictures alone are the deliverable, each name once.
+  assert.deepEqual(turnDocs("", [], ["Livrables/Fatima/post.png", "Livrables/Fatima/copie/post.png"]).map((d) => d.name), ["post.png"]);
 });

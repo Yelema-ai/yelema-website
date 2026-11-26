@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { Check, Info, Loader2, Mic, Send, Square, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Check, Info, Loader2, Mic, Send, SlidersHorizontal, Square, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { AttachButton, AttachmentTray } from "./Attachments";
 import { EffortMenu } from "./EffortMenu";
@@ -18,7 +19,14 @@ import { useCallState } from "@/components/voice/CallProvider";
 import { useVoices } from "@/components/voice/useVoices";
 import { useExpertsContext } from "@/components/experts/ExpertsProvider";
 import { commandsOf, filterCommands, missingFor, type ExpertCommand } from "@/lib/expert-commands";
+import { ENVOI_EVENT } from "./NextAction";
+
+/** « /envoi »: answered here, never sent to the Expert. */
+const ENVOI_COMMAND: ExpertCommand = { cmd: "envoi", label: "Envoyer le dernier livrable", phrase: "Retrouver le choix d’envoi du dernier livrable de la conversation.", example: "", need: null, fileOk: false, common: true };
 import { CommandMenu } from "./CommandMenu";
+import { CreateMenu } from "./CreateMenu";
+import { CREATION_OTHER, creationMessage, creationsOf } from "@/lib/creations";
+import { UpdateSpinner, useDeployPhase } from "@/components/app/DeployStatus";
 
 interface Props {
   agentId: string;
@@ -30,9 +38,11 @@ interface Props {
   // Prominent welcome-state composer (vs the compact docked composer).
   large?: boolean;
   focusToken?: number;
+  /** Text put in the composer (an approval « Modifier »); a new token puts it again. */
+  draft?: { text: string; token: number } | null;
 }
 
-export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large = false, focusToken = 0 }: Props) {
+export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large = false, focusToken = 0, draft = null }: Props) {
   const [text, setText] = useState("");
   // model + provider are always chosen together (one selection); effort is independent. Group
   // them as the composer's outgoing ChatSettings so send is just `{ ...settings, files }`.
@@ -63,6 +73,20 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
     return () => cancelAnimationFrame(frame);
   }, [focusToken]);
 
+  useEffect(() => {
+    if (!draft) return;
+    setText(draft.text);
+    const frame = requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(draft.text.length, draft.text.length);
+      grow(el);
+    });
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.token]);
+
   // The model switcher is a persistent control, shown once the instance reports at least one model
   // (the older metered gateway exposes a single "default"; current builds expose the full catalog).
   // It stays hidden until the list resolves and hides if the call returns nothing (e.g. fetch
@@ -86,8 +110,16 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
   const { experts } = useExpertsContext();
   const expert = experts.find((e) => e.agentId === agentId && e.profileId === profile);
   const expertKey = expert?.catalogueKey ?? null;
+  // While an update runs, said where the member writes, so a slow or missing answer is not taken for
+  // the Expert's fault (Leslie, 06/11: « il faut que ça se voie même dans le chat »).
+  const updating = useDeployPhase() === "maintenance";
   // « / » opens the Expert's commands; a command picked shows as a chip and says what it still needs.
-  const commands = useMemo(() => commandsOf(expertKey, expert?.driveFolder ?? expert?.displayName), [expertKey, expert?.driveFolder, expert?.displayName]);
+  const commands = useMemo(() => {
+    const own = commandsOf(expertKey, expert?.driveFolder ?? expert?.displayName);
+    return own.length && !own.some((c) => c.cmd === "envoi") ? [...own, ENVOI_COMMAND] : own;
+  }, [expertKey, expert?.driveFolder, expert?.displayName]);
+  // « Créer » (Leslie, 19/11): the Expert's Créations; a model picked is asked at once.
+  const creations = useMemo(() => creationsOf(expertKey), [expertKey]);
   const [chosen, setChosen] = useState<ExpertCommand | null>(null);
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState(false);
@@ -124,6 +156,13 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
 
   const submit = () => {
     const typed = text.trim();
+    // « /envoi » (Leslie, 19/11): the offer to send the conversation's last document, shown again; nothing is sent.
+    if ((chosen?.cmd === "envoi" && !typed) || (!chosen && /^\/envoi$/i.test(typed))) {
+      window.dispatchEvent(new Event(ENVOI_EVENT));
+      setText("");
+      setChosen(null);
+      return;
+    }
     if (chosen ? missing !== null : !typed && !att.hasFiles) return;
     if (att.blocksSend) return;
     const trimmed = chosen ? `/${chosen.cmd}${typed ? ` ${typed}` : ""}` : typed;
@@ -135,7 +174,29 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
 
+  const askCreation = (message: string) => {
+    if (att.blocksSend) return;
+    onSend(message, { ...settings, files: [], attachments: [] });
+  };
+  const describeCreation = () => {
+    setChosen(null);
+    setText(CREATION_OTHER);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(CREATION_OTHER.length, CREATION_OTHER.length);
+      grow(el);
+    });
+  };
+
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // « /envoi » typed whole: answered here at once, before the commands menu picks a look-alike.
+    if (e.key === "Enter" && !e.shiftKey && !chosen && /^\/envoi$/i.test(text.trim())) {
+      e.preventDefault();
+      submit();
+      return;
+    }
     if (menuOpen) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
@@ -168,14 +229,37 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
     }
   };
 
+  const modelMenu = groups.length > 0 && (
+    <ModelMenu
+      groups={groups}
+      model={settings.model}
+      defaultModel={defaultModel}
+      defaultLabel={defaultLabel}
+      onChange={(model, provider) => setSettings((s) => ({ ...s, model, provider }))}
+    />
+  );
+  const effortMenu = (
+    <EffortMenu value={settings.reasoningEffort} onChange={(reasoningEffort) => setSettings((s) => ({ ...s, reasoningEffort }))} />
+  );
+
   return (
     <div
       className={cn(
         "@container mx-auto w-full rounded-[22px] border border-line bg-surface shadow-[0_8px_30px_rgb(48_22_103_/_0.06)] transition-[border-color,box-shadow] focus-within:border-brand/30",
-        large ? "max-w-2xl" : "max-w-3xl",
+        // Docked, the bar takes the whole width (Leslie, 16/11); centred, it stays a reading width.
+        large && "max-w-2xl",
         "relative"
       )}
+      data-composer=""
     >
+      {updating && (
+        <p role="status" data-update-note="" className="flex items-center gap-2 rounded-t-[21px] border-b border-amber-200 bg-amber-50 px-5 py-2.5 text-[13px] font-medium leading-snug text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+          <UpdateSpinner />
+          <span>
+            Mise à jour en cours : {expert ? expert.displayName : "vos Experts"} {expert ? "peut" : "peuvent"} répondre plus lentement ou reprendre après la mise à jour. Vos messages sont gardés.
+          </span>
+        </p>
+      )}
       {menuOpen && (
         <CommandMenu
           name={expert?.displayName ?? "l’Expert"}
@@ -242,23 +326,24 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
         <DictationBar dictation={dictation} />
       ) : (
       <div className="flex items-center gap-2 px-3 pb-3">
-        <div className="flex min-w-0 shrink items-center gap-1.5">
-          {groups.length > 0 && (
-            <ModelMenu
-              groups={groups}
-              model={settings.model}
-              defaultModel={defaultModel}
-              defaultLabel={defaultLabel}
-              onChange={(model, provider) => setSettings((s) => ({ ...s, model, provider }))}
-            />
-          )}
-          <EffortMenu
-            value={settings.reasoningEffort}
-            onChange={(reasoningEffort) => setSettings((s) => ({ ...s, reasoningEffort }))}
+        {creations.length > 0 && (
+          <CreateMenu
+            name={expert?.displayName ?? "l’Expert"}
+            models={creations}
+            onPick={(m) => askCreation(creationMessage(m))}
+            onOther={describeCreation}
           />
+        )}
+        <div className="flex min-w-0 shrink items-center gap-1.5 max-sm:hidden">
+          {modelMenu}
+          {effortMenu}
         </div>
+        <PhoneSettings
+          model={modelMenu}
+          effort={<EffortMenu value={settings.reasoningEffort} emptyLabel="Par défaut" onChange={(reasoningEffort) => setSettings((s) => ({ ...s, reasoningEffort }))} />}
+        />
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          <AttachButton onFiles={att.addFiles} />
+          <AttachButton onFiles={att.addFiles} tour="chat-attach" />
           {canDictate && (
             <button
               type="button"
@@ -337,5 +422,43 @@ export function DictationBar({ dictation }: { dictation: ReturnType<typeof useDi
         </>
       )}
     </div>
+  );
+}
+
+// On a phone, one icon for the model and the effort (Leslie, 04/11, point 7): the field keeps its room.
+function PhoneSettings({ model, effort }: { model: ReactNode; effort: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Modèle et effort"
+        title="Modèle et effort"
+        className="grid size-10 shrink-0 place-items-center rounded-full bg-secondary/70 text-ink-2 hover:text-ink sm:hidden"
+      >
+        <SlidersHorizontal className="size-[18px]" />
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent
+          aria-describedby={undefined}
+          className="max-sm:bottom-0 max-sm:left-0 max-sm:top-auto max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-[22px]"
+        >
+          <DialogTitle className="text-[17px] font-bold text-ink">Modèle et effort</DialogTitle>
+          <div className="space-y-3 pb-2">
+            {model && (
+              <div className="flex min-h-11 items-center justify-between gap-3">
+                <span className="text-[14px] font-semibold text-ink-2">Modèle</span>
+                <span className="min-w-0">{model}</span>
+              </div>
+            )}
+            <div className="flex min-h-11 items-center justify-between gap-3">
+              <span className="text-[14px] font-semibold text-ink-2">Effort</span>
+              {effort}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

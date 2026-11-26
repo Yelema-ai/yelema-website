@@ -5,7 +5,8 @@ import { requireAgentAccess } from "@/lib/auth";
 import { fetchCachedDashboardState } from "@/lib/dashboard-cache";
 import { filesAndLink } from "@/lib/dashboard-link";
 import { expertDriveFolders } from "@/lib/expert-folders";
-import { getDashboardMeta, isTrustedDashboardUrl } from "@/lib/dashboards";
+import { shareExpiryOf, type ShareExpiry } from "@/lib/dashboard-expiry";
+import { getDashboardMeta, isTrustedDashboardUrl, legacyLink, namesFile } from "@/lib/dashboards";
 import { JSON_TIMEOUT_MS, withTimeout } from "@/lib/fetch-timeout";
 import { memo } from "@/lib/memo";
 import { ApiError, handleError, json, readJson } from "@/lib/http";
@@ -24,22 +25,24 @@ async function shareToken(): Promise<string> {
   return session.accessToken;
 }
 
-async function shareAnswer(view: BoDashboardShareView | null) {
-  return { ...shareForBrowser(view), shareUrl: shareUrlOf(await pinnedWorkspaceId().catch(() => undefined), view) };
+async function shareAnswer(view: BoDashboardShareView | null, expiry: ShareExpiry) {
+  return { ...shareForBrowser(view), ...shareUrlOf(await pinnedWorkspaceId().catch(() => undefined), view, expiry) };
 }
 
 // What the instance holds for a dashboard: its link, files and the team view. Kept a few seconds,
 // so the generation poll and several tabs share one reading; longer once the link is there.
 interface InstanceView {
   lien: string | null;
-  hebergeur: string;
   maj: string | null;
   pdfPath: string | null;
   htmlPath: string | null;
   pptxPath: string | null;
   teamViewLien: string | null;
+  teamViewPath: string | null;
+  /** The state names its page: generation is over, the reading can be kept longer. */
+  stateFile: boolean;
 }
-const views = memo<InstanceView>({ ttlMs: 30_000, ttlOf: (v) => (v.lien ? 30_000 : 5_000), maxEntries: 500, maxFlightMs: 60_000 });
+const views = memo<InstanceView>({ ttlMs: 30_000, ttlOf: (v) => (v.lien || v.stateFile ? 30_000 : 5_000), maxEntries: 500, maxFlightMs: 60_000 });
 const MAX_SUBFOLDERS = 8;
 
 const trusted = (url: unknown): string | null => (isTrustedDashboardUrl(url) ? url.trim() : null);
@@ -101,11 +104,11 @@ async function linkFromSessions(id: string, profile: string): Promise<string | n
   return null;
 }
 
-// A path the state file names, kept only inside the drive and of the expected kind.
+// A path the state file names, kept only inside the drive and of the expected kind, as the files routes take it.
 function drivePath(value: unknown, ext: string): string | null {
   if (typeof value !== "string") return null;
   const p = value.trim().replace(/^~\//, "");
-  return p.toLowerCase().endsWith(ext) && p.startsWith("Livrables/") && !p.split("/").includes("..") ? p : null;
+  return p.toLowerCase().endsWith(ext) && p.startsWith("Livrables/") && !p.split("/").includes("..") ? `~/${p}` : null;
 }
 
 async function instanceView(id: string, profile: string): Promise<InstanceView> {
@@ -118,25 +121,29 @@ async function instanceView(id: string, profile: string): Promise<InstanceView> 
     isDjeneba
       ? Promise.all(
           [...folders.map((f) => `Livrables/${f}/_memoire/state/tableaux-de-l-equipe.json`), `memory/state/tableaux-de-l-equipe.json`].map((p) => readJsonFile(id, p))
-        ).then((all) => all.map((t) => trusted(t?.lien)).find(Boolean) ?? null)
+        ).then((all) => all.find((t) => t !== null) ?? null)
       : Promise.resolve(null),
     deliverableFiles(id, defaults),
   ]);
-  const lien = trusted(state?.lien);
+  // A state naming its page in the drive is never sent to Render, not even by a link seen in a conversation.
+  const inDrive = namesFile(state);
+  const lien = legacyLink(state);
   const folder = typeof state?.fichiers === "string" ? state.fichiers.trim().replace(/\/+$/, "") : "";
   const [own, found] = await filesAndLink(
     lien,
     folder && !folder.split("/").includes("..") ? deliverableFiles(id, folders.map((f) => `Livrables/${f}/${folder}`)) : Promise.resolve(null),
-    () => linkFromSessions(id, profile),
+    () => (inDrive ? Promise.resolve(null) : linkFromSessions(id, profile)),
   );
+  const teamPath = drivePath(team?.fichier, ".html");
   return {
     lien: found,
-    hebergeur: lien && typeof state?.hebergeur === "string" ? state.hebergeur : "render",
     maj: typeof state?.maj === "string" ? state.maj : null,
-    pdfPath: drivePath(state?.pdfPath, ".pdf") ?? own?.pdfPath ?? defaultFiles.pdfPath,
-    htmlPath: drivePath(state?.htmlPath, ".html") ?? own?.htmlPath ?? defaultFiles.htmlPath,
+    pdfPath: drivePath(state?.pdf, ".pdf") ?? drivePath(state?.pdfPath, ".pdf") ?? own?.pdfPath ?? defaultFiles.pdfPath,
+    htmlPath: drivePath(state?.fichier, ".html") ?? drivePath(state?.htmlPath, ".html") ?? own?.htmlPath ?? defaultFiles.htmlPath,
     pptxPath: own?.pptxPath ?? defaultFiles.pptxPath,
-    teamViewLien: team,
+    teamViewLien: teamPath ? null : trusted(team?.lien),
+    teamViewPath: teamPath,
+    stateFile: inDrive,
   };
 }
 
@@ -175,7 +182,6 @@ export async function GET(request: Request, { params }: Ctx) {
       reader: meta.reader,
       kpis: meta.kpis,
       lien: view.lien,
-      hebergeur: view.hebergeur,
       maj: view.maj,
       pdfPath: view.pdfPath,
       pptxPath: view.pptxPath,
@@ -183,8 +189,9 @@ export async function GET(request: Request, { params }: Ctx) {
       previewUrl: view.lien || `/modeles/${meta.modelFile}`,
       isDjeneba: profile.toLowerCase().includes("djeneba"),
       teamViewLien: view.teamViewLien,
+      teamViewPath: view.teamViewPath,
       sharing,
-      ...(await shareAnswer(share)),
+      ...(await shareAnswer(share, shareExpiryOf(new URL(request.url).searchParams.get("expires")))),
     });
   } catch (e) {
     return handleError(e);
@@ -198,12 +205,26 @@ export async function PATCH(request: Request, { params }: Ctx) {
     const { id, profile } = await params;
     if (!/^[a-z0-9_-]{1,64}$/i.test(profile) || !getDashboardMeta(profile)) return json({ error: "Profil d'expert invalide." }, 400);
     await requireAgentAccess(id);
-    const body = await readJson<{ mode?: unknown; people?: unknown; regenerate?: unknown }>(request);
+    const body = await readJson<{ mode?: unknown; people?: unknown; regenerate?: unknown; expires?: unknown }>(request);
     const mode = MODES.find((m) => m === body.mode);
     if (!mode) return json({ error: "Mode de partage inconnu." }, 400);
     const people = Array.isArray(body.people) ? body.people.filter((e): e is string => typeof e === "string").slice(0, 50) : [];
     const view = await backoffice.saveDashboardShare(await shareToken(), profile, { mode, people, regenerate: body.regenerate === true });
-    return json({ ok: true, ...(await shareAnswer(view)) });
+    return json({ ok: true, ...(await shareAnswer(view, shareExpiryOf(body.expires))) });
+  } catch (e) {
+    return shareError(e);
+  }
+}
+
+// `{ expires }`: a new link to the same share with that end; the share and links already sent stay as they are.
+export async function POST(request: Request, { params }: Ctx) {
+  try {
+    const { id, profile } = await params;
+    if (!/^[a-z0-9_-]{1,64}$/i.test(profile) || !getDashboardMeta(profile)) return json({ error: "Profil d'expert invalide." }, 400);
+    await requireAgentAccess(id);
+    const body = await readJson<{ expires?: unknown }>(request);
+    const view = await backoffice.dashboardShare(await shareToken(), profile);
+    return json({ ok: true, ...(await shareAnswer(view, shareExpiryOf(body.expires))) });
   } catch (e) {
     return shareError(e);
   }
@@ -215,7 +236,7 @@ export async function DELETE(_request: Request, { params }: Ctx) {
     if (!/^[a-z0-9_-]{1,64}$/i.test(profile) || !getDashboardMeta(profile)) return json({ error: "Profil d'expert invalide." }, 400);
     await requireAgentAccess(id);
     const view = await backoffice.stopDashboardShare(await shareToken(), profile);
-    return json({ ok: true, ...(await shareAnswer(view)) });
+    return json({ ok: true, ...(await shareAnswer(view, shareExpiryOf(null))) });
   } catch (e) {
     return shareError(e);
   }

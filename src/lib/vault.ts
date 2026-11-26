@@ -117,10 +117,10 @@ const REFUSALS: Record<string, string> = {
   bad_purpose: "La description fait 300 caractères au plus.",
   bad_request: "Cette demande n’a pas pu être traitée.",
   not_found: "Cet Expert ou cette connexion est introuvable.",
-  conflict: "Cette instance n’est pas encore prête. Réessayez dans quelques minutes.",
+  conflict: "Votre espace n’est pas encore prêt. Réessayez dans quelques minutes.",
   too_many_attempts: "Trop d’essais en peu de temps. Réessayez dans une heure.",
-  instance_error: "L’instance n’a pas pu traiter la demande. Réessayez dans un instant.",
-  unavailable: "Le coffre est momentanément indisponible sur cette instance. Réessayez plus tard.",
+  instance_error: "Votre espace n’a pas pu traiter la demande. Réessayez dans un instant.",
+  unavailable: "Les accès aux sites sont momentanément indisponibles. Réessayez plus tard.",
 };
 
 /** La phrase d'un code de refus du back-office ; null pour un code inconnu. */

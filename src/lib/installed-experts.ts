@@ -9,7 +9,7 @@ import { isCompanionProfile, type Companion } from "@/lib/companion";
 import { currentInstallation, currentInstance } from "@/lib/session";
 import { listInstanceProfiles } from "@/lib/hermes-profiles";
 import { ApiError, dbError } from "@/lib/http";
-import type { AgentRow, CatalogueResponse, Expert, InstalledExpert } from "@/lib/types";
+import type { AgentRow, CatalogueExpert, CatalogueResponse, Expert, InstalledExpert } from "@/lib/types";
 
 // The profiles installed on the instance a user owns (admins included: nobody sees a colleague's).
 // Shared by the experts list and the catalogue, so both screens agree on what "installed" means.
@@ -95,7 +95,7 @@ async function installation(): Promise<{ installation: "running" | "ready" | "fa
 // The name and picture the member chose for each of their experts, and the cycle that brought it, by
 // profile, as the back office keeps them. None where it does not sign users in.
 async function memberLooks(): Promise<
-  Map<string, { displayName: string | null; avatarUrl: string | null; cycle: { key: string; label: string } | null }>
+  Map<string, { displayName: string | null; avatarUrl: string | null; cycle: { key: string; label: string } | null; since: string | null }>
 > {
   if (!authViaBackoffice()) return new Map();
   const instance = await currentInstance().catch(() => null);
@@ -106,9 +106,26 @@ async function memberLooks(): Promise<
         displayName: e.displayName ?? null,
         avatarUrl: e.avatarUrl ?? null,
         cycle: e.cycle?.key && e.cycle.label ? { key: e.cycle.key, label: e.cycle.label } : null,
+        since: e.since ?? null,
       },
     ])
   );
+}
+
+type MemberLook = { displayName: string | null; avatarUrl: string | null };
+
+function presented(profileId: string, entry: CatalogueExpert | null, look: MemberLook | undefined): { displayName: string; photoUrl: string | null } {
+  return { displayName: look?.displayName || entry?.name || expertDisplayName(profileId), photoUrl: look?.avatarUrl || entry?.avatarUrl || null };
+}
+
+export async function expertPresentation(
+  profileId: string
+): Promise<{ name: string; title: string | null; photoUrl: string | null; portraitUrl: string | null; pronoun: "elle" | "il" | null }> {
+  const [catalogue, looks] = await Promise.all([loadCatalogue(), memberLooks()]);
+  const entry = matchCatalogue(catalogue.experts, profileId);
+  const { displayName, photoUrl } = presented(profileId, entry, looks.get(profileId));
+  const title = catalogueJob({ catalogueKey: entry?.key ?? null, profileId }, entry?.title ?? null);
+  return { name: displayName, title, photoUrl, portraitUrl: entry?.portraitUrl ?? null, pronoun: entry?.pronoun ?? null };
 }
 
 // The experts of these instances as the screens show them: each installed profile dressed by the
@@ -130,9 +147,10 @@ export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
   const experts: Expert[] = profiles.filter((p) => !isCompanionProfile(p.profileId)).map((p) => {
     const entry = matchCatalogue(catalogue.experts, p.profileId);
     const look = looks.get(p.profileId);
+    const { displayName, photoUrl } = presented(p.profileId, entry, look);
     return {
       profileId: p.profileId,
-      displayName: look?.displayName || entry?.name || expertDisplayName(p.profileId),
+      displayName,
       agentId: p.agent.agent37_id,
       agentName: p.agent.name,
       gateway: p.gateway,
@@ -142,9 +160,10 @@ export async function userExperts(agents: AgentRow[]): Promise<UserExperts> {
       title: catalogueJob({ catalogueKey: entry?.key ?? null, profileId: p.profileId }, entry?.title ?? null),
       tagline: entry?.tagline ?? null,
       suggestions: entry?.suggestions ?? [],
-      photoUrl: look?.avatarUrl || entry?.avatarUrl || null,
+      photoUrl,
       driveFolder: entry?.driveFolder ?? entry?.name ?? null,
       cycle: catalogueCycle({ catalogueKey: entry?.key ?? null, profileId: p.profileId }, look?.cycle ?? null),
+      since: look?.since ?? null,
     };
   });
 

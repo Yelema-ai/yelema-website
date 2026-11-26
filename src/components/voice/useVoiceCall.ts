@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AethexError, VoiceCall, WebRTCPlatform } from "@aethexai/react/core";
 import type { VoiceLanguage } from "@/lib/voice";
 import { firstTurn, stepTurn, type CallPhase, type TurnState } from "@/lib/call-turns";
+import { sound, type EndedBy } from "@/lib/end-tone";
 import { micMeter, withMicTap, type MicMeter } from "@/lib/mic-tap";
 import { playHangupTone } from "./useRingback";
 
@@ -22,6 +23,16 @@ import { playHangupTone } from "./useRingback";
 // channel (`bot-output`, the member's final `user-transcription`, `llm-function-call-in-progress` and
 // `-stopped`), read as the mobile app does: the peer connection's data channels are listened to.
 
+
+/** The browser's IANA time zone (« Africa/Abidjan »), for the expert to greet by the member's hour; null if unknown. */
+function timeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
 export type { CallPhase };
 
 /** One line of the live transcript. */
@@ -37,7 +48,7 @@ const VOICE_BASE = "/api/voice";
 const LEVEL_MS = 80;
 
 function messageOf(e: AethexError): string | null {
-  if (e.code === "mic_denied" || e.code === "mic_missing") return "Autorisez le micro pour appeler vos experts.";
+  if (e.code === "mic_denied" || e.code === "mic_missing") return "Autorisez le micro pour appeler vos Experts.";
   if (e.code === "unsupported_browser") return "Ce navigateur ne permet pas les appels. Essayez Chrome, Edge ou Safari à jour.";
   if (e.code === "quota_exceeded" || e.code === "payment_required" || e.code === "capacity") return "Service vocal indisponible. Réessayez dans un instant.";
   return null;
@@ -86,10 +97,9 @@ export function useVoiceCall(): UseVoiceCall {
   // Bumped by every release: an SDK still loading for an abandoned call is dropped.
   const attempt = useRef(0);
 
-  const go = useCallback((next: CallPhase) => {
+  const go = useCallback((next: CallPhase, by: EndedBy = "remote") => {
     if (phaseRef.current === "ended" || phaseRef.current === "unreachable") return;
-    // The short end tone, once, when a call the expert had answered ends (either side).
-    if (next === "ended" && answered.current) playHangupTone();
+    sound(playHangupTone, next, by, answered.current);
     phaseRef.current = next;
     setPhase(next);
   }, []);
@@ -122,7 +132,8 @@ export function useVoiceCall(): UseVoiceCall {
   const fail = useCallback(
     (why: string | null) => {
       release();
-      setReason(why ?? "L’expert est injoignable pour le moment. Réessayez dans un instant.");
+      // No reason of our own: the call window says it with the expert's name and what it knows (update, network).
+      setReason(why);
       go("unreachable");
     },
     [go, release]
@@ -227,7 +238,7 @@ export function useVoiceCall(): UseVoiceCall {
             agentId: "yelema", // ignored: the back office picks the agent
             apiBaseUrl: VOICE_BASE,
             endpoints: { connect: "calls", offer: "calls/:id/offer", ice: "calls/:id/ice", end: "calls/:id/end", status: "calls/:id/status" },
-            headers: { "X-Yelema-Expert": expert, "X-Yelema-Language": language, ...(voice ? { "X-Yelema-Voice": voice } : {}) },
+            headers: { "X-Yelema-Expert": expert, "X-Yelema-Language": language, ...(voice ? { "X-Yelema-Voice": voice } : {}), ...(timeZone() ? { "X-Yelema-Timezone": timeZone()! } : {}) },
             fetchImpl,
             platform,
             callbacks: {
@@ -289,9 +300,10 @@ export function useVoiceCall(): UseVoiceCall {
     [fail, go, meter, onServerMessage, release, sendLonger]
   );
 
+  // Ended first: the SDK's own close, fired by `release`, then finds the call over (no remote tone).
   const hangUp = useCallback(() => {
+    go("ended", "member");
     release();
-    go("ended");
   }, [go, release]);
 
   const setMuted = useCallback((m: boolean) => {

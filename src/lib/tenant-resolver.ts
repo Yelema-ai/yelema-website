@@ -1,6 +1,8 @@
 import "server-only";
+import { waitUntil } from "@vercel/functions";
 import { memo } from "@/lib/memo";
-import { backofficeUrl, resolverToken } from "@/lib/runtime-config";
+import { backofficeUrl, deployVersion, resolverToken } from "@/lib/runtime-config";
+import { sharedCacheOn, sharedLayer, throughShared, vercelRuntimeCache } from "@/lib/shared-cache";
 import type { ResolvedTenant } from "@/lib/tenant-header";
 
 // Which client a host name belongs to, asked of the back office (`GET /api/v1/app/tenant`). One
@@ -22,8 +24,10 @@ export class TenantError extends Error {
 }
 
 const TIMEOUT_MS = 10_000;
-// A client's name, logo or suspension is felt within this delay (a suspension also by the back office on /me).
-const TTL_MS = 5 * 60_000;
+// A client's name, logo or suspension is felt within this delay (a suspension also by the back office on
+// /me): past it, the kept answer is still served once while a new one is asked behind (up to STALE_MS).
+const TTL_MS = 10 * 60_000;
+const STALE_MS = 60 * 60_000;
 // A host that is no client's yet is asked again sooner: it may be one being created.
 const MISS_TTL_MS = 60_000;
 // When the back office does not answer, the last known answer keeps a host served this long.
@@ -37,7 +41,19 @@ export function hostOf(headers: { get(name: string): string | null }): string | 
 }
 
 // Unknown hosts are kept too (anyone can ask for any sub-domain): the oldest go first past the cap.
-const hosts = memo<ResolvedTenant | null>({ ttlMs: TTL_MS, ttlOf: (v) => (v ? TTL_MS : MISS_TTL_MS), staleOnErrorMs: STALE_ON_ERROR_MS, maxEntries: 1000, maxFlightMs: TIMEOUT_MS + 2_000 });
+// Identical lookups in flight share one call; a revalidation keeps the function alive until it settles.
+const hosts = memo<ResolvedTenant | null>({
+  ttlMs: TTL_MS,
+  ttlOf: (v) => (v ? TTL_MS : MISS_TTL_MS),
+  staleMs: STALE_MS,
+  staleOnErrorMs: STALE_ON_ERROR_MS,
+  maxEntries: 1000,
+  maxFlightMs: TIMEOUT_MS + 2_000,
+  background: (settled) => waitUntil(settled),
+});
+
+// SHARED_SESSION_CACHE=on: a cold function reads the host from the region's cache (a minute old at most) before asking.
+const shared = sharedCacheOn(process.env) ? sharedLayer<ResolvedTenant | null>("tenant", 60, () => vercelRuntimeCache(deployVersion())) : null;
 
 async function ask(host: string): Promise<ResolvedTenant | null> {
   const base = backofficeUrl();
@@ -63,7 +79,7 @@ async function ask(host: string): Promise<ResolvedTenant | null> {
 /** The client served on this host; null when the back office knows no such host. Throws on an outage with nothing to fall back on. */
 export async function resolveHost(host: string): Promise<ResolvedTenant | null> {
   try {
-    return await hosts.get(host, () => ask(host));
+    return await hosts.get(host, shared ? () => throughShared(shared, `tenant:${host}`, () => ask(host), () => false, (p) => waitUntil(p)) : () => ask(host));
   } catch (e) {
     if (e instanceof TenantError) throw e;
     console.error(`[tenant] ${host} could not be resolved:`, e instanceof Error ? e.message : e);

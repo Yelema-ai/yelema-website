@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import { Check, History, Loader2, Paperclip, Repeat, X } from "lucide-react";
 import { toast } from "sonner";
 import { TOO_LARGE, tooLarge } from "@/lib/upload-limit";
-import { apiFetch, readApiError } from "@/lib/api";
+import { apiFetch, readApiError, errorText } from "@/lib/api";
+import { routinePath } from "@/lib/api-paths";
 import { DRIVE_ROOT } from "@/lib/drive-paths";
 import {
   RECURRENCES,
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Picker } from "@/components/ui/picker";
 
 // What the tab needs to know about the expert: its profile on the instance (where the routines
 // live), and what the catalogue says of it.
@@ -108,7 +110,7 @@ export function RoutineDialog({
       if (!res.ok) throw new Error(await readApiError(res, "Le fichier n’a pas pu être envoyé"));
       set({ attachment: path });
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(errorText(e));
     } finally {
       setUploading(false);
     }
@@ -131,12 +133,12 @@ export function RoutineDialog({
     try {
       const body = JSON.stringify({ expert: expert.profileId, name: draft.name, task: draft.task, skills: draft.skills, attachment: draft.attachment, schedule });
       const res = routine
-        ? await apiFetch<{ routine: Routine }>(`/api/agents/${agentId}/routines/${routine.id}`, { method: "PATCH", body })
+        ? await apiFetch<{ routine: Routine }>(routinePath(agentId, routine.id), { method: "PATCH", body })
         : await apiFetch<{ routine: Routine }>(`/api/agents/${agentId}/routines`, { method: "POST", body });
       onSaved(res.routine);
       onOpenChange(false);
     } catch (err) {
-      toast.error((err as Error).message);
+      toast.error(errorText(err));
     } finally {
       setBusy(false);
     }
@@ -193,18 +195,7 @@ export function RoutineDialog({
 
           <div className="flex flex-wrap items-center gap-2">
             {draft.recurring ? (
-              <select
-                aria-label="Fréquence"
-                value={draft.recurrence}
-                onChange={(e) => set({ recurrence: e.target.value })}
-                className="h-11 rounded-xl border bg-card px-3 text-[15px] text-ink"
-              >
-                {recurrences.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
+              <Picker label="Fréquence" placeholder="Fréquence" value={draft.recurrence} onChange={(v) => set({ recurrence: v })} groups={[{ options: recurrences }]} className="sm:h-11 sm:text-[15px]" />
             ) : (
               <Input
                 type="date"

@@ -63,7 +63,7 @@ export default function Page() {
   const section = "mb-2 px-1 text-[12px] font-bold uppercase tracking-wider text-ink-3";
   return (
     <PageBody>
-      <p className={section}>Pop-ups dans l’app</p>
+      <p className={section}>Alertes dans Yelema</p>
       <SettingsCard>
         {kinds.map((k) => (
           <SettingsRow key={k.kind} label={k.label} hint={k.hint} inline>
@@ -75,7 +75,7 @@ export default function Page() {
       <p className="mt-2 px-1 text-[13px] text-ink-3">La cloche garde toujours tout, même ce que vous coupez ici.</p>
 
       <div className="mt-7">
-        <p className={section}>Notifications de l’ordinateur</p>
+        <p className={section}>Notifications du navigateur</p>
         <SettingsCard>
           <SettingsRow
             label="Sur cet appareil"
@@ -85,11 +85,11 @@ export default function Page() {
                 ? "Refusées : autorisez-les dans les réglages du navigateur."
                 : notif === "unsupported"
                   ? "Ce navigateur ne sait pas afficher de notifications."
-                  : "Une alerte de l’ordinateur quand Yelema est dans un autre onglet, pour les types activés au-dessus."
+                  : "Une alerte quand Yelema est dans un autre onglet, pour les types cochés plus haut."
             }
           >
             {notif === "granted" ? (
-              <Switch on={deviceOn} label="Notifications de l’ordinateur" onChange={flipDevice} />
+              <Switch on={deviceOn} label="Notifications du navigateur" onChange={flipDevice} />
             ) : notif === "default" ? (
               <Button size="sm" onClick={() => void enable()}>
                 Activer

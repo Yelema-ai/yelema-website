@@ -3,7 +3,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { setChatSidePanel } from "@/components/chat/chat-layout";
 import Image from "next/image";
-import { BarChart3, Download, ExternalLink, FileCode, FileText, Loader2, Maximize2, Minimize2, Presentation, RefreshCw, Share2, Sparkles, X } from "lucide-react";
+import { BarChart3, Download, ExternalLink, FileCode, FileText, Loader2, Maximize2, Minimize2, Presentation, RefreshCw, Share2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -28,7 +28,7 @@ function formatMajDate(dateStr?: string | null): string | null {
 
 // `inHeader`: in the expert's own header (Leslie, 28/10, variante B), a short word on a computer, the
 // icon alone on a phone; the panel still opens beside the chat.
-function useToggleDashboard() {
+export function useToggleDashboard() {
   const { panelOpen, setPanelOpen, dialogOpen, setDialogOpen } = useDashboard();
   const comp = useComputer();
   return () => {
@@ -48,47 +48,44 @@ function useToggleDashboard() {
   };
 }
 
-export function DashboardButton({ inHeader = false }: { inHeader?: boolean }) {
+export function DashboardButton() {
   const { profile, panelOpen, isGenerating } = useDashboard();
   const comp = useComputer();
   const toggle = useToggleDashboard();
   if (!profile) return null;
   return (
-    <DashboardButtonFace
-      inHeader={inHeader}
-      highlighted={panelOpen || isGenerating}
-      generating={isGenerating}
-      labelHidden={!inHeader && (panelOpen || Boolean(comp?.panelOpen))}
-      onClick={toggle}
-    />
-  );
-}
-
-// The button alone: also in the expert's header before its chat has ever been opened.
-export function DashboardButtonFace({ inHeader = false, highlighted = false, generating = false, labelHidden = false, onClick }: {
-  inHeader?: boolean;
-  highlighted?: boolean;
-  generating?: boolean;
-  labelHidden?: boolean;
-  onClick: () => void;
-}) {
-  return (
     <button
       type="button"
       title="Tableau de bord"
       aria-label="Tableau de bord"
-      onClick={onClick}
+      onClick={toggle}
       // Same size and weight as « Son ordinateur » and « Nouvelle conversation » beside it.
       className={cn(
         "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border bg-card px-3 text-[13px] font-semibold text-ink transition-colors hover:bg-soft",
-        highlighted && "wide:border-brand/30 wide:bg-soft-2 wide:text-brand-ink"
+        (panelOpen || isGenerating) && "wide:border-brand/30 wide:bg-soft-2 wide:text-brand-ink"
       )}
     >
-      {generating ? <Loader2 className="h-4 w-4 animate-spin text-brand" /> : <BarChart3 className="h-4 w-4" />}
-      <span className={cn(inHeader ? "max-[1439px]:hidden" : "hidden sm:inline", labelHidden && "wide:hidden")}>
-        {generating ? "Génération…" : inHeader ? "Tableau" : "Tableau de bord"}
-      </span>
+      {isGenerating ? <Loader2 className="h-4 w-4 animate-spin text-brand" /> : <BarChart3 className="h-4 w-4" />}
+      <span className={cn("hidden sm:inline", (panelOpen || Boolean(comp?.panelOpen)) && "wide:hidden")}>{isGenerating ? "Génération…" : "Tableau de bord"}</span>
     </button>
+  );
+}
+
+// The same, in the header's « … ».
+export function DashboardMenuItem() {
+  const { profile, isGenerating } = useDashboard();
+  const toggle = useToggleDashboard();
+  if (!profile) return null;
+  return <DashboardMenuFace generating={isGenerating} onSelect={toggle} />;
+}
+
+// The menu line alone: also in the header before the expert's chat has ever been opened.
+export function DashboardMenuFace({ generating = false, onSelect }: { generating?: boolean; onSelect: () => void }) {
+  return (
+    <DropdownMenuItem className="min-h-11 gap-2.5 rounded-[10px] px-2.5 text-sm" onSelect={onSelect}>
+      {generating ? <Loader2 className="h-4 w-4 animate-spin text-brand" /> : <BarChart3 className="h-4 w-4" />}
+      {generating ? "Génération…" : "Tableau de bord"}
+    </DropdownMenuItem>
   );
 }
 
@@ -117,7 +114,7 @@ function DashboardHeaderControls({
   onMaximize?: () => void;
   onClose?: () => void;
 }) {
-  const { activeUrl, refresh, loading, data, activeTab, setActiveTab, setShareModalOpen, downloadPdf, downloadHtml, downloadPptx } = useDashboard();
+  const { embedUrl, refresh, loading, data, activeTab, setActiveTab, setShareModalOpen, downloadPdf, downloadHtml, downloadPptx } = useDashboard();
   const icon = "h-9 w-9 text-ink-3 hover:text-ink";
 
   return (
@@ -167,11 +164,12 @@ function DashboardHeaderControls({
           <ExportItem icon={<FileText className="size-4" />} tone="bg-orange-500/10 text-orange-600" label="PDF" hint="A4 paysage, prêt à imprimer" onSelect={downloadPdf} />
           <ExportItem icon={<Presentation className="size-4" />} tone="bg-red-500/10 text-red-600" label="PowerPoint" hint="Une diapositive par bloc" onSelect={downloadPptx} />
           <ExportItem icon={<FileCode className="size-4" />} tone="bg-blue-500/10 text-blue-600" label="HTML" hint="Page web autonome" onSelect={downloadHtml} />
-          {activeUrl && (
+          {/* Always this app's own sandboxed frame, never the page's host. */}
+          {embedUrl?.startsWith("/api/dashboards/frame") && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild className="gap-2.5 rounded-lg px-2.5 py-2 text-[13px]">
-                <a href={activeUrl} target="_blank" rel="noopener noreferrer">
+                <a href={embedUrl} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="size-4 text-ink-3" /> Ouvrir dans un nouvel onglet
                 </a>
               </DropdownMenuItem>
@@ -223,7 +221,8 @@ function DashboardHeader({
   const majFormatted = formatMajDate(data?.maj);
 
   return (
-    <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-line px-4">
+    // The last button (✕) kept off the corner (Leslie, 20/11).
+    <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-line pl-4 pr-6">
       <div className="min-w-0 pr-2">
         <h2 className="truncate text-sm font-semibold text-ink">{title}</h2>
         <div className="flex min-w-0 items-center gap-2 text-xs text-ink-3">
@@ -253,9 +252,9 @@ function PoweredBy() {
 }
 
 function DashboardContent() {
-  const { embedUrl, loading, isGenerating, triggerGeneration, data } = useDashboard();
+  const { embedUrl, loading, isGenerating, triggerGeneration, autoAsked } = useDashboard();
 
-  if (loading && !embedUrl) {
+  if (loading && !embedUrl && !isGenerating) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
         <Loader2 className="mb-2 h-8 w-8 animate-spin text-brand" />
@@ -264,27 +263,25 @@ function DashboardContent() {
     );
   }
 
+  // No button to press first (Leslie, 23/11): the dashboard asks for itself on opening and shows up here.
+  // Only an attempt that ended without a page leaves a way to try again.
   if (!embedUrl) {
+    const waiting = isGenerating || !autoAsked;
     return (
       <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
         <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-soft text-ink-3">
-          <BarChart3 className="size-6 text-brand" />
+          {waiting ? <Loader2 className="size-6 animate-spin text-brand" /> : <BarChart3 className="size-6 text-brand" />}
         </div>
-        <h3 className="mb-1 text-sm font-semibold text-ink">{data?.title || "Pas encore de tableau de bord"}</h3>
-        <p className="mb-4 max-w-xs text-xs text-ink-3">{data?.role || "Aucun tableau de bord n'a encore été préparé pour cet Expert."}</p>
-        <Button size="sm" onClick={() => void triggerGeneration()} disabled={isGenerating} className="gap-2">
-          {isGenerating ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Préparation en cours…
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" />
-              Préparer le tableau de bord
-            </>
-          )}
-        </Button>
+        <h3 className="mb-1 text-sm font-semibold text-ink">{waiting ? "Votre tableau de bord se prépare" : "Pas encore prêt"}</h3>
+        <p className="max-w-xs text-xs text-ink-3">
+          {waiting ? "Il s'affiche ici dès qu'il est prêt, en quelques minutes." : "Revenez dans quelques minutes, ou relancez la préparation."}
+        </p>
+        {!waiting && (
+          <Button size="sm" variant="ghost" onClick={() => void triggerGeneration()} className="mt-3 gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Relancer
+          </Button>
+        )}
       </div>
     );
   }

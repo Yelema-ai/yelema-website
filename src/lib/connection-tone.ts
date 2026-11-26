@@ -18,9 +18,9 @@ export const reconnected = (prev: CallPhase, next: CallPhase): boolean =>
   prev === "reconnecting" && (next === "listening" || next === "speaking" || next === "thinking");
 
 /** [start, end] of each beep, in seconds from `t0`. */
-export function beepTimes(t0: number, count: number): [number, number][] {
+export function beepTimes(t0: number, count: number, on = BEEP_S, gap = BEEP_GAP_S): [number, number][] {
   return Array.from({ length: count }, (_, i) => {
-    const t = t0 + i * (BEEP_S + BEEP_GAP_S);
-    return [t, t + BEEP_S];
+    const t = t0 + i * (on + gap);
+    return [t, t + on];
   });
 }

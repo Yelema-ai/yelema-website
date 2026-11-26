@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Agent37Error } from "@/lib/agent37";
 import { BackofficeError } from "@/lib/backoffice";
+import { csrfMode, jsonTyped } from "@/lib/csrf";
 import { TenantError } from "@/lib/tenant-resolver";
 
 export class ApiError extends Error {
@@ -23,7 +24,13 @@ export function noStore<T>(data: T): NextResponse {
   return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
 }
 
+// A body typed as a form or as text is what another site's page can send without a preflight: read as empty.
 export async function readJson<T = Record<string, unknown>>(request: Request): Promise<T> {
+  if (!jsonTyped(request.headers.get("content-type"))) {
+    const mode = csrfMode(process.env.CSRF_MODE);
+    if (mode !== "off") console.warn(`[csrf] corps non JSON ${request.method} ${new URL(request.url).pathname} mode=${mode}`);
+    if (mode === "enforce") return {} as T;
+  }
   try {
     return (await request.json()) as T;
   } catch {

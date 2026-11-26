@@ -60,6 +60,10 @@ test("routinePlainText is null when only technical lines are left", () => {
 test("upkeep routines are told apart from the work", () => {
   const r = (name: string, task: string) => ({ name, task });
   assert.equal(isUpkeep(r("Mémoire : regrouper les conversations", "Routine de mémoire, silencieuse : personne n'attend de réponse.")), true);
+  assert.equal(isUpkeep(r("Préparation du matin (Adjoua)", "Tu es Adjoua. Il est 7 h : prépare ta journée en silence.")), true);
+  assert.equal(isUpkeep(r("Preparation Du Matin", "Note Yelema : les outils cités…")), true);
+  assert.equal(isUpkeep(r("Mise en route", "Tu es Adjoua. Il est 7 h : prépare ta journée en silence.")), true);
+  assert.equal(isUpkeep(r("Préparer demain (Adjoua)", "Tu es Adjoua. Il est 15 h : prépare les rendez-vous de demain.")), false);
   assert.equal(isUpkeep(r("Rangement du soir", "Tu es Fatima. Il est 19 h 30 : range ta journée sans écrire.")), true);
   assert.equal(isUpkeep(r("Révision de la mémoire", "Tu es Djénéba. C'est le 1er du mois : révise ta mémoire.")), true);
   assert.equal(isUpkeep(r("Revision Memoire", "Note Yelema : les outils cités…")), true);
@@ -91,6 +95,12 @@ test("schedules and the next run read as a French reader says them", () => {
   assert.equal(sp(scheduleLabel("0 17 * * 1-5")), "Chaque jour ouvré à 17 h");
   assert.equal(sp(scheduleLabel("17 7-21 * * *")), "Toutes les heures de 7 h à 21 h");
   assert.equal(sp(scheduleLabel("0 */2 * * 1-5")), "Toutes les 2 heures, du lundi au vendredi");
+  assert.equal(sp(scheduleLabel("45 8 2 1,4,7,10 *")), "Le 2 janvier, avril, juillet et octobre à 8 h 45");
+  assert.equal(sp(scheduleLabel("0 9 1,15 * *")), "Les 1er et 15 du mois à 9 h");
+  assert.equal(sp(scheduleLabel("0 9 1 1 *")), "Le 1er janvier à 9 h");
+  assert.equal(sp(scheduleLabel("30 6 * 3,9 *")), "Chaque jour en mars et septembre à 6 h 30");
+  assert.equal(sp(scheduleLabel("0 8 * * 2-4")), "Chaque semaine du mardi au jeudi à 8 h");
+  assert.equal(sp(scheduleLabel("*/5 * * * *")), "Horaire : */5 * * * *");
   const fri = Date.UTC(2026, 9, 30, 20, 43);
   assert.equal(sp(nextRunLabel(Date.UTC(2026, 9, 30, 21, 17), fri)), "aujourd’hui à 21 h 17");
   assert.equal(sp(nextRunLabel(Date.UTC(2026, 9, 31, 8, 0), fri)), "demain à 8 h");

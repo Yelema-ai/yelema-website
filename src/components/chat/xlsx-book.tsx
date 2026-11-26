@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type JSZip from "jszip";
 import { cn } from "@/lib/utils";
 import { isNumberCell, isTotalRow } from "@/lib/sheet-cells";
@@ -9,12 +9,16 @@ import {
   applyTint,
   argbHex,
   colIndex,
+  colRange,
   colWidthPx,
+  coverMerges,
   emuPx,
   formatNumber,
+  formulaRefs,
   rowHeightPx,
   rowIndex,
 } from "@/lib/xlsx-format";
+import { inflatedBytes, openZip } from "@/lib/zip-sizes";
 
 // A workbook drawn as Excel shows it (Leslie, 03/11: « logos, mise en forme »): its colours, fonts, borders,
 // merged cells, column widths, row heights, number formats, its pictures where they sit, and every visible
@@ -38,8 +42,7 @@ const num = (v: string | null | undefined) => (v == null || v === "" || isNaN(Nu
 async function xml(zip: JSZip, path: string): Promise<Document | null> {
   const part = zip.file(path);
   if (!part) return null;
-  // jszip's private `_data` holds the part's inflated size, read from the zip before inflating it.
-  if (((part as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 0) > MAX_XML_PART_BYTES) throw new Error("too large");
+  if (inflatedBytes(zip, path) > MAX_XML_PART_BYTES) throw new Error("too large");
   return new DOMParser().parseFromString(await part.async("string"), "application/xml");
 }
 
@@ -143,7 +146,7 @@ async function readStyles(zip: JSZip): Promise<Style[]> {
 
 export async function openBook(data: ArrayBuffer): Promise<Book> {
   const JSZip = (await import("jszip")).default;
-  const zip = await JSZip.loadAsync(data);
+  const zip = await openZip((d) => JSZip.loadAsync(d), data);
   const book = await xml(zip, "xl/workbook.xml");
   const links = await rels(zip, "xl/workbook.xml");
   const sheets = el(book, "sheet")
@@ -168,10 +171,11 @@ async function images(zip: JSZip, sheetPath: string, doc: Document | null, x: (c
   for (const anchor of anchors.slice(0, 20)) {
     const blip = first(anchor, "a:blip");
     const embed = blip?.getAttribute("r:embed") ?? blip?.getAttributeNS(NS_R, "embed");
-    const file = embed ? zip.file(media.get(embed) ?? "") : null;
+    const mediaPath = embed ? (media.get(embed) ?? "") : "";
+    const file = mediaPath ? zip.file(mediaPath) : null;
     const from = first(anchor, "xdr:from");
     if (!file || !from) continue;
-    if (((file as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 0) > MAX_IMAGE_BYTES) continue;
+    if (inflatedBytes(zip, mediaPath) > MAX_IMAGE_BYTES) continue;
     const at = (node: Element | null) => ({
       col: Number(first(node, "xdr:col")?.textContent ?? 0),
       colOff: Number(first(node, "xdr:colOff")?.textContent ?? 0),
@@ -203,6 +207,11 @@ async function images(zip: JSZip, sheetPath: string, doc: Document | null, x: (c
   return out;
 }
 
+/** Gives back a sheet's pictures (blob URLs) once nothing draws it. */
+export function releaseSheet(sheet: Sheet): void {
+  for (const i of sheet.images) URL.revokeObjectURL(i.src);
+}
+
 export async function readSheet(book: Book, index: number, maxRows: number, maxCols: number): Promise<Sheet> {
   const { zip, styles, shared } = book;
   const path = book.sheets[index]?.path;
@@ -213,8 +222,7 @@ export async function readSheet(book: Book, index: number, maxRows: number, maxC
   const defaultWidth = num(first(doc, "sheetFormatPr")?.getAttribute("defaultColWidth"));
   const widths = new Map<number, number>();
   for (const c of el(doc, "col")) {
-    const min = Number(c.getAttribute("min") ?? 1) - 1;
-    const max = Math.min(Number(c.getAttribute("max") ?? 1) - 1, maxCols);
+    const [min, max] = colRange(c.getAttribute("min"), c.getAttribute("max"), maxCols);
     const hidden = c.getAttribute("hidden") === "1";
     for (let i = min; i <= max; i++) widths.set(i, hidden ? 0 : colWidthPx(num(c.getAttribute("width"))));
   }
@@ -257,15 +265,7 @@ export async function readSheet(book: Book, index: number, maxRows: number, maxC
     while (cols.reduce((a, b) => a + b, 0) < p.x + p.w && cols.length < maxCols) cols.push(colWidthPx(defaultWidth ?? undefined));
     while (heights.reduce((a, b) => a + b, 0) < p.y + p.h && heights.length < maxRows) heights.push(rowHeightPx(defaultHeight ?? undefined));
   }
-  const covered = new Set<string>();
-  const spanAt = new Map<string, { rowSpan: number; colSpan: number }>();
-  for (const m of merges) {
-    spanAt.set(`${m.r0}:${m.c0}`, { rowSpan: Math.min(m.r1, heights.length - 1) - m.r0 + 1, colSpan: Math.min(m.c1, cols.length - 1) - m.c0 + 1 });
-    // Bornée à la zone dessinée : une fusion « A1:XFD1048576 » ferait 17 milliards de tours.
-    const r1 = Math.min(m.r1, heights.length - 1);
-    const c1 = Math.min(m.c1, cols.length - 1);
-    for (let r = m.r0; r <= r1; r++) for (let c = m.c0; c <= c1; c++) if (r !== m.r0 || c !== m.c0) covered.add(`${r}:${c}`);
-  }
+  const { covered, spanAt } = coverMerges(merges, heights.length, cols.length);
   // A formula saved without its result (a file written by a script, not by Excel): the simple ones are
   // worked out here (SUM, AVERAGE, MIN, MAX, COUNT over cells of this sheet); any other stays empty.
   const valueAt = (r: number, c: number): number | null => {
@@ -274,14 +274,12 @@ export async function readSheet(book: Book, index: number, maxRows: number, maxC
     return cell && (!t || t === "n") ? num(first(cell, "v")?.textContent) : null;
   };
   const compute = (formula: string): number | null => {
-    const m = /^\s*(SUM|AVERAGE|MIN|MAX|COUNT)\(([A-Z$0-9:,\s]+)\)\s*$/i.exec(formula);
-    if (!m) return null;
+    const parsed = formulaRefs(formula);
+    if (!parsed) return null;
     const vals: number[] = [];
-    for (const part of m[2]!.replace(/\$/g, "").split(",")) {
-      const [a, b = a] = part.trim().split(":");
-      if (!/^[A-Z]+\d+$/i.test(a!) || !/^[A-Z]+\d+$/i.test(b!)) return null;
+    for (const [a, b] of parsed.refs) {
       // Seules les cellules présentes : « SUM(A1:XFD1048576) » ne parcourt pas toute la feuille.
-      const [r0, r1, c0, c1] = [rowIndex(a!), rowIndex(b!), colIndex(a!.toUpperCase()), colIndex(b!.toUpperCase())];
+      const [r0, r1, c0, c1] = [rowIndex(a), rowIndex(b), colIndex(a), colIndex(b)];
       for (const [r, row] of raw) {
         if (r < r0 || r > r1) continue;
         for (const c of row.cells.keys()) {
@@ -290,7 +288,7 @@ export async function readSheet(book: Book, index: number, maxRows: number, maxC
         }
       }
     }
-    const fn = m[1]!.toUpperCase();
+    const fn = parsed.fn;
     if (fn === "COUNT") return vals.length;
     if (!vals.length) return fn === "SUM" ? 0 : null;
     if (fn === "SUM") return vals.reduce((x, y) => x + y, 0);
@@ -398,12 +396,19 @@ export function Workbook({ book, first: initial, full, maxRows, maxCols }: { boo
   const [at, setAt] = useState(0);
   const [sheet, setSheet] = useState<Sheet>(initial);
   const [busy, setBusy] = useState(false);
-  useEffect(() => () => sheet.images.forEach((i) => URL.revokeObjectURL(i.src)), [sheet]);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => void (mounted.current = false);
+  }, []);
+  useEffect(() => () => releaseSheet(sheet), [sheet]);
   const open = (i: number) => {
     if (i === at || busy) return;
     setBusy(true);
     readSheet(book, i, maxRows, maxCols)
       .then((s) => {
+        // Closed while it was read: nobody will draw it, its pictures go now.
+        if (!mounted.current) return releaseSheet(s);
         setSheet(s);
         setAt(i);
       })

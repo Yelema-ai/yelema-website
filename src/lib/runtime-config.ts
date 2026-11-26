@@ -1,4 +1,5 @@
 import "server-only";
+import { echangesOn } from "@/lib/echanges";
 import { eventStreamOn } from "@/lib/instance-events";
 
 // Deployment configuration, read from the environment AT RUNTIME — never at build time.
@@ -42,6 +43,14 @@ export function brandLogoUrl(): string | undefined {
 // Server-only. Optional: without it, an instance wired for it answers "pas encore activés".
 export function composioApiKey(): string | undefined {
   return read("COMPOSIO_API_KEY");
+}
+
+export function meetstreamApiKey(): string | undefined {
+  return read("MEETSTREAM_API_KEY");
+}
+
+export function meetstreamWebhookSecret(): string | undefined {
+  return read("MEETSTREAM_WEBHOOK_SECRET");
 }
 
 // The Yelema back office's public origin: it serves the expert catalogue (names, roles, photos,
@@ -96,7 +105,8 @@ export function deployVersion(): string {
 // whether the deployment is complete — never which values it holds.
 export function missingRequired(): string[] {
   const required: [string, string | undefined][] = [
-    ["AGENT37_API_KEY", read("AGENT37_API_KEY")],
+    // Behind the runtime gateway the app never calls Agent37 itself: no key to hold (sensitive clients).
+    ["AGENT37_API_KEY", read("AGENT37_API_KEY") ?? (read("RUNTIME_GATEWAY_URL") && read("RUNTIME_GATEWAY_TOKEN") ? "gateway" : undefined)],
     ["SUPABASE_URL", supabaseUrl()],
     ["SUPABASE_ANON_KEY", supabaseAnonKey()],
     ["SUPABASE_SERVICE_ROLE_KEY", supabaseServiceRoleKey()],
@@ -108,6 +118,10 @@ export function missingRequired(): string[] {
 
 // What the browser needs: Supabase Auth runs client-side with the anon key, which is public
 // by design (the tables are granted to the service role only).
+export function echangesVisible(): boolean {
+  return echangesOn(read("ECHANGES"));
+}
+
 export type PublicConfig = {
   // "backoffice": the pages sign in through this app's /api/auth routes, not Supabase.
   authVia: "supabase" | "backoffice";
@@ -117,6 +131,10 @@ export type PublicConfig = {
   logoUrl: string | null;
   /** The instance's event stream is open (EVENT_STREAM=on and the gateway): polls wait for it. */
   eventStream: boolean;
+  /** `memory` (DEVICE_CACHE=memory, sensitive deployments): conversations and drive are never written to the device. */
+  deviceCache: "disk" | "memory";
+  /** Échanges (messagerie entre membres) shown: `ECHANGES=on` on the Vercel project (pilot only for now). */
+  echanges: boolean;
 };
 
 // Signed in through the back office, the browser never talks to Supabase: it gets neither value.
@@ -129,5 +147,7 @@ export function publicConfig(): PublicConfig {
     siteUrl: siteUrl() ?? null,
     logoUrl: brandLogoUrl() ?? null,
     eventStream: eventStreamOn(process.env),
+    deviceCache: read("DEVICE_CACHE")?.toLowerCase() === "memory" ? "memory" : "disk",
+    echanges: echangesVisible(),
   };
 }
