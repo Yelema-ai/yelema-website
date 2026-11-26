@@ -374,7 +374,7 @@ export function McpView() {
               {surveying ? <Loader2 className="animate-spin" /> : <RefreshCw />} Relever les outils
             </Button>
           )}
-          <Button onClick={() => setAdding(true)}>
+          <Button onClick={() => setAdding(true)} data-tour="mcp-add">
             <Plus /> Ajouter un outil
           </Button>
         </div>
@@ -418,7 +418,7 @@ export function McpView() {
             </div>
             <p className="text-sm font-semibold text-ink">Aucun serveur MCP pour le moment</p>
             <p className="mt-1 max-w-sm text-xs text-ink-3">Branchez vos outils sur mesure et vos données pour que vos Experts s’en servent.</p>
-            <Button onClick={() => setAdding(true)} variant="outline" size="sm" className="mt-4">
+            <Button onClick={() => setAdding(true)} variant="outline" size="sm" className="mt-4" data-tour="mcp-add">
               <Plus />
               Ajouter un outil
             </Button>

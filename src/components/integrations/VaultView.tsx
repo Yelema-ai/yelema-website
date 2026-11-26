@@ -86,7 +86,7 @@ export function VaultView() {
           <h2 className="sr-only">Accès aux sites</h2>
           <p className="mt-1 max-w-xl text-sm text-ink-3">Confiez à un Expert l’accès à un site : il s’y connecte pour vous, sans jamais voir le mot de passe.</p>
         </div>
-        <Button onClick={() => setAdding(true)} disabled={!data || all.length === 0} className="self-start sm:self-auto">
+        <Button onClick={() => setAdding(true)} disabled={!data || all.length === 0} className="self-start sm:self-auto" data-tour="vault-add">
           <Plus /> Ajouter un accès
         </Button>
       </div>
@@ -125,7 +125,7 @@ export function VaultView() {
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-line px-6 py-12 text-center">
           <p className="text-sm font-semibold text-ink">{only ? `Aucun accès confié à ${nameOf(only)}` : "Aucun accès confié à vos Experts"}</p>
           <p className="mt-1 max-w-sm text-xs text-ink-3">Ajoutez l’accès à un site (portail administratif, banque, outil métier) et dites à quoi il sert.</p>
-          <Button onClick={() => setAdding(true)} variant="outline" size="sm" className="mt-4">
+          <Button onClick={() => setAdding(true)} variant="outline" size="sm" className="mt-4" data-tour="vault-add">
             <Plus /> Ajouter un accès
           </Button>
         </div>

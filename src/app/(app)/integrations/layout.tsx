@@ -69,6 +69,7 @@ export default function IntegrationsLayout({ children }: { children: React.React
               <Link
                 key={tab.href}
                 href={tab.href}
+                data-tour={`int-tab-${tab.href.split("/").pop()}`}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "-mb-px shrink-0 border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors",

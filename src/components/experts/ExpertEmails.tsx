@@ -159,7 +159,7 @@ export function ExpertEmails({
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <Button type="button" onClick={() => setCreateOpen(true)}>
+              <Button type="button" onClick={() => setCreateOpen(true)} data-tour="expert-mail-create">
                 <Mail />
                 Attribuer une adresse e-mail
               </Button>
@@ -243,7 +243,7 @@ export function ExpertEmails({
               <Trash2 />
             </Button>
           )}
-          <Button onClick={() => setCompose({ replyTo: null })} disabled={!inbox.canSend}>
+          <Button onClick={() => setCompose({ replyTo: null })} disabled={!inbox.canSend} data-tour="expert-mail-new">
             <Plus />
             Nouveau message
           </Button>

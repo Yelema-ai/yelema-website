@@ -107,7 +107,7 @@ export function AccountsBoard({ setup, scope, title, picker, scopeLabel, catalog
           </h2>
           {picker}
         </div>
-        <Button size="sm" onClick={() => setAdding(true)} className="h-8 gap-1.5 rounded-full px-3.5 text-xs max-sm:h-10 max-sm:text-[13px]">
+        <Button size="sm" onClick={() => setAdding(true)} data-tour="model-add" className="h-8 gap-1.5 rounded-full px-3.5 text-xs max-sm:h-10 max-sm:text-[13px]">
           <Plus className="h-3.5 w-3.5" /> Ajouter un compte
         </Button>
       </div>
@@ -115,7 +115,7 @@ export function AccountsBoard({ setup, scope, title, picker, scopeLabel, catalog
       {groups.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-[22px] border border-dashed border-line bg-surface/40 p-6 text-center">
           <p className="text-sm text-ink-2">Vos Experts utilisent le moteur Yelema.</p>
-          <Button size="sm" variant="outline" onClick={() => setAdding(true)} className="h-8 gap-1.5 rounded-full px-3.5 text-xs max-sm:h-10 max-sm:text-[13px]">
+          <Button size="sm" variant="outline" onClick={() => setAdding(true)} data-tour="model-add" className="h-8 gap-1.5 rounded-full px-3.5 text-xs max-sm:h-10 max-sm:text-[13px]">
             <Plus className="h-3.5 w-3.5" /> Ajouter un compte
           </Button>
         </div>

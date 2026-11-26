@@ -130,6 +130,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
       <Link
         href="/"
         onClick={onNavigate}
+        data-tour="nav-new"
         title="Nouvelle conversation"
         className={cn(
           "mb-1.5 flex min-h-11 items-center gap-2.5 rounded-xl bg-brand px-3 text-sm font-semibold text-on-brand transition-opacity hover:opacity-90",
@@ -144,6 +145,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         onClick={openSearch}
         onPointerEnter={warmSearch}
         onFocus={warmSearch}
+        data-tour="nav-search"
         title="Rechercher (Ctrl K)"
         className={cn("flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors text-ink-2 hover:bg-soft", collapsed && RAIL_SQUARE)}
       >
@@ -158,6 +160,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
       <Link
         href="/integrations"
         onClick={onNavigate}
+        data-tour="nav-integrations"
         className={cn(
           "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors",
           here.startsWith("/integrations") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
@@ -171,6 +174,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         <Link
           href="/echanges"
           onClick={onNavigate}
+          data-tour="nav-salons"
           className={cn(
             "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors",
             here.startsWith("/echanges") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
@@ -185,6 +189,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         <Link
           href="/equipe"
           onClick={onNavigate}
+          data-tour="nav-equipe"
           className={cn(
             "flex min-h-10 items-center gap-2.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors",
             here.startsWith("/equipe") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft",
@@ -201,7 +206,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
       {/* An employee with the company chat only has no Experts: no empty heading then. */}
       {collapsed && experts.length > 0 && <div className="my-2 h-px w-8 shrink-0 bg-line" aria-hidden />}
       {!collapsed && experts.length > 0 && (
-        <div className="px-2.5 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-3">Mes Experts</div>
+        <div data-tour="nav-experts" className="px-2.5 pt-4 pb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-3">Mes Experts</div>
       )}
 
       {groupByCycle(experts).map((g) => {
@@ -271,6 +276,7 @@ function ExpertsSidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         <Link
           href="/conversations"
           onClick={onNavigate}
+          data-tour="nav-conversations"
           className={cn(
             "mt-3 flex min-h-10 items-center gap-1.5 rounded-[11px] px-2.5 text-sm font-semibold transition-colors",
             here.startsWith("/conversations") ? "bg-soft-2 text-ink" : "text-ink-2 hover:bg-soft"

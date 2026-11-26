@@ -7,7 +7,7 @@ import { TOO_LARGE, tooLargeDocument } from "@/lib/upload-limit";
 import { cn } from "@/lib/utils";
 import type { PendingFile } from "./useChatAttachments";
 
-export function AttachButton({ onFiles, disabled }: { onFiles: (files: FileList) => void; disabled?: boolean }) {
+export function AttachButton({ onFiles, disabled, tour }: { onFiles: (files: FileList) => void; disabled?: boolean; tour?: string }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
     <>
@@ -15,6 +15,7 @@ export function AttachButton({ onFiles, disabled }: { onFiles: (files: FileList)
         type="button"
         disabled={disabled}
         onClick={() => ref.current?.click()}
+        data-tour={tour}
         aria-label="Joindre des fichiers"
         title="Joindre des fichiers"
         className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50 max-sm:h-10 max-sm:w-10"

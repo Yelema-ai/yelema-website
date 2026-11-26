@@ -147,7 +147,7 @@ export function ExpertRoutines({ agentId, expert, active: shown = true }: { agen
             Ce que {expert.name} fait sans qu’on le demande. Le résultat arrive dans tous ses canaux.
           </p>
         </div>
-        <Button onClick={() => setChoosing(true)} className="self-start">
+        <Button onClick={() => setChoosing(true)} className="self-start" data-tour="routine-new">
           <Plus /> Nouvelle routine
         </Button>
       </div>
