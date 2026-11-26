@@ -36,15 +36,11 @@ export function FileSend({
   const [turn, setTurn] = useState<SendTurn>(SEND_START);
   const [error, setError] = useState<string | null>(null);
   const reporter = useTurnReporter(agentId, profileId);
-  const started = useRef(false);
   const live = useRef({ sessionId: null as string | null, responseId: null as string | null, assistant: { content: "" }, done: false });
 
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
     const run = live.current;
     const abort = new AbortController();
-    reporter.start(run);
     let state = SEND_START;
     const apply = (next: SendTurn) => {
       state = next;
@@ -60,7 +56,11 @@ export function FileSend({
         body: JSON.stringify({ request_id: requestId, choice }),
       }).then((r) => answerOutcome(r.status), () => "error" as const);
 
-    (async () => {
+    // Started on the next task: React's development double run cancels the timer, so one turn only leaves.
+    let begun = false;
+    const timer = setTimeout(() => void (async () => {
+      begun = true;
+      reporter.start(run);
       try {
         const res = await fetch(`/api/agents/${agentId}/chat/responses`, {
           method: "POST",
@@ -114,10 +114,11 @@ export function FileSend({
         reporter.cancel(run);
         setError((e as Error).message || "L’envoi n’a pas pu commencer.");
       }
-    })();
+    })(), 0);
     return () => {
+      clearTimeout(timer);
       // The window closes on a turn still running: the provider takes it over (bell, toasts).
-      if (!run.done) {
+      if (begun && !run.done) {
         abort.abort();
         reporter.detach(run);
       }
