@@ -1,0 +1,104 @@
+/* The guided tour's bubble in the Yelema skin (tokens of globals.css, light and dark). */
+.driver-popover.yelema-tour {
+  --driver-popover-font-family: inherit;
+  background-color: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  min-width: 260px;
+  max-width: min(340px, calc(100vw - 32px));
+  padding: 18px 18px 14px;
+  box-shadow: 0 12px 40px rgb(23 17 43 / 0.22);
+}
+
+.yelema-tour .driver-popover-title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+  padding-right: 24px;
+  color: var(--ink);
+}
+
+.yelema-tour .driver-popover-description {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.yelema-tour .driver-popover-close-btn {
+  color: var(--ink-3);
+  top: 8px;
+  right: 8px;
+}
+
+.yelema-tour .driver-popover-close-btn:hover,
+.yelema-tour .driver-popover-close-btn:focus-visible {
+  color: var(--ink);
+}
+
+.yelema-tour .driver-popover-footer {
+  margin-top: 16px;
+}
+
+.yelema-tour .driver-popover-footer-btn {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background-color: var(--surface);
+  color: var(--ink-2);
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  text-shadow: none;
+}
+
+.yelema-tour .driver-popover-footer-btn:hover,
+.yelema-tour .driver-popover-footer-btn:focus-visible {
+  background-color: var(--soft);
+  color: var(--ink);
+}
+
+.yelema-tour .driver-popover-next-btn {
+  border-color: transparent;
+  background-color: var(--brand);
+  color: var(--on-brand);
+}
+
+.yelema-tour .driver-popover-next-btn:hover,
+.yelema-tour .driver-popover-next-btn:focus-visible {
+  background-color: var(--brand);
+  color: var(--on-brand);
+  opacity: 0.9;
+}
+
+.yelema-tour .driver-popover-navigation-btns button + button {
+  margin-left: 8px;
+}
+
+.yelema-tour .driver-popover-arrow {
+  border-color: var(--surface);
+}
+
+.yelema-tour .driver-popover-arrow-side-left {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-right-color: transparent;
+}
+
+.yelema-tour .driver-popover-arrow-side-right {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+}
+
+.yelema-tour .driver-popover-arrow-side-top {
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+  border-right-color: transparent;
+}
+
+.yelema-tour .driver-popover-arrow-side-bottom {
+  border-top-color: transparent;
+  border-left-color: transparent;
+  border-right-color: transparent;
+}

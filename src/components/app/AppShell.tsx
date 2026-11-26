@@ -26,6 +26,7 @@ import { remember } from "@/lib/client-cache";
 import type { CatalogueResponse, MergedAgent } from "@/lib/types";
 import { AgentsProvider } from "@/components/useMyAgents";
 import { catalogueKey } from "@/components/experts/useCatalogue";
+import { GuidedTour, type TourMenu } from "@/components/tour/GuidedTour";
 
 /**
  * Le cadre unique de l'application : menu à gauche, barre en haut, contenu à droite.
@@ -61,6 +62,10 @@ export function AppShell({
   // Le menu s'ouvre toujours replié (icônes et photos) ; le membre le déplie à la main, pour la visite en cours seulement.
   const [collapsed, setCollapsed] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // During the guided tour the menu is unfolded, and on a phone the drawer is out for the menu's own steps.
+  const [tourMenu, setTourMenu] = useState<TourMenu>("off");
+  const railed = collapsed && tourMenu === "off";
+  const menuOut = drawerOpen || tourMenu === "menu";
 
   // "Son ordinateur" keeps ONE live connection, to the instance last opened, so moving between its
   // experts (or to another page and back) does not reconnect. Another instance starts afresh.
@@ -106,10 +111,11 @@ export function AppShell({
         <DeliverableWatcher />
         <InstanceEventStream />
         <SearchDialog />
+        {!chatOnly && <GuidedTour onMenu={setTourMenu} />}
         <div
           className="min-h-screen md:grid"
           // --shell-nav: where the working area starts, for what covers it (an enlarged dashboard).
-          style={{ gridTemplateColumns: `${collapsed ? 72 : 272}px minmax(0,1fr)`, ["--shell-nav" as string]: `${collapsed ? 72 : 272}px` }}
+          style={{ gridTemplateColumns: `${railed ? 72 : 272}px minmax(0,1fr)`, ["--shell-nav" as string]: `${railed ? 72 : 272}px` }}
         >
           {drawerOpen && (
             <button
@@ -122,10 +128,10 @@ export function AppShell({
           <div
             className={cn(
               "fixed inset-y-0 left-0 z-40 w-[284px] shadow-xl transition-transform md:shadow-none md:static md:z-auto md:w-auto md:translate-x-0",
-              drawerOpen ? "translate-x-0" : "-translate-x-full"
+              menuOut ? "translate-x-0" : "-translate-x-full"
             )}
           >
-            <Sidebar collapsed={collapsed && !drawerOpen} onToggle={toggle} onNavigate={() => setDrawerOpen(false)} />
+            <Sidebar collapsed={railed && !menuOut} onToggle={toggle} onNavigate={() => setDrawerOpen(false)} />
           </div>
           {/* Le <main> est la zone qui défile : la hauteur est bornée à l'écran pour que le chat et les
               fichiers gardent leur barre de saisie en bas, les pages longues défilant à l'intérieur. */}
