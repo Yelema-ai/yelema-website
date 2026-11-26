@@ -6,11 +6,14 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 // focus, or the row scrolling into view. Never on a line that asks to spare data, never in a hidden tab.
 export const INTENT_MS = 150;
 
-/** Whether the browser asked to spare data, or the network is too slow to read ahead. */
+/**
+ * Whether the browser asked to spare data, or the link is too thin to read ahead (2g). Not "3g": Chrome reports it
+ * from latency alone (RTT ≥ ~270 ms), and a far-away user is exactly the one reading ahead saves the most.
+ */
 export function sparingData(): boolean {
   if (typeof navigator === "undefined") return true;
   const c = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
-  return Boolean(c?.saveData) || c?.effectiveType === "slow-2g" || c?.effectiveType === "2g" || c?.effectiveType === "3g";
+  return Boolean(c?.saveData) || c?.effectiveType === "slow-2g" || c?.effectiveType === "2g";
 }
 
 const allowed = () => !sparingData() && document.visibilityState === "visible";

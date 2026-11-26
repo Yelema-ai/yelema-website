@@ -26,6 +26,8 @@ import { ComputerMenuItem } from "@/components/experts/ExpertComputer";
 import { ExpertMoreMenu } from "@/components/experts/ExpertMoreMenu";
 import { DashboardMenuFace } from "@/components/experts/ExpertDashboard";
 import { setChatFull, setProfilePanel, useChatFull, useChatListHidden, useChatSidePanel, useProfilePanel } from "@/components/chat/chat-layout";
+import { seedThread } from "@/components/chat/useChat";
+import type { SessionDetail } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useInstallPending } from "@/components/experts/useInstallPending";
 import { CallButton } from "@/components/voice/CallButton";
@@ -87,12 +89,18 @@ export function AgentWorkspace({
   profileId,
   workspaceId,
   initialTab,
+  initialThread = null,
 }: {
   agentId: string;
   profileId: string | null;
   workspaceId: string;
   initialTab: AgentTab;
+  /** The thread `?session=` opens, read by the page on the server and still streaming in. */
+  initialThread?: { sessionId: string; reading: Promise<SessionDetail | null> } | null;
 }) {
+  // Before the chat mounts and asks: its first read of that thread joins the server's (useChat.seedThread).
+  // Browser only: the server render's cache is shared by every request, a thread must never sit in it.
+  useState(() => typeof window !== "undefined" && initialThread && seedThread(agentId, profileId, initialThread.sessionId, initialThread.reading));
   const pathname = usePathname();
   const router = useRouter();
   useEffect(preloadTabs, []);
@@ -157,7 +165,7 @@ export function AgentWorkspace({
   useEffect(() => {
     if (handoffRead.current) return;
     handoffRead.current = true;
-    setInitialMessage(readHandoff(window.location.search));
+    setInitialMessage(readHandoff(window.location.search, undefined, window.location.pathname));
   }, []);
 
   // The open tab follows the URL (history.pushState updates usePathname in the App Router). Fall

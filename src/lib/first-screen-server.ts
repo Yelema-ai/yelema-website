@@ -1,6 +1,9 @@
 import "server-only";
+import { agent37 } from "@/lib/agent37";
 import { appContext } from "@/lib/app-context";
 import type { DriveTree } from "@/lib/drive-paths";
+import { profileQuery } from "@/lib/profile-id";
+import type { SessionDetail } from "@/lib/types";
 import { instanceDriveTree } from "@/lib/drive-tree-server";
 import { FIRST_SCREEN_BUDGET_MS, settledByKey, spaceKey, within } from "@/lib/first-screen";
 import { spaceProfile } from "@/lib/session-rows";
@@ -45,4 +48,9 @@ export async function initialDrives(): Promise<Record<string, DriveTree> | null>
 export async function initialMembers(): Promise<WorkspaceMembers | null> {
   const ws = (await appContext()).workspaces[0];
   return ws?.role === "admin" ? within(workspaceMembers(ws.id), FIRST_SCREEN_BUDGET_MS) : null;
+}
+
+/** The thread `?session=` opens on the member's own instance, read with its page; null (failure, budget) = the browser reads it. */
+export function initialThread(agentId: string, profileId: string | null, sessionId: string): Promise<SessionDetail | null> {
+  return within(agent37.getSession(agentId, sessionId, profileQuery(profileId)), FIRST_SCREEN_BUDGET_MS);
 }

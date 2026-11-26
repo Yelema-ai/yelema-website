@@ -13,12 +13,15 @@ const PUBLIC_PAGES = /^\/(login|reset-password|invite|espace-)/;
 // The session ended while the page was open (expired, or the member was suspended): every call now
 // answers 401, and the screen would sit there with an error. Send the user to sign in instead, and
 // back to where they were afterwards. True when the page is on its way out.
-function leaveIfSignedOut(res: Response): boolean {
-  if (res.status !== 401 || typeof window === "undefined") return false;
+// A session opened without its code where the back office now asks for one (`aal2_required`) ends the same
+// way, except on the device settings, which say it themselves.
+function leaveIfSignedOut(res: Response, url: string, code: string | null): boolean {
+  const reauth = res.status === 403 && code === "aal2_required" && !url.startsWith("/api/account/mfa");
+  if ((res.status !== 401 && !reauth) || typeof window === "undefined") return false;
   if (PUBLIC_PAGES.test(window.location.pathname)) return false;
   const here = window.location.pathname + window.location.search;
   // Nothing of the ended session stays on the device, even if the sign-in page never loads (1 s at most).
-  void within(wipeDevice(), 1_000).finally(() => window.location.assign(`/login?expired=1&next=${encodeURIComponent(here)}`));
+  void within(wipeDevice(), 1_000).finally(() => window.location.assign(`/login?${reauth ? "reauth" : "expired"}=1&next=${encodeURIComponent(here)}`));
   return true;
 }
 
@@ -67,9 +70,9 @@ export async function apiFetch<T>(url: string, init?: RequestInit, fallback?: st
     }
   }
   if (!res.ok) {
-    if (leaveIfSignedOut(res)) throw new Error(EXPIRED);
     const error = (data as { error?: { message?: string; code?: unknown } })?.error;
     const code = typeof error?.code === "string" ? error.code : null;
+    if (leaveIfSignedOut(res, url, code)) throw new Error(EXPIRED);
     throw new ApiFetchError(error?.message || (fallback ? asSentence(fallback) : FAILED), res.status, code);
   }
   return data as T;
@@ -88,8 +91,8 @@ export function errorText(e: unknown, fallback = FAILED): string {
 // Pull the API's { error: { message } } off a non-ok Response for the manual fetch callers
 // (streaming / multipart bodies that can't go through apiFetch), falling back to a status code.
 export async function readApiError(res: Response, fallback: string): Promise<string> {
-  if (leaveIfSignedOut(res)) return EXPIRED;
-  const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+  const body = (await res.json().catch(() => null)) as { error?: { message?: string; code?: unknown } } | null;
+  if (leaveIfSignedOut(res, res.url ? new URL(res.url).pathname : "", typeof body?.error?.code === "string" ? body.error.code : null)) return EXPIRED;
   return asSentence(body?.error?.message || fallback);
 }
 

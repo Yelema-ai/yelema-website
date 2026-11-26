@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { useRouter } from "next/navigation";
 import { CalendarDays, Check, ChevronDown, FileText, ListChecks, Loader2, Lock, Mail, Mic, ReceiptText, Send, Sheet, Sparkles, Sun } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -22,7 +21,7 @@ import { findModel, prettyModelLabel, type ChatSettings } from "@/components/cha
 import { rememberSettings, rememberedSettings } from "@/components/chat/rememberedSettings";
 import { expertCycle, expertRank, isDjeneba } from "@/lib/expert-cycle";
 import { agentTabPath } from "@/lib/expert-tabs";
-import { handoffQuery } from "@/lib/chat-handoff";
+import { useChatHandoff } from "@/components/home/useChatHandoff";
 import type { Expert } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -156,7 +155,6 @@ export function HomeView() {
 }
 
 function ExpertsHome() {
-  const router = useRouter();
   const { current, userEmail, userFirstName } = useWorkspace();
   const { experts, loading, unreadable, installing, stalled, failed, failedExperts } = useExpertsContext();
   // The chat d'entreprise is the member's own instance with no Expert chosen; who has Djénéba may
@@ -198,12 +196,8 @@ function ExpertsHome() {
     onError: (message) => toast.error(message),
   });
 
-  function send(message: string) {
-    const m = message.trim();
-    if (!m) return;
-    const path = to ? agentTabPath(to.agentId, "chat", to.profileId) : ownAgentId ? agentTabPath(ownAgentId, "chat") : null;
-    if (path) router.push(`${path}?${handoffQuery(m)}`);
-  }
+  const chat = useChatHandoff(to ? agentTabPath(to.agentId, "chat", to.profileId) : ownAgentId ? agentTabPath(ownAgentId, "chat") : null);
+  const send = chat.send;
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -233,6 +227,7 @@ function ExpertsHome() {
             <textarea
               ref={field}
               value={text}
+              onFocus={chat.warm}
               onChange={(e) => {
                 setText(e.target.value);
                 grow(e.target);
