@@ -17,11 +17,11 @@ const REPORT = {
 
 describe("summarize", () => {
   it("compte les outils des serveurs branchés ; recommande d'autoriser, de vérifier un serveur du client, un canal et des connecteurs", () => {
-    const s = summarize({ report: REPORT, oauth: [{ id: "1", name: "linear", connected: false, pending: false }], channels: [channel("telegram", "Telegram", false), channel("whatsapp", "WhatsApp", false), channel("irc", "IRC", false)], connections: [] });
+    const s = summarize({ report: REPORT, oauth: [{ id: "1", name: "linear", connected: false, pending: false }], channels: [channel("teams", "Teams", false), channel("telegram", "Telegram", false), channel("whatsapp", "WhatsApp", false), channel("slack", "Slack", false), channel("irc", "IRC", false)], connections: [] });
     assert.equal(s.tools, 2);
     assert.equal(s.servers, 1);
     assert.deepEqual(s.todo.map((t) => t.key), ["oauth:linear", "failed:crm", "channels", "connectors"]);
-    assert.match(s.todo[2]!.detail, /depuis Telegram\./);
+    assert.match(s.todo[2]!.detail, /depuis Telegram, Slack ou Teams\./);
   });
 
   it("rien à recommander quand tout est branché ; les connecteurs sont nommés une fois", () => {
