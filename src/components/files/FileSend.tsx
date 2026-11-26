@@ -85,7 +85,11 @@ export function FileSend({
               if (autoApproves([text], asked.approval.message, isDialogSend)) {
                 const outcome = await give(asked.approval.requestId, "once");
                 apply(outcome === "error" ? asked : answered(asked));
-              } else apply(asked);
+              } else {
+                apply(asked);
+                // In the bell too: the window may be closed before the answer.
+                reporter.asked(run, asked.approval, true);
+              }
               continue;
             }
             const next = sendEvent(state, event, data);
@@ -131,6 +135,7 @@ export function FileSend({
     const a = turn.approval;
     if (!a || !turn.responseId) return;
     setTurn(answered(turn));
+    reporter.settled(a.requestId);
     const res = await fetch(responsePath(agentId, turn.responseId, "approval"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },

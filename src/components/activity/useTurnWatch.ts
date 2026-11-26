@@ -33,7 +33,10 @@ const visible = (signal: AbortSignal) =>
   });
 
 // The terminal event of a reattached stream, or null when it ends without one.
-async function readTerminal(body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<{ outcome: Outcome; text: string } | null> {
+// What the follower hears besides the end: an agreement asked or settled, for the bell (Leslie, 26/11).
+type Heard = (event: string, data: Record<string, unknown>) => void;
+
+async function readTerminal(body: ReadableStream<Uint8Array>, signal: AbortSignal, heard: Heard): Promise<{ outcome: Outcome; text: string } | null> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -45,6 +48,7 @@ async function readTerminal(body: ReadableStream<Uint8Array>, signal: AbortSigna
       const { events, rest } = splitSSE(buffer + decoder.decode(value, { stream: true }));
       buffer = rest;
       for (const { event, data } of events) {
+        if (event === "response.approval_requested" || event === "response.approval_resolved") heard(event, data);
         if (event === "response.output_text.delta" && typeof data.text === "string") text += data.text;
         if (event === "response.completed") return { outcome: "completed", text: typeof data.output_text === "string" ? data.output_text : text };
         if (event === "response.failed") return { outcome: "failed", text: "" };
@@ -58,11 +62,11 @@ async function readTerminal(body: ReadableStream<Uint8Array>, signal: AbortSigna
 
 // Follow a turn no chat streams any more: its stream first, then the session until it names no
 // running response (a stream cut by the host's time limit, or a response the gateway forgot).
-async function follow(t: Turn, signal: AbortSignal): Promise<{ outcome: Outcome; text: string } | null> {
+async function follow(t: Turn, signal: AbortSignal, heard: Heard): Promise<{ outcome: Outcome; text: string } | null> {
   try {
     const res = await fetch(`/api/agents/${t.agentId}/chat/responses/${encodeURIComponent(t.responseId!)}/stream`, { signal });
     if (res.ok && res.body) {
-      const end = await readTerminal(res.body, signal);
+      const end = await readTerminal(res.body, signal, heard);
       if (end) return end;
     } else {
       await res.body?.cancel().catch(() => {});
@@ -115,7 +119,18 @@ export function useTurnWatch(turns: Record<string, Turn>, actions: ActivityActio
       if (t.mode !== "watch" || running.current.has(t.id)) continue;
       const ctrl = new AbortController();
       running.current.set(t.id, ctrl);
-      void follow(t, ctrl.signal).then((end) => {
+      const heard: Heard = (event, data) => {
+        const id = typeof data.request_id === "string" ? data.request_id.trim() : "";
+        if (!id || !t.responseId) return;
+        if (event === "response.approval_resolved") return actions.settled(id);
+        const expires = typeof data.expires_at === "string" ? Date.parse(data.expires_at) : NaN;
+        const message = typeof data.message === "string" ? data.message.trim().slice(0, 8000) : "";
+        actions.asked(
+          { requestId: id, agentId: t.agentId, profile: t.profile, sessionId: t.sessionId, responseId: t.responseId, message, expiresAt: Number.isFinite(expires) ? expires : Date.now() + 300_000, askedAt: Date.now() },
+          false
+        );
+      };
+      void follow(t, ctrl.signal, heard).then((end) => {
         if (ctrl.signal.aborted) return;
         running.current.delete(t.id);
         if (end) actions.finish(t.id, end.outcome, end.text, "watch");

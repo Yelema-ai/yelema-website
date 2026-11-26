@@ -8,6 +8,7 @@ import { readNotifyPrefs } from "@/lib/notify-prefs";
 import {
   EMPTY_ACTIVITY,
   bindTurn,
+  convKey,
   detachTurn,
   dropTurn,
   excerpt,
@@ -38,6 +39,10 @@ import { expertDisplayName } from "@/lib/experts";
 import type { ChatSession } from "@/components/chat/types";
 import { useRoutinePoll } from "./useRoutinePoll";
 import { useTurnWatch } from "./useTurnWatch";
+import { alertInTab } from "./DeliverableWatcher";
+import { responsePath } from "@/lib/api-paths";
+import { answerOutcome } from "@/lib/approval";
+import { addPending, dropPending, openPending, pendingLine, type PendingApproval } from "@/lib/pending-approvals";
 import { systemNotify } from "./system-notify";
 
 const STORAGE_PREFIX = "yelema.activity.";
@@ -60,6 +65,17 @@ export interface ActivityActions {
   /** The chat of one expert, while it is mounted: how to open one of its threads, add a rail row. */
   present: (agentId: string, profile: string | null, presence: ChatPresence) => () => void;
   routineDone: (key: string, routine: string, sessionId: string, at: number, announce: boolean, silent?: boolean) => void;
+  /** An expert waits for an agreement. `shown`: the asking place shows its card already (no pop-up). */
+  asked: (p: PendingApproval, shown: boolean) => void;
+  /** Answered, refused or past its time, wherever it was. */
+  settled: (requestId: string) => void;
+}
+
+/** The agreements waiting, for the bell: answered from it, wherever the member is (Leslie, 26/11). */
+export interface PendingApprovals {
+  items: PendingApproval[];
+  answer: (p: PendingApproval, choice: "once" | "deny") => Promise<void>;
+  open: (p: PendingApproval) => void;
 }
 
 /** The notification centre (the bell): what the provider already knows, newest first. */
@@ -75,10 +91,12 @@ export interface ActivityNotifications {
 const ActionsContext = createContext<ActivityActions | null>(null);
 const StateContext = createContext<ActivityState>(EMPTY_ACTIVITY);
 const NotificationsContext = createContext<ActivityNotifications>({ items: [], open: () => undefined, markAllRead: () => undefined, markRead: () => undefined });
+const ApprovalsContext = createContext<PendingApprovals>({ items: [], answer: async () => undefined, open: () => undefined });
 
 export const useActivityActions = () => useContext(ActionsContext);
 export const useActivityState = () => useContext(StateContext);
 export const useNotifications = () => useContext(NotificationsContext);
+export const usePendingApprovals = () => useContext(ApprovalsContext);
 
 const visible = () => typeof document === "undefined" || document.visibilityState === "visible";
 const SAVE_AFTER_MS = 1_000;
@@ -103,6 +121,8 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
   const presenceRef = useRef(new Map<string, ChatPresence>());
   const expertsRef = useRef(experts);
   expertsRef.current = experts;
+  // Not kept across reloads: past a few minutes the instance has refused by itself.
+  const [pending, setPending] = useState<PendingApproval[]>([]);
 
   // Written once a burst of changes is over (and when the tab hides), only what changed: not on every
   // streamed turn's commit.
@@ -234,6 +254,9 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
         // A turn that ended may have written deliverables (unless the stream says so itself).
         const agentId = stateRef.current.turns[id]?.agentId;
         if (agentId && !instanceEvents.heard(agentId, "files.changed")) driveChanged(agentId);
+        // A turn that ended waits for nothing any more.
+        const responseId = stateRef.current.turns[id]?.responseId;
+        if (responseId) setPending((l) => (l.some((p) => p.responseId === responseId) ? l.filter((p) => p.responseId !== responseId) : l));
         const text = cleanReply(raw);
         const now = Date.now();
         const r = finishTurn(stateRef.current, id, outcome, source, visible(), now);
@@ -255,6 +278,26 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
           if (presenceRef.current.get(k) === presence) presenceRef.current.delete(k);
         };
       },
+      asked: (p, shown) => {
+        setPending((l) => addPending(l, p));
+        // The card is on screen where it was asked: no pop-up on top of it.
+        const here = p.sessionId ? stateRef.current.viewing === convKey(p.agentId, p.profile, p.sessionId) : false;
+        if (shown || here) return;
+        const expert = expertsRef.current.find((e) => expertKey(e.agentId, e.profileId) === expertKey(p.agentId, p.profile));
+        const name = expert?.displayName ?? (p.profile ? expertDisplayName(p.profile) : "Votre Expert");
+        // eslint-disable-next-line @next/next/no-img-element
+        const icon = expert?.photoUrl ? <img src={expert.photoUrl} alt="" className="toast-face" /> : undefined;
+        const open = () => p.sessionId && openConversation(p.agentId, p.profile, p.sessionId);
+        toast(`${name} attend votre accord`, { id: `accord-${p.requestId}`, description: pendingLine(p.message), icon, duration: 15000, action: { label: "Voir", onClick: open } });
+        if (!visible()) {
+          alertInTab(1);
+          systemNotify(`${name} attend votre accord`, pendingLine(p.message), `accord-${p.requestId}`, open);
+        }
+      },
+      settled: (requestId) => {
+        setPending((l) => dropPending(l, requestId));
+        toast.dismiss(`accord-${requestId}`);
+      },
       routineDone: (key, routine, sessionId, at, loud, silent = false) => {
         const ref = parseConvKey(key);
         // Nothing to report: a line in the bell, no conversation and no pop-up (Leslie, 28/10: « juste une notif »).
@@ -266,7 +309,39 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
         if (r.notice && loud && !silent) announce(r.notice, "", routine);
       },
     }),
-    [announce, commit, load]
+    [announce, commit, load, openConversation]
+  );
+
+  // Past their time, they leave the bell on their own.
+  useEffect(() => {
+    const live = openPending(pending);
+    if (live.length !== pending.length) return setPending(live);
+    if (!live.length) return;
+    const next = Math.min(...live.map((p) => p.expiresAt)) - Date.now() + 50;
+    const t = window.setTimeout(() => setPending((l) => openPending(l)), Math.max(0, next));
+    return () => window.clearTimeout(t);
+  }, [pending]);
+
+  const approvals = useMemo<PendingApprovals>(
+    () => ({
+      items: openPending(pending),
+      answer: async (p, choice) => {
+        const res = await fetch(responsePath(p.agentId, p.responseId, "approval"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ request_id: p.requestId, choice }),
+        }).catch(() => null);
+        const outcome = res ? answerOutcome(res.status) : "error";
+        if (outcome === "error") {
+          toast.error("La réponse n’est pas partie. Réessayez.");
+          return;
+        }
+        actions.settled(p.requestId);
+        if (outcome === "expired") toast("Cette demande n’attendait plus : l’Expert n’a rien fait.");
+      },
+      open: (p) => p.sessionId && openConversation(p.agentId, p.profile, p.sessionId),
+    }),
+    [pending, actions, openConversation]
   );
 
   const bell = useMemo<ActivityNotifications>(
@@ -289,7 +364,9 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
   return (
     <ActionsContext.Provider value={actions}>
       <StateContext.Provider value={state}>
-        <NotificationsContext.Provider value={bell}>{children}</NotificationsContext.Provider>
+        <NotificationsContext.Provider value={bell}>
+          <ApprovalsContext.Provider value={approvals}>{children}</ApprovalsContext.Provider>
+        </NotificationsContext.Provider>
       </StateContext.Provider>
     </ActionsContext.Provider>
   );
