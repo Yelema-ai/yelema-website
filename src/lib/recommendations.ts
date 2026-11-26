@@ -11,8 +11,9 @@ import type { IntegrationConnection } from "./types.ts";
 export type Recommendation = { key: string; title: string; detail: string; href: string };
 export type IntegrationsSummary = { tools: number; servers: number; connectors: string[]; channels: string[]; todo: Recommendation[] };
 
-/** Les canaux qu'on propose d'abord quand aucun n'est branché. */
-const SUGGESTED_CHANNELS = ["telegram", "whatsapp", "teams", "slack"];
+/** Les canaux qu'on propose quand aucun n'est branché : seulement ceux testés avec des clients (WhatsApp retiré,
+ * Slack et Teams « Bientôt » dans channels.ts, retours tech du 26/11). */
+const SUGGESTED_CHANNELS = ["telegram"];
 
 export function summarize(input: { report: McpToolsReport | null; oauth: McpOauthServer[]; channels: MessagingPlatform[]; connections: IntegrationConnection[] }): IntegrationsSummary {
   const ok = (input.report?.servers ?? []).filter((s) => s.state === "ok");

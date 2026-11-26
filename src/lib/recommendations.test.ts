@@ -21,7 +21,7 @@ describe("summarize", () => {
     assert.equal(s.tools, 2);
     assert.equal(s.servers, 1);
     assert.deepEqual(s.todo.map((t) => t.key), ["oauth:linear", "failed:crm", "channels", "connectors"]);
-    assert.match(s.todo[2]!.detail, /Telegram, WhatsApp\./);
+    assert.match(s.todo[2]!.detail, /depuis Telegram\./);
   });
 
   it("rien à recommander quand tout est branché ; les connecteurs sont nommés une fois", () => {
