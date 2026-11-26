@@ -223,7 +223,7 @@ function ExpertsHome() {
 
       {ownAgentId && (
         <>
-          <section className="mt-7 rounded-[22px] border border-line bg-surface p-4 shadow-[0_8px_30px_rgb(48_22_103_/_0.06)]">
+          <section data-tour="home-composer" className="mt-7 rounded-[22px] border border-line bg-surface p-4 shadow-[0_8px_30px_rgb(48_22_103_/_0.06)]">
             <textarea
               ref={field}
               value={text}

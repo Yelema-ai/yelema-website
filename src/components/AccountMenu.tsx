@@ -47,6 +47,7 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
+        data-tour="nav-account"
         className={cn(
           "flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left text-ink transition-colors hover:bg-soft",
           collapsed && "w-auto justify-center px-1"

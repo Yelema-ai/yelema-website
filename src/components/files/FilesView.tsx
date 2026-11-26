@@ -402,7 +402,7 @@ export function FilesView({
             {/* Only the Experts make folders here (Myriel, Leslie 30/10): no « Nouveau dossier ». */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" disabled={!fb.path || fb.uploading} className="h-9">
+                <Button size="sm" disabled={!fb.path || fb.uploading} className="h-9" data-tour="files-import">
                   {fb.uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   Importer
                   <ChevronDown className="h-4 w-4" />

@@ -337,7 +337,7 @@ export function ConnectorsView({ agentId }: { agentId: string }) {
         <h2 className="text-[17px] font-bold text-ink">
           Tous les outils <span className="ml-1.5 text-[13.5px] font-normal text-ink-3">Plus de 1 000</span>
         </h2>
-        <div className="relative">
+        <div className="relative" data-tour="connector-search">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" />
           <Input
             ref={searchBox}

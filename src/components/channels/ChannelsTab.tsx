@@ -182,14 +182,14 @@ export function ChannelsTab({
 
       {channels === null ? (
         // Before the image's list arrives, the first channels are known: their rows show at once, state pending.
-        <div className="divide-y overflow-hidden rounded-[22px] border bg-card">
+        <div data-tour="channel-list" className="divide-y overflow-hidden rounded-[22px] border bg-card">
           {PLACEHOLDERS.map((channel) => (
             <ChannelRow key={channel.id} channel={channel} canManage={false} checking onOpen={() => undefined} />
           ))}
         </div>
       ) : (
         <>
-          <div className="divide-y overflow-hidden rounded-[22px] border bg-card">
+          <div data-tour="channel-list" className="divide-y overflow-hidden rounded-[22px] border bg-card">
             {featured.map((channel) => (
               <ChannelRow
                 key={channel.id}

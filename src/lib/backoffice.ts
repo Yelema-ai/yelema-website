@@ -19,6 +19,7 @@ import type { BuzzOverview } from "@/lib/buzz";
 import type { GuestFile, GuestParticipant, GuestSessionView } from "@/lib/guest-access";
 import type { GuestRefusal, SalonGuest } from "@/lib/salon-guests";
 import type { ClaudeAuth, ClaudeAuthStatus, ClaudeLogin, ClaudeUsage } from "@/lib/claude-code-auth";
+import type { TourPrefs, TourUpdate } from "@/lib/tour-state";
 
 // The Yelema back office's API for this app (`/api/v1/app/*`, guide: yelema-platform
 // docs/specs/client-api-v1/app.md). It signs users in and says what they may see: their account,
@@ -425,8 +426,11 @@ function usageQuery(filter: BoUsageFilter, page?: number): string {
   return query ? `?${query}` : "";
 }
 
-/** `/app/me/preferences` : épinglé, archivé et notifications du membre, gardés par le back-office. */
-export type MemberPrefs = { chatMarks: { pinned: string[]; archived: string[] }; notify: Record<string, boolean> };
+/** `/app/me/preferences` : épinglé, archivé et notifications du membre, gardés par le back-office. `tour` is
+ * absent until the back office keeps the guided tour (docs/plans/visite-guidee.md). */
+export type MemberPrefs = { chatMarks: { pinned: string[]; archived: string[] }; notify: Record<string, boolean>; tour?: TourPrefs };
+/** A `PUT` replaces the sections it carries; `tour` takes `{ done }`, the back office sets the date. */
+export type MemberPrefsPatch = Partial<Pick<MemberPrefs, "chatMarks" | "notify">> & { tour?: TourUpdate };
 
 export const backoffice = {
   login: (email: string, password: string) =>
@@ -466,7 +470,7 @@ export const backoffice = {
   setMyAvatar: (token: string, form: FormData) => call<BoMe>("/app/me/avatar", { method: "PUT", token, form, timeoutMs: SETTING_WRITE_TIMEOUT_MS }),
   removeMyAvatar: (token: string) => call<BoMe>("/app/me/avatar", { method: "DELETE", token }),
   preferences: (token: string) => call<MemberPrefs>("/app/me/preferences", { token }),
-  setPreferences: (token: string, body: Partial<MemberPrefs>) => call<MemberPrefs>("/app/me/preferences", { method: "PUT", token, body }),
+  setPreferences: (token: string, body: MemberPrefsPatch) => call<MemberPrefs>("/app/me/preferences", { method: "PUT", token, body }),
   instance: async (token: string): Promise<BoInstanceReading> => {
     const d = await call<{ instance: BoInstance | null; installation?: string; failedExperts?: unknown }>("/app/instance", { token });
     const known = d.installation === "running" || d.installation === "ready" || d.installation === "failed";

@@ -2,19 +2,18 @@
 
 import { BackButton } from "@/components/ui/back-button";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, Check, Copy, Inbox, Loader2, Mail, Paperclip, Plus, RefreshCw, Send, Trash2, TriangleAlert, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Check, Copy, Inbox, Loader2, Mail, Paperclip, Plus, RefreshCw, Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import { apiFetch, ApiFetchError } from "@/lib/api";
-import type { ExpertLook } from "@/lib/backoffice";
-import { EXPERT_NAME_MAX, EXPERT_NAME_RULE, expertName as cleanExpertName } from "@/lib/expert-looks";
-import { INBOX_LIMIT_CODE, moreInboxesHref, bareAddress, hasRemoteImages, isSent, parseRecipients, sandboxedMail, sanitizeInboxDisplayName, type CreateMailInboxInput, type MailDetail, type MailInbox, type MailOutgoingAttachment, type MailSummary } from "@/lib/mail";
+import { apiFetch } from "@/lib/api";
+import { bareAddress, hasRemoteImages, isSent, parseRecipients, sandboxedMail, type CreateMailInboxInput, type MailDetail, type MailInbox, type MailOutgoingAttachment, type MailSummary } from "@/lib/mail";
 import { MAX_UPLOAD_BYTES } from "@/lib/upload-limit";
 import { mailMessagePath } from "@/lib/api-paths";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { useExpertsContext } from "@/components/experts/ExpertsProvider";
+import { AssignInboxDialog } from "@/components/experts/AssignInboxDialog";
+import { useAssignInbox } from "@/components/experts/useAssignInbox";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -63,7 +62,7 @@ export function ExpertEmails({
   onCreateInbox?: (input: Omit<CreateMailInboxInput, "agentId">) => Promise<MailInbox>;
   onDeleteInbox?: (expert: string) => Promise<void>;
 }) {
-  const { reload: reloadExperts, applyLook } = useExpertsContext();
+  const assign = useAssignInbox();
   const expert = inbox?.expert ?? null;
   const [page, setPage] = useState<Page | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,18 +73,9 @@ export function ExpertEmails({
   const [open, setOpen] = useState<{ id: string; message: MailDetail | null } | null>(null);
   const [compose, setCompose] = useState<Compose | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [chosenName, setChosenName] = useState(expertName);
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [noneLeft, setNoneLeft] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   // An answer for an expert the screen has left is dropped.
   const asked = useRef<string | null>(null);
-
-  useEffect(() => {
-    setChosenName(expertName);
-    setCreateError(null);
-  }, [expertKey, expertName]);
 
   const load = useCallback(async () => {
     if (!expert) return;
@@ -141,39 +131,6 @@ export function ExpertEmails({
     });
   }
 
-  const cleanedName = cleanExpertName(chosenName);
-
-  async function activateInbox(e: React.FormEvent) {
-    e.preventDefault();
-    if (!expertKey || !onCreateInbox || creating) return;
-    if (!cleanedName) {
-      setCreateError(EXPERT_NAME_RULE);
-      return;
-    }
-    setCreateError(null);
-    setCreating(true);
-    try {
-      // Un nom modifié renomme d'abord l'expert ; l'adresse n'est créée que si le renommage a réussi.
-      if (cleanedName !== expertName) {
-        const updated = await apiFetch<ExpertLook>(`/api/experts/${encodeURIComponent(expertKey)}`, {
-          method: "PATCH",
-          body: JSON.stringify({ displayName: cleanedName }),
-        });
-        applyLook(updated);
-        reloadExperts();
-      }
-      const displayName = sanitizeInboxDisplayName(cleanedName);
-      const created = await onCreateInbox(displayName ? { expert: expertKey, displayName } : { expert: expertKey });
-      setCreateOpen(false);
-      toast.success(`Adresse attribuée : ${created.address}`);
-    } catch (err) {
-      setCreateError((err as Error).message);
-      setNoneLeft(err instanceof ApiFetchError && err.code === INBOX_LIMIT_CODE);
-    } finally {
-      setCreating(false);
-    }
-  }
-
   if (!inbox) {
     if (!loaded) {
       return (
@@ -202,14 +159,7 @@ export function ExpertEmails({
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                onClick={() => {
-                  setChosenName(expertName);
-                  setCreateError(null);
-                  setCreateOpen(true);
-                }}
-              >
+              <Button type="button" onClick={() => setCreateOpen(true)} data-tour="expert-mail-create">
                 <Mail />
                 Attribuer une adresse e-mail
               </Button>
@@ -226,61 +176,13 @@ export function ExpertEmails({
             </p>
           </div>
 
-          <Dialog open={createOpen} onOpenChange={(next) => !creating && setCreateOpen(next)}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Attribuer une adresse e-mail</DialogTitle>
-                <DialogDescription asChild>
-                  <div role="alert" className="mt-3 flex gap-2.5 rounded-xl border border-coral/60 bg-coral/20 px-3.5 py-2.5 text-left text-coral-ink">
-                    <TriangleAlert className="mt-px h-4 w-4 shrink-0" aria-hidden />
-                    <div className="space-y-0.5 text-xs leading-relaxed">
-                      <p className="font-bold">Attention : ce nom renomme aussi l’expert.</p>
-                      <p>Si vous modifiez le nom ci-dessous, l’expert est renommé et son adresse e-mail est créée avec ce même nom.</p>
-                    </div>
-                  </div>
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={(e) => void activateInbox(e)} className="space-y-4">
-                <div>
-                  <Label htmlFor="inbox-expert-name">Nom de l’expert</Label>
-                  <Input
-                    id="inbox-expert-name"
-                    value={chosenName}
-                    onChange={(e) => {
-                      setChosenName(e.target.value);
-                      if (createError) setCreateError(null);
-                    }}
-                    placeholder={expertName}
-                    maxLength={EXPERT_NAME_MAX}
-                    disabled={creating}
-                    className="mt-1.5"
-                  />
-                </div>
-
-                {createError && (
-                  <div className="rounded-xl bg-ko-pale px-4 py-3 text-sm text-ko">
-                    <p>{createError}</p>
-                    {noneLeft && (
-                      <a href={moreInboxesHref(null, cleanedName || expertName)} className="mt-2 inline-flex items-center gap-1.5 font-semibold underline underline-offset-2">
-                        <Mail className="size-4" />
-                        Contacter Yelema
-                      </a>
-                    )}
-                  </div>
-                )}
-
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
-                    Annuler
-                  </Button>
-                  <Button type="submit" disabled={creating || !cleanedName}>
-                    {creating ? <Loader2 className="animate-spin" /> : <Mail />}
-                    {creating ? "Attribution…" : "Confirmer et attribuer"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <AssignInboxDialog
+            open={createOpen}
+            onOpenChange={setCreateOpen}
+            expertName={expertName}
+            owner={null}
+            onAssign={(name) => assign({ expert: expertKey, currentName: expertName, name, renames: true, create: onCreateInbox })}
+          />
         </div>
       );
     }
@@ -341,7 +243,7 @@ export function ExpertEmails({
               <Trash2 />
             </Button>
           )}
-          <Button onClick={() => setCompose({ replyTo: null })} disabled={!inbox.canSend}>
+          <Button onClick={() => setCompose({ replyTo: null })} disabled={!inbox.canSend} data-tour="expert-mail-new">
             <Plus />
             Nouveau message
           </Button>

@@ -364,6 +364,7 @@ export function AgentWorkspace({
                     key={t.id}
                     type="button"
                     onClick={() => selectTab(t.id)}
+                    data-tour={`expert-tab-${t.id}`}
                     aria-current={on ? "page" : undefined}
                     className={cn(
                       "min-h-9 shrink-0 rounded-full px-2 py-1.5 text-[13px] font-semibold sm:px-3 lg:-mb-px lg:inline-flex lg:h-full lg:items-center lg:rounded-none lg:border-b-2 lg:px-0.5 lg:text-[15px]",
@@ -392,8 +393,8 @@ export function AgentWorkspace({
                     </ExpertMoreMenu>
                   )}
                 </span>
-                {callee && <CallButton expert={callee} iconOnly className="size-11 shrink-0 rounded-full lg:hidden" />}
-                {callee && <CallButton expert={callee} className="h-10 shrink-0 rounded-full bg-brand px-4 text-[14.5px] text-on-brand hover:bg-brand/90 max-lg:hidden" />}
+                {callee && <CallButton expert={callee} iconOnly tour="expert-call" className="size-11 shrink-0 rounded-full lg:hidden" />}
+                {callee && <CallButton expert={callee} tour="expert-call" className="h-10 shrink-0 rounded-full bg-brand px-4 text-[14.5px] text-on-brand hover:bg-brand/90 max-lg:hidden" />}
                 <span className="flex items-center gap-2 max-lg:hidden">
                   <NotificationBell />
                 </span>

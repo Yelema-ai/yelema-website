@@ -343,7 +343,7 @@ export function ChatComposer({ agentId, isStreaming, att, onSend, onStop, large 
           effort={<EffortMenu value={settings.reasoningEffort} emptyLabel="Par défaut" onChange={(reasoningEffort) => setSettings((s) => ({ ...s, reasoningEffort }))} />}
         />
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          <AttachButton onFiles={att.addFiles} />
+          <AttachButton onFiles={att.addFiles} tour="chat-attach" />
           {canDictate && (
             <button
               type="button"
