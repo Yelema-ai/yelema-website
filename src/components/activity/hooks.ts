@@ -44,6 +44,14 @@ export function useTurnReporter(agentId: string, profile: string | null) {
         const id = idOf(run);
         if (id) actions?.detach(id);
       },
+      // An agreement the expert waits for, for the bell; `shown` when its card is on screen where it was asked.
+      asked(run: ReportedRun, a: { requestId: string; message: string; expiresAt: number }, shown: boolean) {
+        if (!actions || !run.responseId) return;
+        actions.asked({ ...a, agentId: where.current.agentId, profile: where.current.profile, sessionId: run.sessionId, responseId: run.responseId, askedAt: Date.now() }, shown);
+      },
+      settled(requestId: string) {
+        actions?.settled(requestId);
+      },
       cancel(run: ReportedRun) {
         const id = idOf(run);
         if (id) actions?.drop(id);

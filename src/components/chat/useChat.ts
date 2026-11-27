@@ -468,8 +468,11 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
                   break;
                 }
                 patchRun(run, (m) => ({ ...m, approvals: addApproval(m.approvals, a) }));
+                // In the bell too, and a pop-up when this thread is not the one on screen (Leslie, 26/11).
+                turns.asked(run, a, isViewed(run));
                 // The expert waits a few minutes only: said outside the page too (Leslie, 17/11: the e-mail never left).
-                if (document.visibilityState === "hidden") {
+                // Off screen, the activity provider says it.
+                if (document.visibilityState === "hidden" && isViewed(run)) {
                   alertInTab(1);
                   systemNotify("Votre accord est attendu", a.message.slice(0, 180), `accord-${a.requestId}`, () => {});
                 }
@@ -478,6 +481,7 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
               case "response.approval_resolved": {
                 const rid = str(data.request_id);
                 if (rid) patchRun(run, (m) => ({ ...m, approvals: settleApproval(m.approvals, rid, "answered", isApprovalChoice(data.choice) ? data.choice : undefined) }));
+                if (rid) turns.settled(rid);
                 break;
               }
               case "response.completed": {
@@ -885,11 +889,14 @@ export function useChat({ agentId, profile, sessionId, refreshToken = 0, onSessi
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ request_id: requestId, choice }),
       }).then((res) => answerOutcome(res.status), () => "error" as const);
-      if (outcome !== "error") return settle(outcome, choice);
+      if (outcome !== "error") {
+        turns.settled(requestId);
+        return settle(outcome, choice);
+      }
       settle("pending");
       setError("Votre réponse n’a pas pu être transmise. Réessayez.");
     },
-    [agentId, patchRun]
+    [agentId, patchRun, turns]
   );
 
   // Stop the current turn: abort the local stream and cancel it upstream so the agent stops work.
