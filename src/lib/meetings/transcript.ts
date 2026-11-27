@@ -32,6 +32,15 @@ export function speakerTurns(segments: readonly TranscriptSegment[]): Turn[] {
   return turns;
 }
 
+/** Read at the top of the file by the expert who writes the minutes: who said what is not known. */
+export const VOICES_NOT_SEPARATED =
+  "> Attention : les voix n'ont pas été distinguées (un seul nom pour plusieurs participants). Ne pas attribuer une décision ou une action à une personne sans la confirmer.";
+
+/** Several people took part but every turn carries one speaker name: the attribution cannot be trusted. */
+export function voicesNotSeparated(turns: readonly { speaker: string }[], participants: number): boolean {
+  return participants >= 2 && turns.length > 0 && new Set(turns.map((t) => t.speaker)).size < 2;
+}
+
 export interface TranscriptHeading {
   startedAt: string | null;
   participants: readonly string[];
@@ -42,7 +51,9 @@ export function transcriptMarkdown(segments: readonly TranscriptSegment[], headi
   if (heading.startedAt) lines.push(`Début : ${heading.startedAt}`);
   if (heading.participants.length) lines.push(`Participants : ${heading.participants.map(oneLine).join(", ")}`);
   lines.push("");
-  for (const turn of speakerTurns(segments)) {
+  const turns = speakerTurns(segments);
+  if (voicesNotSeparated(turns, heading.participants.length)) lines.push(VOICES_NOT_SEPARATED, "");
+  for (const turn of turns) {
     const at = turn.start === null ? "" : ` (${clock(turn.start)})`;
     lines.push(`**${turn.speaker.replace(/\*/g, "")}**${at} : ${turn.words.join(" ")}`, "");
   }

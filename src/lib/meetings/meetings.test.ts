@@ -15,7 +15,7 @@ import { minutesInstruction, parsePageResult, publishInstruction } from "./promp
 import { meetingIdAt, newMeetingRecord, parseMeetingRecord, serializeRecord, withDelivery, type Byline, type Delivery, type MeetingRecord } from "./record.ts";
 import { isFrameUrl, publishedFrame } from "../frames/wire.ts";
 import { minutesFrameHtml } from "./frame-html.ts";
-import { speakerTurns, transcriptMarkdown } from "./transcript.ts";
+import { speakerTurns, transcriptMarkdown, VOICES_NOT_SEPARATED, voicesNotSeparated } from "./transcript.ts";
 import { JOIN_ABANDONED_AFTER_MS, SENDING_TIMEOUT_MS, STALL_AFTER_MS, isReady, meetingStatus, meetingView, type MeetingView } from "./view.ts";
 
 const BOT = "08105834-6fca-4488-9c2c-bbf87ec0183f";
@@ -177,6 +177,16 @@ test("transcription : tours de parole regroupés, horodatés", () => {
   assert.match(md, /\*\*Aïcha\*\* \(00:00\) : Bonjour à tous/);
   assert.match(md, /\*\*Moussa\*\* \(01:05\) : Merci/);
   assert.match(md, /Participants : Aïcha, Moussa/);
+});
+
+test("transcription : voix non distinguées signalées en tête", () => {
+  const one = [{ speaker: "Speaker 1", text: "On valide le budget", start: 0 }, { speaker: "Speaker 1", text: "Moussa s'en charge", start: 30 }];
+  const md = transcriptMarkdown(one, { startedAt: null, participants: ["Aïcha", "Moussa"] });
+  assert.ok(md.includes(VOICES_NOT_SEPARATED));
+  assert.ok(md.indexOf(VOICES_NOT_SEPARATED) < md.indexOf("On valide"));
+  assert.equal(voicesNotSeparated(speakerTurns(one), 1), false);
+  const two = [{ speaker: "Aïcha", text: "Bonjour", start: 0 }, { speaker: "Moussa", text: "Merci", start: 5 }];
+  assert.ok(!transcriptMarkdown(two, { startedAt: null, participants: ["Aïcha", "Moussa"] }).includes("Attention"));
 });
 
 test("instructions : rédaction sans envoi ni fichier Word", () => {
