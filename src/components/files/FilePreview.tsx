@@ -11,6 +11,7 @@ import { fileLabel, seatFolderOf } from "@/lib/drive-paths";
 import type { Expert } from "@/lib/types";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SendDialog } from "@/components/experts/SendDialog";
+import { FileSend } from "./FileSend";
 import { Button } from "@/components/ui/button";
 import { CharteAdopt, isCharteDoc, Preview as DocPreview } from "@/components/chat/DocumentCards";
 import { docKind, normDrivePath } from "@/lib/drive-links";
@@ -95,6 +96,8 @@ export function FilePreview({
   const where = entry ? folderLabel(entry.path) : "";
   const [opening, setOpening] = useState(false);
   const [sending, setSending] = useState(false);
+  // The instruction of a send started from this window, followed here (FileSend); reset with the file.
+  const [sent, setSent] = useState<{ path: string; text: string } | null>(null);
   const google = entry ? shortcutKind(entry.name) : null;
   const ext = google ? GOOGLE_LABEL[google] : entry?.name.includes(".") ? entry.name.split(".").pop()!.toUpperCase() : "";
   return (
@@ -175,10 +178,10 @@ export function FilePreview({
                   <span className="max-sm:hidden">{editor.name ? `Modifier avec ${editor.name}` : "Modifier dans le chat d’entreprise"}</span>
                 </Button>
               )}
-              {/* « Envoyer » (Leslie, 16/11): the expert sends it with its own tools; the instruction is
-                  written in its chat with the file pinned, for the member to send. */}
+              {/* « Envoyer » (Leslie, 16/11): the expert sends it with its own tools. Followed in this window, the
+                  agreement included (Leslie and Djénéba, 26/11), no longer in a new conversation to find. */}
               {editor?.name && (
-                <Button variant="outline" onClick={() => setSending(true)}>
+                <Button variant="outline" disabled={sent?.path === entry.path} onClick={() => setSending(true)}>
                   <Send className="h-4 w-4" />
                   Envoyer
                 </Button>
@@ -193,8 +196,20 @@ export function FilePreview({
                   onClose={() => setSending(false)}
                   onSend={(text) => {
                     setSending(false);
+                    setSent({ path: entry.path, text });
+                  }}
+                />
+              )}
+              {sent?.path === entry.path && editor?.profileId && editor.expert && (
+                <FileSend
+                  agentId={agentId}
+                  profileId={editor.profileId}
+                  expert={editor.expert}
+                  text={sent.text}
+                  onOpenConversation={(session) => {
                     onClose();
-                    router.push(`${agentTabPath(agentId, "chat", editor.profileId)}?ref=${encodeURIComponent(entry.path)}&dire=${encodeURIComponent(text)}`);
+                    const thread = session ? `session=${encodeURIComponent(session)}&` : "";
+                    router.push(`${agentTabPath(agentId, "chat", editor.profileId)}?${thread}ref=${encodeURIComponent(entry.path)}`);
                   }}
                 />
               )}
@@ -228,13 +243,13 @@ const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCas
 
 // Who changes a deliverable: the Expert whose folder it lies in, or the chat d'entreprise for its own
 // folder. Nobody for what the member brought or a file outside any Expert's folder.
-function editorOf(experts: Expert[], agentId: string, path: string): { profileId: string | null; name: string | null } | null {
+function editorOf(experts: Expert[], agentId: string, path: string): { profileId: string | null; name: string | null; expert?: Expert } | null {
   const parts = path.replace(/^.*?\/Livrables\//, "").split("/");
   if (parts.length < 2) return null;
   if (seatFolderOf(parts)) return { profileId: null, name: null };
   const f = fold(parts[0]);
   const e = experts.find((x) => x.agentId === agentId && [x.driveFolder, x.displayName, x.catalogueKey].some((n) => n && fold(n) === f));
-  return e ? { profileId: e.profileId, name: e.displayName } : null;
+  return e ? { profileId: e.profileId, name: e.displayName, expert: e } : null;
 }
 
 // « Plan de lancement Q4 » for ~/Livrables/Djénéba/Plan de lancement Q4/plan.pdf.
